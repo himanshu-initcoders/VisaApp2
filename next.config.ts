@@ -1,0 +1,26 @@
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  /* config options here */
+  reactStrictMode: true,
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**.amazonaws.com',
+      },
+      {
+        // Existing seeded country images still point here until replaced with our CDN
+        protocol: 'https',
+        hostname: 'media.atlys.com',
+      },
+    ],
+  },
+  // pdfjs / tesseract load workers and wasm from CDN at runtime
+  serverExternalPackages: ['tesseract.js', 'pdfjs-dist'],
+  experimental: {
+    // Enable experimental features if needed
+  },
+};
+
+export default nextConfig;

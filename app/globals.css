@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-switzer: 'Switzer', 'Inter', system-ui, sans-serif;
+  --font-basier: 'Basier Circle', 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-white text-portrait-ink font-switzer antialiased;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@keyframes passport-scan {
+  0% {
+    top: 8%;
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    top: 88%;
+    opacity: 0.4;
+  }
+}
+

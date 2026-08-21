@@ -1,0 +1,14 @@
+import type { IndianPassportFields } from '@/lib/passport/types';
+
+export type ApplyStep = 'travellers' | 'documents' | 'pay';
+
+export interface ApplyTraveller {
+  id: string;
+  name: string;
+  photoUploaded: boolean;
+  passportUploaded: boolean;
+  passportData?: IndianPassportFields;
+  passportFrontUrl?: string;
+  passportBackUrl?: string;
+  editing: boolean;
+}

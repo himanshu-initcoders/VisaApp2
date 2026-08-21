@@ -1,0 +1,10 @@
+{
+  "livePreview": true,
+  "readableLineLength": true,
+  "strictLineBreaks": false,
+  "showLineNumber": true,
+  "spellcheck": true,
+  "useMarkdownLinks": true,
+  "newLinkFormat": "relative",
+  "newFileLocation": "current"
+}

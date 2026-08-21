@@ -1,0 +1,69 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1786709676569,
+      "tag": "0000_premium_vapor",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786958011211,
+      "tag": "0001_fantastic_randall",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786968424310,
+      "tag": "0002_sleepy_rocket_raccoon",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787030827220,
+      "tag": "0003_illegal_ultimatum",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787032392230,
+      "tag": "0004_acoustic_puff_adder",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787214000000,
+      "tag": "0006_rename_entry_processes_to_visa_listings",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787217600000,
+      "tag": "0007_drop_tier_priority_concierge",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787220000000,
+      "tag": "0008_visa_listing_prices",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787223600000,
+      "tag": "0009_drop_countries_currency",
+      "breakpoints": true
+    }
+  ]
+}

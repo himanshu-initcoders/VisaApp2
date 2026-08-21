@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"d:/Visa/obsidian-vault\")",
+      "Bash(npm run *)",
+      "Bash(node apply-migration.js)",
+      "Bash(node apply-migration-images.js)",
+      "Bash(rm -rf \"app/\\(admin\\)/admin/config/countries/[iso2Code]/images\")",
+      "Bash(node apply-json-migration.js)",
+      "Bash(curl -s http://localhost:3000 -H \"Cache-Control: no-cache\")",
+      "Bash(curl -s -I http://localhost:3000)"
+    ],
+    "additionalDirectories": [
+      "d:\\Visa",
+      "D:\\Visa\\app\\(admin)\\admin\\config\\countries\\[iso2Code]\\images"
+    ]
+  }
+}
