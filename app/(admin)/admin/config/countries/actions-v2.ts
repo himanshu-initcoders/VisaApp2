@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { countries } from '@/lib/db/schema-extended';
 import { eq } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth-utils';
+import { revalidatePublicVisaCatalog } from '@/lib/revalidate-public-catalog';
 
 /**
  * Server actions for country management with JSON structure
@@ -74,6 +75,7 @@ export async function updateCountryV2(
     revalidatePath('/admin/config/countries');
     revalidatePath(`/admin/config/countries/${country.iso2Code}`);
     revalidatePath(`/admin/config/visa-listings?country=${country.iso2Code}`);
+    revalidatePublicVisaCatalog({ countryCode: country.iso2Code });
 
     return {
       success: true,
@@ -117,6 +119,7 @@ export async function updateCountryByIsoCode(
     revalidatePath('/admin/config/countries');
     revalidatePath(`/admin/config/countries/${country.iso2Code}`);
     revalidatePath(`/admin/config/visa-listings?country=${country.iso2Code}`);
+    revalidatePublicVisaCatalog({ countryCode: country.iso2Code });
 
     return {
       success: true,

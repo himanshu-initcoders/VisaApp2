@@ -7,6 +7,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth-utils';
 import { processBasicInfoSchema, type ProcessBasicInfo, createVisaListingSchema, visaListingPriceSchema, type VisaListingPriceInput, additionalQuestionSchema, type AdditionalQuestion, componentRequiredSchema, type ComponentRequired, faqSchema, type FAQ, postCheckoutStepSchema, type PostCheckoutStep, multiCountrySchema, type MultiCountry } from '@/lib/validations/config';
 import { getQuestionById, getMaxQuestionSortOrder, getComponentById, getMaxComponentSortOrder, getFaqById, getMaxFaqSortOrder, getPostCheckoutStepById, getMaxStepSortOrder } from '@/lib/db/queries/config';
+import { revalidatePublicVisaCatalog } from '@/lib/revalidate-public-catalog';
 
 /**
  * Server actions for visa listing management
@@ -61,6 +62,10 @@ export async function createVisaListing(data: unknown) {
     revalidatePath(`/admin/config/visa-listings/${created.id}`);
     revalidatePath('/admin/config/countries');
     revalidatePath(`/admin/config/countries/${validated.destinationCountry}`);
+    revalidatePublicVisaCatalog({
+      countryCode: validated.destinationCountry,
+      listingId: created.id,
+    });
 
     return {
       success: true,
@@ -91,6 +96,7 @@ export async function updateProcessBasicInfo(processId: string, data: ProcessBas
       where: eq(visaListings.id, processId),
       columns: {
         id: true,
+        destinationCountry: true,
       },
     });
 
@@ -126,6 +132,10 @@ export async function updateProcessBasicInfo(processId: string, data: ProcessBas
     revalidatePath(`/admin/config/visa-listings/${processId}/docs`);
     revalidatePath(`/admin/config/visa-listings/${processId}/content`);
     revalidatePath('/admin/config/visa-listings');
+    revalidatePublicVisaCatalog({
+      countryCode: process.destinationCountry,
+      listingId: processId,
+    });
 
     return {
       success: true,
@@ -153,7 +163,7 @@ export async function createListingPrice(processId: string, data: VisaListingPri
 
     const listing = await db.query.visaListings.findFirst({
       where: eq(visaListings.id, processId),
-      columns: { id: true },
+      columns: { id: true, destinationCountry: true },
     });
 
     if (!listing) {
@@ -180,6 +190,10 @@ export async function createListingPrice(processId: string, data: VisaListingPri
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/tiers`);
     revalidatePath('/admin/config/visa-listings');
+    revalidatePublicVisaCatalog({
+      countryCode: listing.destinationCountry,
+      listingId: processId,
+    });
 
     return { success: true, message: 'Price option created' };
   } catch (error) {
@@ -223,9 +237,17 @@ export async function updateListingPrice(priceId: string, data: VisaListingPrice
       .where(eq(visaListingPrices.id, priceId));
 
     const processId = price.visaListingId;
+    const listing = await db.query.visaListings.findFirst({
+      where: eq(visaListings.id, processId),
+      columns: { destinationCountry: true },
+    });
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/tiers`);
     revalidatePath('/admin/config/visa-listings');
+    revalidatePublicVisaCatalog({
+      countryCode: listing?.destinationCountry,
+      listingId: processId,
+    });
 
     return { success: true, message: 'Price option updated' };
   } catch (error) {
@@ -255,9 +277,17 @@ export async function deleteListingPrice(priceId: string) {
     await db.delete(visaListingPrices).where(eq(visaListingPrices.id, priceId));
 
     const processId = price.visaListingId;
+    const listing = await db.query.visaListings.findFirst({
+      where: eq(visaListings.id, processId),
+      columns: { destinationCountry: true },
+    });
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/tiers`);
     revalidatePath('/admin/config/visa-listings');
+    revalidatePublicVisaCatalog({
+      countryCode: listing?.destinationCountry,
+      listingId: processId,
+    });
 
     return { success: true, message: 'Price option deleted' };
   } catch (error) {

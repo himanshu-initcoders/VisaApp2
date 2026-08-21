@@ -14,6 +14,8 @@ import { MobileStickyBar } from '@/components/public/MobileStickyBar';
 import { StartApplicationCTA } from '@/components/apply/StartApplicationCTA';
 import { getPublicProcessPageData } from '@/lib/db/queries/public';
 
+export const dynamic = 'force-dynamic';
+
 interface PageProps {
   params: Promise<{
     countryCode: string;

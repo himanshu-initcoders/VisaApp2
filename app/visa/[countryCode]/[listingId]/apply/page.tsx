@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { ApplyVisaWizard } from '@/components/apply/ApplyVisaWizard';
 import { getPublicProcessPageData } from '@/lib/db/queries/public';
 
+export const dynamic = 'force-dynamic';
+
 interface PageProps {
   params: Promise<{
     countryCode: string;

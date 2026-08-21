@@ -11,6 +11,7 @@ import {
   createCountrySchema,
 } from '@/lib/validations/config';
 import { generatePresignedUploadUrl, getPublicS3Url, type S3Folder } from '@/lib/s3';
+import { revalidatePublicVisaCatalog } from '@/lib/revalidate-public-catalog';
 
 /**
  * Server actions for country management
@@ -45,6 +46,7 @@ export async function createCountry(data: unknown) {
     revalidatePath('/admin/config/countries');
     revalidatePath(`/admin/config/countries/${validated.iso2Code}`);
     revalidatePath('/admin/config/visa-listings');
+    revalidatePublicVisaCatalog({ countryCode: validated.iso2Code });
 
     return {
       success: true,
@@ -88,6 +90,7 @@ export async function toggleCountryEnabled(countryId: string) {
     // Revalidate pages
     revalidatePath('/admin/config/countries');
     revalidatePath(`/admin/config/countries/${country.iso2Code}`);
+    revalidatePublicVisaCatalog({ countryCode: country.iso2Code });
 
     return {
       success: true,
@@ -132,6 +135,7 @@ export async function updateCountryMetadata(countryId: string, data: CountryMeta
     // Revalidate pages
     revalidatePath('/admin/config/countries');
     revalidatePath(`/admin/config/countries/${country.iso2Code}`);
+    revalidatePublicVisaCatalog({ countryCode: country.iso2Code });
 
     return {
       success: true,
@@ -243,6 +247,7 @@ export async function updateCountryImage(
     // Revalidate pages
     revalidatePath('/admin/config/countries');
     revalidatePath(`/admin/config/countries/${country.iso2Code}`);
+    revalidatePublicVisaCatalog({ countryCode: country.iso2Code });
 
     return {
       success: true,

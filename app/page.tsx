@@ -4,6 +4,9 @@ import { HomeLandingClient } from '@/components/public/HomeLandingClient';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { getEnabledCountriesWithProcesses } from '@/lib/db/queries/public';
 
+// Always read live catalog so admin adds show up on Vercel without a redeploy
+export const dynamic = 'force-dynamic';
+
 export default async function Home() {
   const countriesWithProcesses = await getEnabledCountriesWithProcesses();
   type CountryWithProcesses = (typeof countriesWithProcesses)[number];
