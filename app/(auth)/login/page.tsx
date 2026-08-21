@@ -49,8 +49,8 @@ export default function LoginPage() {
         return;
       }
 
-      // Redirect to dashboard on success
-      router.push('/dashboard');
+      // Redirect to admin on success
+      router.push('/admin');
       router.refresh();
     } catch (err) {
       setError('Something went wrong. Please try again.');

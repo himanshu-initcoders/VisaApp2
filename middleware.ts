@@ -45,10 +45,10 @@ export default auth((req) => {
     }
   }
 
-  // Redirect to dashboard if accessing auth pages while logged in
+  // Redirect to admin if accessing auth pages while logged in
   const authPages = ['/login', '/register'];
   if (authPages.includes(pathname) && isLoggedIn) {
-    return NextResponse.redirect(new URL('/dashboard', req.url));
+    return NextResponse.redirect(new URL('/admin', req.url));
   }
 
   return NextResponse.next();
