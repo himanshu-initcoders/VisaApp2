@@ -69,7 +69,17 @@ export async function getApplicationsWithFilters(
   // Fetch visa applications
   let visaApps: ApplicationListItem[] = [];
   if (type === 'all' || type === 'visa') {
-    const visaQuery = db
+    const visaConditions = [...conditions];
+    if (search) {
+      visaConditions.push(
+        or(
+          like(users.name, `%${search}%`),
+          like(users.email, `%${search}%`)
+        )
+      );
+    }
+
+    const visaResults = await db
       .select({
         id: visaApplications.id,
         userId: visaApplications.userId,
@@ -83,19 +93,7 @@ export async function getApplicationsWithFilters(
       })
       .from(visaApplications)
       .innerJoin(users, eq(visaApplications.userId, users.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined);
-
-    // Apply search filter
-    if (search) {
-      visaQuery.where(
-        or(
-          like(users.name, `%${search}%`),
-          like(users.email, `%${search}%`)
-        )
-      );
-    }
-
-    const visaResults = await visaQuery;
+      .where(visaConditions.length > 0 ? and(...visaConditions) : undefined);
 
     visaApps = visaResults.map((v) => ({
       id: v.id,
@@ -128,8 +126,16 @@ export async function getApplicationsWithFilters(
     if (dateTo) {
       passportConditions.push(lte(passportServices.submittedAt, new Date(dateTo)));
     }
+    if (search) {
+      passportConditions.push(
+        or(
+          like(users.name, `%${search}%`),
+          like(users.email, `%${search}%`)
+        )
+      );
+    }
 
-    const passportQuery = db
+    const passportResults = await db
       .select({
         id: passportServices.id,
         userId: passportServices.userId,
@@ -143,18 +149,6 @@ export async function getApplicationsWithFilters(
       .from(passportServices)
       .innerJoin(users, eq(passportServices.userId, users.id))
       .where(passportConditions.length > 0 ? and(...passportConditions) : undefined);
-
-    // Apply search filter
-    if (search) {
-      passportQuery.where(
-        or(
-          like(users.name, `%${search}%`),
-          like(users.email, `%${search}%`)
-        )
-      );
-    }
-
-    const passportResults = await passportQuery;
 
     passportApps = passportResults.map((p) => ({
       id: p.id,
@@ -357,19 +351,6 @@ export async function getUsersWithApplicationCounts(
   page: number = 1,
   limit: number = 25
 ): Promise<PaginatedUsers> {
-  // Build base query
-  let query = db
-    .select({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      role: users.role,
-      emailVerified: users.emailVerified,
-      createdAt: users.createdAt,
-    })
-    .from(users);
-
-  // Apply filters
   const conditions: any[] = [];
 
   if (searchQuery) {
@@ -385,21 +366,29 @@ export async function getUsersWithApplicationCounts(
     conditions.push(eq(users.role, roleFilter));
   }
 
-  if (conditions.length > 0) {
-    query = query.where(and(...conditions));
-  }
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   // Get total count
   const totalResult = await db
     .select({ count: count() })
     .from(users)
-    .where(conditions.length > 0 ? and(...conditions) : undefined);
+    .where(whereClause);
 
   const total = totalResult[0]?.count || 0;
 
   // Apply pagination
   const offset = (page - 1) * limit;
-  const usersResult = await query
+  const usersResult = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      role: users.role,
+      emailVerified: users.emailVerified,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .where(whereClause)
     .orderBy(desc(users.createdAt))
     .limit(limit)
     .offset(offset);

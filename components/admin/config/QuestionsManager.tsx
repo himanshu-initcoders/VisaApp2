@@ -32,14 +32,14 @@ interface Question {
   label: string;
   description: string | null;
   questionType: 'text' | 'date' | 'select' | 'dropdown' | 'file' | 'flight' | 'boolean';
-  required: boolean;
-  familyEnabled: boolean;
-  onlyB2b: boolean;
+  required: boolean | null;
+  familyEnabled: boolean | null;
+  onlyB2b: boolean | null;
   extraInfo: string | null;
   requiredDoc: string | null;
   sourceUrl: string | null;
-  options: Array<{ label: string; value: string }>;
-  sortOrder: number;
+  options: Array<{ label: string; value: string }> | null;
+  sortOrder: number | null;
   createdAt: Date;
 }
 

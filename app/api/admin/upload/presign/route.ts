@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { generatePresignedUploadUrl, getPublicS3Url, validateFileSize, type S3Folder } from '@/lib/s3';
 
 /**
@@ -11,9 +10,8 @@ import { generatePresignedUploadUrl, getPublicS3Url, validateFileSize, type S3Fo
  */
 export async function POST(request: NextRequest) {
   try {
-    // Auth check
-    const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== 'admin') {
+    const session = await auth();
+    if (!session?.user || session.user.role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

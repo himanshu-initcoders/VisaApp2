@@ -6,18 +6,18 @@
  */
 
 import fs from 'fs/promises';
+import type { Stats } from 'fs';
 import path from 'path';
 import { IUploadProvider, UploadResult, UploadOptions } from '../types';
 
+/** Statically scoped so Turbopack does not trace the whole project root. */
+const UPLOAD_ROOT = path.join(process.cwd(), 'public', 'uploads');
+
 export class LocalUploadProvider implements IUploadProvider {
   readonly name = 'local' as const;
-  private uploadDir: string;
   private publicUrl: string;
 
   constructor() {
-    // Base upload directory (relative to project root)
-    this.uploadDir = process.env.LOCAL_UPLOAD_DIR || 'public/uploads';
-
     // Public URL base (how files are served)
     this.publicUrl = process.env.LOCAL_UPLOAD_URL || '/uploads';
   }
@@ -31,7 +31,7 @@ export class LocalUploadProvider implements IUploadProvider {
   }
 
   private getFilePath(key: string): string {
-    return path.join(process.cwd(), this.uploadDir, key);
+    return path.join(UPLOAD_ROOT, key);
   }
 
   async upload(file: File | Buffer, options: UploadOptions): Promise<UploadResult> {
@@ -74,7 +74,7 @@ export class LocalUploadProvider implements IUploadProvider {
     const key = `${folder}/${timestamp}-${randomString}-${sanitizedFilename}`;
 
     // Ensure folder exists
-    const folderPath = path.join(process.cwd(), this.uploadDir, folder);
+    const folderPath = path.join(UPLOAD_ROOT, folder);
     await this.ensureDir(folderPath);
 
     // Write file to disk
@@ -146,7 +146,7 @@ export class LocalUploadProvider implements IUploadProvider {
   /**
    * Get file stats (size, modified date, etc.)
    */
-  async getStats(key: string): Promise<fs.Stats | null> {
+  async getStats(key: string): Promise<Stats | null> {
     try {
       const filePath = this.getFilePath(key);
       return await fs.stat(filePath);
@@ -160,7 +160,7 @@ export class LocalUploadProvider implements IUploadProvider {
    */
   async listFiles(folder: string): Promise<string[]> {
     try {
-      const folderPath = path.join(process.cwd(), this.uploadDir, folder);
+      const folderPath = path.join(UPLOAD_ROOT, folder);
       const files = await fs.readdir(folderPath);
       return files
         .filter(f => !f.endsWith('.meta.json'))

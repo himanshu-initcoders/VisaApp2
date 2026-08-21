@@ -31,12 +31,12 @@ interface DocumentComponent {
   id: string;
   visaListingId: string;
   key: string;
-  amount: string;
-  chargeable: boolean;
-  familyEnabled: boolean;
-  onlyB2b: boolean;
-  toggle: boolean;
-  attributes: string[];
+  amount: string | null;
+  chargeable: boolean | null;
+  familyEnabled: boolean | null;
+  onlyB2b: boolean | null;
+  toggle: boolean | null;
+  attributes: string[] | null;
   sourceUrl: string | null;
   sortOrder: number;
   createdAt: Date;

@@ -52,19 +52,22 @@ export type CreateCountryFormValues = z.input<typeof createCountrySchema>;
 
 export const processBasicInfoSchema = z.object({
   processName: z.string().min(3, 'Visa name must be at least 3 characters').max(100, 'Visa name too long'),
-  processType: z.enum(['electronic_travel_authorisation', 'afc', 'visa', 'appointment', 'visa_on_arrival', 'sticker_visa', 'visa_free'], {
-    errorMap: () => ({ message: 'Invalid process type' })
-  }),
-  purpose: z.enum(['tourism', 'business', 'work', 'study', 'family', 'medical', 'transit'], {
-    errorMap: () => ({ message: 'Invalid purpose' })
-  }),
+  processType: z.enum(
+    ['electronic_travel_authorisation', 'afc', 'visa', 'appointment', 'visa_on_arrival', 'sticker_visa', 'visa_free'],
+    'Invalid process type'
+  ),
+  purpose: z.enum(
+    ['tourism', 'business', 'work', 'study', 'family', 'medical', 'transit'],
+    'Invalid purpose'
+  ),
   processTypeLabel: z.union([z.string().max(50, 'Type label too long'), z.literal('')]).nullable().optional(),
   entryType: z.union([z.string().max(50, 'Entry type too long'), z.literal('')]).nullable().optional(),
   processPhysical: z.boolean(),
   standardEtaDuration: z.number().int().positive('ETA duration must be positive').nullable().optional(),
-  standardEtaUnit: z.enum(['minutes', 'hours', 'days', 'months', 'years'], {
-    errorMap: () => ({ message: 'Invalid ETA unit' })
-  }).nullable().optional(),
+  standardEtaUnit: z.enum(
+    ['minutes', 'hours', 'days', 'months', 'years'],
+    'Invalid ETA unit'
+  ).nullable().optional(),
   isMultipleEntry: z.boolean(),
   familyEnabled: z.boolean(),
   unsupported: z.boolean(),
@@ -103,9 +106,10 @@ export type CreateVisaListingFormValues = z.input<typeof createVisaListingSchema
 // VISA LISTING PRICE OPTIONS
 // ============================================================================
 
-const unitSchema = z.enum(['minutes', 'hours', 'days', 'months', 'years'], {
-  errorMap: () => ({ message: 'Invalid time unit' })
-});
+const unitSchema = z.enum(
+  ['minutes', 'hours', 'days', 'months', 'years'],
+  'Invalid time unit'
+);
 
 export const visaListingPriceSchema = z.object({
   entryValidityAmount: z.number().int().positive('Validity amount must be positive'),
@@ -136,16 +140,17 @@ export const additionalQuestionSchema = z.object({
     .regex(/^[a-z_]+$/, 'Key must be lowercase letters and underscores only'),
   label: z.string().min(3, 'Label must be at least 3 characters').max(255, 'Label too long'),
   description: z.union([z.string().max(500, 'Description too long'), z.literal('')]).nullable().optional(),
-  questionType: z.enum(['text', 'date', 'select', 'dropdown', 'file', 'flight', 'boolean'], {
-    errorMap: () => ({ message: 'Invalid question type' })
-  }),
+  questionType: z.enum(
+    ['text', 'date', 'select', 'dropdown', 'file', 'flight', 'boolean'],
+    'Invalid question type'
+  ),
   required: z.boolean(),
   familyEnabled: z.boolean(),
   onlyB2b: z.boolean(),
   extraInfo: z.union([z.string().max(500, 'Extra info too long'), z.literal('')]).nullable().optional(),
   requiredDoc: z.union([z.string().max(100, 'Required doc too long'), z.literal('')]).nullable().optional(),
   sourceUrl: z.union([z.string().url('Must be a valid URL'), z.literal('')]).nullable().optional(),
-  options: z.array(questionOptionSchema).default([])
+  options: z.array(questionOptionSchema).optional().default([])
 }).refine(data => {
   // Dropdown/select types must have options
   if (data.questionType === 'dropdown' || data.questionType === 'select') {
@@ -171,7 +176,7 @@ export const componentRequiredSchema = z.object({
   familyEnabled: z.boolean(),
   onlyB2b: z.boolean(),
   toggle: z.boolean(),
-  attributes: z.array(z.string()).default([]),
+  attributes: z.array(z.string()).optional().default([]),
   sourceUrl: z.union([z.string().url('Must be a valid URL'), z.literal('')]).nullable().optional(),
 });
 
@@ -189,6 +194,8 @@ export const faqSchema = z.object({
 });
 
 export type FAQ = z.infer<typeof faqSchema>;
+/** @deprecated Use FAQ */
+export type Faq = FAQ;
 
 // ============================================================================
 // POST-CHECKOUT STEP SCHEMAS
@@ -227,9 +234,10 @@ export const passportOcrSettingsSchema = z.object({
 export type PassportOcrSettings = z.infer<typeof passportOcrSettingsSchema>;
 
 export const photoValidationSettingsSchema = z.object({
-  settingType: z.enum(['upload', 'live_capture'], {
-    errorMap: () => ({ message: 'Setting type must be upload or live_capture' })
-  }),
+  settingType: z.enum(
+    ['upload', 'live_capture'],
+    'Setting type must be upload or live_capture'
+  ),
   restrictInvalidPhoto: z.boolean(),
   restrictMultipleFaces: z.boolean(),
   restrictFaceOutsideFrame: z.boolean(),

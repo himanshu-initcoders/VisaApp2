@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { faqSchema, type Faq } from '@/lib/validations/config';
+import { faqSchema, type FAQ } from '@/lib/validations/config';
 import { createFaq, updateFaq } from '@/app/(admin)/admin/config/visa-listings/actions';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -15,7 +15,7 @@ interface FaqData {
   question: string;
   answer: string;
   category: string | null;
-  sortOrder: number;
+  sortOrder: number | null;
   createdAt: Date;
 }
 
@@ -30,14 +30,14 @@ export function FaqFormModal({ processId, initialData, onClose, onSuccess }: Faq
   const isEditMode = !!initialData;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<Faq>({
+  const form = useForm<FAQ>({
     resolver: zodResolver(faqSchema),
     defaultValues: initialData
       ? {
           question: initialData.question,
           answer: initialData.answer,
           category: initialData.category || '',
-          sortOrder: initialData.sortOrder,
+          sortOrder: initialData.sortOrder ?? 0,
         }
       : {
           question: '',
@@ -47,7 +47,7 @@ export function FaqFormModal({ processId, initialData, onClose, onSuccess }: Faq
         },
   });
 
-  const onSubmit = async (data: Faq) => {
+  const onSubmit = async (data: FAQ) => {
     setIsSubmitting(true);
 
     try {

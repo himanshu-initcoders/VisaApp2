@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
         phone: phone || null,
         passwordHash,
         role: 'user',
-        emailVerified: false, // Will be verified via email
+        emailVerified: null, // Will be verified via email
       })
       .returning({
         id: users.id,

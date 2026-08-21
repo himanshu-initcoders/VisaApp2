@@ -6,14 +6,19 @@ import 'next-auth';
 declare module 'next-auth' {
   interface User {
     id: string;
-    email: string;
-    name: string | null;
     role: string;
-    emailVerified: boolean;
+    /** App uses boolean; NextAuth adapter default is Date | null */
+    emailVerified?: boolean | Date | null;
   }
 
   interface Session {
-    user: User;
+    user: {
+      id: string;
+      email: string;
+      name: string | null;
+      role: string;
+      emailVerified?: boolean | Date | null;
+    };
   }
 }
 

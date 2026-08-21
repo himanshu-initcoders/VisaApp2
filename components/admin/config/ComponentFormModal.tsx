@@ -10,17 +10,20 @@ import { Input } from '@/components/ui/Input';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Button } from '@/components/ui/Button';
 import { X } from 'lucide-react';
+import { z } from 'zod';
+
+type ComponentFormValues = z.input<typeof componentRequiredSchema>;
 
 interface Component {
   id: string;
   visaListingId: string;
   key: string;
-  amount: string;
-  chargeable: boolean;
-  familyEnabled: boolean;
-  onlyB2b: boolean;
-  toggle: boolean;
-  attributes: string[];
+  amount: string | null;
+  chargeable: boolean | null;
+  familyEnabled: boolean | null;
+  onlyB2b: boolean | null;
+  toggle: boolean | null;
+  attributes: string[] | null;
   sourceUrl: string | null;
   sortOrder: number;
   createdAt: Date;
@@ -94,16 +97,16 @@ export function ComponentFormModal({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isSubmitting, onClose]);
 
-  const form = useForm<ComponentRequired>({
+  const form = useForm<ComponentFormValues, unknown, ComponentRequired>({
     resolver: zodResolver(componentRequiredSchema),
     defaultValues: initialData
       ? {
           key: initialData.key,
-          amount: initialData.amount,
-          chargeable: initialData.chargeable,
-          familyEnabled: initialData.familyEnabled,
-          onlyB2b: initialData.onlyB2b,
-          toggle: initialData.toggle,
+          amount: initialData.amount || '0',
+          chargeable: initialData.chargeable ?? false,
+          familyEnabled: initialData.familyEnabled ?? false,
+          onlyB2b: initialData.onlyB2b ?? false,
+          toggle: initialData.toggle ?? false,
           attributes: initialData.attributes || [],
           sourceUrl: initialData.sourceUrl || '',
         }
@@ -143,9 +146,18 @@ export function ComponentFormModal({
 
       if (result.success && result.component) {
         onSuccess({
-          ...result.component,
-          attributes: (result.component.attributes as string[]) || [],
+          id: result.component.id,
+          visaListingId: result.component.visaListingId,
+          key: result.component.key,
           amount: String(result.component.amount),
+          chargeable: result.component.chargeable ?? false,
+          familyEnabled: result.component.familyEnabled ?? false,
+          onlyB2b: result.component.onlyB2b ?? false,
+          toggle: result.component.toggle ?? false,
+          attributes: (result.component.attributes as string[]) || [],
+          sourceUrl: result.component.sourceUrl,
+          sortOrder: result.component.sortOrder,
+          createdAt: result.component.createdAt,
         });
       } else {
         alert(result.error || 'Failed to save document requirement');

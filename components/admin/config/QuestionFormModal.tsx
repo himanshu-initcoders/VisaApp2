@@ -11,6 +11,9 @@ import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Button } from '@/components/ui/Button';
 import { X, Plus, Trash2 } from 'lucide-react';
+import { z } from 'zod';
+
+type QuestionFormValues = z.input<typeof additionalQuestionSchema>;
 
 interface Question {
   id: string;
@@ -19,14 +22,14 @@ interface Question {
   label: string;
   description: string | null;
   questionType: 'text' | 'date' | 'select' | 'dropdown' | 'file' | 'flight' | 'boolean';
-  required: boolean;
-  familyEnabled: boolean;
-  onlyB2b: boolean;
+  required: boolean | null;
+  familyEnabled: boolean | null;
+  onlyB2b: boolean | null;
   extraInfo: string | null;
   requiredDoc: string | null;
   sourceUrl: string | null;
-  options: Array<{ label: string; value: string }>;
-  sortOrder: number;
+  options: Array<{ label: string; value: string }> | null;
+  sortOrder: number | null;
   createdAt: Date;
 }
 
@@ -57,7 +60,7 @@ export function QuestionFormModal({
   const isEditMode = !!initialData;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<AdditionalQuestion>({
+  const form = useForm<QuestionFormValues, unknown, AdditionalQuestion>({
     resolver: zodResolver(additionalQuestionSchema),
     defaultValues: initialData
       ? {
@@ -65,9 +68,9 @@ export function QuestionFormModal({
           label: initialData.label,
           description: initialData.description || '',
           questionType: initialData.questionType,
-          required: initialData.required,
-          familyEnabled: initialData.familyEnabled,
-          onlyB2b: initialData.onlyB2b,
+          required: initialData.required ?? true,
+          familyEnabled: initialData.familyEnabled ?? false,
+          onlyB2b: initialData.onlyB2b ?? false,
           extraInfo: initialData.extraInfo || '',
           requiredDoc: initialData.requiredDoc || '',
           sourceUrl: initialData.sourceUrl || '',
@@ -199,22 +202,22 @@ export function QuestionFormModal({
             <div className="space-y-4">
               <Checkbox
                 label="Required"
-                helperText="User must answer this question to proceed"
-                checked={form.watch('required')}
+                description="User must answer this question to proceed"
+                checked={!!form.watch('required')}
                 onChange={(checked) => form.setValue('required', checked)}
               />
 
               <Checkbox
                 label="Family Enabled"
-                helperText="Ask this question for all family members"
-                checked={form.watch('familyEnabled')}
+                description="Ask this question for all family members"
+                checked={!!form.watch('familyEnabled')}
                 onChange={(checked) => form.setValue('familyEnabled', checked)}
               />
 
               <Checkbox
                 label="B2B Only"
-                helperText="Only show in B2B portal"
-                checked={form.watch('onlyB2b')}
+                description="Only show in B2B portal"
+                checked={!!form.watch('onlyB2b')}
                 onChange={(checked) => form.setValue('onlyB2b', checked)}
               />
             </div>

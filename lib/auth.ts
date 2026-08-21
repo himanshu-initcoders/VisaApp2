@@ -62,7 +62,7 @@ export const authConfig: NextAuthConfig = {
             email: user.email,
             name: user.name,
             role: user.role,
-            emailVerified: user.emailVerified,
+            emailVerified: Boolean(user.emailVerified),
           };
         } catch (error) {
           console.error('Auth error:', error);
@@ -99,7 +99,9 @@ export const authConfig: NextAuthConfig = {
       if (token && session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
-        session.user.emailVerified = token.emailVerified as boolean;
+        // Cast: NextAuth DefaultSession keeps emailVerified as Date | null
+        (session.user as { emailVerified?: boolean }).emailVerified =
+          Boolean(token.emailVerified);
       }
       return session;
     },

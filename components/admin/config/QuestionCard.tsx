@@ -11,10 +11,10 @@ interface Question {
   label: string;
   description: string | null;
   questionType: 'text' | 'date' | 'select' | 'dropdown' | 'file' | 'flight' | 'boolean';
-  required: boolean;
-  familyEnabled: boolean;
-  onlyB2b: boolean;
-  options: Array<{ label: string; value: string }>;
+  required: boolean | null;
+  familyEnabled: boolean | null;
+  onlyB2b: boolean | null;
+  options: Array<{ label: string; value: string }> | null;
 }
 
 interface QuestionCardProps {

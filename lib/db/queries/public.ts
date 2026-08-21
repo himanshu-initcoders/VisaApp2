@@ -321,15 +321,17 @@ export async function getPublicProcessPageData(
     };
   });
 
-  const dbRequirements = process.componentsRequired.map((item) => ({
+  const dbRequirements = process.componentsRequired.map((item) => {
+    const attrs = item.attributes ?? [];
+    return {
     id: item.id,
     key: item.key,
     title: item.key
       .replace(/_/g, ' ')
       .replace(/\b\w/g, (character) => character.toUpperCase()),
     description:
-      item.attributes.length > 0
-        ? item.attributes
+      attrs.length > 0
+        ? attrs
             .map((attribute) => attribute.replace(/_/g, ' '))
             .join(', ')
         : item.chargeable
@@ -341,7 +343,8 @@ export async function getPublicProcessPageData(
         ? 'Can be submitted for family travelers too'
         : 'Standard requirement for this destination'),
     chargeable: Boolean(item.chargeable),
-  }));
+  };
+  });
 
   const questionRequirements = process.additionalQuestions.map((question) => ({
     id: question.id,

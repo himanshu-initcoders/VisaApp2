@@ -24,8 +24,8 @@ export interface ApplicationListItem {
   submittedAt: Date | null;
   createdAt: Date;
   // Visa-specific fields
-  country?: string;
-  visaType?: string;
+  country?: string | null;
+  visaType?: string | null;
   // Passport-specific fields
   serviceType?: string;
 }

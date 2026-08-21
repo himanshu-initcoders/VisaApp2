@@ -32,9 +32,9 @@ export function ImageUploadV2({
   const [uploadComplete, setUploadComplete] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentImageUrl || null);
   const [altText, setAltText] = useState(initialAltText);
-  const [dimensions, setDimensions] = useState({
-    width: initialDimensions?.width || undefined,
-    height: initialDimensions?.height || undefined,
+  const [dimensions, setDimensions] = useState<{ width?: number; height?: number }>({
+    width: initialDimensions?.width ?? undefined,
+    height: initialDimensions?.height ?? undefined,
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -118,7 +118,10 @@ export function ImageUploadV2({
     setPreviewUrl(currentImageUrl || null);
     setSelectedFile(null);
     setAltText(initialAltText);
-    setDimensions({ width: initialDimensions?.width, height: initialDimensions?.height });
+    setDimensions({
+      width: initialDimensions?.width ?? undefined,
+      height: initialDimensions?.height ?? undefined,
+    });
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }

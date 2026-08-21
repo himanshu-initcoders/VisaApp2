@@ -54,7 +54,6 @@ export function MultiCountryManager({
 
     const result = await addMultiTripCountry(processId, {
       additionalCountryCode: countryCode.toUpperCase(),
-      sortOrder: 0,
     });
 
     if (result.success) {

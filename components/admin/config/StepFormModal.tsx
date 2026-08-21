@@ -14,7 +14,7 @@ interface StepData {
   visaListingId: string;
   heading: string;
   subheading: string | null;
-  sortOrder: number;
+  sortOrder: number | null;
   createdAt: Date;
 }
 
@@ -35,7 +35,7 @@ export function StepFormModal({ processId, initialData, onClose, onSuccess }: St
       ? {
           heading: initialData.heading,
           subheading: initialData.subheading || '',
-          sortOrder: initialData.sortOrder,
+          sortOrder: initialData.sortOrder ?? 0,
         }
       : {
           heading: '',

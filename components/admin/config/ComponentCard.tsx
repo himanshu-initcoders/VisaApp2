@@ -8,12 +8,12 @@ import { GripVertical } from 'lucide-react';
 interface Component {
   id: string;
   key: string;
-  amount: string;
-  chargeable: boolean;
-  familyEnabled: boolean;
-  onlyB2b: boolean;
-  toggle: boolean;
-  attributes: string[];
+  amount: string | null;
+  chargeable: boolean | null;
+  familyEnabled: boolean | null;
+  onlyB2b: boolean | null;
+  toggle: boolean | null;
+  attributes: string[] | null;
   sourceUrl: string | null;
 }
 
@@ -88,7 +88,7 @@ export function ComponentCard({ component, index, onEdit, onDelete }: ComponentC
           {/* Chargeable Badge */}
           {component.chargeable ? (
             <span className="px-3 py-1 rounded-full text-xs font-medium bg-peach-wash text-portrait-ink">
-              Chargeable: ₹{parseFloat(component.amount).toLocaleString()}
+              Chargeable: ₹{parseFloat(component.amount || '0').toLocaleString()}
             </span>
           ) : (
             <span className="px-3 py-1 rounded-full text-xs font-medium bg-mint-wash text-portrait-ink">

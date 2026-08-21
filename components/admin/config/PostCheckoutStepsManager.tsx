@@ -30,7 +30,7 @@ interface Step {
   visaListingId: string;
   heading: string;
   subheading: string | null;
-  sortOrder: number;
+  sortOrder: number | null;
   createdAt: Date;
 }
 

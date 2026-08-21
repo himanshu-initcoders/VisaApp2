@@ -31,7 +31,7 @@ interface Faq {
   question: string;
   answer: string;
   category: string | null;
-  sortOrder: number;
+  sortOrder: number | null;
   createdAt: Date;
 }
 
