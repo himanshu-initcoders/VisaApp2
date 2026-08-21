@@ -26,7 +26,7 @@ const nextConfig: NextConfig = {
   experimental: {
     // Default Server Action body limit is 1MB; country banner uploads allow up to 5MB
     serverActions: {
-      bodySizeLimit: '6mb',
+      bodySizeLimit: '20mb',
     },
   },
 };
