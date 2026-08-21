@@ -52,6 +52,11 @@ export function FaqsManager({ processId, initialFaqs }: FaqsManagerProps) {
     setIsMounted(true);
   }, []);
 
+  // Keep list in sync after router.refresh() (useState only uses initial props once)
+  useEffect(() => {
+    setFaqs(initialFaqs);
+  }, [initialFaqs]);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {

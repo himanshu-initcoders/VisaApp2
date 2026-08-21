@@ -51,6 +51,11 @@ export function PostCheckoutStepsManager({ processId, initialSteps }: PostChecko
     setIsMounted(true);
   }, []);
 
+  // Keep list in sync after router.refresh() (useState only uses initial props once)
+  useEffect(() => {
+    setSteps(initialSteps);
+  }, [initialSteps]);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {

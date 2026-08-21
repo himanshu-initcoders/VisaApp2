@@ -72,6 +72,11 @@ export function QuestionsManager({ processId, initialQuestions }: QuestionsManag
     setIsMounted(true);
   }, []);
 
+  // Keep list in sync after router.refresh() (useState only uses initial props once)
+  useEffect(() => {
+    setQuestions(initialQuestions);
+  }, [initialQuestions]);
+
   // Drag-and-drop sensors
   const sensors = useSensors(
     useSensor(PointerSensor),

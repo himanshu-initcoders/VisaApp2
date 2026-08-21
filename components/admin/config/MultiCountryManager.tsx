@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -33,10 +33,15 @@ export function MultiCountryManager({
   primaryCountry,
 }: MultiCountryManagerProps) {
   const router = useRouter();
-  const [countries] = useState(initialCountries);
+  const [countries, setCountries] = useState(initialCountries);
   const [isAdding, setIsAdding] = useState(false);
   const [countryCode, setCountryCode] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Keep list in sync after router.refresh() (useState only uses initial props once)
+  useEffect(() => {
+    setCountries(initialCountries);
+  }, [initialCountries]);
 
   const getFlag = (iso2Code: string) => {
     const codePoints = iso2Code
