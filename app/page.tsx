@@ -1,4 +1,3 @@
-import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { HomeLandingClient } from '@/components/public/HomeLandingClient';
 import { MotionReveal } from '@/components/public/MotionReveal';
@@ -12,9 +11,37 @@ export default async function Home() {
   type CountryWithProcesses = (typeof countriesWithProcesses)[number];
   type VisaListing = CountryWithProcesses['visaListings'][number];
 
-  const allProcesses = countriesWithProcesses.flatMap((country: CountryWithProcesses) =>
-    country.visaListings.map((process: VisaListing) => ({
-      ...process,
+  const countries = countriesWithProcesses.map((country: CountryWithProcesses) => {
+    const listings = country.visaListings.map((process: VisaListing) => ({
+      id: process.id,
+      href: process.href,
+      processName: process.processName,
+      processType: process.processType,
+      processTypeLabel: process.processTypeLabel,
+      formattedStartingPrice: process.formattedStartingPrice,
+      startingPrice: process.startingPrice,
+      standardEta: process.standardEta,
+      standardEtaDuration: process.standardEtaDuration,
+      standardEtaUnit: process.standardEtaUnit,
+    }));
+
+    const cheapest = listings.reduce((lowest, listing) =>
+      listing.startingPrice < lowest.startingPrice ? listing : lowest
+    );
+
+    return {
+      name: country.name,
+      iso2Code: country.iso2Code,
+      images: country.images,
+      href: cheapest.href,
+      startingPrice: cheapest.startingPrice,
+      listings,
+    };
+  });
+
+  const allProcesses = countries.flatMap((country) =>
+    country.listings.map((listing) => ({
+      ...listing,
       country: {
         name: country.name,
         iso2Code: country.iso2Code,
@@ -25,11 +52,10 @@ export default async function Home() {
 
   return (
     <>
-      <Header />
       <main className="min-h-screen bg-[#f8f6f1]">
-        <HomeLandingClient processes={allProcesses} />
+        <HomeLandingClient countries={countries} processes={allProcesses} />
 
-        {allProcesses.length > 0 && (
+        {countries.length > 0 && (
           <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-20 lg:px-8">
             <MotionReveal className="rounded-2xl bg-[#0b1220] px-5 py-10 text-center text-white shadow-elevated sm:rounded-[36px] sm:px-10 sm:py-12">
               <p className="text-xs uppercase tracking-[0.24em] text-white/60 sm:text-sm">

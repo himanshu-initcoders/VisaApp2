@@ -8,9 +8,13 @@ interface StickySectionNavProps {
     id: string;
     label: string;
   }>;
+  className?: string;
 }
 
-export function StickySectionNav({ items }: StickySectionNavProps) {
+export function StickySectionNav({
+  items,
+  className,
+}: StickySectionNavProps) {
   const itemIds = useMemo(() => items.map((item) => item.id), [items]);
   const [activeId, setActiveId] = useState(itemIds[0] || '');
 
@@ -45,7 +49,8 @@ export function StickySectionNav({ items }: StickySectionNavProps) {
   return (
     <div
       className={cn(
-        'sticky top-[60px] z-30 border-b border-ash-divider/70 bg-white/90 backdrop-blur sm:top-[55px]'
+        'sticky top-[60px] z-30 border-b border-ash-divider/70 bg-white/90 backdrop-blur sm:top-[55px]',
+        className
       )}
     >
       <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 py-2 sm:gap-2 sm:px-6 sm:py-3 lg:px-8">

@@ -3,6 +3,7 @@
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { useApplyStartFlow } from '@/components/apply/useApplyStartFlow';
+import { readApplyDraft } from '@/lib/apply/draftStorage';
 
 interface StartApplicationCTAProps {
   countryCode: string;
@@ -29,12 +30,20 @@ export function StartApplicationCTA({
     travellers,
   });
 
+  const applyHref = `/visa/${countryCode.toLowerCase()}/${listingId}/apply?travellers=${Math.min(100, Math.max(1, travellers))}`;
+
   return (
     <>
       <Button
         type="button"
         size={size}
-        onClick={requestStart}
+        onClick={() => {
+          if (readApplyDraft(listingId)) {
+            requestStart();
+            return;
+          }
+          window.location.assign(applyHref);
+        }}
         className={
           className ||
           (variant === 'hero'

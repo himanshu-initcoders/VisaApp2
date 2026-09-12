@@ -1,5 +1,13 @@
 import type { Metadata } from 'next';
+import { Caveat } from 'next/font/google';
 import './globals.css';
+
+const caveat = Caveat({
+  subsets: ['latin'],
+  weight: '600',
+  variable: '--font-caveat',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Visa & Passport Services - Fast, Easy, Reliable',
@@ -13,7 +21,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="scroll-smooth">
+    <html
+      lang="en"
+      className={`scroll-smooth ${caveat.variable}`}
+      data-scroll-behavior="smooth"
+    >
       <head>
         {/* Preload critical fonts */}
         <link

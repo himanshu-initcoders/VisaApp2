@@ -43,6 +43,7 @@
 - [x] Button (primary, ghost variants)
 - [x] Card (default, elevated variants)
 - [x] Input (with label, error, helper text)
+- [x] AnimatedTabs (Framer Motion sliding pill)
 - [x] Utility functions (cn)
 
 ---

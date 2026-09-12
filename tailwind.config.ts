@@ -31,6 +31,7 @@ const config: Config = {
           'system-ui',
           'sans-serif',
         ],
+        script: ['var(--font-caveat)', 'cursive'],
       },
       fontSize: {
         caption: [

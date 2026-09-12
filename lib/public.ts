@@ -36,6 +36,53 @@ export function formatProcessType(processType: string) {
   return processType.replace(/_/g, ' ');
 }
 
+export function formatGuaranteedOnDate(
+  duration?: number | null,
+  unit?: string | null,
+  from = new Date()
+) {
+  if (!duration || !unit) return null;
+
+  const date = new Date(from);
+
+  switch (unit) {
+    case 'minutes':
+      date.setMinutes(date.getMinutes() + duration);
+      break;
+    case 'hours':
+      date.setHours(date.getHours() + duration);
+      break;
+    case 'days':
+      date.setDate(date.getDate() + duration);
+      break;
+    case 'months':
+      date.setMonth(date.getMonth() + duration);
+      break;
+    case 'years':
+      date.setFullYear(date.getFullYear() + duration);
+      break;
+    default:
+      return null;
+  }
+
+  return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
 /** Display label for a visa listing purpose (e.g. tourism → Tourism). */
 export function formatVisaKindLabel(input: {
   entryType?: string | null;
@@ -48,6 +95,29 @@ export function formatVisaKindLabel(input: {
   return input.purpose
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+export function getCountryCardImage(
+  images?: {
+    banner?: { url?: string; alt?: string };
+    hero?: { url?: string; alt?: string };
+  } | null
+) {
+  if (images?.banner?.url) {
+    return {
+      url: images.banner.url,
+      alt: images.banner.alt,
+    };
+  }
+
+  if (images?.hero?.url) {
+    return {
+      url: images.hero.url,
+      alt: images.hero.alt,
+    };
+  }
+
+  return null;
 }
 
 export function getFlagEmoji(iso2Code: string) {

@@ -26,3 +26,8 @@ export type { BadgeProps } from './Badge';
 
 export { Select } from './Select';
 export type { SelectProps, SelectOption } from './Select';
+
+export { AnimatedTabs } from './AnimatedTabs';
+export type { AnimatedTabItem } from './AnimatedTabs';
+
+export { AnimatedStatValue } from './AnimatedStatValue';

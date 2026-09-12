@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Check, ChevronDown, Minus, Plus, Users } from 'lucide-react';
-import { Badge, Button } from '@/components/ui';
+import { ArrowRight, Minus, Plus, Users } from 'lucide-react';
+import { AnimatedStatValue, AnimatedTabs, Badge, Button } from '@/components/ui';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { useApplyStartFlow } from '@/components/apply/useApplyStartFlow';
 import { formatPrice } from '@/lib/public';
+import { readApplyDraft } from '@/lib/apply/draftStorage';
 
 const INR = 'INR';
 const MIN_TRAVELLERS = 1;
@@ -44,6 +45,12 @@ interface PricingPanelProps {
   /** Sibling visa listings for this country. Shown only when length > 1. */
   visaKinds?: VisaKindOption[];
   currentListingId?: string;
+  selectedId?: string;
+  onSelectedIdChange?: (id: string) => void;
+}
+
+function stayDaysLabel(option: PriceOptionView) {
+  return option.stayDuration || option.daysLabel || option.entryValidity || 'Package';
 }
 
 function VisaKindSelector({
@@ -56,40 +63,16 @@ function VisaKindSelector({
   tone?: 'dark' | 'light';
 }) {
   const router = useRouter();
-  const listId = useId();
-  const rootRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-
+  const layoutId = useId();
   const current =
     visaKinds.find((kind) => kind.id === currentListingId) || visaKinds[0];
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onPointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
 
   if (!current || visaKinds.length < 2) return null;
 
   const isDark = tone === 'dark';
 
   return (
-    <div ref={rootRef} className="relative">
+    <div>
       <p
         className={`mb-2 text-[10px] uppercase tracking-[0.2em] sm:text-xs ${
           isDark ? 'text-white/50' : 'text-slate-helper'
@@ -97,79 +80,17 @@ function VisaKindSelector({
       >
         Visa type
       </p>
-      <button
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={listId}
-        onClick={() => setOpen((value) => !value)}
-        className={`flex w-full items-center justify-between gap-3 rounded-xl px-3.5 py-3 text-left transition-colors sm:rounded-[20px] sm:px-4 ${
-          isDark
-            ? 'border border-white/15 bg-white/10 hover:bg-white/14'
-            : 'border border-ash-divider bg-[#f8fafc] hover:bg-sky-wash/60'
-        }`}
-      >
-        <span
-          className={`text-sm font-medium ${
-            isDark ? 'text-white' : 'text-portrait-ink'
-          }`}
-        >
-          {current.label}
-        </span>
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
-            open ? 'rotate-180' : ''
-          } ${isDark ? 'text-white/70' : 'text-slate-helper'}`}
-        />
-      </button>
-
-      {open && (
-        <ul
-          id={listId}
-          role="listbox"
-          aria-label="Available visa types"
-          className={`absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-xl border py-1 shadow-elevated sm:rounded-[20px] ${
-            isDark
-              ? 'border-white/15 bg-[#121a2b]'
-              : 'border-ash-divider bg-white'
-          }`}
-        >
-          {visaKinds.map((kind) => {
-            const isActive = kind.id === current.id;
-            return (
-              <li key={kind.id} role="option" aria-selected={isActive}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    if (kind.id !== current.id) {
-                      router.push(kind.href);
-                    }
-                  }}
-                  className={`flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left text-sm transition-colors sm:px-4 sm:py-3 ${
-                    isDark
-                      ? isActive
-                        ? 'bg-white/12 text-white'
-                        : 'text-white/80 hover:bg-white/8 hover:text-white'
-                      : isActive
-                        ? 'bg-sky-wash text-portrait-ink'
-                        : 'text-portrait-ink hover:bg-[#f8fafc]'
-                  }`}
-                >
-                  <span>{kind.label}</span>
-                  {isActive && (
-                    <Check
-                      className={`h-4 w-4 shrink-0 ${
-                        isDark ? 'text-white' : 'text-portrait-ink'
-                      }`}
-                    />
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <AnimatedTabs
+        items={visaKinds.map((kind) => ({ id: kind.id, label: kind.label }))}
+        value={current.id}
+        onChange={(id) => {
+          const kind = visaKinds.find((item) => item.id === id);
+          if (kind && kind.id !== current.id) router.push(kind.href);
+        }}
+        tone={tone}
+        ariaLabel="Visa type"
+        layoutId={`visa-kind${layoutId}`}
+      />
     </div>
   );
 }
@@ -267,16 +188,25 @@ export function PricingPanel({
   isFree,
   countryCode,
   listingId,
-  compact = false,
+  compact: _compact = false,
   priceOptions,
   headline,
   visaKinds = [],
   currentListingId,
+  selectedId: selectedIdProp,
+  onSelectedIdChange,
 }: PricingPanelProps) {
-  const [selectedId, setSelectedId] = useState(priceOptions[0]?.id);
+  const stayTabsId = useId();
+  const [internalSelectedId, setInternalSelectedId] = useState(priceOptions[0]?.id);
   const [travellers, setTravellers] = useState(MIN_TRAVELLERS);
+  const selectedId = selectedIdProp ?? internalSelectedId;
   const selected =
     priceOptions.find((option) => option.id === selectedId) || priceOptions[0];
+
+  const setSelectedId = (id: string) => {
+    if (selectedIdProp === undefined) setInternalSelectedId(id);
+    onSelectedIdChange?.(id);
+  };
 
   const { requestStart, modals } = useApplyStartFlow({
     countryCode,
@@ -301,10 +231,20 @@ export function PricingPanel({
       : formatPrice(scaledTotal, INR)
     : headline || 'FREE';
 
+  const applyHref = `/visa/${countryCode.toLowerCase()}/${listingId}/apply?travellers=${Math.min(100, Math.max(1, travellers))}${
+    selected?.id ? `&priceOption=${selected.id}` : ''
+  }`;
+
   const startButton = (className?: string) => (
     <Button
       type="button"
-      onClick={requestStart}
+        onClick={() => {
+          if (readApplyDraft(listingId)) {
+            requestStart();
+            return;
+          }
+          window.location.assign(applyHref);
+        }}
       className={
         className ||
         'w-full group flex items-center justify-center'
@@ -330,6 +270,28 @@ export function PricingPanel({
         onChange={setTravellers}
         tone={tone}
       />
+      {priceOptions.length > 1 && selected && (
+        <div>
+          <p
+            className={`mb-2 text-[10px] uppercase tracking-[0.2em] sm:text-xs ${
+              tone === 'dark' ? 'text-white/50' : 'text-slate-helper'
+            }`}
+          >
+            Stay
+          </p>
+          <AnimatedTabs
+            items={priceOptions.map((option) => ({
+              id: option.id,
+              label: stayDaysLabel(option),
+            }))}
+            value={selected.id}
+            onChange={setSelectedId}
+            tone={tone}
+            ariaLabel="Stay duration"
+            layoutId={`stay-days${stayTabsId}`}
+          />
+        </div>
+      )}
     </div>
   );
 
@@ -391,13 +353,16 @@ export function PricingPanel({
               Pricing
             </p>
             <h3 className="mt-2 font-basier text-2xl text-white sm:mt-3 sm:text-3xl">
-              {displayHeadline}
+              <AnimatedStatValue value={displayHeadline} />
             </h3>
             <p className="mt-1 text-xs text-white/65 sm:text-sm">
-              {selected.daysLabel
-                ? `Package: ${selected.daysLabel}`
-                : 'Choose a validity and stay package'}
-              {travellers > 1 ? ` · ${travellers} travellers` : ''}
+              <AnimatedStatValue
+                value={`${
+                  selected.daysLabel
+                    ? `Package: ${selected.daysLabel}`
+                    : 'Choose a validity and stay package'
+                }${travellers > 1 ? ` · ${travellers} travellers` : ''}`}
+              />
             </p>
           </div>
           <Badge className="border-0 bg-white text-portrait-ink text-[10px] sm:text-xs">
@@ -405,90 +370,29 @@ export function PricingPanel({
           </Badge>
         </div>
 
-        {!compact && priceOptions.length > 1 && (
-          <div className="mt-5 grid gap-2 sm:mt-6 sm:gap-3">
-            {priceOptions.map((option) => {
-              const isActive = option.id === selected.id;
-              const optionTotal = scaleAmount(
-                option.governmentFeeAmount +
-                  option.serviceFeeAmount +
-                  option.governmentGstFeeAmount
-              );
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setSelectedId(option.id)}
-                  className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors sm:rounded-[20px] sm:px-4 sm:py-3 ${
-                    isActive ? 'bg-white/16 ring-1 ring-white/30' : 'bg-white/8 hover:bg-white/12'
-                  }`}
-                >
-                  <div>
-                    <p className="text-sm font-medium text-white">
-                      {option.stayDuration || option.entryValidity || 'Package'}
-                    </p>
-                    <p className="text-xs text-white/55">
-                      {option.entryValidity
-                        ? `${option.entryValidity} validity`
-                        : 'Validity on request'}
-                    </p>
-                  </div>
-                  <p className="text-sm font-semibold text-white">
-                    {formatPrice(optionTotal, INR)}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {compact && priceOptions.length > 1 && (
-          <div className="mt-5 space-y-2 sm:mt-6">
-            {priceOptions.map((option) => {
-              const isActive = option.id === selected.id;
-              const optionTotal = scaleAmount(
-                option.governmentFeeAmount +
-                  option.serviceFeeAmount +
-                  option.governmentGstFeeAmount
-              );
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setSelectedId(option.id)}
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors sm:rounded-[20px] sm:px-4 sm:py-3 ${
-                    isActive ? 'bg-white/16 ring-1 ring-white/30' : 'bg-white/8 hover:bg-white/12'
-                  }`}
-                >
-                  <p className="text-sm text-white/80">
-                    {option.daysLabel || 'Package'}
-                  </p>
-                  <p className="text-sm font-semibold text-white">
-                    {formatPrice(optionTotal, INR)}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
         <div className="mt-5 space-y-3 rounded-xl bg-white/8 p-4 sm:mt-6 sm:space-y-4 sm:rounded-[24px] sm:p-5">
           <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
             <span>Government fee</span>
             <span>
-              {formatPrice(scaleAmount(selected.governmentFeeAmount), INR)}
+              <AnimatedStatValue
+                value={formatPrice(scaleAmount(selected.governmentFeeAmount), INR)}
+              />
             </span>
           </div>
           <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
             <span>Service fee</span>
             <span>
-              {formatPrice(scaleAmount(selected.serviceFeeAmount), INR)}
+              <AnimatedStatValue
+                value={formatPrice(scaleAmount(selected.serviceFeeAmount), INR)}
+              />
             </span>
           </div>
           <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
             <span>Government GST</span>
             <span>
-              {formatPrice(scaleAmount(selected.governmentGstFeeAmount), INR)}
+              <AnimatedStatValue
+                value={formatPrice(scaleAmount(selected.governmentGstFeeAmount), INR)}
+              />
             </span>
           </div>
         </div>

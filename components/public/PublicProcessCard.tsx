@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { ArrowUpRight, Clock3, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { formatProcessType, getFlagEmoji } from '@/lib/public';
+import { formatProcessType, getCountryCardImage, getFlagEmoji } from '@/lib/public';
 
 interface PublicProcessCardProps {
   process: {
@@ -19,6 +19,10 @@ interface PublicProcessCardProps {
       name: string;
       iso2Code: string;
       images?: {
+        banner?: {
+          url?: string;
+          alt?: string;
+        };
         hero?: {
           url?: string;
           alt?: string;
@@ -34,6 +38,7 @@ export function PublicProcessCard({
   className,
 }: PublicProcessCardProps) {
   const isFree = process.startingPrice === 0;
+  const cardImage = getCountryCardImage(process.country.images);
 
   return (
     <Link
@@ -46,11 +51,12 @@ export function PublicProcessCard({
       {/* Desktop: tall image card */}
       <div className="hidden sm:block">
         <div className="relative h-72 overflow-hidden">
-          {process.country.images?.hero?.url ? (
+          {cardImage ? (
             <Image
-              src={process.country.images.hero.url}
-              alt={process.country.images.hero.alt || process.country.name}
+              src={cardImage.url}
+              alt={cardImage.alt || process.country.name}
               fill
+              sizes="(min-width: 1280px) 25vw, (min-width: 640px) 50vw, 100vw"
               className="object-cover transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
@@ -112,11 +118,12 @@ export function PublicProcessCard({
       {/* Mobile: compact horizontal card */}
       <div className="flex items-center gap-3 p-3 sm:hidden">
         <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl">
-          {process.country.images?.hero?.url ? (
+          {cardImage ? (
             <Image
-              src={process.country.images.hero.url}
-              alt={process.country.images.hero.alt || process.country.name}
+              src={cardImage.url}
+              alt={cardImage.alt || process.country.name}
               fill
+              sizes="80px"
               className="object-cover"
             />
           ) : (
