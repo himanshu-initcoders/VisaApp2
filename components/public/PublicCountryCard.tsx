@@ -11,6 +11,7 @@ export interface HomeCountryListing {
   href: string;
   processName: string;
   startingPrice: number;
+  purpose?: string;
 }
 
 export interface HomeCountryCardData {
@@ -61,7 +62,7 @@ export function PublicCountryCard({ country, className }: PublicCountryCardProps
           <div className="absolute inset-0 bg-gradient-to-t from-[#0b1220] via-[#0b1220]/30 to-transparent" />
           <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4">
             <div>
-              <p className="mb-2 text-sm text-white/80">
+              <p className="mb-2 text-sm text-white/80" suppressHydrationWarning>
                 {getFlagEmoji(country.iso2Code)}
               </p>
               <h3 className="font-basier text-2xl font-medium leading-tight text-white">
@@ -115,7 +116,7 @@ export function PublicCountryCard({ country, className }: PublicCountryCardProps
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="flex items-center gap-1.5 text-[15px] font-medium text-portrait-ink">
-            <span>{getFlagEmoji(country.iso2Code)}</span>
+            <span suppressHydrationWarning>{getFlagEmoji(country.iso2Code)}</span>
             {country.name}
           </h3>
           <p className="mt-0.5 truncate text-xs text-slate-helper">

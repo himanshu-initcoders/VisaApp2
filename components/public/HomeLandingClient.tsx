@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 import { CountrySearchOverlay } from '@/components/public/CountrySearchOverlay';
 import { DestinationSearchBar } from '@/components/public/DestinationSearchBar';
 import { LandingHero } from '@/components/public/LandingHero';
@@ -53,6 +55,7 @@ export function HomeLandingClient({
   const [query, setQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSearchStuck, setIsSearchStuck] = useState(false);
+  const [activeCategory, setActiveCategory] = useState('all');
   const heroSearchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -70,6 +73,25 @@ export function HomeLandingClient({
     return () => observer.disconnect();
   }, []);
 
+  const availablePurposes = useMemo(() => {
+    const seen = new Set<string>();
+    for (const country of countries) {
+      for (const listing of country.listings) {
+        if (listing.purpose) seen.add(listing.purpose);
+      }
+    }
+    return ['tourism', 'business', 'work', 'study', 'family', 'medical', 'transit'].filter(
+      (purpose) => seen.has(purpose)
+    );
+  }, [countries]);
+
+  const visibleCountries = useMemo(() => {
+    if (activeCategory === 'all') return countries;
+    return countries.filter((country) =>
+      country.listings.some((listing) => listing.purpose === activeCategory)
+    );
+  }, [activeCategory, countries]);
+
   const openSearch = () => setIsSearchOpen(true);
   const closeSearch = () => {
     setIsSearchOpen(false);
@@ -79,7 +101,6 @@ export function HomeLandingClient({
   return (
     <>
       <Header
-        overlay
         center={
           isSearchStuck && !isSearchOpen ? (
             <DestinationSearchBar variant="nav" onActivate={openSearch} />
@@ -87,7 +108,13 @@ export function HomeLandingClient({
         }
       />
 
-      <LandingHero onSearchOpen={openSearch} searchRef={heroSearchRef} />
+      <LandingHero
+        onSearchOpen={openSearch}
+        searchRef={heroSearchRef}
+        activeCategory={activeCategory}
+        onCategoryChange={setActiveCategory}
+        availablePurposes={availablePurposes}
+      />
 
       {isSearchOpen && (
         <CountrySearchOverlay
@@ -99,16 +126,34 @@ export function HomeLandingClient({
       )}
 
       <section
-        className="mx-auto max-w-7xl px-4 pb-8 pt-6 sm:px-6 sm:pb-12 sm:pt-10 lg:px-8"
+        className="mx-auto max-w-7xl px-4 pb-8 pt-6 sm:px-6 sm:pb-12 sm:pt-8 lg:px-8"
         id="visas"
       >
-        <div className="space-y-3 sm:grid sm:grid-cols-2 sm:gap-6 sm:space-y-0 xl:grid-cols-4">
-          {countries.map((country, index) => (
-            <MotionReveal key={country.iso2Code} delayMs={Math.min(index * 40, 240)}>
-              <PublicCountryCard country={country} />
-            </MotionReveal>
-          ))}
-        </div>
+        {visibleCountries.length > 0 ? (
+          <div className="space-y-3 sm:grid sm:grid-cols-2 sm:gap-6 sm:space-y-0 xl:grid-cols-4">
+            {visibleCountries.map((country, index) => (
+              <MotionReveal
+                key={country.iso2Code}
+                delayMs={Math.min(index * 40, 240)}
+              >
+                <PublicCountryCard country={country} />
+              </MotionReveal>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-3xl border border-ash bg-white px-5 py-8 text-sm text-slate-helper">
+            No destinations in this category yet. Try another icon or search
+            above.
+          </p>
+        )}
+
+        <Link
+          href="/destinations"
+          className="mt-5 inline-flex items-center text-sm font-medium text-portrait-ink"
+        >
+          View all destinations
+          <ArrowRight className="ml-1 h-4 w-4" />
+        </Link>
       </section>
     </>
   );

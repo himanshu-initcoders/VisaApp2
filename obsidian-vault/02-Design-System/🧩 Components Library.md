@@ -177,6 +177,14 @@
 
 ---
 
+## Home & listing heroes
+
+Navy canvas `#062445`, destination photo, cream wave (`HeroWave`) into `#f8f6f1`. Listing heroes use Apply + Check Eligibility. Mobile is photo-first.
+
+The **home page** does not use that full hero. It uses a compact search strip: Visas / Passport icon tabs, an Atlys-style India + Where to? pill, Airbnb-style category icons, then destination cards.
+
+---
+
 ## Implementation Notes
 
 All components use:
