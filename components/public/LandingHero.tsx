@@ -1,9 +1,8 @@
 'use client';
 
-import type { Ref } from 'react';
+import { useEffect, useState, type Ref } from 'react';
 import Link from 'next/link';
 import {
-  BookOpen,
   Briefcase,
   Building2,
   Globe,
@@ -22,12 +21,14 @@ const PRODUCT_TABS = [
     label: 'Visas',
     href: '#visas',
     imageSrc: '/visa.gif',
+    playOnHover: false,
   },
   {
     id: 'passport',
     label: 'Passport',
     href: '/passport',
-    Icon: BookOpen,
+    imageSrc: '/passport.gif',
+    playOnHover: true,
   },
 ] as const;
 
@@ -53,6 +54,63 @@ const CATEGORY_LABELS: Record<string, string> = {
   transit: 'Transit',
 };
 
+function HoverGif({
+  src,
+  playing,
+}: {
+  src: string;
+  playing: boolean;
+}) {
+  const [frozenSrc, setFrozenSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const image = new window.Image();
+    image.src = src;
+
+    image.onload = () => {
+      if (cancelled) return;
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth || image.width;
+      canvas.height = image.naturalHeight || image.height;
+      const context = canvas.getContext('2d');
+      if (!context) return;
+      context.drawImage(image, 0, 0);
+      setFrozenSrc(canvas.toDataURL('image/png'));
+    };
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+
+  return (
+    <span className="relative inline-flex h-16 w-16 shrink-0 mix-blend-multiply">
+      {/* Preloaded GIF always underneath — no remount, no blink */}
+      <img
+        src={src}
+        alt=""
+        width={64}
+        height={64}
+        className="absolute inset-0 h-16 w-16 rounded-full object-cover"
+        aria-hidden
+      />
+      {/* Frozen first frame covers it until hover */}
+      <img
+        src={frozenSrc || src}
+        alt=""
+        width={64}
+        height={64}
+        className={cn(
+          'absolute inset-0 h-16 w-16 rounded-full object-cover transition-opacity duration-200 ease-out',
+          playing ? 'opacity-0' : 'opacity-100'
+        )}
+        aria-hidden
+      />
+    </span>
+  );
+}
+
 export interface LandingHeroProps {
   onSearchOpen: () => void;
   searchRef?: Ref<HTMLDivElement>;
@@ -68,6 +126,8 @@ export function LandingHero({
   onCategoryChange,
   availablePurposes,
 }: LandingHeroProps) {
+  const [passportPlaying, setPassportPlaying] = useState(false);
+
   const categories = [
     'all',
     ...availablePurposes.filter((purpose) => purpose in CATEGORY_ICONS),
@@ -79,6 +139,9 @@ export function LandingHero({
         <div className="mb-5 flex items-center justify-center gap-8 sm:mb-6">
           {PRODUCT_TABS.map((tab) => {
             const isActive = tab.id === 'visa';
+            const imageClassName =
+              'h-16 w-16 rounded-full object-cover mix-blend-multiply';
+
             return (
               <Link
                 key={tab.id}
@@ -89,18 +152,41 @@ export function LandingHero({
                     ? 'border-b-2 border-portrait-ink text-portrait-ink'
                     : 'border-b-2 border-transparent text-slate-helper hover:text-portrait-ink'
                 )}
+                onMouseEnter={
+                  tab.playOnHover
+                    ? () => setPassportPlaying(true)
+                    : undefined
+                }
+                onMouseLeave={
+                  tab.playOnHover
+                    ? () => setPassportPlaying(false)
+                    : undefined
+                }
+                onFocus={
+                  tab.playOnHover
+                    ? () => setPassportPlaying(true)
+                    : undefined
+                }
+                onBlur={
+                  tab.playOnHover
+                    ? () => setPassportPlaying(false)
+                    : undefined
+                }
               >
-                {'imageSrc' in tab ? (
+                {tab.playOnHover ? (
+                  <HoverGif
+                    src={tab.imageSrc}
+                    playing={passportPlaying}
+                  />
+                ) : (
                   <img
                     src={tab.imageSrc}
                     alt=""
-                    width={28}
-                    height={28}
-                    className="h-16 w-16 object-cover mix-blend-multiply rounded-full"
+                    width={64}
+                    height={64}
+                    className={imageClassName}
                     aria-hidden
                   />
-                ) : (
-                  <tab.Icon className="h-6 w-6" aria-hidden />
                 )}
                 {tab.label}
               </Link>
