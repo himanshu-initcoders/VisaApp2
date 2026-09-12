@@ -101,6 +101,7 @@ export function HomeLandingClient({
   return (
     <>
       <Header
+        overlay
         center={
           isSearchStuck && !isSearchOpen ? (
             <DestinationSearchBar variant="nav" onActivate={openSearch} />

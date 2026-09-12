@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type Ref } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import {
   Briefcase,
@@ -134,8 +135,21 @@ export function LandingHero({
   ];
 
   return (
-    <section className="bg-[#f8f6f1] pt-24 sm:pt-28">
-      <div className="mx-auto max-w-3xl px-4 sm:px-6">
+    <section className="relative overflow-hidden pt-24 sm:pt-28">
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        <Image
+          src="/hero.png"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover object-[center_30%]"
+        />
+        <div className="absolute inset-0 bg-[#f8f6f1]/35" />
+        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-b from-transparent to-[#f8f6f1]" />
+      </div>
+
+      <div className="relative z-10 mx-auto max-w-3xl px-4 sm:px-6">
         <div className="mb-5 flex items-center justify-center gap-8 sm:mb-6">
           {PRODUCT_TABS.map((tab) => {
             const isActive = tab.id === 'visa';
@@ -199,7 +213,7 @@ export function LandingHero({
         </div>
       </div>
 
-      <div className="mx-auto mt-6 max-w-3xl border-b border-ash px-4 sm:mt-7 sm:px-6">
+      <div className="relative z-10 mx-auto mt-6 max-w-3xl border-b border-ash/80 px-4 sm:mt-7 sm:px-6">
         <div
           role="tablist"
           aria-label="Visa categories"
