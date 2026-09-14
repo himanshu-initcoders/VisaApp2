@@ -39,7 +39,8 @@ function toRecognizable(image: Tesseract.ImageLike): Tesseract.ImageLike {
 
   const candidate = image as { toBuffer?: (mime: string) => Uint8Array };
   if (typeof candidate?.toBuffer === 'function') {
-    return candidate.toBuffer('image/png');
+    // napi-rs canvas returns Uint8Array; tesseract.js types ImageLike as Buffer.
+    return Buffer.from(candidate.toBuffer('image/png'));
   }
   return image;
 }

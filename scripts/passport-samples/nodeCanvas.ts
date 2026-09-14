@@ -24,10 +24,24 @@ import {
   loadImage,
 } from '@napi-rs/canvas';
 
-type Global = typeof globalThis & Record<string, unknown>;
-const scope = globalThis as Global;
+type ShimGlobal = {
+  document?: {
+    createElement(tag: string): unknown;
+    createElementNS(ns: string, tag: string): unknown;
+    fonts: { add: (font: unknown) => unknown };
+  };
+  HTMLCanvasElement?: unknown;
+  HTMLImageElement?: unknown;
+  Image?: unknown;
+  ImageData?: unknown;
+  Path2D?: unknown;
+  DOMMatrix?: unknown;
+  createImageBitmap?: unknown;
+};
+const scope = globalThis as unknown as ShimGlobal;
 
 if (!scope.document) {
+  // napi-rs Canvas is not an HTMLElement; this only has to satisfy pdf.js at runtime.
   scope.document = {
     createElement(tag: string) {
       if (tag !== 'canvas') {
@@ -36,16 +50,14 @@ if (!scope.document) {
       return createCanvas(1, 1);
     },
     createElementNS(_ns: string, tag: string) {
-      return (scope.document as { createElement(t: string): unknown }).createElement(
-        tag
-      );
+      return scope.document!.createElement(tag);
     },
     fonts: { add: () => undefined },
   };
 }
 
-scope.HTMLCanvasElement ??= Canvas as unknown as typeof HTMLCanvasElement;
-scope.HTMLImageElement ??= Image as unknown as typeof HTMLImageElement;
+scope.HTMLCanvasElement ??= Canvas;
+scope.HTMLImageElement ??= Image;
 scope.Image ??= Image;
 scope.ImageData ??= ImageData;
 scope.Path2D ??= Path2D;
@@ -60,7 +72,9 @@ if (!canvasProto.toBlob) {
   canvasProto.toBlob = function toBlob(callback, type = 'image/png', quality) {
     const format = type === 'image/jpeg' ? 'jpeg' : 'png';
     this.encode(format, quality !== undefined ? Math.round(quality * 100) : undefined)
-      .then((buffer) => callback(new Blob([buffer], { type })))
+      .then((buffer) =>
+        callback(new Blob([Uint8Array.from(buffer)], { type }))
+      )
       .catch(() => callback(null));
   };
 }
