@@ -1,11 +1,18 @@
 import type { Metadata } from 'next';
-import { Caveat } from 'next/font/google';
+import { Caveat, Instrument_Serif } from 'next/font/google';
 import './globals.css';
 
 const caveat = Caveat({
   subsets: ['latin'],
   weight: '600',
   variable: '--font-caveat',
+  display: 'swap',
+});
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ['latin'],
+  weight: '400',
+  variable: '--font-instrument-serif',
   display: 'swap',
 });
 
@@ -23,7 +30,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`scroll-smooth ${caveat.variable}`}
+      className={`scroll-smooth ${caveat.variable} ${instrumentSerif.variable}`}
       data-scroll-behavior="smooth"
     >
       <head>

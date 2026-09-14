@@ -4,9 +4,11 @@ import {
   HTMLAttributes,
   ReactNode,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
+import { VISA_KIND_NAV_CLASS } from '@/components/public/PreserveListingView';
 import { cn } from '@/lib/utils';
 
 interface MotionRevealProps extends HTMLAttributes<HTMLDivElement> {
@@ -39,6 +41,12 @@ export function MotionReveal({
   const ref = useRef<HTMLDivElement | null>(null);
   const prefersReducedMotion = usePrefersReducedMotion();
   const [isVisible, setIsVisible] = useState(false);
+
+  useLayoutEffect(() => {
+    if (document.documentElement.classList.contains(VISA_KIND_NAV_CLASS)) {
+      setIsVisible(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (prefersReducedMotion) {

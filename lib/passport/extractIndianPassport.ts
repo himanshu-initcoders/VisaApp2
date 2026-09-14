@@ -1,22 +1,32 @@
 import { parse as parseMrz } from 'mrz';
 import Tesseract from 'tesseract.js';
 import type { IndianPassportExtraction } from './types';
+import { canvasToBlob } from './pdfToImage';
 import {
-  canvasToBlob,
-  isPdfFile,
-  pdfPagesToCanvases,
-} from './pdfToImage';
-import { normalizeDocumentPages } from './documentRegion';
-import { extractBackPageDetails, type BackPageDetails } from './backPage';
+  extractBackPageDetails,
+  hasBackPageEvidence,
+  looksLikeFrontPage,
+  type BackPageDetails,
+  type BackPageOptions,
+} from './backPage';
 import {
   binarizeCanvas,
   cropCanvas,
   findTextLineBands,
   padRect,
+  rotateCanvas,
   sourceSize,
+  type Rotation,
 } from './imageOps';
+import { mrzRegion } from './mrzLocate';
+import { rankBackPageCandidates } from './pageSelect';
+import { selectCandidatePages, type CandidatePage } from './pipeline';
+import {
+  createPassportOcr,
+  MRZ_WHITELIST,
+  type PassportOcr,
+} from './ocr';
 
-const MRZ_WHITELIST = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<';
 const TD3_LEN = 44;
 
 export class IndianPassportError extends Error {
@@ -26,56 +36,60 @@ export class IndianPassportError extends Error {
   }
 }
 
-/** Crop and binarize the MRZ band at the bottom of a passport data page. */
+/**
+ * Crop and binarize the MRZ band.
+ *
+ * The band is located by its shape, so this works on a booklet spread where
+ * the MRZ sits mid-page and on a notarised copy with stamps printed below it.
+ * `bottomRatio` is only the fallback for an image with no detectable band.
+ */
 export function detectMrzRegion(
   source: HTMLCanvasElement | HTMLImageElement,
   bottomRatio = 0.28
 ): HTMLCanvasElement {
-  const { width, height } = sourceSize(source);
-  const cropHeight = Math.max(48, Math.floor(height * bottomRatio));
-  const band = cropCanvas(
-    source,
-    { x: 0, y: height - cropHeight, width, height: cropHeight },
-    Math.min(2600, Math.max(width * 2, 1800))
-  );
-  return binarizeCanvas(band);
+  return binarizeCanvas(cropMrzBand(source, bottomRatio));
 }
 
+/** Color/grayscale MRZ crop — phone photos often binarize worse than they OCR. */
+export function cropMrzBand(
+  source: HTMLCanvasElement | HTMLImageElement,
+  bottomRatio = 0.28
+): HTMLCanvasElement {
+  const { width, height } = sourceSize(source);
+  const located = mrzRegion(source);
+  const rect =
+    located.rect.height > 0
+      ? located.rect
+      : {
+          x: 0,
+          y: height - Math.max(48, Math.floor(height * bottomRatio)),
+          width,
+          height: Math.max(48, Math.floor(height * bottomRatio)),
+        };
+
+  return cropCanvas(source, rect, Math.min(2600, Math.max(rect.width * 2, 2000)));
+}
+
+/**
+ * One-off OCR pass. `mrzMode` selects the OCR-B model and the MRZ character
+ * repertoire; without it the printed zone is read with English.
+ */
 export async function ocrText(
   image: HTMLCanvasElement | HTMLImageElement | Blob | File,
   options?: {
     mrzMode?: boolean;
-    psm?: typeof Tesseract.PSM[keyof typeof Tesseract.PSM];
-    worker?: Tesseract.Worker;
+    psm?: (typeof Tesseract.PSM)[keyof typeof Tesseract.PSM];
+    ocr?: PassportOcr;
   }
 ): Promise<{ text: string; confidence: number }> {
-  const ownsWorker = !options?.worker;
-  const worker =
-    options?.worker ||
-    (await Tesseract.createWorker('eng', undefined, {
-      logger: () => undefined,
-    }));
-
+  const ocr = options?.ocr ?? (await createPassportOcr());
   try {
-    if (options?.mrzMode) {
-      await worker.setParameters({
-        tessedit_char_whitelist: MRZ_WHITELIST,
-        tessedit_pageseg_mode: options.psm ?? Tesseract.PSM.SINGLE_BLOCK,
-        preserve_interword_spaces: '0',
-      });
-    } else {
-      await worker.setParameters({
-        tessedit_char_whitelist: '',
-        tessedit_pageseg_mode: options?.psm ?? Tesseract.PSM.AUTO,
-      });
-    }
-    const result = await worker.recognize(image);
-    return {
-      text: result.data.text || '',
-      confidence: result.data.confidence ?? 0,
-    };
+    return await ocr.recognize(image, {
+      language: options?.mrzMode ? 'ocrb' : 'eng',
+      psm: options?.psm,
+    });
   } finally {
-    if (ownsWorker) await worker.terminate();
+    if (!options?.ocr) await ocr.terminate();
   }
 }
 
@@ -94,10 +108,28 @@ function pad44(line: string): string {
 /**
  * Rebuild TD3 line 1. Prefer existing << separator; otherwise reconstruct from tokens.
  */
+/**
+ * ICAO 9303 document type. Passports are P (P, PD diplomatic, PS service).
+ * Visas are V (MRV-A / MRV-B) and ID cards are I/A/C (TD1/TD2) — a passport
+ * parser must reject those rather than rewrite them.
+ */
+export function isPassportMrzLine(line: string): boolean {
+  const s = normalizeMrz(line);
+  if (s.length < 20) return false;
+  // Postal PIN lines on the last page (PIN:500039,TELANGANA,INDIA) start with
+  // P and must never be rewritten into a fake TD3.
+  if (/^PIN\d{5,}/.test(s)) return false;
+  // P / PD / PS, then a 3-letter country, then the start of a name — not a digit.
+  return /^[PFR]<?[A-Z]{3}[A-Z]/.test(s);
+}
+
 export function correctMrzLine1(line: string): string {
   let s = normalizeMrz(line);
   if (s.startsWith('PIND')) s = `P<${s.slice(1)}`;
-  if (!s.startsWith('P<')) s = `P<${s.replace(/^P/, '')}`;
+  // Only normalize to P< when the line really is a passport line. Forcing it
+  // would turn an MRV-A visa line (VCAUT…) into a fake passport MRZ.
+  if (!isPassportMrzLine(s)) return pad44(s);
+  if (!s.startsWith('P<')) s = `P<${s.replace(/^[PFR]/, '')}`;
 
   // Ensure country code shape P<IND...
   if (!/^P<[A-Z]{3}/.test(s) && s.startsWith('P<')) {
@@ -112,21 +144,24 @@ export function correctMrzLine1(line: string): string {
   // Strip trailing fillers so <<<... doesn't fake a name separator
   let rest = m[2].replace(/<+$/, '');
 
-  // Real TD3 name separator is << with no junk < inside surname
+  // Real TD3 name separator is <<. A single < inside the surname is a space
+  // (TIRUNELVELI<SARANGAPANI), not OCR junk — skipping that case used to
+  // shove the second surname token into the given names.
   const sepAt = rest.indexOf('<<');
   if (sepAt >= 0) {
     const surnamePart = rest.slice(0, sepAt);
     const givenPart = rest.slice(sepAt + 2);
-    // Clean MRZ: surname has no single-< OCR junk
-    if (!surnamePart.includes('<')) {
-      const surname = surnamePart.replace(/[^A-Z]/g, '');
-      const given = givenPart
-        .split('<')
-        .map((t) => t.replace(/[^A-Z]/g, ''))
-        .filter((t) => t.length >= 2)
-        .join('<');
-      if (surname) return pad44(`P<${country}${surname}<<${given}`);
-    }
+    const surname = surnamePart
+      .split('<')
+      .map((t) => t.replace(/[^A-Z]/g, ''))
+      .filter((t) => t.length >= 2)
+      .join('<');
+    const given = givenPart
+      .split('<')
+      .map((t) => t.replace(/[^A-Z]/g, ''))
+      .filter((t) => t.length >= 2)
+      .join('<');
+    if (surname) return pad44(`P<${country}${surname}<<${given}`);
   }
 
   // No clean << — OCR turned separators into C/K/L letters
@@ -237,9 +272,12 @@ export function findTd3MrzLines(ocrRaw: string): [string, string] | null {
     .map((l) => normalizeMrz(l))
     .filter((l) => l.length >= 20);
 
-  const line1 = rawLines.find((l) => l.includes('P<') || l.startsWith('P'));
+  const line1 = rawLines.find((l) => isPassportMrzLine(l));
   const line2 = rawLines.find(
-    (l) => /[A-Z]{0,2}\d{6,}/.test(l) && (l.includes('IND') || /[MFX]/.test(l))
+    (l) =>
+      !isPassportMrzLine(l) &&
+      /[A-Z]{0,2}\d{6,}/.test(l) &&
+      (l.includes('IND') || /[MFX]/.test(l))
   );
 
   if (line1 && line2) {
@@ -274,7 +312,11 @@ export function parseTd3Manually(lines: [string, string]) {
   const countryOfIssue = line1.slice(2, 5).replace(/</g, '');
   const nameRest = line1.slice(5);
   const [surRaw, givenRaw = ''] = nameRest.split('<<');
-  const surname = surRaw.replace(/</g, '').replace(/[^A-Z]/g, '');
+  const surname = surRaw
+    .split('<')
+    .map((p) => p.replace(/[^A-Z]/g, ''))
+    .filter((p) => p.length >= 2)
+    .join(' ');
   const givenNames = givenRaw
     .split('<')
     .map((p) => p.replace(/[^A-Z]/g, ''))
@@ -309,13 +351,22 @@ function sanitizePersonName(value: string): string {
     .toUpperCase()
     .replace(/[^A-Z\s'-]/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+    .split(' ')
+    .filter(
+      (token) =>
+        token.length >= 2 &&
+        !/^[EILCKT]{2,3}$/.test(token) &&
+        !/[BCDFGHJKLMNPQRSTVWXYZ]{6,}/.test(token)
+    )
+    .join(' ');
 }
 
 function looksLikeGarbageName(value: string): boolean {
   if (!value) return true;
   if (value.length === 1) return true;
-  if (value.length > 30) return true;
+  // Indian given names can be a long compound (Dilip's is 35 characters).
+  if (value.length > 60) return true;
   if (/[LCK]{4,}/.test(value)) return true;
   const fillers = (value.match(/[LCK]/g) || []).length;
   if (fillers > value.length / 2) return true;
@@ -415,6 +466,60 @@ export function repairWithCheckDigit(
   return matches.size === 1 ? [...matches][0] : null;
 }
 
+/**
+ * TD3 composite check digit (ICAO 9303 Part 4): covers the document number
+ * field, the birth date field and the optional-data field, and is the single
+ * strongest signal that a whole line 2 was read correctly.
+ */
+export function td3CompositeCheckDigit(line2: string): string {
+  const padded = pad44(line2);
+  return mrzCheckDigit(
+    padded.slice(0, 10) + padded.slice(13, 20) + padded.slice(21, 43)
+  );
+}
+
+export interface Td3Validation {
+  /** Line 1 declares a passport, not a visa or ID card. */
+  isPassportType: boolean;
+  /** Line 2 matches the TD3 field layout. */
+  hasTd3Layout: boolean;
+  numberCheckOk: boolean;
+  birthCheckOk: boolean;
+  expiryCheckOk: boolean;
+  compositeCheckOk: boolean;
+  /** How many of the four check digits verified. */
+  checksPassed: number;
+}
+
+/**
+ * Structural verdict on a TD3 pair. Used both to reject non-passport MRZs and
+ * to rank competing OCR readings of the same passport.
+ */
+export function validateTd3(lines: [string, string]): Td3Validation {
+  const line1 = pad44(normalizeMrz(lines[0]));
+  const line2 = pad44(normalizeMrz(lines[1]));
+
+  const numberCheckOk = mrzCheckDigit(line2.slice(0, 9)) === line2.slice(9, 10);
+  const birthCheckOk = mrzCheckDigit(line2.slice(13, 19)) === line2.slice(19, 20);
+  const expiryCheckOk = mrzCheckDigit(line2.slice(21, 27)) === line2.slice(27, 28);
+  const compositeCheckOk = td3CompositeCheckDigit(line2) === line2.slice(43, 44);
+
+  return {
+    isPassportType: isPassportMrzLine(lines[0]),
+    hasTd3Layout: /^[A-Z0-9<]{9}[0-9<][A-Z<]{3}\d{6}[0-9<][MFX<]\d{6}/.test(line2),
+    numberCheckOk,
+    birthCheckOk,
+    expiryCheckOk,
+    compositeCheckOk,
+    checksPassed: [
+      numberCheckOk,
+      birthCheckOk,
+      expiryCheckOk,
+      compositeCheckOk,
+    ].filter(Boolean).length,
+  };
+}
+
 function isPlausibleIndianNumberField(candidate: string): boolean {
   return /^[A-Z]{1,2}\d{6,7}<*$/.test(candidate);
 }
@@ -427,10 +532,19 @@ function isPlausibleMrzDate(candidate: string): boolean {
 }
 
 export function parseAndValidateMrz(lines: [string, string]) {
+  // A visa or ID-card MRZ carries an IND nationality too, so it would sail
+  // through the India gate below and overwrite the passport fields.
+  if (!isPassportMrzLine(lines[0])) {
+    throw new IndianPassportError(
+      'This looks like a visa or ID card page, not the passport data page'
+    );
+  }
+
   const corrected: [string, string] = [
     correctMrzLine1(lines[0]),
     correctMrzLine2(lines[1]),
   ];
+  const structure = validateTd3(corrected);
   const manual = parseTd3Manually(corrected);
 
   let result: ReturnType<typeof parseMrz> | null = null;
@@ -482,9 +596,8 @@ export function parseAndValidateMrz(lines: [string, string]) {
   // A field is only repaired when another field's check digit verifies —
   // otherwise the mis-read character could be the check digit itself.
   const line2 = corrected[1];
-  const numberOk = mrzCheckDigit(line2.slice(0, 9)) === line2.slice(9, 10);
-  const birthOk = mrzCheckDigit(line2.slice(13, 19)) === line2.slice(19, 20);
-  const expiryOk = mrzCheckDigit(line2.slice(21, 27)) === line2.slice(27, 28);
+  const { numberCheckOk: numberOk, birthCheckOk: birthOk, expiryCheckOk: expiryOk } =
+    structure;
 
   const numberField =
     numberOk || birthOk || expiryOk
@@ -541,6 +654,7 @@ export function parseAndValidateMrz(lines: [string, string]) {
     documentType: 'P',
     countryOfIssue: 'IND',
     correctedLines: corrected,
+    structure,
     details: result?.details || [],
   };
 }
@@ -786,7 +900,7 @@ export function extractVisualZoneNames(ocrTextFull: string) {
 /** Back page fields plus the issue date, wherever it was printed. */
 export function mergeBackPageFields(
   ocrTextFull: string,
-  options?: { currentPassportNumber?: string }
+  options?: BackPageOptions
 ): BackPageDetails {
   const text = ocrTextFull.replace(/\r/g, '\n');
   const details = extractBackPageDetails(text, options);
@@ -801,64 +915,6 @@ export function mergeBackPageFields(
         'ISSUED ON',
       ]),
   };
-}
-
-async function loadImage(blob: Blob): Promise<HTMLImageElement> {
-  const url = URL.createObjectURL(blob);
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Failed to load image'));
-    img.src = url;
-  });
-}
-
-function imageToCanvas(img: HTMLImageElement): HTMLCanvasElement {
-  const canvas = document.createElement('canvas');
-  canvas.width = img.naturalWidth || img.width;
-  canvas.height = img.naturalHeight || img.height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new IndianPassportError('Canvas unavailable');
-  ctx.drawImage(img, 0, 0);
-  return canvas;
-}
-
-/**
- * Rasterize input and crop the actual passport out of each sheet.
- * Scanned PDFs put a small passport on a big white page — OCR needs the crop.
- */
-async function inputToDocumentPages(
-  input: File | Blob | HTMLCanvasElement
-): Promise<HTMLCanvasElement[]> {
-  const rawPages: HTMLCanvasElement[] = [];
-
-  if (input instanceof HTMLCanvasElement) {
-    rawPages.push(input);
-  } else {
-    const header = new Uint8Array(await input.slice(0, 5).arrayBuffer());
-    const isPdf =
-      isPdfFile(input) ||
-      (header[0] === 0x25 &&
-        header[1] === 0x50 &&
-        header[2] === 0x44 &&
-        header[3] === 0x46);
-
-    if (isPdf) {
-      const pages = await pdfPagesToCanvases(input, 3);
-      if (!pages.length) {
-        throw new IndianPassportError('Could not read PDF pages');
-      }
-      rawPages.push(...pages);
-    } else {
-      rawPages.push(imageToCanvas(await loadImage(input)));
-    }
-  }
-
-    const documents: HTMLCanvasElement[] = [];
-  for (const page of rawPages) {
-    documents.push(...normalizeDocumentPages(page, { maxRegions: 3 }));
-  }
-  return documents.slice(0, 4);
 }
 
 function frontPageScore(text: string): number {
@@ -888,8 +944,16 @@ function backPageScore(text: string): number {
   return score;
 }
 
+/**
+ * Minimum back-page score to accept a page as the back page. One strong label
+ * (father, mother) or a pair of weaker ones clears it; a visa page or a blank
+ * sheet does not. Below this we report no back page rather than guessing,
+ * because a wrong guess silently fills the parent fields.
+ */
+const BACK_PAGE_SCORE_FLOOR = 4;
+
 /** Pick which cropped document is the data page and which is the back page. */
-function classifyPages(texts: string[]): { front: number; back: number } {
+export function classifyPages(texts: string[]): { front: number; back: number } {
   if (texts.length === 1) return { front: 0, back: -1 };
 
   let front = 0;
@@ -903,7 +967,7 @@ function classifyPages(texts: string[]): { front: number; back: number } {
   });
 
   let back = -1;
-  let bestBack = 0;
+  let bestBack = BACK_PAGE_SCORE_FLOOR - 1;
   texts.forEach((text, index) => {
     if (index === front) return;
     const score = backPageScore(text);
@@ -913,7 +977,6 @@ function classifyPages(texts: string[]): { front: number; back: number } {
     }
   });
 
-  if (back === -1) back = front === 0 ? 1 : 0;
   return { front, back };
 }
 
@@ -923,7 +986,7 @@ function classifyPages(texts: string[]): { front: number; back: number } {
  */
 async function readMrzByLineBands(
   front: HTMLCanvasElement,
-  worker: Tesseract.Worker
+  ocr: PassportOcr
 ): Promise<[string, string] | null> {
   const band = detectMrzRegion(front, 0.34);
   const bands = findTextLineBands(band, { minInkRatio: 0.03 });
@@ -933,6 +996,7 @@ async function readMrzByLineBands(
 
   const texts: string[] = [];
   for (const rect of candidates) {
+    if (rect.width < 80 || rect.height < 6) continue;
     const padded = padRect(
       rect,
       Math.round(band.width * 0.01),
@@ -942,25 +1006,276 @@ async function readMrzByLineBands(
     const lineCanvas = cropCanvas(band, padded, 2000);
     const { text } = await ocrText(lineCanvas, {
       mrzMode: true,
-      worker,
+      ocr,
       psm: Tesseract.PSM.SINGLE_LINE,
     });
     texts.push(text);
   }
 
   const [a, b] = texts;
-  const aIsFirst = normalizeMrz(a).includes('P<') || !normalizeMrz(b).includes('P<');
+  if (!a || !b) return null;
+  const aIsFirst = isPassportMrzLine(a) || !isPassportMrzLine(b);
   const first = aIsFirst ? a : b;
   const second = aIsFirst ? b : a;
+  if (!isPassportMrzLine(first)) return null;
   return [correctMrzLine1(first), correctMrzLine2(second)];
 }
 
 type ParsedMrz = ReturnType<typeof parseAndValidateMrz>;
 
-/** Rank MRZ readings so the most complete one wins. */
-function scoreMrzResult(parsed: ParsedMrz): number {
+/**
+ * Check digits verified before we stop looking. Three of four means the
+ * number, birth date and expiry all independently agree, which in practice
+ * only happens on a correct reading.
+ */
+const MRZ_CONFIDENT_CHECKS = 3;
+
+/** Orientation attempts across the whole upload, to bound scan time. */
+const MAX_MRZ_ATTEMPTS = 8;
+
+/** Extra crops read only to locate the back page. */
+const MAX_BACK_PAGE_PASSES = 3;
+
+interface MrzSearchResult {
+  parsed: ParsedMrz | null;
+  score: number;
+  sawNonIndian: boolean;
+}
+
+/** Best parse among several competing readings of the same MRZ. */
+function bestOf(
+  candidates: Array<[string, string]>,
+  incumbent?: MrzSearchResult
+): MrzSearchResult {
+  let parsed = incumbent?.parsed ?? null;
+  let score = incumbent?.score ?? -1;
+  let sawNonIndian = incumbent?.sawNonIndian ?? false;
+
+  for (const candidate of candidates) {
+    try {
+      const result = parseAndValidateMrz(candidate);
+      const candidateScore = scoreMrzResult(result);
+      if (candidateScore > score) {
+        score = candidateScore;
+        parsed = result;
+      }
+    } catch (error) {
+      if (
+        error instanceof IndianPassportError &&
+        error.message.includes('Only Indian')
+      ) {
+        sawNonIndian = true;
+      }
+    }
+  }
+
+  return { parsed, score, sawNonIndian };
+}
+
+/** Pull an MRZ out of already-OCR'd page text. Last resort for poor scans. */
+function findMrzInTexts(texts: string[]): MrzSearchResult {
+  const candidates: Array<[string, string]> = [];
+  for (const text of texts) {
+    const found = findTd3MrzLines(text);
+    if (found) candidates.push(found);
+  }
+  return bestOf(candidates);
+}
+
+/** Read the MRZ off one oriented crop using several segmentation modes. */
+async function readMrzFromCrop(
+  crop: HTMLCanvasElement,
+  ocr: PassportOcr
+): Promise<{ candidates: Array<[string, string]>; confidence: number }> {
+  const candidates: Array<[string, string]> = [];
+  let confidence = 0;
+
+  // Per-line beats block mode on low-resolution scans, so it goes first
+  const lineBands = await readMrzByLineBands(crop, ocr);
+  if (lineBands) candidates.push(lineBands);
+
+  const mrzCanvas = detectMrzRegion(crop);
+  for (const psm of [
+    Tesseract.PSM.SINGLE_BLOCK,
+    Tesseract.PSM.SINGLE_COLUMN,
+  ] as const) {
+    const pass = await ocrText(mrzCanvas, { mrzMode: true, ocr, psm });
+    confidence = Math.max(confidence, pass.confidence);
+    const found = findTd3MrzLines(pass.text);
+    if (found) candidates.push(found);
+  }
+
+  if (!candidates.some((pair) => isPassportMrzLine(pair[0]))) {
+    const colorBand = cropMrzBand(crop);
+    const pass = await ocrText(colorBand, {
+      mrzMode: true,
+      ocr,
+      psm: Tesseract.PSM.SINGLE_BLOCK,
+    });
+    confidence = Math.max(confidence, pass.confidence);
+    const found = findTd3MrzLines(pass.text);
+    if (found) candidates.push(found);
+  }
+
+  // A4 scans and phone photos often leave the MRZ mid-frame, not at the
+  // bottom. If the geometric band missed, try the lower-middle of the page.
+  if (!candidates.some((pair) => isPassportMrzLine(pair[0]))) {
+    const { width, height } = sourceSize(crop);
+    const fallbacks = [
+      {
+        x: 0,
+        y: Math.floor(height * 0.52),
+        width,
+        height: Math.floor(height * 0.38),
+      },
+      {
+        x: 0,
+        y: Math.floor(height * 0.32),
+        width,
+        height: Math.floor(height * 0.4),
+      },
+    ];
+    for (const rect of fallbacks) {
+      if (rect.height < 24) continue;
+      const band = binarizeCanvas(
+        cropCanvas(crop, rect, Math.min(2600, Math.max(rect.width * 2, 2000)))
+      );
+      const pass = await ocrText(band, {
+        mrzMode: true,
+        ocr,
+        psm: Tesseract.PSM.SINGLE_BLOCK,
+      });
+      confidence = Math.max(confidence, pass.confidence);
+      const found = findTd3MrzLines(pass.text);
+      if (found && isPassportMrzLine(found[0])) {
+        candidates.push(found);
+        break;
+      }
+    }
+  }
+
+  return {
+    candidates: candidates.filter((pair) => isPassportMrzLine(pair[0])),
+    confidence,
+  };
+}
+
+/** Rotate a candidate to an absolute orientation, allowing for the one already applied. */
+function reorient(
+  candidate: CandidatePage,
+  target: Rotation
+): HTMLCanvasElement {
+  const delta = ((((target - candidate.rotation) % 360) + 360) % 360) as Rotation;
+  return delta === 0 ? candidate.canvas : rotateCanvas(candidate.canvas, delta);
+}
+
+/**
+ * Identify the data page and its orientation together.
+ *
+ * Attempts are ordered by each crop's best-guess orientation first, then by
+ * the 180° flip, because a well-ranked crop at its predicted orientation is
+ * far more likely than a poorly-ranked one. The search stops as soon as
+ * enough check digits verify, so a clean upload costs a single pass.
+ */
+async function findDataPage(
+  pageCandidates: CandidatePage[],
+  ocr: PassportOcr
+): Promise<{
+  page: CandidatePage | null;
+  parsed: ParsedMrz | null;
+  confidence: number;
+  sawNonIndian: boolean;
+}> {
+  // Embedded text is free and often already holds a valid TD3 (scanner OCR).
+  const fromText = findMrzInTexts(pageCandidates.map((c) => c.textLayer));
+  if (
+    fromText.parsed &&
+    fromText.parsed.structure.checksPassed >= MRZ_CONFIDENT_CHECKS
+  ) {
+    const withMrz = pageCandidates.filter((candidate) =>
+      findTd3MrzLines(candidate.textLayer)
+    );
+    const page =
+      [...withMrz].sort((a, b) => b.bandScore - a.bandScore)[0] ??
+      pageCandidates[0] ??
+      null;
+    return {
+      page,
+      parsed: fromText.parsed,
+      confidence: 90,
+      sawNonIndian: fromText.sawNonIndian,
+    };
+  }
+
+  const attempts: Array<{ candidate: CandidatePage; rotation: Rotation }> = [];
+  for (const rank of [0, 1, 2]) {
+    for (const candidate of pageCandidates) {
+      const rotations: Rotation[] = [
+        candidate.rotation,
+        ...candidate.fallbackRotations,
+      ];
+      const rotation = rotations[rank];
+      if (rotation !== undefined) attempts.push({ candidate, rotation });
+    }
+  }
+
+  let best: MrzSearchResult = fromText;
+  let bestPage: CandidatePage | null = fromText.parsed
+    ? [...pageCandidates]
+        .filter((candidate) => findTd3MrzLines(candidate.textLayer))
+        .sort((a, b) => b.bandScore - a.bandScore)[0] ?? pageCandidates[0]
+    : null;
+  let confidence = fromText.parsed ? 70 : 0;
+
+  for (const { candidate, rotation } of attempts.slice(0, MAX_MRZ_ATTEMPTS)) {
+    const canvas = reorient(candidate, rotation);
+    const { candidates, confidence: passConfidence } = await readMrzFromCrop(
+      canvas,
+      ocr
+    );
+    confidence = Math.max(confidence, passConfidence);
+
+    const previousScore = best.score;
+    best = bestOf(candidates, best);
+    if (best.score > previousScore) {
+      bestPage = { ...candidate, canvas, rotation };
+    }
+
+    if (
+      best.parsed &&
+      best.parsed.structure.checksPassed >= MRZ_CONFIDENT_CHECKS
+    ) {
+      break;
+    }
+  }
+
+  return {
+    page: bestPage,
+    parsed: best.parsed,
+    confidence,
+    sawNonIndian: best.sawNonIndian,
+  };
+}
+
+/**
+ * Rank MRZ readings so the most complete one wins.
+ *
+ * Check digits carry the most weight: they are the only evidence that is
+ * independent of how plausible the text happens to look.
+ */
+export function scoreMrzResult(parsed: ParsedMrz): number {
+  if (
+    looksLikeGarbagePassportNumber(parsed.passportNumber) &&
+    parsed.structure.checksPassed < 2
+  ) {
+    return -1;
+  }
+  if (!isPassportMrzLine(parsed.correctedLines[0])) return -1;
+
   let score = 0;
   if (parsed.valid) score += 10;
+  score += parsed.structure.checksPassed * 6;
+  if (parsed.structure.hasTd3Layout) score += 4;
   if (parsed.passportNumberVerified) score += 5;
   if (!looksLikeGarbagePassportNumber(parsed.passportNumber)) score += 4;
   if (!looksLikeGarbageName(parsed.surname)) score += 3;
@@ -989,31 +1304,97 @@ export function collectDates(text: string): string[] {
   return dates;
 }
 
+/** Indian passport validity: 10 years for adults, 5 for minors. */
+const VALIDITY_YEARS = [10, 5] as const;
+
+function shiftIsoDate(iso: string, years: number, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(y + years, m - 1, d + days));
+  return date.toISOString().slice(0, 10);
+}
+
+function yearsBetween(fromIso: string, toIso: string): number {
+  return (
+    (Date.parse(toIso) - Date.parse(fromIso)) / (365.2425 * 24 * 60 * 60 * 1000)
+  );
+}
+
 /**
- * Indian passports are issued for 10 years, so birth/issue/expiry can be
- * inferred from an unlabeled set of dates when OCR loses the labels.
+ * Issue date implied by an expiry date. Indian passports expire exactly one
+ * day short of the validity anniversary (issued 05/03/2024 → 04/03/2034), so
+ * this is exact rather than approximate.
  */
-export function inferDates(dates: string[]): {
+export function issueDateFromExpiry(expiryIso: string, validityYears = 10): string {
+  return shiftIsoDate(expiryIso, -validityYears, 1);
+}
+
+function isPlausibleBirthDate(iso: string, todayIso: string): boolean {
+  const age = yearsBetween(iso, todayIso);
+  return age >= 0 && age <= 120;
+}
+
+function isPlausibleExpiryDate(iso: string, todayIso: string): boolean {
+  const delta = yearsBetween(todayIso, iso);
+  return delta >= -15 && delta <= 11;
+}
+
+/**
+ * Recover birth/issue/expiry from an unlabelled set of dates.
+ *
+ * A scanned sheet often carries dates that belong to nothing on the data page
+ * — a notary stamp, an old passport's issue date, a visa validity — so this
+ * only accepts dates that fit the passport's own arithmetic. Anchors are
+ * fields already read from the MRZ and are never overridden.
+ */
+export function inferDates(
+  dates: string[],
+  anchors?: { dateOfBirth?: string; dateOfExpiry?: string; todayIso?: string }
+): {
   dateOfBirth?: string;
   dateOfIssue?: string;
   dateOfExpiry?: string;
 } {
-  if (dates.length < 2) return {};
-  const sorted = [...dates].sort();
-  const dateOfBirth = sorted[0];
-  const dateOfExpiry = sorted[sorted.length - 1];
+  const todayIso = anchors?.todayIso || new Date().toISOString().slice(0, 10);
+  const candidates = [...new Set(dates.filter(isIsoDate))].sort();
+
+  const dateOfExpiry =
+    (anchors?.dateOfExpiry && isIsoDate(anchors.dateOfExpiry)
+      ? anchors.dateOfExpiry
+      : undefined) ||
+    [...candidates]
+      .reverse()
+      .find((iso) => isPlausibleExpiryDate(iso, todayIso));
+
+  const dateOfBirth =
+    (anchors?.dateOfBirth && isIsoDate(anchors.dateOfBirth)
+      ? anchors.dateOfBirth
+      : undefined) ||
+    candidates.find(
+      (iso) =>
+        isPlausibleBirthDate(iso, todayIso) &&
+        (!dateOfExpiry || iso < dateOfExpiry)
+    );
 
   let dateOfIssue: string | undefined;
-  const expiryYear = Number(dateOfExpiry.slice(0, 4));
-  for (const candidate of sorted) {
-    if (candidate === dateOfBirth || candidate === dateOfExpiry) continue;
-    const year = Number(candidate.slice(0, 4));
-    if (expiryYear - year === 10) {
-      dateOfIssue = candidate;
-      break;
+  if (dateOfExpiry) {
+    // Prefer a date actually printed on the page that matches the arithmetic
+    for (const years of VALIDITY_YEARS) {
+      const derived = issueDateFromExpiry(dateOfExpiry, years);
+      if (candidates.includes(derived)) {
+        dateOfIssue = derived;
+        break;
+      }
+    }
+    if (!dateOfIssue) {
+      // No printed match — derive it, choosing validity by age at issue
+      const tenYear = issueDateFromExpiry(dateOfExpiry, 10);
+      const wasMinor =
+        dateOfBirth !== undefined && yearsBetween(dateOfBirth, tenYear) < 18;
+      dateOfIssue = wasMinor
+        ? issueDateFromExpiry(dateOfExpiry, 5)
+        : tenYear;
     }
   }
-  if (!dateOfIssue && sorted.length >= 3) dateOfIssue = sorted[1];
 
   return { dateOfBirth, dateOfIssue, dateOfExpiry };
 }
@@ -1021,11 +1402,24 @@ export function inferDates(dates: string[]): {
 /**
  * Back page lists father, mother, spouse and address in fixed order.
  * Used when bilingual labels are too noisy for the label regexes.
+ *
+ * Order alone is not evidence, so this refuses to guess on data-page text and
+ * skips any candidate built only from the holder's own name tokens.
  */
-export function extractParentsPositional(backText: string): {
+export function extractParentsPositional(
+  backText: string,
+  options?: { holderNames?: string[] }
+): {
   fathersName?: string;
   mothersName?: string;
 } {
+  if (looksLikeFrontPage(backText) || !hasBackPageEvidence(backText)) {
+    return {};
+  }
+
+  const holderFull = sanitizePersonName((options?.holderNames || []).join(' '));
+  const holderGiven = sanitizePersonName(options?.holderNames?.[1] || '');
+
   const lines = backText
     .replace(/\r/g, '\n')
     .split('\n')
@@ -1043,11 +1437,37 @@ export function extractParentsPositional(backText: string): {
     if (cleaned !== cleaned.toUpperCase()) continue;
     const words = cleaned.split(' ');
     if (words.length > 4) continue;
+    if (holderFull && cleaned === holderFull) continue;
+    if (holderGiven && cleaned === holderGiven) continue;
     names.push(cleaned);
     if (names.length === 2) break;
   }
 
   return { fathersName: names[0], mothersName: names[1] };
+}
+
+function isNameCompletion(mrz: string, visual: string): boolean {
+  const mrzTokens = mrz.split(/\s+/).filter(Boolean);
+  const visualTokens = visual.split(/\s+/).filter(Boolean);
+  if (!mrzTokens.length || visualTokens.length < mrzTokens.length) return false;
+  if (visualTokens.length > mrzTokens.length) return false;
+  return mrzTokens.every((token, index) => {
+    const other = visualTokens[index];
+    if (index < mrzTokens.length - 1) return other === token;
+    return other.startsWith(token) && other.length > token.length && other.length - token.length <= 12;
+  });
+}
+
+function pickBestName(mrzValue?: string, visualValue?: string): string {
+  const mrzOk = mrzValue && !looksLikeGarbageName(mrzValue);
+  const visualOk = visualValue && !looksLikeGarbageName(visualValue);
+  if (mrzOk && visualOk) {
+    if (isNameCompletion(mrzValue, visualValue)) return visualValue;
+    return mrzValue;
+  }
+  if (mrzOk) return mrzValue;
+  if (visualOk) return visualValue;
+  return mrzValue || visualValue || '';
 }
 
 function pickBest(
@@ -1062,10 +1482,88 @@ function pickBest(
   return mrzValue || visualValue || '';
 }
 
+function recoverIndianPassportNumber(
+  mrz?: string,
+  visual?: string,
+  verified?: boolean
+): string {
+  // OCR often prefixes a 1-letter Indian number with I or T (T1131439 → IT1131439).
+  if (
+    mrz &&
+    visual &&
+    /^[A-Z]\d{7}$/.test(visual) &&
+    mrz.length === visual.length + 1 &&
+    mrz.endsWith(visual)
+  ) {
+    return visual;
+  }
+  if (verified && mrz && !looksLikeGarbagePassportNumber(mrz)) return mrz;
+  return pickBest(mrz, visual, looksLikeGarbagePassportNumber);
+}
+
 function pickBestDate(mrzValue?: string, visualValue?: string): string {
   if (mrzValue && isIsoDate(mrzValue)) return mrzValue;
   if (visualValue && isIsoDate(visualValue)) return visualValue;
   return mrzValue || visualValue || '';
+}
+
+/** OCR a likely-back crop, trying the next rotation if the first has no labels. */
+async function readBackPageText(
+  candidate: CandidatePage,
+  ocr: PassportOcr
+): Promise<{ text: string; canvas: HTMLCanvasElement; confidence: number }> {
+  const rotations: Rotation[] = [
+    candidate.rotation,
+    ...candidate.fallbackRotations,
+  ].slice(0, 2);
+
+  let best = {
+    text: '',
+    canvas: candidate.canvas,
+    confidence: 0,
+    score: -1,
+  };
+
+  for (const rotation of rotations) {
+    const canvas = reorient(candidate, rotation);
+    const pass = await ocrText(canvas, { mrzMode: false, ocr });
+    const score = backPageScore(pass.text);
+    if (score > best.score) {
+      best = {
+        text: pass.text,
+        canvas,
+        confidence: pass.confidence,
+        score,
+      };
+    }
+    if (score >= BACK_PAGE_SCORE_FLOOR) break;
+  }
+
+  return best;
+}
+
+async function readPrintedZone(
+  canvas: HTMLCanvasElement,
+  ocr: PassportOcr
+): Promise<{ text: string; confidence: number }> {
+  const first = await ocrText(canvas, { mrzMode: false, ocr });
+  if (first.text.replace(/\s+/g, '').length > 50) return first;
+
+  const { width, height } = sourceSize(canvas);
+  const inset = cropCanvas(canvas, {
+    x: Math.floor(width * 0.06),
+    y: Math.floor(height * 0.06),
+    width: Math.floor(width * 0.88),
+    height: Math.floor(height * 0.74),
+  });
+  const retry = await ocrText(inset, {
+    mrzMode: false,
+    ocr,
+    psm: Tesseract.PSM.SPARSE_TEXT,
+  });
+  return retry.text.replace(/\s+/g, '').length > first.text.replace(/\s+/g, '').length
+    ? retry
+    : first;
 }
 
 /**
@@ -1080,142 +1578,156 @@ export async function extractIndianPassport(
   input: File | Blob | HTMLCanvasElement
 ): Promise<IndianPassportExtraction> {
   const warnings: string[] = [];
-  const pages = await inputToDocumentPages(input);
-  if (!pages.length) {
+  const pageCandidates = await selectCandidatePages(input);
+  if (!pageCandidates.length) {
     throw new IndianPassportError('Could not read this passport file');
   }
 
-  const worker = await Tesseract.createWorker('eng', undefined, {
-    logger: () => undefined,
-  });
+  const ocr = await createPassportOcr();
 
   try {
-    const pageTexts: string[] = [];
-    let bestVisualConfidence = 0;
-    for (const page of pages) {
-      const result = await ocrText(page, { mrzMode: false, worker });
-      pageTexts.push(result.text);
-      bestVisualConfidence = Math.max(bestVisualConfidence, result.confidence);
+    // Find the data page by reading an MRZ off it, not by its position in the
+    // file. Orientation is settled the same way: the crop and quarter turn
+    // that yield a check-digit-valid TD3 are, by definition, the right ones.
+    const search = await findDataPage(pageCandidates, ocr);
+    let parsed = search.parsed;
+    const front = search.page?.canvas ?? pageCandidates[0].canvas;
+    const mrzConfidence = search.confidence;
+    const sourcePageCount =
+      search.page?.sourcePageCount ?? pageCandidates[0].sourcePageCount ?? 1;
+    const dataPageNumber = search.page?.pageNumber ?? 1;
+
+    const frontPass = await readPrintedZone(front, ocr);
+    const frontText = [frontPass.text, search.page?.textLayer]
+      .filter(Boolean)
+      .join('\n');
+    let bestVisualConfidence = frontPass.confidence;
+
+    const otherPages = rankBackPageCandidates(
+      pageCandidates.filter((candidate) => candidate.id !== search.page?.id),
+      dataPageNumber,
+      sourcePageCount
+    );
+
+    const otherReads: Array<{
+      candidate: CandidatePage;
+      text: string;
+      canvas: HTMLCanvasElement;
+    }> = [];
+    for (const candidate of otherPages.slice(0, MAX_BACK_PAGE_PASSES)) {
+      const pass = await readBackPageText(candidate, ocr);
+      otherReads.push({
+        candidate: { ...candidate, canvas: pass.canvas },
+        text: pass.text,
+        canvas: pass.canvas,
+      });
+      bestVisualConfidence = Math.max(bestVisualConfidence, pass.confidence);
     }
 
-    const { front: frontIndex, back: backIndex } = classifyPages(pageTexts);
-    const front = pages[frontIndex];
-    const back = backIndex >= 0 ? pages[backIndex] : undefined;
-    const frontText = pageTexts[frontIndex];
-    // Everything OCR'd, so a single image holding both pages still yields
-    // back-page fields even when no separate back crop was detected.
-    const corpus = pageTexts.join('\n');
-    const backText = backIndex >= 0 ? pageTexts[backIndex] : corpus;
-    const combined = corpus;
+    const otherTexts = otherReads.map((read) => read.text);
+
+    // The MRZ may still have failed on a very poor scan; fall back to reading
+    // the printed labels. Do not feed visa-page text in as if it were a second
+    // data page — findMrzInTexts already rejects non-passport lines.
+    let retrySawNonIndian = false;
+    if (!parsed) {
+      const retry = findMrzInTexts([
+        frontText,
+        ...pageCandidates.map((candidate) => candidate.textLayer),
+        ...otherTexts,
+      ]);
+      parsed = retry.parsed;
+      retrySawNonIndian = retry.sawNonIndian;
+    }
+
+    // Back page: only a crop that scores as one, never a positional guess
+    const { back: backOffset } = classifyPages([frontText, ...otherTexts]);
+    const separateBack = backOffset > 0;
+    const backRead = separateBack ? otherReads[backOffset - 1] : undefined;
+    const backText = separateBack
+      ? otherTexts[backOffset - 1]
+      : hasBackPageEvidence(frontText)
+        ? frontText
+        : '';
 
     const frontPreviewUrl = URL.createObjectURL(await canvasToBlob(front));
-    const backPreviewUrl = back
-      ? URL.createObjectURL(await canvasToBlob(back))
+    const backPreviewUrl = backRead
+      ? URL.createObjectURL(await canvasToBlob(backRead.canvas))
       : undefined;
 
-    const visual = extractVisualZoneIdentity(combined);
+    const visual = extractVisualZoneIdentity(frontText);
 
-    // Sequential OCR on the shared worker (parallel recognize races setParameters)
-    const candidates: Array<[string, string]> = [];
-
-    const lineBands = await readMrzByLineBands(front, worker);
-    if (lineBands) candidates.push(lineBands);
-
-    const mrzCanvas = detectMrzRegion(front, 0.3);
-    const mrzBlock = await ocrText(mrzCanvas, {
-      mrzMode: true,
-      worker,
-      psm: Tesseract.PSM.SINGLE_BLOCK,
-    });
-    const mrzColumn = await ocrText(mrzCanvas, {
-      mrzMode: true,
-      worker,
-      psm: Tesseract.PSM.SINGLE_COLUMN,
-    });
-    const sparse = await ocrText(front, {
-      mrzMode: true,
-      worker,
-      psm: Tesseract.PSM.SPARSE_TEXT,
-    });
-
-    for (const blob of [
-      mrzBlock.text,
-      mrzColumn.text,
-      sparse.text,
-      frontText,
-      combined,
-    ]) {
-      const found = findTd3MrzLines(blob);
-      if (found) candidates.push(found);
-    }
-
-    let parsed: ParsedMrz | null = null;
-    let bestScore = -1;
-    let sawNonIndian = false;
-
-    for (const candidate of candidates) {
-      try {
-        const result = parseAndValidateMrz(candidate);
-        const score = scoreMrzResult(result);
-        if (score > bestScore) {
-          bestScore = score;
-          parsed = result;
-        }
-      } catch (error) {
-        if (
-          error instanceof IndianPassportError &&
-          error.message.includes('Only Indian')
-        ) {
-          sawNonIndian = true;
-        }
-      }
-    }
-
-    // Indian-only gate: MRZ must say IND, or the print must say so
+    // Indian-only gate: MRZ must say IND, or the print must say so.
+    // When OCR cannot confirm India (common on soft/skewed scans), open an
+    // empty form so the traveller can enter details manually instead of
+    // blocking on "Only Indian passports are supported".
     const indiaSignal =
-      /\bINDIAN\b/i.test(combined) ||
-      /REPUBLIC\s*OF\s*INDIA/i.test(combined) ||
-      combined.toUpperCase().includes('IND');
-    if (sawNonIndian && !parsed) {
-      throw new IndianPassportError('Only Indian passports are supported');
-    }
-    if (!parsed && !indiaSignal) {
-      throw new IndianPassportError(
-        'Only Indian passports are supported. We could not confirm this is an Indian passport.'
-      );
-    }
-
-    // Keep good MRZ fields even when check digits fail; visual only fills gaps.
-    const surname = pickBest(
-      parsed?.surname,
-      visual.surname,
-      looksLikeGarbageName
-    );
-    const givenNames = pickBest(
-      parsed?.givenNames,
-      visual.givenNames,
-      looksLikeGarbageName
-    );
-    // A check-digit-verified number beats anything OCR read off the print
-    const passportNumber = parsed?.passportNumberVerified
-      ? parsed.passportNumber
-      : pickBest(
-          parsed?.passportNumber,
-          visual.passportNumber,
-          looksLikeGarbagePassportNumber
+      /\bINDIAN\b/i.test(frontText) ||
+      /REPUBLIC\s*OF\s*INDIA/i.test(frontText) ||
+      frontText.toUpperCase().includes('IND');
+    const cannotConfirmIndia =
+      ((search.sawNonIndian || retrySawNonIndian) && !parsed) ||
+      (!parsed && !indiaSignal);
+    if (cannotConfirmIndia) {
+      if (frontText.replace(/\s+/g, '').length < 20) {
+        throw new IndianPassportError(
+          'Could not read passport details. Use a clearer scan of the data page.'
         );
+      }
+      warnings.push(
+        'We could not auto-fill from this scan. Please enter your details manually.'
+      );
+      return {
+        passportNumber: '',
+        surname: '',
+        givenNames: '',
+        nationality: 'INDIAN',
+        dateOfBirth: '',
+        sex: '',
+        dateOfExpiry: '',
+        documentType: 'P',
+        countryOfIssue: 'IND',
+        frontPreviewUrl,
+        backPreviewUrl,
+        rawMrz: ['', ''],
+        confidence: Math.max(mrzConfidence, bestVisualConfidence),
+        warnings,
+      };
+    }
 
-    // Back page needs the current number so it is not read as the old one
-    const backDetails = mergeBackPageFields(backText, {
-      currentPassportNumber: passportNumber,
-    });
+    // Names: MRZ is structured, but it truncates; the printed zone keeps the rest.
+    const surname = pickBestName(parsed?.surname, visual.surname);
+    const givenNames = pickBestName(parsed?.givenNames, visual.givenNames);
+    // A check-digit-verified number beats anything OCR read off the print
+    const passportNumber = recoverIndianPassportNumber(
+      parsed?.passportNumber,
+      visual.passportNumber,
+      parsed?.passportNumberVerified
+    );
+
+    // Back page needs the current number so it is not read as the old one,
+    // and the holder's name so the data page cannot pose as a parent.
+    const holderNames = [surname, givenNames].filter(Boolean);
+    const sameSheetBack = !separateBack && Boolean(backText);
+    const backDetails: BackPageDetails = backText
+      ? mergeBackPageFields(backText, {
+          currentPassportNumber: passportNumber,
+          holderNames,
+          allowPositionalNames: separateBack || sameSheetBack,
+        })
+      : {};
 
     let dateOfBirth = pickBestDate(parsed?.dateOfBirth, visual.dateOfBirth);
     let dateOfExpiry = pickBestDate(parsed?.dateOfExpiry, visual.dateOfExpiry);
     let dateOfIssue = visual.dateOfIssue || backDetails.dateOfIssue || '';
 
     if (!dateOfBirth || !dateOfExpiry || !dateOfIssue) {
-      const inferred = inferDates(collectDates(frontText));
+      // Anchored on whatever the MRZ already proved, and read only from the
+      // data page so a notary stamp or old-passport date cannot win.
+      const inferred = inferDates(collectDates(frontText), {
+        dateOfBirth,
+        dateOfExpiry,
+      });
       if (!dateOfBirth && inferred.dateOfBirth) dateOfBirth = inferred.dateOfBirth;
       if (!dateOfExpiry && inferred.dateOfExpiry) {
         dateOfExpiry = inferred.dateOfExpiry;
@@ -1223,18 +1735,12 @@ export async function extractIndianPassport(
       if (!dateOfIssue && inferred.dateOfIssue) dateOfIssue = inferred.dateOfIssue;
     }
 
-    // Issue date is exactly 10 years before expiry on Indian passports
-    if (!dateOfIssue && isIsoDate(dateOfExpiry)) {
-      const year = Number(dateOfExpiry.slice(0, 4)) - 10;
-      dateOfIssue = `${year}${dateOfExpiry.slice(4)}`;
-    }
-
     const sex = (parsed?.sex || visual.sex || '') as '' | 'M' | 'F' | 'X';
 
     let fathersName = backDetails.fathersName;
     let mothersName = backDetails.mothersName;
-    if (!fathersName || !mothersName) {
-      const positional = extractParentsPositional(backText);
+    if ((separateBack || sameSheetBack) && (!fathersName || !mothersName)) {
+      const positional = extractParentsPositional(backText, { holderNames });
       fathersName = fathersName || positional.fathersName;
       mothersName = mothersName || positional.mothersName;
     }
@@ -1278,14 +1784,10 @@ export async function extractIndianPassport(
       frontPreviewUrl,
       backPreviewUrl,
       rawMrz: parsed?.correctedLines || ['', ''],
-      confidence: Math.max(
-        mrzBlock.confidence || 0,
-        mrzColumn.confidence || 0,
-        bestVisualConfidence
-      ),
+      confidence: Math.max(mrzConfidence, bestVisualConfidence),
       warnings,
     };
   } finally {
-    await worker.terminate();
+    await ocr.terminate();
   }
 }

@@ -32,6 +32,12 @@ const config: Config = {
           'sans-serif',
         ],
         script: ['var(--font-caveat)', 'cursive'],
+        serif: [
+          'var(--font-instrument-serif)',
+          'Georgia',
+          'Times New Roman',
+          'serif',
+        ],
       },
       fontSize: {
         caption: [

@@ -34,6 +34,46 @@ const LABEL_PATTERNS: Record<string, RegExp> = {
 const NAME_STOPWORDS =
   /FATHER|MOTHER|SPOUSE|GUARDIAN|ADDRESS|NAME|PASSPORT|FILE|INDIA|REPUBLIC|PIN|ROAD|COLONY|NAGAR|STREET|FLAT|SECTOR|BLOCK|DISTRICT|POST|HOLDER|SIGNATURE|OBSERVATION|EMIGRATION|PLACE|DATE|ISSUE/i;
 
+/**
+ * Labels that only ever appear on the back page. Without one of these the
+ * text is not a back page, and guessing names from line order would happily
+ * copy the holder's own name off the data page.
+ */
+const BACK_PAGE_EVIDENCE: RegExp[] = [
+  /NAME\s*OF\s*FATHER/i,
+  /FATHER'?S?\s*NAME/i,
+  /LEGAL\s*GUARDIAN/i,
+  /NAME\s*OF\s*MOTHER/i,
+  /MOTHER'?S?\s*NAME/i,
+  /NAME\s*OF\s*SPOUSE/i,
+  /OLD\s*PASSPORT/i,
+  /FILE\s*(?:NO|NUMBER)/i,
+  /PIN\s*[:\-]?\s*\d{6}/i,
+];
+
+/** Printed only on the data page — proof this text is NOT a back page. */
+const FRONT_PAGE_EVIDENCE: RegExp[] = [
+  /GIVEN\s*NAME/i,
+  /DATE\s*OF\s*EXPIRY/i,
+  /PLACE\s*OF\s*ISSUE/i,
+  /P<[A-Z]{3}/,
+];
+
+/**
+ * True when the text carries at least one back-page-only label.
+ * Callers use this to decide whether order-based name guessing is safe.
+ */
+export function hasBackPageEvidence(text: string): boolean {
+  const compact = text.replace(/\s+/g, ' ');
+  return BACK_PAGE_EVIDENCE.some((pattern) => pattern.test(compact));
+}
+
+/** True when the text is the data page (so back-page fields must not be guessed). */
+export function looksLikeFrontPage(text: string): boolean {
+  const compact = text.replace(/\s+/g, ' ');
+  return FRONT_PAGE_EVIDENCE.some((pattern) => pattern.test(compact));
+}
+
 function cleanLine(line: string): string {
   return line.replace(/[^\x20-\x7E]/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -56,12 +96,19 @@ function isLabelLine(line: string): boolean {
 }
 
 function looksLikePersonName(line: string): boolean {
-  const value = line.replace(/[^A-Za-z .']/g, ' ').replace(/\s+/g, ' ').trim();
+  const value = line
+    .replace(/[^A-Za-z .']/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
   if (value.length < 4 || value.length > 40) return false;
-  if (value !== value.toUpperCase()) return false;
   if (NAME_STOPWORDS.test(value)) return false;
+  const consonants = value.replace(/[^BCDFGHJKLMNPQRSTVWXYZ]/g, '');
+  if (consonants.length < 2) return false;
   const words = value.split(' ');
-  return words.length >= 1 && words.length <= 5;
+  if (words.length < 1 || words.length > 5) return false;
+  if (words.some((word) => word.length < 2)) return false;
+  return words.some((word) => word.length >= 4);
 }
 
 function looksLikeAddressLine(line: string): boolean {
@@ -91,31 +138,68 @@ function toIsoDate(day: string, month: string, year: string): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+export interface BackPageOptions {
+  /** Stops the current number (also printed on the back) reading as the old one. */
+  currentPassportNumber?: string;
+  /**
+   * The holder's own name from the MRZ. A back page never repeats it, so any
+   * candidate matching it is data-page bleed and must be dropped.
+   */
+  holderNames?: string[];
+  /**
+   * Allow guessing father/mother from line order when the bilingual labels
+   * were lost to OCR noise. Only safe on a page proven to be the back page.
+   */
+  allowPositionalNames?: boolean;
+}
+
+/**
+ * The holder's own full name, or their given names alone, leaking off the
+ * data page. The surname by itself is not enough — in India the father's
+ * given name is often the child's surname (CHINNASWAMY / CHINNASWAMY).
+ */
+function isHolderName(candidate: string, holderNames?: string[]): boolean {
+  const normalized = normalizeName(candidate);
+  if (!normalized) return false;
+  const surname = normalizeName(holderNames?.[0] || '');
+  const given = normalizeName(holderNames?.[1] || '');
+  const full = [surname, given].filter(Boolean).join(' ');
+  if (full && normalized === full) return true;
+  if (given && normalized === given) return true;
+  return false;
+}
+
 /**
  * Extract every field printed on the back page.
- * `currentPassportNumber` prevents the current number (also printed on the
- * back, next to the barcode) from being mistaken for the old one.
+ *
+ * Only call this with text that actually came from a back page — check with
+ * `hasBackPageEvidence` first. Given data-page text it would otherwise read
+ * the holder's own surname and given names as father and mother.
  */
 export function extractBackPageDetails(
   text: string,
-  options?: { currentPassportNumber?: string }
+  options?: BackPageOptions
 ): BackPageDetails {
   const lines = usefulLines(text);
   const joined = lines.join('\n');
   const current = (options?.currentPassportNumber || '').toUpperCase();
+  const holderNames = options?.holderNames;
 
   const details: BackPageDetails = {};
   const usedIndexes = new Set<number>();
+
+  const isParentName = (value: string) =>
+    looksLikePersonName(value) && !isHolderName(value, holderNames);
 
   // Labelled values: take the first plausible name after the label line
   const valueAfterLabel = (pattern: RegExp): number => {
     for (let i = 0; i < lines.length; i += 1) {
       if (!pattern.test(lines[i])) continue;
       const inline = lines[i].split(/[:\-]\s*/).slice(1).join(' ').trim();
-      if (inline && looksLikePersonName(inline)) return i;
+      if (inline && isParentName(inline)) return i;
       for (let j = i + 1; j < Math.min(i + 3, lines.length); j += 1) {
         if (isLabelLine(lines[j])) continue;
-        if (looksLikePersonName(lines[j])) return j;
+        if (isParentName(lines[j])) return j;
       }
     }
     return -1;
@@ -217,15 +301,19 @@ export function extractBackPageDetails(
     }
   }
 
-  // Positional fallback — Indian back pages list father, mother, spouse in order
-  if (!details.fathersName || !details.mothersName) {
+  // Positional fallback — Indian back pages list father, mother, spouse in
+  // order. Opt-in only: on data-page text this would return the holder's name.
+  if (
+    options?.allowPositionalNames &&
+    (!details.fathersName || !details.mothersName)
+  ) {
     const candidates: string[] = [];
     for (let i = 0; i < lines.length; i += 1) {
       if (usedIndexes.has(i)) continue;
       if (details.address && details.address.includes(lines[i].toUpperCase())) {
         continue;
       }
-      if (looksLikePersonName(lines[i])) candidates.push(normalizeName(lines[i]));
+      if (isParentName(lines[i])) candidates.push(normalizeName(lines[i]));
       if (candidates.length >= 3) break;
     }
     if (!details.fathersName) details.fathersName = candidates.shift();

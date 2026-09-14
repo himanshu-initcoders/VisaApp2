@@ -7,6 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "postinstall": "node scripts/sync-ocr-assets.mjs",
+    "prebuild": "node scripts/sync-ocr-assets.mjs",
+    "passport:smoke": "tsx lib/passport/__smoke__/mrz.smoke.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
@@ -48,6 +51,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^1.0.9",
     "@types/bcryptjs": "^2.4.6",
     "@types/mrz": "^3.1.5",
     "@types/node": "^26.2.0",

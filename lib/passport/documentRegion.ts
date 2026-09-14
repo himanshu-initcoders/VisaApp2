@@ -260,15 +260,18 @@ export function findDocumentRegions(source: ImageSource): Rect[] {
     }
   }
 
-  const padX = Math.round(aw * 0.012);
-  const padY = Math.round(ah * 0.012);
+  const padX = Math.round(aw * 0.02);
+  const padY = Math.round(ah * 0.02);
   const regions: Rect[] = [];
 
   for (const block of blocks) {
+    // The MRZ sits in a thin strip under the printed zone. Tight bounding
+    // boxes on A4 scans often crop it off, so we pad the bottom extra.
+    const extraBottom = Math.round(block.height * 0.28);
     const x = Math.max(0, block.x - padX);
     const y = Math.max(0, block.y - padY);
     const w = Math.min(aw - x, block.width + padX * 2);
-    const h = Math.min(ah - y, block.height + padY * 2);
+    const h = Math.min(ah - y, block.height + padY + extraBottom);
 
     const areaRatio = (w * h) / (aw * ah);
     if (areaRatio < 0.03) continue;
@@ -284,14 +287,18 @@ export function findDocumentRegions(source: ImageSource): Rect[] {
 
   if (!regions.length) return [fullRect];
 
-  // Drop slivers next to a dominant block (scanner artefacts, captions)
+  // Drop slivers next to a dominant block, but keep wide thin strips —
+  // that is what an MRZ looks like when it segmented separately.
   const largestArea = regions.reduce(
     (max, r) => Math.max(max, r.width * r.height),
     0
   );
-  const kept = regions.filter(
-    (r) => (r.width * r.height) / largestArea >= 0.22
-  );
+  const kept = regions.filter((r) => {
+    const areaRatio = (r.width * r.height) / largestArea;
+    if (areaRatio >= 0.22) return true;
+    const aspect = r.width / Math.max(1, r.height);
+    return aspect >= 8 && r.width >= fullWidth * 0.35;
+  });
 
   return (kept.length ? kept : regions).sort(
     (a, b) => a.y - b.y || a.x - b.x

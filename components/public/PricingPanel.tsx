@@ -1,10 +1,10 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Minus, Plus, Users } from 'lucide-react';
 import { AnimatedStatValue, AnimatedTabs, Badge, Button } from '@/components/ui';
-import { MotionReveal } from '@/components/public/MotionReveal';
+import { beginVisaKindNavigation } from '@/components/public/PreserveListingView';
 import { useApplyStartFlow } from '@/components/apply/useApplyStartFlow';
 import { formatPrice } from '@/lib/public';
 import { readApplyDraft } from '@/lib/apply/draftStorage';
@@ -47,6 +47,7 @@ interface PricingPanelProps {
   currentListingId?: string;
   selectedId?: string;
   onSelectedIdChange?: (id: string) => void;
+  onVisaKindSelect?: (kind: VisaKindOption) => Promise<boolean> | boolean;
 }
 
 function stayDaysLabel(option: PriceOptionView) {
@@ -57,15 +58,28 @@ function VisaKindSelector({
   visaKinds,
   currentListingId,
   tone = 'dark',
+  onSelect,
 }: {
   visaKinds: VisaKindOption[];
   currentListingId?: string;
   tone?: 'dark' | 'light';
+  onSelect?: (kind: VisaKindOption) => Promise<boolean> | boolean;
 }) {
   const router = useRouter();
-  const layoutId = useId();
   const current =
     visaKinds.find((kind) => kind.id === currentListingId) || visaKinds[0];
+  const [pendingId, setPendingId] = useState(current?.id);
+  const switchingRef = useRef(false);
+
+  useEffect(() => {
+    setPendingId(current?.id);
+  }, [current?.id]);
+
+  useEffect(() => {
+    visaKinds.forEach((kind) => {
+      if (kind.id !== current?.id) router.prefetch(kind.href);
+    });
+  }, [visaKinds, current?.id, router]);
 
   if (!current || visaKinds.length < 2) return null;
 
@@ -82,14 +96,35 @@ function VisaKindSelector({
       </p>
       <AnimatedTabs
         items={visaKinds.map((kind) => ({ id: kind.id, label: kind.label }))}
-        value={current.id}
+        value={pendingId || current.id}
         onChange={(id) => {
           const kind = visaKinds.find((item) => item.id === id);
-          if (kind && kind.id !== current.id) router.push(kind.href);
+          if (!kind || kind.id === current.id || switchingRef.current) return;
+
+          const previousId = current.id;
+          setPendingId(id);
+
+          const navigate = async () => {
+            switchingRef.current = true;
+            try {
+              if (onSelect) {
+                const ok = await onSelect(kind);
+                if (!ok) setPendingId(previousId);
+                return;
+              }
+
+              beginVisaKindNavigation();
+              router.push(kind.href, { scroll: false });
+            } finally {
+              switchingRef.current = false;
+            }
+          };
+
+          void navigate();
         }}
         tone={tone}
         ariaLabel="Visa type"
-        layoutId={`visa-kind${layoutId}`}
+        layoutId="visa-kind-tabs"
       />
     </div>
   );
@@ -195,6 +230,7 @@ export function PricingPanel({
   currentListingId,
   selectedId: selectedIdProp,
   onSelectedIdChange,
+  onVisaKindSelect,
 }: PricingPanelProps) {
   const stayTabsId = useId();
   const [internalSelectedId, setInternalSelectedId] = useState(priceOptions[0]?.id);
@@ -263,6 +299,7 @@ export function PricingPanel({
           visaKinds={visaKinds}
           currentListingId={currentListingId}
           tone={tone}
+          onSelect={onVisaKindSelect}
         />
       )}
       <TravellersCounter
@@ -297,7 +334,7 @@ export function PricingPanel({
 
   if (isFree) {
     return (
-      <MotionReveal>
+      <>
         <div className="rounded-2xl border border-mint-wash bg-white p-5 shadow-elevated sm:rounded-[32px] sm:p-7">
           {typeAndTravellers('light')}
           <Badge className="border-0 bg-mint-wash text-portrait-ink">100% free</Badge>
@@ -313,13 +350,13 @@ export function PricingPanel({
           </div>
         </div>
         {modals}
-      </MotionReveal>
+      </>
     );
   }
 
   if (!selected) {
     return (
-      <MotionReveal>
+      <>
         <div className="sticky top-32 rounded-2xl border border-ash-divider bg-[#0b1220] p-5 text-white shadow-elevated sm:rounded-[32px] sm:p-7">
           {typeAndTravellers('dark')}
           <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 sm:text-xs">
@@ -338,12 +375,12 @@ export function PricingPanel({
           </div>
         </div>
         {modals}
-      </MotionReveal>
+      </>
     );
   }
 
   return (
-    <MotionReveal>
+    <>
       <div className="sticky top-32 rounded-2xl border border-ash-divider bg-[#0b1220] p-5 text-white shadow-elevated sm:rounded-[32px] sm:p-7">
         {typeAndTravellers('dark')}
 
@@ -404,6 +441,6 @@ export function PricingPanel({
         </div>
       </div>
       {modals}
-    </MotionReveal>
+    </>
   );
 }

@@ -61,6 +61,55 @@ export function cropCanvas(
   return canvas;
 }
 
+export type Rotation = 0 | 90 | 180 | 270;
+
+/** Rotate clockwise by a quarter turn. 0 returns the source untouched. */
+export function rotateCanvas(
+  source: ImageSource,
+  degrees: Rotation
+): HTMLCanvasElement {
+  if (degrees === 0) return toCanvas(source);
+
+  const { width, height } = sourceSize(source);
+  const swapped = degrees === 90 || degrees === 270;
+  const canvas = createCanvas(swapped ? height : width, swapped ? width : height);
+  const ctx = context2d(canvas);
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate((degrees * Math.PI) / 180);
+  ctx.drawImage(source, -width / 2, -height / 2, width, height);
+
+  return canvas;
+}
+
+/**
+ * Rotate by a small angle about the centre, keeping the original frame.
+ * Used to take the skew out of a scan before reading the MRZ.
+ */
+export function deskewCanvas(
+  source: ImageSource,
+  degrees: number
+): HTMLCanvasElement {
+  const { width, height } = sourceSize(source);
+  if (!Number.isFinite(degrees) || Math.abs(degrees) < 0.1) {
+    return toCanvas(source);
+  }
+
+  const canvas = createCanvas(width, height);
+  const ctx = context2d(canvas);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.translate(width / 2, height / 2);
+  ctx.rotate((degrees * Math.PI) / 180);
+  ctx.drawImage(source, -width / 2, -height / 2, width, height);
+
+  return canvas;
+}
+
 export function toCanvas(source: ImageSource): HTMLCanvasElement {
   if (source instanceof HTMLCanvasElement) return source;
   const { width, height } = sourceSize(source);

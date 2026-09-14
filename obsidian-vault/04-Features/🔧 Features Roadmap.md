@@ -64,8 +64,12 @@
 ### Visa Application
 - [x] Public listing page with travellers counter + pricing scale
 - [x] Departure date modal (Fixed Dates / Flexible month)
-- [x] Apply flow shell: Travelers → Documents → Pay (no site navbar)
+- [x] Apply flow shell: Basic Information → Review → Checkout (no site navbar)
+- [x] Apply step 1: name card, previous-profile carousel, in-field Next
+- [x] Apply step 2: traveller profiles, passport-first fill, accordion review
 - [x] Passport capture + Indian MRZ/OCR review (client-side)
+- [x] Passport OCR hardened against real upload layouts (extra pages, rotations, visa pages, PIN-as-MRZ) — see [[Passport OCR]]
+- [x] After passport scan, application form uses AnimatedTabs: General details / Trip details / Documents / Review & submit
 - [ ] Persist application to DB + real S3 upload
 - [ ] Payment gateway on Pay step
 - [ ] Form validation (client + server)

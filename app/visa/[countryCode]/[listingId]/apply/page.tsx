@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { ApplyVisaWizard } from '@/components/apply/ApplyVisaWizard';
 import { getPublicProcessPageData } from '@/lib/db/queries/public';
+import { formatFullVisaLabel } from '@/lib/public';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,9 +61,17 @@ export async function generateMetadata({ params }: PageProps) {
   const data = await getPublicProcessPageData(countryCode, listingId);
   if (!data) return {};
 
+  const visaFullName = formatFullVisaLabel({
+    countryName: data.country.name,
+    purpose: data.process.purpose,
+    stayDuration: data.process.stayDuration,
+    entryValidity: data.process.entryValidity,
+    daysLabel: data.process.priceOptions[0]?.daysLabel,
+  });
+
   return {
-    title: `Apply · ${data.process.processName} · ${data.country.name}`,
-    description: `Complete your ${data.process.processName} application for ${data.country.name}.`,
+    title: `Apply · ${visaFullName}`,
+    description: `Complete your ${visaFullName} application.`,
   };
 }
 
@@ -88,12 +97,25 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
 
   const resume = query.resume === '1' || query.resume === 'true';
 
+  const selectedPrice =
+    data.process.priceOptions.find((option) => option.id === query.priceOption) ||
+    data.process.priceOptions[0];
+
+  const visaFullName = formatFullVisaLabel({
+    countryName: data.country.name,
+    purpose: data.process.purpose,
+    stayDuration: selectedPrice?.stayDuration ?? data.process.stayDuration,
+    entryValidity: selectedPrice?.entryValidity ?? data.process.entryValidity,
+    daysLabel: selectedPrice?.daysLabel,
+  });
+
   return (
     <ApplyVisaWizard
       countryName={data.country.name}
       countryCode={data.country.iso2Code}
       listingId={data.process.id}
       processName={data.process.processName}
+      visaFullName={visaFullName}
       initialTravellerCount={initialTravellerCount}
       departureLabel={departureLabel}
       departureMeta={{
@@ -103,6 +125,7 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
         label: departureLabel,
         priceOption: query.priceOption,
       }}
+      formConfig={data.page.applyForm}
       resume={resume}
     />
   );

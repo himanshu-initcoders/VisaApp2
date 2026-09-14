@@ -29,6 +29,7 @@ interface ListingOverviewSectionProps {
   priceOptions: PriceOptionView[];
   headline?: string;
   visaKinds?: VisaKindOption[];
+  onVisaKindSelect?: (kind: VisaKindOption) => Promise<boolean> | boolean;
 }
 
 function OverviewStat({
@@ -60,6 +61,7 @@ export function ListingOverviewSection({
   priceOptions,
   headline,
   visaKinds = [],
+  onVisaKindSelect,
 }: ListingOverviewSectionProps) {
   const [selectedId, setSelectedId] = useState(priceOptions[0]?.id);
   const selected = useMemo(
@@ -111,6 +113,7 @@ export function ListingOverviewSection({
           currentListingId={listingId}
           selectedId={selected?.id}
           onSelectedIdChange={setSelectedId}
+          onVisaKindSelect={onVisaKindSelect}
         />
       </div>
     </section>

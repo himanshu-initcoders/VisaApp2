@@ -97,6 +97,28 @@ export function formatVisaKindLabel(input: {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+/** e.g. "United States Business Visa 30 Days" */
+export function formatFullVisaLabel(input: {
+  countryName: string;
+  purpose: string;
+  stayDuration?: string | null;
+  entryValidity?: string | null;
+  daysLabel?: string | null;
+}) {
+  // Match listing hero: purpose → "Business Visa", not entry-type codes like B1/B2
+  const kind = formatVisaKindLabel({ purpose: input.purpose });
+  const visaTitle = /visa/i.test(kind) ? kind : `${kind} Visa`;
+  const durationRaw =
+    input.daysLabel || input.stayDuration || input.entryValidity || '';
+  const duration = durationRaw
+    .trim()
+    .replace(/\b[a-z]/g, (character) => character.toUpperCase());
+
+  return [input.countryName.trim(), visaTitle, duration]
+    .filter(Boolean)
+    .join(' ');
+}
+
 export function getCountryCardImage(
   images?: {
     banner?: { url?: string; alt?: string };

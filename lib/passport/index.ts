@@ -14,10 +14,16 @@ export {
   correctMrzOcrArtifacts,
   extractMrzPairFromText,
   extractParentsPositional,
+  classifyPages,
+  isPassportMrzLine,
+  validateTd3,
+  td3CompositeCheckDigit,
+  scoreMrzResult,
   mrzCheckDigit,
   repairWithCheckDigit,
   collectDates,
   inferDates,
+  issueDateFromExpiry,
   mergeBackPageFields,
   extractVisualZoneNames,
   extractVisualZoneIdentity,
@@ -25,7 +31,37 @@ export {
   parseLooseDateToIso,
   ocrText,
   IndianPassportError,
+  type Td3Validation,
 } from './extractIndianPassport';
-export { pdfPagesToCanvases, isPdfFile, canvasToBlob } from './pdfToImage';
-export { extractBackPageDetails, type BackPageDetails } from './backPage';
+export {
+  pdfPagesToCanvases,
+  rasterizePdfPages,
+  pdfPageCount,
+  isPdfFile,
+  canvasToBlob,
+  MAX_PDF_PAGES,
+  type RasterizedPage,
+} from './pdfToImage';
+export {
+  findMrzBands,
+  mrzBandScore,
+  mrzRegion,
+  type MrzBandCandidate,
+} from './mrzLocate';
+export { guessOrientation, orientPage } from './orientation';
+export {
+  choosePagesToPromote,
+  rankBackPageCandidates,
+  scoreBackPageCandidate,
+  textLayerSignals,
+} from './pageSelect';
+export { selectCandidatePages, type CandidatePage } from './pipeline';
+export { createPassportOcr, MRZ_WHITELIST, type PassportOcr } from './ocr';
+export {
+  extractBackPageDetails,
+  hasBackPageEvidence,
+  looksLikeFrontPage,
+  type BackPageDetails,
+  type BackPageOptions,
+} from './backPage';
 export { findDocumentRegions, normalizeDocumentPages } from './documentRegion';

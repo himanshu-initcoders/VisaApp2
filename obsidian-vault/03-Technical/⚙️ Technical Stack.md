@@ -5,6 +5,8 @@
 ## Overview
 Full-stack Next.js 16 application with PostgreSQL database, built for visa and passport service management.
 
+Passport upload on apply is read client-side (Tesseract.js + pdf.js). Layout handling and the sample-corpus harness live in [[Passport OCR]].
+
 ---
 
 ## Frontend

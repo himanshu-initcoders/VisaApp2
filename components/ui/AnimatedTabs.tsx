@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 export interface AnimatedTabItem {
   id: string;
   label: string;
+  disabled?: boolean;
 }
 
 interface AnimatedTabsProps {
@@ -47,6 +48,7 @@ export function AnimatedTabs({
       >
         {items.map((item) => {
           const isActive = item.id === value;
+          const isDisabled = Boolean(item.disabled);
 
           return (
             <button
@@ -54,10 +56,16 @@ export function AnimatedTabs({
               type="button"
               role="tab"
               aria-selected={isActive}
-              onClick={() => onChange(item.id)}
+              aria-disabled={isDisabled}
+              disabled={isDisabled}
+              onClick={() => {
+                if (isDisabled) return;
+                onChange(item.id);
+              }}
               className={cn(
                 'relative z-10 rounded-full px-3 py-2 text-sm font-medium transition-colors',
                 stretch ? 'flex-1' : 'shrink-0',
+                isDisabled && 'cursor-not-allowed opacity-40',
                 isActive
                   ? isDark
                     ? 'text-white'

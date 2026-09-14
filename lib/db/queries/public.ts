@@ -26,6 +26,7 @@ import {
   getDemoPriceOptions,
   getDemoRequirements,
 } from '@/lib/public-demo';
+import { buildApplyFormConfig } from '@/lib/apply/applicationForm';
 
 /**
  * Public-facing database queries for landing pages
@@ -472,6 +473,17 @@ export async function getPublicProcessPageData(
       })),
       exploreMore,
       visaKinds,
+      applyForm: buildApplyFormConfig({
+        purpose: process.purpose,
+        countryName: process.country.name,
+        processName: process.processName,
+        components: process.componentsRequired,
+        questions: process.additionalQuestions,
+      }),
     },
   };
 }
+
+export type PublicProcessPageData = NonNullable<
+  Awaited<ReturnType<typeof getPublicProcessPageData>>
+>;
