@@ -32,6 +32,7 @@ interface Question {
   label: string;
   description: string | null;
   questionType: 'text' | 'date' | 'select' | 'dropdown' | 'file' | 'flight' | 'boolean';
+  category?: string | null;
   required: boolean | null;
   familyEnabled: boolean | null;
   onlyB2b: boolean | null;
@@ -39,6 +40,12 @@ interface Question {
   requiredDoc: string | null;
   sourceUrl: string | null;
   options: Array<{ label: string; value: string }> | null;
+  visibility?: {
+    enabled: true;
+    sourceQuestionKey: string;
+    operator: 'equals';
+    value: string;
+  } | null;
   sortOrder: number | null;
   createdAt: Date;
 }
@@ -145,6 +152,7 @@ export function QuestionsManager({ processId, initialQuestions }: QuestionsManag
           <QuestionFormModal
             processId={processId}
             initialData={null}
+            siblingQuestions={questions}
             onClose={() => setShowAddModal(false)}
             onSuccess={handleModalSuccess}
           />
@@ -214,6 +222,7 @@ export function QuestionsManager({ processId, initialQuestions }: QuestionsManag
         <QuestionFormModal
           processId={processId}
           initialData={null}
+          siblingQuestions={questions}
           onClose={() => setShowAddModal(false)}
           onSuccess={handleModalSuccess}
         />
@@ -224,6 +233,7 @@ export function QuestionsManager({ processId, initialQuestions }: QuestionsManag
         <QuestionFormModal
           processId={processId}
           initialData={editingQuestion}
+          siblingQuestions={questions}
           onClose={() => setEditingQuestion(null)}
           onSuccess={handleModalSuccess}
         />

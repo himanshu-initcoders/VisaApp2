@@ -8,15 +8,24 @@ import {
   isTravellerFilled,
   travellerDisplayName,
 } from '@/lib/apply/reviewFields';
+import type {
+  ApplyDocumentSlot,
+  ApplyTripQuestion,
+} from '@/lib/apply/applicationForm';
 import type { ApplyTraveller } from '@/lib/apply/types';
 
 interface ReviewStepProps {
   countryName: string;
   travellers: ApplyTraveller[];
   canAdd: boolean;
+  showGeneralInfo?: boolean;
+  showTripDetails?: boolean;
+  extraQuestions?: ApplyTripQuestion[];
+  documentSlots?: ApplyDocumentSlot[];
   onAddTraveller: (name: string) => void;
   onRemoveTraveller: (id: string) => void;
   onUploadPassport: (id: string, file: File) => void;
+  onFillApplication: (id: string) => void;
   onEditTraveller: (id: string) => void;
   onProceedCheckout: () => void;
 }
@@ -25,9 +34,14 @@ export function ReviewStep({
   countryName,
   travellers,
   canAdd,
+  showGeneralInfo = true,
+  showTripDetails = true,
+  extraQuestions = [],
+  documentSlots = [],
   onAddTraveller,
   onRemoveTraveller,
   onUploadPassport,
+  onFillApplication,
   onEditTraveller,
   onProceedCheckout,
 }: ReviewStepProps) {
@@ -75,7 +89,12 @@ export function ReviewStep({
             traveller={selected}
             name={travellerDisplayName(selected, Math.max(0, selectedIndex))}
             filled={selectedFilled}
+            showGeneralInfo={showGeneralInfo}
+            showTripDetails={showTripDetails}
+            extraQuestions={extraQuestions}
+            documentSlots={documentSlots}
             onUploadPassport={(file) => onUploadPassport(selected.id, file)}
+            onFillApplication={() => onFillApplication(selected.id)}
             onEdit={() => onEditTraveller(selected.id)}
           />
         )}

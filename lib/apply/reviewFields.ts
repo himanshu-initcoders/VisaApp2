@@ -92,7 +92,7 @@ export function formatReviewValue(
 }
 
 export function isTravellerFilled(traveller: ApplyTraveller) {
-  if (traveller.applicationComplete && traveller.passportData) return true;
+  if (traveller.applicationComplete) return true;
   return Boolean(
     traveller.passportUploaded &&
       traveller.passportData &&

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { AnimatedTabs } from '@/components/ui';
+import { AdditionalQuestionsTab } from '@/components/apply/form/AdditionalQuestionsTab';
 import { DocumentsTab } from '@/components/apply/form/DocumentsTab';
 import { FormTabFooter } from '@/components/apply/form/FormTabFooter';
 import { GeneralDetailsTab } from '@/components/apply/form/GeneralDetailsTab';
@@ -13,9 +14,12 @@ import {
   defaultApplyFormConfig,
   emptyTripDetails,
   firstIncompleteTab,
-  getTripIssues,
+  getAdditionalQuestionIssues,
+  getCoreTripIssues,
+  getVisibleApplicationTabs,
+  isAdditionalQuestionsComplete,
+  isCoreTripComplete,
   isDocumentsComplete,
-  isTripComplete,
   tabUnlockState,
   type ApplicationFormTabId,
   type ApplyFormConfig,
@@ -49,13 +53,6 @@ interface PassportReviewStageProps {
   onContinue: (data: PassportApplicationPayload) => void;
 }
 
-const TAB_ORDER: ApplicationFormTabId[] = [
-  'general',
-  'trip',
-  'documents',
-  'review',
-];
-
 export function PassportReviewStage({
   initial,
   formConfig: formConfigProp,
@@ -68,6 +65,16 @@ export function PassportReviewStage({
   onContinue,
 }: PassportReviewStageProps) {
   const formConfig = formConfigProp ?? defaultApplyFormConfig();
+  const visibleTabs = useMemo(
+    () => getVisibleApplicationTabs(formConfig),
+    [formConfig]
+  );
+  const tabMeta = useMemo(
+    () =>
+      APPLICATION_FORM_TABS.filter((item) => visibleTabs.includes(item.id)),
+    [visibleTabs]
+  );
+
   const [form, setForm] = useState<IndianPassportFields>({
     passportNumber: initial.passportNumber,
     surname: initial.surname,
@@ -108,26 +115,51 @@ export function PassportReviewStage({
     savedDocuments ?? []
   );
 
-  const generalComplete = useMemo(() => isReviewComplete(form), [form]);
-  const tripIssues = useMemo(
-    () => getTripIssues(trip, formConfig.extraQuestions),
+  const generalComplete = useMemo(
+    () => (formConfig.showGeneralInfo ? isReviewComplete(form) : true),
+    [form, formConfig.showGeneralInfo]
+  );
+  const coreTripIssues = useMemo(() => getCoreTripIssues(trip), [trip]);
+  const tripComplete = useMemo(
+    () => (formConfig.showTripDetails ? isCoreTripComplete(trip) : true),
+    [trip, formConfig.showTripDetails]
+  );
+  const additionalIssues = useMemo(
+    () => getAdditionalQuestionIssues(trip, formConfig.extraQuestions),
     [trip, formConfig.extraQuestions]
   );
-  const tripComplete = tripIssues.length === 0;
+  const additionalComplete = useMemo(
+    () =>
+      formConfig.extraQuestions.length === 0
+        ? true
+        : isAdditionalQuestionsComplete(trip, formConfig.extraQuestions),
+    [trip, formConfig.extraQuestions]
+  );
   const documentsComplete = useMemo(
     () => isDocumentsComplete(documents, formConfig.documentSlots),
     [documents, formConfig.documentSlots]
   );
   const unlocked = tabUnlockState({
+    visibleTabs,
     generalComplete,
     tripComplete,
+    additionalComplete,
     documentsComplete,
   });
 
   const [tab, setTab] = useState<ApplicationFormTabId>(() =>
     firstIncompleteTab({
-      generalComplete: isReviewComplete(form),
-      tripComplete: isTripComplete(trip, formConfig.extraQuestions),
+      visibleTabs,
+      generalComplete: formConfig.showGeneralInfo
+        ? isReviewComplete(form)
+        : true,
+      tripComplete: formConfig.showTripDetails
+        ? isCoreTripComplete(trip)
+        : true,
+      additionalComplete:
+        formConfig.extraQuestions.length === 0
+          ? true
+          : isAdditionalQuestionsComplete(trip, formConfig.extraQuestions),
       documentsComplete: isDocumentsComplete(
         savedDocuments ?? [],
         formConfig.documentSlots
@@ -144,24 +176,26 @@ export function PassportReviewStage({
   });
 
   const goNext = () => {
-    const index = TAB_ORDER.indexOf(tab);
+    const index = visibleTabs.indexOf(tab);
     if (tab === 'general' && !generalComplete) return;
     if (tab === 'trip' && !tripComplete) return;
+    if (tab === 'additional' && !additionalComplete) return;
     if (tab === 'documents' && !documentsComplete) return;
     if (tab === 'review') {
       onContinue(payload());
       return;
     }
-    setTab(TAB_ORDER[index + 1]);
+    const next = visibleTabs[index + 1];
+    if (next) setTab(next);
   };
 
   const goBack = () => {
-    const index = TAB_ORDER.indexOf(tab);
+    const index = visibleTabs.indexOf(tab);
     if (index <= 0) {
       onBack();
       return;
     }
-    setTab(TAB_ORDER[index - 1]);
+    setTab(visibleTabs[index - 1]);
   };
 
   const continueLabel =
@@ -169,7 +203,17 @@ export function PassportReviewStage({
   const continueDisabled =
     (tab === 'general' && !generalComplete) ||
     (tab === 'trip' && !tripComplete) ||
+    (tab === 'additional' && !additionalComplete) ||
     (tab === 'documents' && !documentsComplete);
+
+  const footerHint =
+    tab === 'trip' && coreTripIssues.length > 0
+      ? coreTripIssues[0]
+      : tab === 'additional' && additionalIssues.length > 0
+        ? additionalIssues[0]
+        : null;
+
+  const firstTab = visibleTabs[0] ?? 'review';
 
   return (
     <div className="min-h-dvh bg-white">
@@ -195,9 +239,9 @@ export function PassportReviewStage({
         </button>
       </header>
 
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+      <div className="mx-auto flex w-full max-w-6xl justify-center px-4 sm:px-6">
         <AnimatedTabs
-          items={APPLICATION_FORM_TABS.map((item) => ({
+          items={tabMeta.map((item) => ({
             ...item,
             disabled: !unlocked[item.id],
           }))}
@@ -206,11 +250,12 @@ export function PassportReviewStage({
           tone="light"
           layoutId="passport-application-tabs"
           ariaLabel="Application sections"
+          className="max-w-4xl"
         />
       </div>
 
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        {tab === 'general' && (
+        {tab === 'general' && formConfig.showGeneralInfo && (
           <GeneralDetailsTab
             form={form}
             onChange={setForm}
@@ -220,10 +265,16 @@ export function PassportReviewStage({
             onEditFront={onEditFront}
           />
         )}
-        {tab === 'trip' && (
+        {tab === 'trip' && formConfig.showTripDetails && (
           <TripDetailsTab
             trip={trip}
             countryName={formConfig.countryName}
+            onChange={setTrip}
+          />
+        )}
+        {tab === 'additional' && formConfig.extraQuestions.length > 0 && (
+          <AdditionalQuestionsTab
+            trip={trip}
             extraQuestions={formConfig.extraQuestions}
             onChange={setTrip}
           />
@@ -232,7 +283,9 @@ export function PassportReviewStage({
           <DocumentsTab
             slots={formConfig.documentSlots}
             uploads={documents}
-            passportPreviewUrl={initial.frontPreviewUrl}
+            passportPreviewUrl={
+              formConfig.showGeneralInfo ? initial.frontPreviewUrl : undefined
+            }
             onChange={setDocuments}
           />
         )}
@@ -244,18 +297,24 @@ export function PassportReviewStage({
             slots={formConfig.documentSlots}
             uploads={documents}
             countryName={formConfig.countryName}
+            passportPreviewUrl={
+              formConfig.showGeneralInfo ? initial.frontPreviewUrl : undefined
+            }
+            passportBackPreviewUrl={
+              formConfig.showGeneralInfo ? initial.backPreviewUrl : undefined
+            }
+            showGeneralInfo={formConfig.showGeneralInfo}
+            showTripDetails={formConfig.showTripDetails}
           />
         )}
 
         <FormTabFooter
           continueLabel={continueLabel}
           continueDisabled={continueDisabled}
-          hint={
-            tab === 'trip' && tripIssues.length > 0 ? tripIssues[0] : null
-          }
+          hint={footerHint}
           onContinue={goNext}
           onBack={goBack}
-          backLabel={tab === 'general' ? 'Close' : 'Previous'}
+          backLabel={tab === firstTab ? 'Close' : 'Previous'}
         />
       </div>
     </div>

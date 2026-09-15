@@ -248,6 +248,10 @@ export function ApplyVisaWizard({
     setPassportTravellerId(id);
   };
 
+  const openFillApplication = (id: string) => {
+    openPassport(id, true);
+  };
+
   const savePassport = async (
     id: string,
     payload: PassportApplicationPayload
@@ -273,7 +277,9 @@ export function ApplyVisaWizard({
         if (item.id !== id) return item;
         return {
           ...item,
-          passportUploaded: true,
+          passportUploaded: formConfig.showGeneralInfo
+            ? true
+            : item.passportUploaded,
           photoUploaded,
           applicationComplete: true,
           passportData: payload.fields,
@@ -289,7 +295,7 @@ export function ApplyVisaWizard({
       id,
       name: fullName,
       photoUploaded,
-      passportUploaded: true,
+      passportUploaded: formConfig.showGeneralInfo,
       passportData: payload.fields,
       passportFrontUrl: frontUrl,
       passportBackUrl: backUrl,
@@ -373,9 +379,14 @@ export function ApplyVisaWizard({
             countryName={countryName}
             travellers={travellers}
             canAdd={travellers.length < MAX_TRAVELLERS}
+            extraQuestions={formConfig.extraQuestions}
+            documentSlots={formConfig.documentSlots}
+            showGeneralInfo={formConfig.showGeneralInfo}
+            showTripDetails={formConfig.showTripDetails}
             onAddTraveller={addTraveller}
             onRemoveTraveller={removeTraveller}
             onUploadPassport={(id, file) => openPassport(id, false, file)}
+            onFillApplication={openFillApplication}
             onEditTraveller={(id) => openPassport(id, true)}
             onProceedCheckout={() => {
               if (filledTravellers.length === 0) return;
@@ -412,15 +423,24 @@ export function ApplyVisaWizard({
           formConfig={formConfig}
           arrivalPrefill={departure.departure}
           resume={
-            passportResume &&
-            activePassportTraveller?.passportData &&
-            activePassportTraveller.passportFrontUrl
+            passportResume
               ? {
-                  fields: activePassportTraveller.passportData,
-                  frontPreviewUrl: activePassportTraveller.passportFrontUrl,
-                  backPreviewUrl: activePassportTraveller.passportBackUrl,
-                  tripDetails: activePassportTraveller.tripDetails,
-                  documents: activePassportTraveller.documents,
+                  fields: activePassportTraveller?.passportData ?? {
+                    passportNumber: '',
+                    surname: '',
+                    givenNames: '',
+                    nationality: 'IND',
+                    dateOfBirth: '',
+                    sex: '',
+                    dateOfExpiry: '',
+                    documentType: 'P',
+                    countryOfIssue: 'IND',
+                  },
+                  frontPreviewUrl:
+                    activePassportTraveller?.passportFrontUrl ?? '',
+                  backPreviewUrl: activePassportTraveller?.passportBackUrl,
+                  tripDetails: activePassportTraveller?.tripDetails,
+                  documents: activePassportTraveller?.documents,
                 }
               : undefined
           }

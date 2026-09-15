@@ -35,6 +35,8 @@ interface ProcessBasicInfoFormProps {
     unsupported: boolean | null;
     visaOnArrival: boolean | null;
     visaFree: boolean | null;
+    showGeneralInfo?: boolean | null;
+    showTripDetails?: boolean | null;
     sourceUrl: string | null;
   };
 }
@@ -88,6 +90,8 @@ export function ProcessBasicInfoForm({ processId, initialData }: ProcessBasicInf
       unsupported: initialData.unsupported ?? false,
       visaOnArrival: initialData.visaOnArrival ?? false,
       visaFree: initialData.visaFree ?? false,
+      showGeneralInfo: initialData.showGeneralInfo ?? true,
+      showTripDetails: initialData.showTripDetails ?? true,
       sourceUrl: initialData.sourceUrl || '',
     },
   });
@@ -208,6 +212,32 @@ export function ProcessBasicInfoForm({ processId, initialData }: ProcessBasicInf
               {...form.register('standardEtaUnit', {
                 setValueAs: (value) => value || null,
               })}
+            />
+          </div>
+        </section>
+
+        <section className="border-t border-ash-divider pt-8 space-y-6">
+          <div>
+            <h2 className="text-xl font-medium text-portrait-ink mb-2" style={{ fontFamily: 'Basier Circle' }}>
+              Apply form sections
+            </h2>
+            <p className="text-sm text-slate-helper">
+              Control which built-in sections appear on the public apply form. Additional questions from Form Builder always appear in their own tab when configured.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Checkbox
+              label="General Information"
+              description="Passport biodata fields. When off, travellers use Fill Application instead of passport OCR upload."
+              checked={form.watch('showGeneralInfo') ?? true}
+              onChange={(checked) => form.setValue('showGeneralInfo', checked, { shouldDirty: true })}
+            />
+            <Checkbox
+              label="Trip Details"
+              description="Purpose, dates, accommodation, and flight fields on the apply form."
+              checked={form.watch('showTripDetails') ?? true}
+              onChange={(checked) => form.setValue('showTripDetails', checked, { shouldDirty: true })}
             />
           </div>
         </section>

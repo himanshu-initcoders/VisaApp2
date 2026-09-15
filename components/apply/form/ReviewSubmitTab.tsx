@@ -1,16 +1,15 @@
 'use client';
 
+import type { ReactNode } from 'react';
+import { DocumentsReviewSection } from '@/components/apply/review/DocumentsReviewSection';
 import { ReviewFieldGrid } from '@/components/apply/review/ReviewFieldGrid';
-import {
-  PASSPORT_REVIEW_GROUPS,
-  formatReviewDate,
-} from '@/lib/apply/reviewFields';
-import {
-  purposeLabel,
-  type ApplyDocumentSlot,
-  type ApplyTripQuestion,
-  type TravellerDocumentUpload,
-  type TravellerTripDetails,
+import { TripDetailsReview } from '@/components/apply/review/TripDetailsReview';
+import { PASSPORT_REVIEW_GROUPS } from '@/lib/apply/reviewFields';
+import type {
+  ApplyDocumentSlot,
+  ApplyTripQuestion,
+  TravellerDocumentUpload,
+  TravellerTripDetails,
 } from '@/lib/apply/applicationForm';
 import type { IndianPassportFields } from '@/lib/passport/types';
 
@@ -21,15 +20,26 @@ interface ReviewSubmitTabProps {
   slots: ApplyDocumentSlot[];
   uploads: TravellerDocumentUpload[];
   countryName: string;
+  passportPreviewUrl?: string;
+  passportBackPreviewUrl?: string;
+  showGeneralInfo?: boolean;
+  showTripDetails?: boolean;
 }
 
-function Row({ label, value }: { label: string; value?: string }) {
-  if (!value) return null;
+function ReviewSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="min-w-0">
-      <dt className="text-xs text-slate-helper">{label}</dt>
-      <dd className="truncate text-sm font-medium text-portrait-ink">{value}</dd>
-    </div>
+    <section className="rounded-[24px] border border-ash bg-white p-5 shadow-sm">
+      <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-helper">
+        {title}
+      </h3>
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
@@ -40,11 +50,15 @@ export function ReviewSubmitTab({
   slots,
   uploads,
   countryName,
+  passportPreviewUrl,
+  passportBackPreviewUrl,
+  showGeneralInfo = true,
+  showTripDetails = true,
 }: ReviewSubmitTabProps) {
-  const byKey = new Map(uploads.map((item) => [item.key, item]));
+  const hasAdditional = extraQuestions.length > 0;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h2 className="font-basier text-xl text-portrait-ink">
           Review &amp; submit
@@ -55,62 +69,43 @@ export function ReviewSubmitTab({
         </p>
       </div>
 
-      <section>
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-helper">
-          General details
-        </h3>
-        <div className="mt-3">
+      {showGeneralInfo && (
+        <ReviewSection title="General details">
           <ReviewFieldGrid groups={PASSPORT_REVIEW_GROUPS} data={fields} />
-        </div>
-      </section>
+        </ReviewSection>
+      )}
 
-      <section>
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-helper">
-          Trip details
-        </h3>
-        <dl className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
-          <Row label="Purpose" value={purposeLabel(trip.purpose)} />
-          <Row label="Arrival city" value={trip.arrivalCity} />
-          <Row
-            label="Arrival date"
-            value={trip.arrivalDate ? formatReviewDate(trip.arrivalDate) : ''}
+      {showTripDetails && (
+        <ReviewSection title="Trip details">
+          <TripDetailsReview
+            trip={trip}
+            includeCore
+            includeExtra={false}
+            showEmpty
           />
-          <Row
-            label="Return date"
-            value={trip.returnDate ? formatReviewDate(trip.returnDate) : ''}
-          />
-          <Row label="Flight number" value={trip.flightNumber} />
-          <Row label="Accommodation" value={trip.accommodationName} />
-          <Row label="Stay address" value={trip.accommodationAddress} />
-          {extraQuestions.map((question) => (
-            <Row
-              key={question.id}
-              label={question.label}
-              value={
-                question.type === 'boolean'
-                  ? trip.extra[question.key] === 'true'
-                    ? 'Yes'
-                    : 'No'
-                  : trip.extra[question.key]
-              }
-            />
-          ))}
-        </dl>
-      </section>
+        </ReviewSection>
+      )}
 
-      <section>
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-helper">
-          Documents
-        </h3>
-        <ul className="mt-3 space-y-2">
-          <li className="text-sm text-portrait-ink">Passport bio page · uploaded</li>
-          {slots.map((slot) => (
-            <li key={slot.id} className="text-sm text-portrait-ink">
-              {slot.title} · {byKey.get(slot.key)?.name || 'Missing'}
-            </li>
-          ))}
-        </ul>
-      </section>
+      {hasAdditional && (
+        <ReviewSection title="Additional questions">
+          <TripDetailsReview
+            trip={trip}
+            extraQuestions={extraQuestions}
+            includeCore={false}
+            includeExtra
+            showEmpty
+          />
+        </ReviewSection>
+      )}
+
+      <ReviewSection title="Documents">
+        <DocumentsReviewSection
+          slots={slots}
+          uploads={uploads}
+          passportPreviewUrl={passportPreviewUrl}
+          passportBackPreviewUrl={passportBackPreviewUrl}
+        />
+      </ReviewSection>
     </div>
   );
 }

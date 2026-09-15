@@ -26,7 +26,7 @@ import {
   getDemoPriceOptions,
   getDemoRequirements,
 } from '@/lib/public-demo';
-import { buildApplyFormConfig } from '@/lib/apply/applicationForm';
+import { buildApplyFormConfig, formatDocumentTitle } from '@/lib/apply/applicationForm';
 
 /**
  * Public-facing database queries for landing pages
@@ -323,27 +323,16 @@ export async function getPublicProcessPageData(
   });
 
   const dbRequirements = process.componentsRequired.map((item) => {
-    const attrs = item.attributes ?? [];
     return {
     id: item.id,
     key: item.key,
-    title: item.key
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (character) => character.toUpperCase()),
-    description:
-      attrs.length > 0
-        ? attrs
-            .map((attribute) => attribute.replace(/_/g, ' '))
-            .join(', ')
-        : item.chargeable
-          ? 'Reviewed during your application'
-          : 'Needed before you can submit',
-    helper:
-      item.sourceUrl ||
-      (item.familyEnabled
-        ? 'Can be submitted for family travelers too'
-        : 'Standard requirement for this destination'),
-    chargeable: Boolean(item.chargeable),
+    title: formatDocumentTitle(item.key, {
+      label: item.label,
+      documentType: item.documentType,
+    }),
+    description: 'Needed before you can submit',
+    helper: 'Standard requirement for this destination',
+    chargeable: false,
   };
   });
 
@@ -477,6 +466,8 @@ export async function getPublicProcessPageData(
         purpose: process.purpose,
         countryName: process.country.name,
         processName: process.processName,
+        showGeneralInfo: process.showGeneralInfo,
+        showTripDetails: process.showTripDetails,
         components: process.componentsRequired,
         questions: process.additionalQuestions,
       }),

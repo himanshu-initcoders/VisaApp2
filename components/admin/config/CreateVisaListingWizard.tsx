@@ -138,6 +138,8 @@ export function CreateVisaListingWizard({
       unsupported: false,
       visaOnArrival: false,
       visaFree: false,
+      showGeneralInfo: true,
+      showTripDetails: true,
       sourceUrl: '',
     },
   });
@@ -431,6 +433,22 @@ export function CreateVisaListingWizard({
                   checked={form.watch('visaFree')}
                   onChange={(checked) =>
                     form.setValue('visaFree', checked, { shouldDirty: true })
+                  }
+                />
+                <Checkbox
+                  label="General Information"
+                  description="Show passport biodata on apply. Off = Fill Application (no OCR)."
+                  checked={form.watch('showGeneralInfo') ?? true}
+                  onChange={(checked) =>
+                    form.setValue('showGeneralInfo', checked, { shouldDirty: true })
+                  }
+                />
+                <Checkbox
+                  label="Trip Details"
+                  description="Show purpose, dates, and accommodation on apply."
+                  checked={form.watch('showTripDetails') ?? true}
+                  onChange={(checked) =>
+                    form.setValue('showTripDetails', checked, { shouldDirty: true })
                   }
                 />
               </div>

@@ -43,7 +43,7 @@ export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
     };
 
     return (
-      <div className={cn('flex items-start gap-2', className)}>
+      <div className={cn('flex items-start gap-2 min-w-0 w-full', className)}>
         <div className="relative flex items-center">
           <input
             ref={ref}
@@ -92,12 +92,12 @@ export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
         </div>
 
         {(label || description) && (
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
             {label && (
               <label
                 htmlFor={id}
                 className={cn(
-                  'text-sm font-medium cursor-pointer',
+                  'text-sm font-medium cursor-pointer break-words whitespace-normal',
                   disabled ? 'text-slate-helper' : 'text-portrait-ink',
                   error && 'text-red-700'
                 )}
@@ -110,7 +110,7 @@ export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
               <p
                 id={`${id}-description`}
                 className={cn(
-                  'text-xs',
+                  'text-xs break-words',
                   error ? 'text-red-600' : 'text-slate-helper'
                 )}
               >

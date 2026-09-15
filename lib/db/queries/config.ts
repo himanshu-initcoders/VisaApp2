@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { eq, desc, and, or, like, sql } from 'drizzle-orm';
+import { eq, desc, and, or, like, ilike, ne, sql } from 'drizzle-orm';
 import {
   countries,
   visaListings,
@@ -263,6 +263,77 @@ export async function getMaxQuestionSortOrder(processId: string) {
     .where(eq(additionalQuestions.visaListingId, processId));
 
   return result[0]?.maxSort ?? -1;
+}
+
+export type QuestionLabelSuggestion = {
+  id: string;
+  label: string;
+  description: string | null;
+  questionType: 'text' | 'date' | 'select' | 'dropdown' | 'file' | 'flight' | 'boolean';
+  category: string;
+  required: boolean | null;
+  options: Array<{ label: string; value: string }> | null;
+  visibility: {
+    enabled: true;
+    sourceQuestionKey: string;
+    operator: 'equals';
+    value: string;
+  } | null;
+};
+
+/**
+ * Search additional questions by label across all visa listings.
+ * Returns recent matches (deduped by lowercase label) for admin autocomplete.
+ */
+export async function searchAdditionalQuestionsByLabel(
+  query: string,
+  options?: { excludeId?: string; limit?: number }
+): Promise<QuestionLabelSuggestion[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) {
+    return [];
+  }
+
+  const limit = options?.limit ?? 10;
+  // Strip LIKE wildcards from user input so they match literally as text search
+  const safeTerm = trimmed.replace(/[%_]/g, '');
+  if (safeTerm.length < 2) {
+    return [];
+  }
+  const conditions = [ilike(additionalQuestions.label, `%${safeTerm}%`)];
+
+  if (options?.excludeId) {
+    conditions.push(ne(additionalQuestions.id, options.excludeId));
+  }
+
+  const rows = await db.query.additionalQuestions.findMany({
+    where: and(...conditions),
+    orderBy: [desc(additionalQuestions.createdAt)],
+    limit: limit * 4,
+    columns: {
+      id: true,
+      label: true,
+      description: true,
+      questionType: true,
+      category: true,
+      required: true,
+      options: true,
+      visibility: true,
+    },
+  });
+
+  const seen = new Set<string>();
+  const suggestions: QuestionLabelSuggestion[] = [];
+
+  for (const row of rows) {
+    const dedupeKey = row.label.trim().toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    suggestions.push(row);
+    if (suggestions.length >= limit) break;
+  }
+
+  return suggestions;
 }
 
 // ============================================================================

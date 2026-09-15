@@ -4,23 +4,18 @@ import {
   UnderlineField,
   UnderlineSelect,
 } from '@/components/apply/form/UnderlineField';
-import type {
-  ApplyTripQuestion,
-  TravellerTripDetails,
-} from '@/lib/apply/applicationForm';
+import type { TravellerTripDetails } from '@/lib/apply/applicationForm';
 import { toIsoDate, TRIP_PURPOSE_OPTIONS } from '@/lib/apply/applicationForm';
 
 interface TripDetailsTabProps {
   trip: TravellerTripDetails;
   countryName: string;
-  extraQuestions: ApplyTripQuestion[];
   onChange: (next: TravellerTripDetails) => void;
 }
 
 export function TripDetailsTab({
   trip,
   countryName,
-  extraQuestions,
   onChange,
 }: TripDetailsTabProps) {
   const set = (key: keyof TravellerTripDetails) => (value: string) => {
@@ -88,85 +83,6 @@ export function TripDetailsTab({
           />
         </div>
       </div>
-
-      {extraQuestions.length > 0 && (
-        <div className="pt-2">
-          <h3 className="font-basier text-lg text-portrait-ink">
-            Extra questions for this visa
-          </h3>
-          <div className="mt-5 grid gap-5 sm:grid-cols-2">
-            {extraQuestions.map((question) => {
-              const value = trip.extra[question.key] ?? '';
-              const update = (next: string) =>
-                onChange({
-                  ...trip,
-                  extra: { ...trip.extra, [question.key]: next },
-                });
-
-              if (question.type === 'boolean') {
-                return (
-                  <label
-                    key={question.id}
-                    className="flex items-start gap-3 sm:col-span-2"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={value === 'true'}
-                      onChange={(event) =>
-                        update(event.target.checked ? 'true' : 'false')
-                      }
-                      className="mt-1 h-4 w-4 rounded border-ash"
-                    />
-                    <span>
-                      <span className="block text-sm font-medium text-portrait-ink">
-                        {question.label}
-                        {question.required && (
-                          <span className="text-[#ff4940]"> *</span>
-                        )}
-                      </span>
-                      {question.description && (
-                        <span className="mt-0.5 block text-xs text-slate-helper">
-                          {question.description}
-                        </span>
-                      )}
-                    </span>
-                  </label>
-                );
-              }
-
-              if (question.type === 'select') {
-                return (
-                  <UnderlineSelect
-                    key={question.id}
-                    label={question.label}
-                    required={question.required}
-                    value={value}
-                    onChange={update}
-                  >
-                    <option value="">Select</option>
-                    {(question.options ?? []).map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </UnderlineSelect>
-                );
-              }
-
-              return (
-                <UnderlineField
-                  key={question.id}
-                  label={question.label}
-                  required={question.required}
-                  type={question.type === 'date' ? 'date' : 'text'}
-                  value={value}
-                  onChange={update}
-                />
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

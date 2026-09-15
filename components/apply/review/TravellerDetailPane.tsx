@@ -1,15 +1,18 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Pencil, Upload } from 'lucide-react';
+import { FileText, Pencil, Upload } from 'lucide-react';
+import { DocumentsReviewSection } from '@/components/apply/review/DocumentsReviewSection';
 import { FilledBadge } from '@/components/apply/review/FilledBadge';
 import { ReviewFieldGrid } from '@/components/apply/review/ReviewFieldGrid';
+import { TripDetailsReview } from '@/components/apply/review/TripDetailsReview';
 import { formatProfileName } from '@/lib/apply/travellerProfiles';
+import { PASSPORT_REVIEW_GROUPS } from '@/lib/apply/reviewFields';
 import {
-  formatReviewDate,
-  PASSPORT_REVIEW_GROUPS,
-} from '@/lib/apply/reviewFields';
-import { purposeLabel } from '@/lib/apply/applicationForm';
+  emptyTripDetails,
+  type ApplyDocumentSlot,
+  type ApplyTripQuestion,
+} from '@/lib/apply/applicationForm';
 import type { ApplyTraveller } from '@/lib/apply/types';
 
 const PASSPORT_ACCEPT =
@@ -27,7 +30,12 @@ interface TravellerDetailPaneProps {
   traveller: ApplyTraveller;
   name: string;
   filled: boolean;
+  showGeneralInfo?: boolean;
+  showTripDetails?: boolean;
+  extraQuestions?: ApplyTripQuestion[];
+  documentSlots?: ApplyDocumentSlot[];
   onUploadPassport: (file: File) => void;
+  onFillApplication: () => void;
   onEdit: () => void;
 }
 
@@ -35,12 +43,18 @@ export function TravellerDetailPane({
   traveller,
   name,
   filled,
+  showGeneralInfo = true,
+  showTripDetails = true,
+  extraQuestions = [],
+  documentSlots = [],
   onUploadPassport,
+  onFillApplication,
   onEdit,
 }: TravellerDetailPaneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const displayName = formatProfileName(name) || 'Traveller';
+  const hasAdditional = extraQuestions.length > 0;
 
   const handleFiles = (files: FileList | null) => {
     const file = files?.[0];
@@ -53,6 +67,8 @@ export function TravellerDetailPane({
     onUploadPassport(file);
     if (inputRef.current) inputRef.current.value = '';
   };
+
+  const uploads = traveller.documents ?? [];
 
   return (
     <div className="min-h-[360px] flex-1 rounded-[24px] border border-white bg-white p-5 shadow-card sm:p-8">
@@ -75,51 +91,74 @@ export function TravellerDetailPane({
         )}
       </div>
 
-      {filled && traveller.passportData ? (
-        <div className="mt-6 space-y-6">
-          <ReviewFieldGrid
-            groups={PASSPORT_REVIEW_GROUPS}
-            data={traveller.passportData}
-          />
-          {traveller.tripDetails && (
-            <div>
-              <h4 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-helper">
+      {filled ? (
+        <div className="mt-6 space-y-8">
+          {showGeneralInfo && traveller.passportData && (
+            <section>
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-helper">
+                General details
+              </h3>
+              <div className="mt-3">
+                <ReviewFieldGrid
+                  groups={PASSPORT_REVIEW_GROUPS}
+                  data={traveller.passportData}
+                />
+              </div>
+            </section>
+          )}
+
+          {showTripDetails && (
+            <section>
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-helper">
                 Trip details
-              </h4>
-              <dl className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
-                <div>
-                  <dt className="text-xs text-slate-helper">Purpose</dt>
-                  <dd className="text-sm font-medium text-portrait-ink">
-                    {purposeLabel(traveller.tripDetails.purpose)}
-                  </dd>
-                </div>
-                {traveller.tripDetails.arrivalDate && (
-                  <div>
-                    <dt className="text-xs text-slate-helper">Arrival</dt>
-                    <dd className="text-sm font-medium text-portrait-ink">
-                      {formatReviewDate(traveller.tripDetails.arrivalDate)}
-                    </dd>
-                  </div>
-                )}
-                {traveller.tripDetails.returnDate && (
-                  <div>
-                    <dt className="text-xs text-slate-helper">Return</dt>
-                    <dd className="text-sm font-medium text-portrait-ink">
-                      {formatReviewDate(traveller.tripDetails.returnDate)}
-                    </dd>
-                  </div>
-                )}
-              </dl>
+              </h3>
+              <div className="mt-3">
+                <TripDetailsReview
+                  trip={emptyTripDetails(traveller.tripDetails)}
+                  includeCore
+                  includeExtra={false}
+                  showEmpty
+                />
+              </div>
+            </section>
+          )}
+
+          {hasAdditional && (
+            <section>
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-helper">
+                Additional questions
+              </h3>
+              <div className="mt-3">
+                <TripDetailsReview
+                  trip={emptyTripDetails(traveller.tripDetails)}
+                  extraQuestions={extraQuestions}
+                  includeCore={false}
+                  includeExtra
+                  showEmpty
+                />
+              </div>
+            </section>
+          )}
+
+          <section>
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-helper">
+              Documents
+            </h3>
+            <div className="mt-3">
+              <DocumentsReviewSection
+                slots={documentSlots}
+                uploads={uploads}
+                passportPreviewUrl={
+                  showGeneralInfo ? traveller.passportFrontUrl : undefined
+                }
+                passportBackPreviewUrl={
+                  showGeneralInfo ? traveller.passportBackUrl : undefined
+                }
+              />
             </div>
-          )}
-          {traveller.documents && traveller.documents.length > 0 && (
-            <p className="text-xs text-slate-helper">
-              {traveller.documents.length} supporting document
-              {traveller.documents.length === 1 ? '' : 's'} uploaded
-            </p>
-          )}
+          </section>
         </div>
-      ) : (
+      ) : showGeneralInfo ? (
         <div className="mt-8 max-w-md">
           <p className="text-sm leading-6 text-slate-helper">
             Start this application by uploading the Indian passport. Details
@@ -146,6 +185,21 @@ export function TravellerDetailPane({
           {fileError && (
             <p className="mt-2 text-xs text-[#ff4940]">{fileError}</p>
           )}
+        </div>
+      ) : (
+        <div className="mt-8 max-w-md">
+          <p className="text-sm leading-6 text-slate-helper">
+            Fill in the application details for this traveller. You can upload
+            required documents in the form.
+          </p>
+          <button
+            type="button"
+            onClick={onFillApplication}
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#3b82f6] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          >
+            <FileText className="h-4 w-4" />
+            Fill Application
+          </button>
         </div>
       )}
     </div>

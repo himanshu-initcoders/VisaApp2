@@ -5,9 +5,11 @@ import { db } from '@/lib/db';
 import { countries, visaListings, visaListingPrices, additionalQuestions, componentsRequired, faqs, postCheckoutSteps, multiTripCountries } from '@/lib/db/schema-extended';
 import { eq, and, sql } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth-utils';
-import { processBasicInfoSchema, type ProcessBasicInfo, createVisaListingSchema, visaListingPriceSchema, type VisaListingPriceInput, additionalQuestionSchema, type AdditionalQuestion, componentRequiredSchema, type ComponentRequired, faqSchema, type FAQ, postCheckoutStepSchema, type PostCheckoutStep, multiCountrySchema, type MultiCountry } from '@/lib/validations/config';
-import { getQuestionById, getMaxQuestionSortOrder, getComponentById, getMaxComponentSortOrder, getFaqById, getMaxFaqSortOrder, getPostCheckoutStepById, getMaxStepSortOrder } from '@/lib/db/queries/config';
+import { processBasicInfoSchema, type ProcessBasicInfo, createVisaListingSchema, visaListingPriceSchema, type VisaListingPriceInput, additionalQuestionSchema, type AdditionalQuestion, componentRequiredSchema, type ComponentRequired, createComponentsBulkSchema, type CreateComponentsBulk, faqSchema, type FAQ, postCheckoutStepSchema, type PostCheckoutStep, multiCountrySchema, type MultiCountry } from '@/lib/validations/config';
+import { getQuestionById, getMaxQuestionSortOrder, getAdditionalQuestions, searchAdditionalQuestionsByLabel, getComponentById, getMaxComponentSortOrder, getComponentsRequired, getFaqById, getMaxFaqSortOrder, getPostCheckoutStepById, getMaxStepSortOrder } from '@/lib/db/queries/config';
 import { revalidatePublicVisaCatalog } from '@/lib/revalidate-public-catalog';
+import { documentTypeLabel } from '@/lib/document-types';
+import { validateVisibilityAgainstSiblings } from '@/lib/question-visibility';
 
 /**
  * Server actions for visa listing management
@@ -49,6 +51,8 @@ export async function createVisaListing(data: unknown) {
         unsupported: validated.unsupported,
         visaOnArrival: validated.visaOnArrival,
         visaFree: validated.visaFree,
+        showGeneralInfo: validated.showGeneralInfo,
+        showTripDetails: validated.showTripDetails,
         sourceUrl: validated.sourceUrl || null,
       })
       .returning({ id: visaListings.id });
@@ -120,6 +124,8 @@ export async function updateProcessBasicInfo(processId: string, data: ProcessBas
         unsupported: validated.unsupported,
         visaOnArrival: validated.visaOnArrival,
         visaFree: validated.visaFree,
+        showGeneralInfo: validated.showGeneralInfo,
+        showTripDetails: validated.showTripDetails,
         sourceUrl: validated.sourceUrl || null,
         updatedAt: new Date(),
       })
@@ -327,6 +333,25 @@ export async function getProcessInfo(processId: string) {
 }
 
 /**
+ * Suggest existing question labels from all visa listings (admin autocomplete).
+ */
+export async function suggestQuestions(query: string, excludeId?: string) {
+  await requireRole(['admin']);
+
+  try {
+    const suggestions = await searchAdditionalQuestionsByLabel(query, {
+      excludeId,
+      limit: 10,
+    });
+
+    return { success: true as const, suggestions };
+  } catch (error) {
+    console.error('Error suggesting questions:', error);
+    return { error: 'Failed to search questions', suggestions: [] as const };
+  }
+}
+
+/**
  * Create new additional question for a process
  */
 export async function createQuestion(processId: string, data: AdditionalQuestion) {
@@ -348,20 +373,32 @@ export async function createQuestion(processId: string, data: AdditionalQuestion
     // Get max sortOrder and increment
     const maxOrder = await getMaxQuestionSortOrder(processId);
 
+    const siblings = await getAdditionalQuestions(processId);
+    const visibilityError = validateVisibilityAgainstSiblings({
+      questionKey: null,
+      visibility: validated.visibility ?? null,
+      siblings,
+    });
+    if (visibilityError) {
+      return { error: visibilityError };
+    }
+
     // Create question
     await db.insert(additionalQuestions).values({
       visaListingId: processId,
-      key: validated.key,
+      key: crypto.randomUUID(),
       label: validated.label,
       description: validated.description || null,
       questionType: validated.questionType,
+      category: validated.category,
       required: validated.required,
-      familyEnabled: validated.familyEnabled,
-      onlyB2b: validated.onlyB2b,
-      extraInfo: validated.extraInfo || null,
+      familyEnabled: false,
+      onlyB2b: false,
+      extraInfo: null,
       requiredDoc: validated.requiredDoc || null,
-      sourceUrl: validated.sourceUrl || null,
+      sourceUrl: null,
       options: validated.options || [],
+      visibility: validated.visibility ?? null,
       sortOrder: maxOrder + 1
     });
 
@@ -402,21 +439,28 @@ export async function updateQuestion(questionId: string, data: AdditionalQuestio
       return { error: 'Question not found' };
     }
 
-    // Update question
+    const siblings = await getAdditionalQuestions(question.visaListingId);
+    const visibilityError = validateVisibilityAgainstSiblings({
+      questionKey: question.key,
+      visibility: validated.visibility ?? null,
+      siblings,
+    });
+    if (visibilityError) {
+      return { error: visibilityError };
+    }
+
+    // Update question. Key and unused flags stay as stored — they are not editable in the form UI.
     await db
       .update(additionalQuestions)
       .set({
-        key: validated.key,
         label: validated.label,
         description: validated.description || null,
         questionType: validated.questionType,
+        category: validated.category,
         required: validated.required,
-        familyEnabled: validated.familyEnabled,
-        onlyB2b: validated.onlyB2b,
-        extraInfo: validated.extraInfo || null,
         requiredDoc: validated.requiredDoc || null,
-        sourceUrl: validated.sourceUrl || null,
-        options: validated.options || []
+        options: validated.options || [],
+        visibility: validated.visibility ?? null,
       })
       .where(eq(additionalQuestions.id, questionId));
 
@@ -533,14 +577,16 @@ export async function createComponent(processId: string, data: ComponentRequired
       .insert(componentsRequired)
       .values({
         visaListingId: processId,
-        key: validated.key,
-        amount: validated.amount,
-        chargeable: validated.chargeable,
-        familyEnabled: validated.familyEnabled,
-        onlyB2b: validated.onlyB2b,
-        toggle: validated.toggle,
-        attributes: validated.attributes || [],
-        sourceUrl: validated.sourceUrl || null,
+        key: crypto.randomUUID(),
+        documentType: validated.documentType,
+        label: validated.label?.trim() || documentTypeLabel(validated.documentType),
+        amount: '0',
+        chargeable: false,
+        familyEnabled: false,
+        onlyB2b: false,
+        toggle: false,
+        attributes: [],
+        sourceUrl: null,
         sortOrder: maxOrder + 1,
       })
       .returning();
@@ -568,6 +614,77 @@ export async function createComponent(processId: string, data: ComponentRequired
 }
 
 /**
+ * Create multiple document requirements in one action
+ */
+export async function createComponents(processId: string, data: CreateComponentsBulk) {
+  await requireRole(['admin']);
+
+  try {
+    const validated = createComponentsBulkSchema.parse(data);
+
+    const process = await db.query.visaListings.findFirst({
+      where: eq(visaListings.id, processId),
+    });
+
+    if (!process) {
+      return { error: 'Visa listing not found' };
+    }
+
+    const existing = await getComponentsRequired(processId);
+    const existingTypes = new Set(
+      existing
+        .map((item) => item.documentType || item.key)
+        .filter(Boolean)
+    );
+
+    const uniqueTypes = [...new Set(validated.documentTypes)].filter(
+      (type) => !existingTypes.has(type)
+    );
+
+    if (uniqueTypes.length === 0) {
+      return { error: 'Those document types are already added' };
+    }
+
+    let nextOrder = (await getMaxComponentSortOrder(processId)) + 1;
+    const rows = uniqueTypes.map((documentType) => ({
+      visaListingId: processId,
+      key: crypto.randomUUID(),
+      documentType,
+      label: documentTypeLabel(documentType),
+      amount: '0' as const,
+      chargeable: false,
+      familyEnabled: false,
+      onlyB2b: false,
+      toggle: false,
+      attributes: [] as string[],
+      sourceUrl: null,
+      sortOrder: nextOrder++,
+    }));
+
+    const created = await db.insert(componentsRequired).values(rows).returning();
+
+    revalidatePath(`/admin/config/visa-listings/${processId}`);
+    revalidatePath(`/admin/config/visa-listings/${processId}/docs`);
+    revalidatePath('/admin/config/visa-listings');
+    revalidatePath('/admin/config/visa-listings/new');
+
+    return {
+      success: true,
+      message: `${created.length} document requirement${created.length === 1 ? '' : 's'} created`,
+      components: created,
+    };
+  } catch (error) {
+    console.error('Error creating components:', error);
+
+    if (error instanceof Error && error.name === 'ZodError') {
+      return { error: 'Invalid component data provided' };
+    }
+
+    return { error: 'Failed to create document requirements' };
+  }
+}
+
+/**
  * Update existing document requirement
  */
 export async function updateComponent(componentId: string, data: ComponentRequired) {
@@ -584,18 +701,19 @@ export async function updateComponent(componentId: string, data: ComponentRequir
       return { error: 'Document requirement not found' };
     }
 
-    // Update component
+    // Update component (key stays UUID; type/label are editable)
     const [updated] = await db
       .update(componentsRequired)
       .set({
-        key: validated.key,
-        amount: validated.amount,
-        chargeable: validated.chargeable,
-        familyEnabled: validated.familyEnabled,
-        onlyB2b: validated.onlyB2b,
-        toggle: validated.toggle,
-        attributes: validated.attributes || [],
-        sourceUrl: validated.sourceUrl || null,
+        documentType: validated.documentType,
+        label: validated.label?.trim() || documentTypeLabel(validated.documentType),
+        amount: '0',
+        chargeable: false,
+        familyEnabled: false,
+        onlyB2b: false,
+        toggle: false,
+        attributes: [],
+        sourceUrl: null,
       })
       .where(eq(componentsRequired.id, componentId))
       .returning();

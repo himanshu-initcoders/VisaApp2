@@ -1,23 +1,28 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { componentRequiredSchema, type ComponentRequired } from '@/lib/validations/config';
-import { createComponent, updateComponent } from '@/app/(admin)/admin/config/visa-listings/actions';
-import { Input } from '@/components/ui/Input';
-import { Checkbox } from '@/components/ui/Checkbox';
+import {
+  createComponents,
+  updateComponent,
+} from '@/app/(admin)/admin/config/visa-listings/actions';
 import { Button } from '@/components/ui/Button';
-import { X } from 'lucide-react';
-import { z } from 'zod';
-
-type ComponentFormValues = z.input<typeof componentRequiredSchema>;
+import { Checkbox } from '@/components/ui/Checkbox';
+import { Input } from '@/components/ui/Input';
+import {
+  DOCUMENT_TYPES,
+  documentTypeLabel,
+  isDocumentTypeValue,
+  type DocumentTypeValue,
+} from '@/lib/document-types';
+import { Search, X } from 'lucide-react';
 
 interface Component {
   id: string;
   visaListingId: string;
   key: string;
+  documentType?: string | null;
+  label?: string | null;
   amount: string | null;
   chargeable: boolean | null;
   familyEnabled: boolean | null;
@@ -32,52 +37,79 @@ interface Component {
 interface ComponentFormModalProps {
   processId: string;
   initialData: Component | null;
+  /** Document types already on this listing (skip in add mode) */
+  existingDocumentTypes?: string[];
   onClose: () => void;
-  onSuccess: (component: Component) => void;
+  onSuccess: (components: Component | Component[]) => void;
 }
 
-// Common document types
-const DOCUMENT_TYPES = [
-  { value: 'passport', label: 'Passport (Front)' },
-  { value: 'passport_back', label: 'Passport (Back)' },
-  { value: 'photo', label: 'Passport Photo' },
-  { value: 'india_aadhaar', label: 'Aadhaar Card' },
-  { value: 'pan_card', label: 'PAN Card' },
-  { value: 'flight_tickets', label: 'Flight Tickets' },
-  { value: 'hotel_details', label: 'Hotel Booking' },
-  { value: 'travel_insurance', label: 'Travel Insurance' },
-  { value: 'bank_statements', label: 'Bank Statements' },
-  { value: 'covid_vaccine', label: 'COVID Vaccine Certificate' },
-  { value: 'custom', label: 'Custom (Enter below)' },
-];
+function resolveDocumentType(component: Component | null): DocumentTypeValue {
+  if (!component) return 'passport';
+  if (component.documentType && isDocumentTypeValue(component.documentType)) {
+    return component.documentType;
+  }
+  if (isDocumentTypeValue(component.key)) {
+    return component.key;
+  }
+  return 'passport';
+}
 
-// Common validation attributes
-const COMMON_ATTRIBUTES = [
-  'validity_required',
-  'image_required',
-  'fathers_name_required',
-  'mothers_name_required',
-  'departure_flight_required',
-  'return_flight_required',
-  'biometric_required',
-];
+function mapCreated(component: {
+  id: string;
+  visaListingId: string;
+  key: string;
+  documentType: string | null;
+  label: string | null;
+  amount: string | null;
+  chargeable: boolean | null;
+  familyEnabled: boolean | null;
+  onlyB2b: boolean | null;
+  toggle: boolean | null;
+  attributes: unknown;
+  sourceUrl: string | null;
+  sortOrder: number;
+  createdAt: Date;
+}): Component {
+  return {
+    id: component.id,
+    visaListingId: component.visaListingId,
+    key: component.key,
+    documentType: component.documentType,
+    label: component.label,
+    amount: String(component.amount ?? '0'),
+    chargeable: component.chargeable ?? false,
+    familyEnabled: component.familyEnabled ?? false,
+    onlyB2b: component.onlyB2b ?? false,
+    toggle: component.toggle ?? false,
+    attributes: (component.attributes as string[]) || [],
+    sourceUrl: component.sourceUrl,
+    sortOrder: component.sortOrder,
+    createdAt: component.createdAt,
+  };
+}
 
 /**
- * ComponentFormModal Component
- *
- * Modal dialog for creating or editing document requirements.
+ * ComponentFormModal — searchable multi-select for add; single type for edit.
  */
 export function ComponentFormModal({
   processId,
   initialData,
+  existingDocumentTypes = [],
   onClose,
   onSuccess,
 }: ComponentFormModalProps) {
   const isEditMode = !!initialData;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [selectedDocType, setSelectedDocType] = useState(
-    DOCUMENT_TYPES.find((t) => t.value === initialData?.key) ? initialData!.key : 'custom'
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<DocumentTypeValue[]>(() =>
+    isEditMode ? [resolveDocumentType(initialData)] : []
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  const alreadyAdded = useMemo(
+    () => new Set(existingDocumentTypes.filter(Boolean)),
+    [existingDocumentTypes]
   );
 
   useEffect(() => {
@@ -97,239 +129,208 @@ export function ComponentFormModal({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isSubmitting, onClose]);
 
-  const form = useForm<ComponentFormValues, unknown, ComponentRequired>({
-    resolver: zodResolver(componentRequiredSchema),
-    defaultValues: initialData
-      ? {
-          key: initialData.key,
-          amount: initialData.amount || '0',
-          chargeable: initialData.chargeable ?? false,
-          familyEnabled: initialData.familyEnabled ?? false,
-          onlyB2b: initialData.onlyB2b ?? false,
-          toggle: initialData.toggle ?? false,
-          attributes: initialData.attributes || [],
-          sourceUrl: initialData.sourceUrl || '',
-        }
-      : {
-          key: '',
-          amount: '0',
-          chargeable: false,
-          familyEnabled: true,
-          onlyB2b: false,
-          toggle: false,
-          attributes: [],
-          sourceUrl: '',
-        },
-  });
+  const filteredTypes = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return DOCUMENT_TYPES;
+    return DOCUMENT_TYPES.filter(
+      (type) =>
+        type.label.toLowerCase().includes(query) ||
+        type.value.toLowerCase().includes(query)
+    );
+  }, [search]);
 
-  const chargeable = form.watch('chargeable');
-
-  const handleDocTypeChange = (value: string) => {
-    setSelectedDocType(value);
-    if (value !== 'custom') {
-      form.setValue('key', value);
+  const toggleType = (value: DocumentTypeValue) => {
+    setError(null);
+    if (isEditMode) {
+      setSelected([value]);
+      return;
     }
+    setSelected((prev) =>
+      prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]
+    );
   };
 
-  const onSubmit = async (data: ComponentRequired) => {
+  const clearSelection = () => {
+    setSelected(isEditMode ? [resolveDocumentType(initialData)] : []);
+    setError(null);
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selected.length === 0) {
+      setError('Select at least one document type');
+      return;
+    }
+
     setIsSubmitting(true);
+    setError(null);
 
     try {
-      const payload = {
-        ...data,
-        sourceUrl: data.sourceUrl?.trim() ? data.sourceUrl.trim() : null,
-      };
-
-      const result = isEditMode
-        ? await updateComponent(initialData!.id, payload)
-        : await createComponent(processId, payload);
-
-      if (result.success && result.component) {
-        onSuccess({
-          id: result.component.id,
-          visaListingId: result.component.visaListingId,
-          key: result.component.key,
-          amount: String(result.component.amount),
-          chargeable: result.component.chargeable ?? false,
-          familyEnabled: result.component.familyEnabled ?? false,
-          onlyB2b: result.component.onlyB2b ?? false,
-          toggle: result.component.toggle ?? false,
-          attributes: (result.component.attributes as string[]) || [],
-          sourceUrl: result.component.sourceUrl,
-          sortOrder: result.component.sortOrder,
-          createdAt: result.component.createdAt,
+      if (isEditMode) {
+        const documentType = selected[0];
+        const result = await updateComponent(initialData!.id, {
+          documentType,
+          label: documentTypeLabel(documentType),
         });
-      } else {
-        alert(result.error || 'Failed to save document requirement');
+
+        if (result.success && result.component) {
+          onSuccess(mapCreated(result.component));
+        } else {
+          setError(result.error || 'Failed to update document');
+        }
+        return;
       }
-    } catch (error) {
-      console.error('Error saving component:', error);
-      alert('Failed to save document requirement');
+
+      const result = await createComponents(processId, { documentTypes: selected });
+
+      if (result.success && result.components) {
+        onSuccess(result.components.map(mapCreated));
+      } else {
+        setError(result.error || 'Failed to create documents');
+      }
+    } catch (err) {
+      console.error('Error saving components:', err);
+      setError('Failed to save document requirements');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const toggleAttribute = (attr: string) => {
-    const current = form.watch('attributes') || [];
-    if (current.includes(attr)) {
-      form.setValue(
-        'attributes',
-        current.filter((a) => a !== attr)
-      );
-    } else {
-      form.setValue('attributes', [...current, attr]);
-    }
-  };
-
-  const currentAttributes = form.watch('attributes') || [];
-
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      {/* Backdrop — full viewport, no inset padding */}
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
 
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="component-modal-title"
-        className="relative bg-white rounded-3xl shadow-elevated max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+        className="relative bg-white rounded-t-3xl sm:rounded-3xl shadow-elevated w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden"
       >
-        <div className="sticky top-0 bg-white border-b border-ash-divider p-6 flex items-center justify-between rounded-t-3xl z-10">
+        <div className="shrink-0 bg-white border-b border-ash-divider px-4 py-4 sm:p-6 flex items-start gap-3">
           <h2
             id="component-modal-title"
-            className="text-[31px] font-medium text-portrait-ink"
+            className="flex-1 min-w-0 text-[22px] sm:text-[31px] leading-tight font-medium text-portrait-ink"
             style={{ fontFamily: 'Basier Circle', letterSpacing: '-0.4px' }}
           >
-            {isEditMode ? 'Edit Document' : 'Add Document Requirement'}
+            {isEditMode ? 'Edit Document' : 'Add Document Requirements'}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 hover:bg-slate-helper/10 rounded-full transition-colors"
+            className="shrink-0 p-2 hover:bg-slate-helper/10 rounded-full transition-colors"
             aria-label="Close"
           >
             <X className="h-5 w-5 text-slate-helper" />
           </button>
         </div>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="p-6">
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-portrait-ink mb-2">
-                Document Type
-              </label>
-              <select
-                value={selectedDocType}
-                onChange={(e) => handleDocTypeChange(e.target.value)}
-                className="w-full px-4 py-3 border border-ash-divider rounded-2xl focus:outline-none focus:ring-2 focus:ring-portrait-ink/20 transition-shadow"
-              >
-                {DOCUMENT_TYPES.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
+        <form
+          onSubmit={onSubmit}
+          className="flex flex-col min-h-0 flex-1 overflow-hidden"
+        >
+          <div className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6 space-y-3">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-helper pointer-events-none" />
+              <Input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search documents…"
+                className="pl-10"
+                autoFocus
+                aria-label="Search document types"
+              />
             </div>
 
-            {selectedDocType === 'custom' && (
-              <Input
-                label="Document Key"
-                placeholder="e.g., emirates_id_front"
-                helperText="Lowercase letters and underscores only"
-                error={form.formState.errors.key?.message}
-                {...form.register('key')}
-              />
-            )}
-
-            <div className="p-4 bg-mint-wash/30 rounded-2xl space-y-4">
-              <Checkbox
-                label="Chargeable Document"
-                description="Charge a fee for processing this document"
-                checked={chargeable}
-                onChange={(checked) => form.setValue('chargeable', checked)}
-              />
-
-              {chargeable && (
-                <Input
-                  label="Fee Amount (₹)"
-                  type="number"
-                  step="0.01"
-                  placeholder="0"
-                  helperText="INR only"
-                  error={form.formState.errors.amount?.message}
-                  {...form.register('amount')}
-                />
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <p className="text-slate-helper">
+                {isEditMode
+                  ? 'Choose one document type'
+                  : `${selected.length} selected`}
+              </p>
+              {!isEditMode && selected.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="shrink-0 text-portrait-ink underline-offset-2 hover:underline"
+                >
+                  Clear
+                </button>
               )}
             </div>
 
-            <div className="space-y-4">
-              <Checkbox
-                label="Family Enabled"
-                description="Required for all family members"
-                checked={form.watch('familyEnabled')}
-                onChange={(checked) => form.setValue('familyEnabled', checked)}
-              />
-
-              <Checkbox
-                label="B2B Only"
-                description="Only shown in B2B portal"
-                checked={form.watch('onlyB2b')}
-                onChange={(checked) => form.setValue('onlyB2b', checked)}
-              />
-
-              <Checkbox
-                label="Optional (User Toggle)"
-                description="User can choose whether to provide this document"
-                checked={form.watch('toggle')}
-                onChange={(checked) => form.setValue('toggle', checked)}
-              />
-            </div>
-
-            <div className="p-4 bg-sky-wash/30 rounded-2xl">
-              <h4 className="text-sm font-medium text-portrait-ink mb-3">
-                Validation Attributes
-              </h4>
-              <p className="text-xs text-slate-helper mb-3">
-                Select which validations apply to this document
-              </p>
-              <div className="space-y-2">
-                {COMMON_ATTRIBUTES.map((attr) => (
-                  <label key={attr} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={currentAttributes.includes(attr)}
-                      onChange={() => toggleAttribute(attr)}
-                      className="w-4 h-4 rounded border-ash-divider"
-                    />
-                    <span className="text-sm text-portrait-ink">
-                      {attr.replace(/_/g, ' ')}
+            {!isEditMode && selected.length > 0 && (
+              <div className="flex flex-wrap gap-2 content-start">
+                {selected.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => toggleType(value)}
+                    className="inline-flex max-w-full items-start gap-1.5 rounded-2xl bg-sky-wash px-3 py-1.5 text-left text-xs font-medium text-portrait-ink hover:bg-mint-wash transition-colors"
+                  >
+                    <span className="min-w-0 break-words whitespace-normal">
+                      {documentTypeLabel(value)}
                     </span>
-                  </label>
+                    <X className="h-3 w-3 shrink-0 mt-0.5" />
+                  </button>
                 ))}
               </div>
-            </div>
-
-            <Input
-              label="Source URL (Optional)"
-              type="text"
-              inputMode="url"
-              placeholder="https://embassy.gov/documents"
-              helperText="Official source for this requirement. Leave blank if none."
-              error={form.formState.errors.sourceUrl?.message}
-              {...form.register('sourceUrl')}
-            />
+            )}
           </div>
 
-          <div className="flex gap-3 mt-8 pt-6 border-t border-ash-divider">
-            <Button type="submit" variant="primary" size="md" disabled={isSubmitting}>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-6">
+            <div className="border border-ash-divider rounded-2xl divide-y divide-ash-divider">
+              {filteredTypes.length === 0 ? (
+                <p className="p-4 text-sm text-slate-helper">
+                  No documents match “{search.trim()}”.
+                </p>
+              ) : (
+                filteredTypes.map((type) => {
+                  const isAlreadyAdded =
+                    !isEditMode && alreadyAdded.has(type.value);
+                  const isChecked = selected.includes(type.value);
+
+                  return (
+                    <div
+                      key={type.value}
+                      className={`px-3 py-3 sm:px-4 ${isAlreadyAdded ? 'opacity-50' : 'hover:bg-sky-wash/40'}`}
+                    >
+                      <Checkbox
+                        checked={isChecked || isAlreadyAdded}
+                        disabled={isAlreadyAdded || isSubmitting}
+                        onChange={() => {
+                          if (!isAlreadyAdded) toggleType(type.value);
+                        }}
+                        label={type.label}
+                        description={isAlreadyAdded ? 'Already added' : undefined}
+                      />
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {error && (
+            <p className="shrink-0 px-4 sm:px-6 text-sm text-red-600">{error}</p>
+          )}
+
+          <div className="shrink-0 flex flex-wrap gap-3 px-4 py-4 sm:px-6 sm:pb-6 border-t border-ash-divider bg-white">
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              disabled={isSubmitting || selected.length === 0}
+            >
               {isSubmitting
                 ? 'Saving...'
                 : isEditMode
                   ? 'Update Document'
-                  : 'Create Document'}
+                  : selected.length > 1
+                    ? `Add ${selected.length} Documents`
+                    : 'Add Document'}
             </Button>
             <Button type="button" onClick={onClose} variant="ghost" size="md">
               Cancel

@@ -12,8 +12,9 @@ import { ChevronLeft } from 'lucide-react';
  * Features:
  * - Drag-and-drop reordering
  * - Add/edit/delete questions
- * - Support for 7 question types (text, date, dropdown, select, file, flight, boolean)
- * - Configure family-enabled and B2B-only questions
+ * - Support for 4 question types (text, date, dropdown, boolean)
+ * - Required category from a hardcoded list (groups apply-form sections)
+ * - Question keys are UUID-generated and hidden from the admin UI
  * - Manage dropdown options
  */
 export default async function FormsPage({

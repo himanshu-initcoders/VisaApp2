@@ -11,10 +11,8 @@ import { ChevronLeft } from 'lucide-react';
  * Allows admins to manage required documents for an entry process.
  * Features:
  * - Drag-and-drop reordering
- * - Add/edit/delete document requirements
- * - Configure validation attributes
- * - Set fees for chargeable documents
- * - Family-enabled and B2B-only flags
+ * - Add/edit/delete from a fixed document-type catalog
+ * - Storage keys are UUIDs (not shown in the UI)
  */
 export default async function DocumentsPage({
   params,

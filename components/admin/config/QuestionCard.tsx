@@ -3,6 +3,8 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/Button';
+import { questionCategoryLabel } from '@/lib/question-categories';
+import { normalizeQuestionVisibility } from '@/lib/question-visibility';
 import { GripVertical } from 'lucide-react';
 
 interface Question {
@@ -11,10 +13,17 @@ interface Question {
   label: string;
   description: string | null;
   questionType: 'text' | 'date' | 'select' | 'dropdown' | 'file' | 'flight' | 'boolean';
+  category?: string | null;
   required: boolean | null;
   familyEnabled: boolean | null;
   onlyB2b: boolean | null;
   options: Array<{ label: string; value: string }> | null;
+  visibility?: {
+    enabled: true;
+    sourceQuestionKey: string;
+    operator: 'equals';
+    value: string;
+  } | null;
 }
 
 interface QuestionCardProps {
@@ -31,9 +40,9 @@ interface QuestionCardProps {
  * Features:
  * - Drag handle for reordering
  * - Question type badge with color coding
+ * - Category badge
+ * - Conditional visibility badge
  * - Required/Optional badge
- * - Family-enabled badge
- * - B2B-only badge
  * - Options count for dropdowns
  * - Edit and Delete buttons
  */
@@ -47,6 +56,8 @@ export function QuestionCard({ question, index, onEdit, onDelete }: QuestionCard
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
+
+  const isConditional = Boolean(normalizeQuestionVisibility(question.visibility));
 
   // Get question type color
   const getTypeColor = (type: string) => {
@@ -99,8 +110,18 @@ export function QuestionCard({ question, index, onEdit, onDelete }: QuestionCard
               question.questionType
             )}`}
           >
-            {question.questionType}
+            {question.questionType === 'select' ? 'dropdown' : question.questionType}
           </span>
+
+          <span className="px-3 py-1 rounded-full text-xs font-medium bg-sky-wash text-portrait-ink">
+            {questionCategoryLabel(question.category || 'other')}
+          </span>
+
+          {isConditional && (
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-peach-wash text-portrait-ink">
+              Conditional
+            </span>
+          )}
 
           {/* Required Badge */}
           <span
@@ -112,20 +133,6 @@ export function QuestionCard({ question, index, onEdit, onDelete }: QuestionCard
           >
             {question.required ? 'Required' : 'Optional'}
           </span>
-
-          {/* Family Badge */}
-          {question.familyEnabled && (
-            <span className="px-3 py-1 rounded-full text-xs font-medium bg-sky-wash text-portrait-ink">
-              Family
-            </span>
-          )}
-
-          {/* B2B Only Badge */}
-          {question.onlyB2b && (
-            <span className="px-3 py-1 rounded-full text-xs font-medium bg-fog-edge text-portrait-ink">
-              B2B Only
-            </span>
-          )}
         </div>
 
         {/* Description */}
@@ -140,9 +147,6 @@ export function QuestionCard({ question, index, onEdit, onDelete }: QuestionCard
             configured
           </p>
         )}
-
-        {/* Question key */}
-        <p className="text-xs text-slate-helper/60 mt-2 font-mono">Key: {question.key}</p>
       </div>
 
       {/* Actions */}

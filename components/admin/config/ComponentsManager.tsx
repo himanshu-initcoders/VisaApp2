@@ -29,6 +29,8 @@ interface Component {
   id: string;
   visaListingId: string;
   key: string;
+  documentType?: string | null;
+  label?: string | null;
   amount: string | null;
   chargeable: boolean | null;
   familyEnabled: boolean | null;
@@ -105,20 +107,28 @@ export function ComponentsManager({ processId, initialComponents }: ComponentsMa
     }
   };
 
-  const handleModalSuccess = (component: Component) => {
+  const handleModalSuccess = (result: Component | Component[]) => {
+    const items = Array.isArray(result) ? result : [result];
     setComponents((prev) => {
-      const existingIndex = prev.findIndex((c) => c.id === component.id);
-      if (existingIndex >= 0) {
-        const next = [...prev];
-        next[existingIndex] = component;
-        return next;
+      let next = [...prev];
+      for (const component of items) {
+        const existingIndex = next.findIndex((c) => c.id === component.id);
+        if (existingIndex >= 0) {
+          next[existingIndex] = component;
+        } else {
+          next.push(component);
+        }
       }
-      return [...prev, component].sort((a, b) => a.sortOrder - b.sortOrder);
+      return next.sort((a, b) => a.sortOrder - b.sortOrder);
     });
     setShowAddModal(false);
     setEditingComponent(null);
     router.refresh();
   };
+
+  const existingDocumentTypes = components
+    .map((c) => c.documentType || c.key)
+    .filter(Boolean);
 
   if (components.length === 0) {
     return (
@@ -137,6 +147,7 @@ export function ComponentsManager({ processId, initialComponents }: ComponentsMa
           <ComponentFormModal
             processId={processId}
             initialData={null}
+            existingDocumentTypes={existingDocumentTypes}
             onClose={() => setShowAddModal(false)}
             onSuccess={handleModalSuccess}
           />
@@ -166,7 +177,9 @@ export function ComponentsManager({ processId, initialComponents }: ComponentsMa
                   {index + 1}
                 </div>
                 <div className="flex-1">
-                  <h4 className="text-lg font-medium text-portrait-ink">{component.key}</h4>
+                  <h4 className="text-lg font-medium text-portrait-ink">
+                    {component.label || component.key}
+                  </h4>
                 </div>
               </div>
             </div>
@@ -201,6 +214,7 @@ export function ComponentsManager({ processId, initialComponents }: ComponentsMa
         <ComponentFormModal
           processId={processId}
           initialData={null}
+          existingDocumentTypes={existingDocumentTypes}
           onClose={() => setShowAddModal(false)}
           onSuccess={handleModalSuccess}
         />
@@ -210,6 +224,10 @@ export function ComponentsManager({ processId, initialComponents }: ComponentsMa
         <ComponentFormModal
           processId={processId}
           initialData={editingComponent}
+          existingDocumentTypes={existingDocumentTypes.filter(
+            (type) =>
+              type !== editingComponent.documentType && type !== editingComponent.key
+          )}
           onClose={() => setEditingComponent(null)}
           onSuccess={handleModalSuccess}
         />

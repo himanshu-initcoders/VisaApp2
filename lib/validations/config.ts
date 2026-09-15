@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import { QUESTION_CATEGORY_VALUES } from '@/lib/question-categories';
+import { DOCUMENT_TYPE_VALUES } from '@/lib/document-types';
+import {
+  normalizeQuestionVisibility,
+  questionVisibilityDraftSchema,
+} from '@/lib/question-visibility';
 
 /**
  * Validation schemas for admin configuration forms
@@ -73,6 +79,8 @@ export const processBasicInfoSchema = z.object({
   unsupported: z.boolean(),
   visaOnArrival: z.boolean(),
   visaFree: z.boolean(),
+  showGeneralInfo: z.boolean(),
+  showTripDetails: z.boolean(),
   sourceUrl: z.union([z.string().url('Must be a valid URL'), z.literal('')]).nullable().optional()
 }).superRefine((data, ctx) => {
   const hasAmount = data.standardEtaDuration !== null && data.standardEtaDuration !== undefined;
@@ -128,39 +136,67 @@ export type VisaListingPriceInput = z.infer<typeof visaListingPriceSchema>;
 // DYNAMIC QUESTION SCHEMAS
 // ============================================================================
 
-export const questionOptionSchema = z.object({
-  label: z.string().min(1, 'Option label required'),
-  value: z.string().min(1, 'Option value required')
-});
+export const questionOptionSchema = z
+  .object({
+    label: z.string().min(1, 'Option label required'),
+    value: z.string().optional(),
+  })
+  .transform((opt) => ({
+    label: opt.label.trim(),
+    value: opt.value?.trim() ? opt.value.trim() : crypto.randomUUID(),
+  }));
 
 export const additionalQuestionSchema = z.object({
-  key: z.string()
+  key: z
+    .string()
     .min(2, 'Key must be at least 2 characters')
     .max(50, 'Key too long')
-    .regex(/^[a-z_]+$/, 'Key must be lowercase letters and underscores only'),
+    .regex(/^[a-z0-9_-]+$/, 'Key must be lowercase letters, numbers, hyphens, and underscores only')
+    .optional(),
   label: z.string().min(3, 'Label must be at least 3 characters').max(255, 'Label too long'),
   description: z.union([z.string().max(500, 'Description too long'), z.literal('')]).nullable().optional(),
   questionType: z.enum(
-    ['text', 'date', 'select', 'dropdown', 'file', 'flight', 'boolean'],
+    ['text', 'date', 'dropdown', 'boolean'],
     'Invalid question type'
   ),
+  category: z.enum(QUESTION_CATEGORY_VALUES, 'Invalid question category'),
   required: z.boolean(),
-  familyEnabled: z.boolean(),
-  onlyB2b: z.boolean(),
+  familyEnabled: z.boolean().optional().default(false),
+  onlyB2b: z.boolean().optional().default(false),
   extraInfo: z.union([z.string().max(500, 'Extra info too long'), z.literal('')]).nullable().optional(),
   requiredDoc: z.union([z.string().max(100, 'Required doc too long'), z.literal('')]).nullable().optional(),
   sourceUrl: z.union([z.string().url('Must be a valid URL'), z.literal('')]).nullable().optional(),
-  options: z.array(questionOptionSchema).optional().default([])
-}).refine(data => {
-  // Dropdown/select types must have options
-  if (data.questionType === 'dropdown' || data.questionType === 'select') {
-    return data.options.length > 0;
+  options: z.array(questionOptionSchema).optional().default([]),
+  visibility: questionVisibilityDraftSchema,
+}).superRefine((data, ctx) => {
+  if (data.questionType === 'dropdown' && data.options.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Dropdown options required for dropdown question types',
+      path: ['options'],
+    });
   }
-  return true;
-}, {
-  message: 'Dropdown options required for select/dropdown question types',
-  path: ['options']
-});
+
+  if (data.visibility && data.visibility.enabled === true) {
+    if (!data.visibility.sourceQuestionKey.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Select a question',
+        path: ['visibility', 'sourceQuestionKey'],
+      });
+    }
+    if (!data.visibility.value.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Enter a value to match',
+        path: ['visibility', 'value'],
+      });
+    }
+  }
+}).transform((data) => ({
+  ...data,
+  visibility: normalizeQuestionVisibility(data.visibility),
+}));
 
 export type AdditionalQuestion = z.infer<typeof additionalQuestionSchema>;
 export type QuestionOption = z.infer<typeof questionOptionSchema>;
@@ -170,17 +206,19 @@ export type QuestionOption = z.infer<typeof questionOptionSchema>;
 // ============================================================================
 
 export const componentRequiredSchema = z.object({
-  key: z.string().min(2, 'Key must be at least 2 characters').max(50, 'Key too long'),
-  amount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Must be a valid amount'),
-  chargeable: z.boolean(),
-  familyEnabled: z.boolean(),
-  onlyB2b: z.boolean(),
-  toggle: z.boolean(),
-  attributes: z.array(z.string()).optional().default([]),
-  sourceUrl: z.union([z.string().url('Must be a valid URL'), z.literal('')]).nullable().optional(),
+  documentType: z.enum(DOCUMENT_TYPE_VALUES, 'Select a document type'),
+  label: z.string().min(2, 'Label required').max(200).optional(),
 });
 
 export type ComponentRequired = z.infer<typeof componentRequiredSchema>;
+
+export const createComponentsBulkSchema = z.object({
+  documentTypes: z
+    .array(z.enum(DOCUMENT_TYPE_VALUES))
+    .min(1, 'Select at least one document type'),
+});
+
+export type CreateComponentsBulk = z.infer<typeof createComponentsBulkSchema>;
 
 // ============================================================================
 // FAQ SCHEMAS

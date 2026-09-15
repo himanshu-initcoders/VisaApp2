@@ -62,6 +62,8 @@ None — used existing `countries` and `visa_listings` tables.
 ## Related Notes
 - [[🔧 Features Roadmap]]
 - [[⚙️ Technical Stack]]
+- Form Builder questions use hardcoded categories from `lib/question-categories.ts` (`additional_questions.category`) and group fields on the apply Trip details tab
+- Form Builder visibility: optional show-if equals rule stored in `additional_questions.visibility`
 
 ---
 

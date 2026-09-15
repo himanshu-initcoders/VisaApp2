@@ -7,7 +7,7 @@
 export const occupations = [
   { label: 'Services', value: 'services', sortOrder: 1 },
   { label: 'Housewife', value: 'house wife', sortOrder: 2 },
-  { label: 'Child', value: 'none', sortOrder: 3 },
+  { label: 'Child', value: 'child', sortOrder: 3 },
   { label: 'Retired', value: 'retired', sortOrder: 4 },
   { label: 'Business', value: 'business', sortOrder: 5 },
   { label: 'Student / Not Allowed to Work', value: 'STUDENT / NOT ALLOWED TO WORK', sortOrder: 6 },

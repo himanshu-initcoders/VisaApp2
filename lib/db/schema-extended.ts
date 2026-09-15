@@ -133,6 +133,10 @@ export const visaListings = pgTable('visa_listings', {
   visaOnArrival: boolean('visa_on_arrival').default(false),
   visaFree: boolean('visa_free').default(false),
 
+  // Apply form section visibility (default: shown)
+  showGeneralInfo: boolean('show_general_info').default(true).notNull(),
+  showTripDetails: boolean('show_trip_details').default(true).notNull(),
+
   // Standard ETA (Estimated Time to Approval) — listing-level
   standardEtaDuration: integer('standard_eta_duration'), // 30, 48, etc.
   standardEtaUnit: unitEnum('standard_eta_unit'), // 'minutes', 'hours', 'days'
@@ -225,6 +229,8 @@ export const additionalQuestions = pgTable('additional_questions', {
   label: text('label').notNull(),
   description: text('description'),
   questionType: questionTypeEnum('question_type').notNull(),
+  /** Stable key from QUESTION_CATEGORIES (e.g. financial_information) */
+  category: varchar('category', { length: 50 }).notNull().default('other'),
   required: boolean('required').default(false),
   familyEnabled: boolean('family_enabled').default(false),
   onlyB2b: boolean('only_b2b').default(false),
@@ -232,8 +238,16 @@ export const additionalQuestions = pgTable('additional_questions', {
   requiredDoc: varchar('required_doc', { length: 100 }),
   sourceUrl: text('source_url'),
 
-  // For dropdown/select types (e.g., 57 occupation options)
+  // For dropdown types (e.g., 57 occupation options)
   options: jsonb('options').$type<Array<{ label: string; value: string }>>().default([]),
+
+  /** Show-if rule: null = always visible */
+  visibility: jsonb('visibility').$type<{
+    enabled: true;
+    sourceQuestionKey: string;
+    operator: 'equals';
+    value: string;
+  } | null>().default(null),
 
   sortOrder: integer('sort_order').default(0),
   createdAt: timestamp('created_at').defaultNow().notNull()
@@ -248,7 +262,11 @@ export const additionalQuestions = pgTable('additional_questions', {
 export const componentsRequired = pgTable('components_required', {
   id: uuid('id').primaryKey().defaultRandom(),
   visaListingId: uuid('visa_listing_id').references(() => visaListings.id, { onDelete: 'cascade' }).notNull(),
-  key: varchar('key', { length: 50 }).notNull(), // 'passport', 'photo', 'india_aadhaar', 'pan_card'
+  key: varchar('key', { length: 50 }).notNull(), // UUID storage key for uploads
+  /** Stable slug from DOCUMENT_TYPES (e.g. passport, bank_statements) */
+  documentType: varchar('document_type', { length: 80 }),
+  /** Applicant-facing title */
+  label: text('label'),
   amount: decimal('amount', { precision: 10, scale: 2 }).default('0'),
   chargeable: boolean('chargeable').default(false),
   familyEnabled: boolean('family_enabled').default(false),

@@ -33,7 +33,8 @@ export function AnimatedTabs({
   if (items.length < 2) return null;
 
   const isDark = tone === 'dark';
-  const stretch = items.length <= 4;
+  // Apply form can show up to 5 sections; stretch so the row stays centered/full-width
+  const stretch = items.length <= 5;
 
   return (
     <LayoutGroup id={layoutId}>
@@ -42,6 +43,7 @@ export function AnimatedTabs({
         aria-label={ariaLabel}
         className={cn(
           'relative flex w-full gap-1 overflow-x-auto rounded-full p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+          stretch ? '' : 'justify-center',
           isDark ? 'bg-white/10' : 'bg-[#f3f4f6]',
           className
         )}

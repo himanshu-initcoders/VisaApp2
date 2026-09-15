@@ -134,7 +134,7 @@ export function PassportCaptureFlow({
   onClose,
   onComplete,
 }: PassportCaptureFlowProps) {
-  const canResume = Boolean(resume?.frontPreviewUrl);
+  const canResume = Boolean(resume);
   const [stage, setStage] = useState<PassportFlowStage>(
     canResume ? 'review' : 'scan'
   );
