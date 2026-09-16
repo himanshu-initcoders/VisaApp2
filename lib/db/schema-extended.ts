@@ -42,7 +42,9 @@ export const questionTypeEnum = pgEnum('question_type', [
   'dropdown',
   'file',
   'flight',
-  'boolean'
+  'boolean',
+  'checkbox',
+  'radio',
 ]);
 
 export const purposeEnum = pgEnum('purpose', [

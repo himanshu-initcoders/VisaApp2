@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { ArrowLeft } from 'lucide-react';
 import { ApplyStepper } from '@/components/apply/ApplyStepper';
 import { BasicInformationStep } from '@/components/apply/BasicInformationStep';
@@ -25,12 +26,15 @@ import {
   saveTravellerProfile,
   type TravellerProfile,
 } from '@/lib/apply/travellerProfiles';
+import { getFlagEmoji } from '@/lib/public';
 
 export type { ApplyStep, ApplyTraveller };
 
 interface ApplyVisaWizardProps {
   countryName: string;
   countryCode: string;
+  /** Flag image URL from countries.images.flag.url */
+  flagUrl?: string | null;
   listingId: string;
   processName: string;
   /** e.g. "United States Business Visa 30 Days" — always shown in the apply header */
@@ -65,6 +69,7 @@ function createInitialTravellers(count: number): ApplyTraveller[] {
 export function ApplyVisaWizard({
   countryName,
   countryCode,
+  flagUrl,
   listingId,
   processName,
   visaFullName,
@@ -343,7 +348,28 @@ export function ApplyVisaWizard({
             Back
           </button>
           <p className="min-w-0 flex-1 text-right text-sm font-medium leading-snug text-portrait-ink sm:text-base">
-            {visaLabel}
+            <span className="inline-flex max-w-full items-center justify-end gap-2">
+              <span className="relative flex h-5 w-5 shrink-0 overflow-hidden rounded-full bg-sky-wash sm:h-6 sm:w-6">
+                {flagUrl ? (
+                  <Image
+                    src={flagUrl}
+                    alt=""
+                    fill
+                    sizes="24px"
+                    className="object-cover"
+                  />
+                ) : (
+                  <span
+                    className="flex size-full items-center justify-center text-sm leading-none sm:text-base"
+                    aria-hidden
+                  >
+                    {getFlagEmoji(countryCode)}
+                  </span>
+                )}
+              </span>
+              <span className="min-w-0 truncate">{visaLabel}</span>
+            </span>
+            <span className="sr-only">{countryName}</span>
           </p>
         </div>
 

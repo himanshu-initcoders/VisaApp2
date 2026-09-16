@@ -12,7 +12,16 @@ interface Question {
   key: string;
   label: string;
   description: string | null;
-  questionType: 'text' | 'date' | 'select' | 'dropdown' | 'file' | 'flight' | 'boolean';
+  questionType:
+    | 'text'
+    | 'date'
+    | 'select'
+    | 'dropdown'
+    | 'file'
+    | 'flight'
+    | 'boolean'
+    | 'checkbox'
+    | 'radio';
   category?: string | null;
   required: boolean | null;
   familyEnabled: boolean | null;
@@ -64,7 +73,10 @@ export function QuestionCard({ question, index, onEdit, onDelete }: QuestionCard
     switch (type) {
       case 'dropdown':
       case 'select':
+      case 'radio':
         return 'bg-mint-wash text-portrait-ink';
+      case 'checkbox':
+        return 'bg-sky-wash text-portrait-ink';
       case 'file':
         return 'bg-peach-wash text-portrait-ink';
       case 'date':
@@ -140,8 +152,11 @@ export function QuestionCard({ question, index, onEdit, onDelete }: QuestionCard
           <p className="text-sm text-slate-helper mb-2 line-clamp-2">{question.description}</p>
         )}
 
-        {/* Options count for dropdowns */}
-        {(question.questionType === 'dropdown' || question.questionType === 'select') && (
+        {/* Options count for choice types */}
+        {(question.questionType === 'dropdown' ||
+          question.questionType === 'select' ||
+          question.questionType === 'checkbox' ||
+          question.questionType === 'radio') && (
           <p className="text-xs text-slate-helper">
             {question.options?.length || 0} option{question.options?.length !== 1 ? 's' : ''}{' '}
             configured

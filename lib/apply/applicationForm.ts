@@ -59,7 +59,7 @@ export interface ApplyTripQuestion {
   label: string;
   description?: string;
   category: QuestionCategory;
-  type: 'text' | 'date' | 'dropdown' | 'boolean';
+  type: 'text' | 'date' | 'dropdown' | 'boolean' | 'checkbox' | 'radio';
   required: boolean;
   options?: Array<{ label: string; value: string }>;
   visibility?: QuestionVisibility;
@@ -252,9 +252,33 @@ function isFileQuestionType(type: string) {
 function mapQuestionType(type: string): ApplyTripQuestion['type'] {
   if (type === 'date') return 'date';
   if (type === 'boolean') return 'boolean';
+  if (type === 'checkbox') return 'checkbox';
+  if (type === 'radio') return 'radio';
   // Legacy "select" rows are treated as dropdown
   if (type === 'select' || type === 'dropdown') return 'dropdown';
   return 'text';
+}
+
+/** Parse checkbox multi-select answers stored as a JSON string array. */
+export function parseCheckboxValues(raw: string | undefined): string[] {
+  if (!raw?.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map(String).filter((value) => value.trim().length > 0);
+    }
+  } catch {
+    // Legacy / accidental comma lists
+    return raw
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+export function stringifyCheckboxValues(values: string[]): string {
+  return JSON.stringify(values);
 }
 
 export function buildApplyFormConfig(input: {
@@ -405,6 +429,12 @@ export function getAdditionalQuestionIssues(
     if (question.type === 'boolean') {
       if (value !== 'true' && value !== 'yes') {
         issues.push(`Confirm: ${question.label}`);
+      }
+      continue;
+    }
+    if (question.type === 'checkbox') {
+      if (parseCheckboxValues(value).length === 0) {
+        issues.push(`Select at least one option for ${question.label}`);
       }
       continue;
     }

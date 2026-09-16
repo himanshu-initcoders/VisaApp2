@@ -156,7 +156,7 @@ export const additionalQuestionSchema = z.object({
   label: z.string().min(3, 'Label must be at least 3 characters').max(255, 'Label too long'),
   description: z.union([z.string().max(500, 'Description too long'), z.literal('')]).nullable().optional(),
   questionType: z.enum(
-    ['text', 'date', 'dropdown', 'boolean'],
+    ['text', 'date', 'dropdown', 'boolean', 'checkbox', 'radio'],
     'Invalid question type'
   ),
   category: z.enum(QUESTION_CATEGORY_VALUES, 'Invalid question category'),
@@ -169,10 +169,15 @@ export const additionalQuestionSchema = z.object({
   options: z.array(questionOptionSchema).optional().default([]),
   visibility: questionVisibilityDraftSchema,
 }).superRefine((data, ctx) => {
-  if (data.questionType === 'dropdown' && data.options.length === 0) {
+  if (
+    (data.questionType === 'dropdown' ||
+      data.questionType === 'checkbox' ||
+      data.questionType === 'radio') &&
+    data.options.length === 0
+  ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Dropdown options required for dropdown question types',
+      message: 'Options are required for this question type',
       path: ['options'],
     });
   }

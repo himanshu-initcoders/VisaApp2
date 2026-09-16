@@ -3,6 +3,7 @@
 import { formatReviewDate } from '@/lib/apply/reviewFields';
 import {
   groupApplyTripQuestions,
+  parseCheckboxValues,
   purposeLabel,
   type ApplyTripQuestion,
   type TravellerTripDetails,
@@ -52,7 +53,18 @@ function extraValue(question: ApplyTripQuestion, raw?: string) {
     return raw === 'true' ? 'Yes' : 'No';
   }
   if (!raw) return '';
-  if (question.type === 'dropdown') {
+  if (question.type === 'checkbox') {
+    const selected = parseCheckboxValues(raw);
+    if (selected.length === 0) return '';
+    return selected
+      .map(
+        (value) =>
+          question.options?.find((option) => option.value === value)?.label ||
+          value
+      )
+      .join(', ');
+  }
+  if (question.type === 'dropdown' || question.type === 'radio') {
     return (
       question.options?.find((option) => option.value === raw)?.label || raw
     );

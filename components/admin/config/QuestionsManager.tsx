@@ -31,7 +31,16 @@ interface Question {
   key: string;
   label: string;
   description: string | null;
-  questionType: 'text' | 'date' | 'select' | 'dropdown' | 'file' | 'flight' | 'boolean';
+  questionType:
+    | 'text'
+    | 'date'
+    | 'select'
+    | 'dropdown'
+    | 'file'
+    | 'flight'
+    | 'boolean'
+    | 'checkbox'
+    | 'radio';
   category?: string | null;
   required: boolean | null;
   familyEnabled: boolean | null;

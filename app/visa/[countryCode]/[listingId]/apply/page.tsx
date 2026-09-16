@@ -113,6 +113,7 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
     <ApplyVisaWizard
       countryName={data.country.name}
       countryCode={data.country.iso2Code}
+      flagUrl={data.country.images?.flag?.url ?? null}
       listingId={data.process.id}
       processName={data.process.processName}
       visaFullName={visaFullName}

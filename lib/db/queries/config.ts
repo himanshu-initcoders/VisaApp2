@@ -269,7 +269,16 @@ export type QuestionLabelSuggestion = {
   id: string;
   label: string;
   description: string | null;
-  questionType: 'text' | 'date' | 'select' | 'dropdown' | 'file' | 'flight' | 'boolean';
+  questionType:
+    | 'text'
+    | 'date'
+    | 'select'
+    | 'dropdown'
+    | 'file'
+    | 'flight'
+    | 'boolean'
+    | 'checkbox'
+    | 'radio';
   category: string;
   required: boolean | null;
   options: Array<{ label: string; value: string }> | null;

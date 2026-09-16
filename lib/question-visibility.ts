@@ -62,7 +62,21 @@ export function isQuestionVisible(
   }
 
   const sourceValue = (answers[rule.sourceQuestionKey] ?? '').trim();
-  return sourceValue === rule.value.trim();
+  return answerMatchesEquals(sourceValue, rule.value.trim());
+}
+
+/** Exact match, or includes when source is a checkbox JSON array. */
+export function answerMatchesEquals(sourceValue: string, ruleValue: string): boolean {
+  if (!ruleValue) return false;
+  try {
+    const parsed = JSON.parse(sourceValue);
+    if (Array.isArray(parsed)) {
+      return parsed.map(String).includes(ruleValue);
+    }
+  } catch {
+    // not JSON
+  }
+  return sourceValue === ruleValue;
 }
 
 export function getVisibleExtraQuestions<T extends VisibilityAwareQuestion>(

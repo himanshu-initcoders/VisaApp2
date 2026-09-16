@@ -34,14 +34,23 @@ type QuestionLabelSuggestion = {
   id: string;
   label: string;
   description: string | null;
-  questionType: 'text' | 'date' | 'select' | 'dropdown' | 'file' | 'flight' | 'boolean';
+  questionType:
+    | 'text'
+    | 'date'
+    | 'select'
+    | 'dropdown'
+    | 'file'
+    | 'flight'
+    | 'boolean'
+    | 'checkbox'
+    | 'radio';
   category: string;
   required: boolean | null;
   options: Array<{ label: string; value: string }> | null;
   visibility?: QuestionVisibility;
 };
 
-type AdminQuestionType = 'text' | 'date' | 'dropdown' | 'boolean';
+type AdminQuestionType = 'text' | 'date' | 'dropdown' | 'boolean' | 'checkbox' | 'radio';
 
 export type SiblingQuestion = {
   id: string;
@@ -55,8 +64,18 @@ export type SiblingQuestion = {
 function toAdminQuestionType(type: string): AdminQuestionType {
   if (type === 'date') return 'date';
   if (type === 'boolean') return 'boolean';
+  if (type === 'checkbox') return 'checkbox';
+  if (type === 'radio') return 'radio';
   if (type === 'dropdown' || type === 'select') return 'dropdown';
   return 'text';
+}
+
+function questionTypeLabel(type: string): string {
+  if (type === 'select') return 'dropdown';
+  if (type === 'radio') return 'radio';
+  if (type === 'checkbox') return 'checkbox';
+  if (type === 'boolean') return 'boolean';
+  return type;
 }
 
 function toAdminCategory(value: string | null | undefined): QuestionCategory {
@@ -78,7 +97,9 @@ function defaultEqualsValueForSibling(sibling: SiblingQuestion | undefined): str
   if (!sibling) return '';
   const type = toAdminQuestionType(sibling.questionType);
   if (type === 'boolean') return 'true';
-  if (type === 'dropdown') return sibling.options?.[0]?.value ?? '';
+  if (type === 'dropdown' || type === 'radio' || type === 'checkbox') {
+    return sibling.options?.[0]?.value ?? '';
+  }
   return '';
 }
 
@@ -88,7 +109,16 @@ interface Question {
   key: string;
   label: string;
   description: string | null;
-  questionType: 'text' | 'date' | 'select' | 'dropdown' | 'file' | 'flight' | 'boolean';
+  questionType:
+    | 'text'
+    | 'date'
+    | 'select'
+    | 'dropdown'
+    | 'file'
+    | 'flight'
+    | 'boolean'
+    | 'checkbox'
+    | 'radio';
   category?: string | null;
   required: boolean | null;
   familyEnabled: boolean | null;
@@ -171,7 +201,10 @@ export function QuestionFormModal({
   const labelValue = form.watch('label');
   const visibility = form.watch('visibility');
   const visibilityEnabled = isVisibilityDraftEnabled(visibility);
-  const showOptions = questionType === 'dropdown';
+  const showOptions =
+    questionType === 'dropdown' ||
+    questionType === 'checkbox' ||
+    questionType === 'radio';
 
   const sourceKey = String(
     visibility && typeof visibility === 'object' && visibility !== null && 'sourceQuestionKey' in visibility
@@ -469,12 +502,12 @@ export function QuestionFormModal({
                         <span className="block text-xs text-slate-helper mt-0.5">
                           {questionCategoryLabel(suggestion.category || 'other')}
                           {' · '}
-                          {suggestion.questionType === 'select'
-                            ? 'dropdown'
-                            : suggestion.questionType}
+                          {questionTypeLabel(suggestion.questionType)}
                           {suggestion.required ? ' · Required' : ' · Optional'}
                           {(suggestion.questionType === 'dropdown' ||
-                            suggestion.questionType === 'select') &&
+                            suggestion.questionType === 'select' ||
+                            suggestion.questionType === 'checkbox' ||
+                            suggestion.questionType === 'radio') &&
                           suggestion.options?.length
                             ? ` · ${suggestion.options.length} options`
                             : ''}
@@ -509,6 +542,8 @@ export function QuestionFormModal({
                 { value: 'text', label: 'Text Input' },
                 { value: 'date', label: 'Date Picker' },
                 { value: 'dropdown', label: 'Dropdown' },
+                { value: 'radio', label: 'Radio button' },
+                { value: 'checkbox', label: 'Checkbox' },
                 { value: 'boolean', label: 'Yes/No Toggle' },
               ]}
               {...form.register('questionType')}
@@ -575,9 +610,16 @@ export function QuestionFormModal({
 
                   <p className="text-sm font-medium text-portrait-ink">Equals</p>
 
-                  {sourceType === 'dropdown' && (
+                  {sourceType === 'dropdown' ||
+                  sourceType === 'radio' ||
+                  sourceType === 'checkbox' ? (
                     <Select
                       label="Value"
+                      helperText={
+                        sourceType === 'checkbox'
+                          ? 'Shows when this option is among the selected checkboxes'
+                          : undefined
+                      }
                       options={(sourceSibling?.options || []).map((option) => ({
                         value: option.value,
                         label: option.label,
@@ -597,7 +639,7 @@ export function QuestionFormModal({
                           : undefined
                       }
                     />
-                  )}
+                  ) : null}
 
                   {sourceType === 'boolean' && (
                     <Select
@@ -646,7 +688,13 @@ export function QuestionFormModal({
             {showOptions && (
               <div className="p-4 bg-mint-wash/30 rounded-2xl space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium text-portrait-ink">Dropdown Options</h4>
+                  <h4 className="text-sm font-medium text-portrait-ink">
+                    {questionType === 'radio'
+                      ? 'Radio Options'
+                      : questionType === 'checkbox'
+                        ? 'Checkbox Options'
+                        : 'Dropdown Options'}
+                  </h4>
                   <Button
                     type="button"
                     onClick={() => append({ label: '', value: crypto.randomUUID() })}
