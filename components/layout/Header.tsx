@@ -2,7 +2,7 @@
 
 import { type ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Menu, X } from 'lucide-react';
+import { Menu, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 
@@ -11,9 +11,16 @@ interface HeaderProps {
   /** Dark transparent bar for heroes on navy backgrounds. */
   theme?: 'light' | 'dark';
   center?: ReactNode;
+  /** Homepage uses the account icon; other public pages keep Apply now. */
+  cta?: 'apply' | 'account';
 }
 
-export function Header({ overlay = false, theme = 'light', center }: HeaderProps) {
+export function Header({
+  overlay = false,
+  theme = 'light',
+  center,
+  cta = 'apply',
+}: HeaderProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -71,47 +78,64 @@ export function Header({ overlay = false, theme = 'light', center }: HeaderProps
             )}
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
-              <Link
-                href="/destinations"
-                className={cn(
-                  'pointer-events-auto',
-                  center ? 'hidden lg:block' : 'hidden md:block'
-                )}
-              >
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className={
+              {cta === 'account' ? (
+                <Link
+                  href="/signin"
+                  aria-label="Sign in"
+                  className={cn(
+                    'pointer-events-auto p-2 transition-colors',
                     inverted
-                      ? 'border-white text-white hover:bg-white hover:text-portrait-ink'
-                      : undefined
-                  }
+                      ? 'text-white hover:text-white/80'
+                      : 'text-portrait-ink hover:text-nautical-teal'
+                  )}
                 >
-                  Apply now
-                </Button>
-              </Link>
+                  <User className="h-6 w-6" />
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    href="/destinations"
+                    className={cn(
+                      'pointer-events-auto',
+                      center ? 'hidden lg:block' : 'hidden md:block'
+                    )}
+                  >
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      className={
+                        inverted
+                          ? 'border-white text-white hover:bg-white hover:text-portrait-ink'
+                          : undefined
+                      }
+                    >
+                      Apply now
+                    </Button>
+                  </Link>
 
-              <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className={cn(
-                  'pointer-events-auto p-2 transition-colors lg:hidden',
-                  inverted
-                    ? 'text-white hover:text-white/80'
-                    : 'text-portrait-ink hover:text-nautical-teal'
-                )}
-              >
-                {isMobileMenuOpen ? (
-                  <X className="h-6 w-6" />
-                ) : (
-                  <Menu className="h-6 w-6" />
-                )}
-              </button>
+                  <button
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    className={cn(
+                      'pointer-events-auto p-2 transition-colors lg:hidden',
+                      inverted
+                        ? 'text-white hover:text-white/80'
+                        : 'text-portrait-ink hover:text-nautical-teal'
+                    )}
+                  >
+                    {isMobileMenuOpen ? (
+                      <X className="h-6 w-6" />
+                    ) : (
+                      <Menu className="h-6 w-6" />
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
       </header>
 
-      {isMobileMenuOpen && (
+      {cta === 'apply' && isMobileMenuOpen && (
         <div className="fixed inset-0 z-[60] lg:hidden">
           <div
             className="absolute inset-0 bg-black/40"

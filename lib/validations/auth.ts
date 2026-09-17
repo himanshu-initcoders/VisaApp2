@@ -7,6 +7,14 @@ import { z } from 'zod';
  * Following OWASP guidelines for password strength
  */
 
+export const indianMobileSchema = z
+  .string()
+  .regex(/^[6-9]\d{9}$/, 'Invalid Indian phone number (10 digits starting with 6-9)');
+
+export const mobileOtpSchema = z
+  .string()
+  .regex(/^\d{5}$/, 'Enter the 5-digit OTP');
+
 export const registerSchema = z.object({
   name: z
     .string()
@@ -20,10 +28,7 @@ export const registerSchema = z.object({
     .toLowerCase()
     .trim(),
 
-  phone: z
-    .string()
-    .regex(/^[6-9]\d{9}$/, 'Invalid Indian phone number (10 digits starting with 6-9)')
-    .optional(),
+  phone: indianMobileSchema.optional(),
 
   password: z
     .string()
@@ -73,10 +78,7 @@ export const updateProfileSchema = z.object({
     .regex(/^[a-zA-Z\s]+$/, 'Name can only contain letters and spaces')
     .optional(),
 
-  phone: z
-    .string()
-    .regex(/^[6-9]\d{9}$/, 'Invalid Indian phone number (10 digits starting with 6-9)')
-    .optional(),
+  phone: indianMobileSchema.optional(),
 });
 
 // Type exports for TypeScript
@@ -85,3 +87,5 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+export type IndianMobile = z.infer<typeof indianMobileSchema>;
+export type MobileOtp = z.infer<typeof mobileOtpSchema>;

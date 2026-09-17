@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server';
  * - /
  * - /login
  * - /register
+ * - /signin (mock mobile OTP; not an admin auth page)
  * - /api/auth/*
  */
 
