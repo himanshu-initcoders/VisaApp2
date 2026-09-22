@@ -24,6 +24,7 @@ import {
   adaptVisibilityForListing,
   normalizeQuestionVisibility,
   type QuestionVisibility,
+  type QuestionVisibilityOperator,
 } from '@/lib/question-visibility';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { z } from 'zod';
@@ -211,6 +212,19 @@ export function QuestionFormModal({
       ? ((visibility as { sourceQuestionKey?: unknown }).sourceQuestionKey ?? '')
       : ''
   );
+  const visibilityOperator: QuestionVisibilityOperator = (() => {
+    if (
+      visibility &&
+      typeof visibility === 'object' &&
+      visibility !== null &&
+      'operator' in visibility &&
+      typeof (visibility as { operator?: unknown }).operator === 'string'
+    ) {
+      const op = (visibility as { operator: string }).operator;
+      if (op === 'is_empty' || op === 'is_filled' || op === 'equals') return op;
+    }
+    return 'equals';
+  })();
   const sourceSibling = availableSiblings.find((q) => q.key === sourceKey) ?? null;
   const sourceType = sourceSibling
     ? toAdminQuestionType(sourceSibling.questionType)
@@ -302,7 +316,11 @@ export function QuestionFormModal({
   };
 
   const patchVisibility = (
-    patch: Partial<{ sourceQuestionKey: string; value: string }>
+    patch: Partial<{
+      sourceQuestionKey: string;
+      value: string;
+      operator: QuestionVisibilityOperator;
+    }>
   ) => {
     const raw = form.getValues('visibility');
     const current =
@@ -313,35 +331,64 @@ export function QuestionFormModal({
               'sourceQuestionKey' in raw && typeof raw.sourceQuestionKey === 'string'
                 ? raw.sourceQuestionKey
                 : '',
-            operator: 'equals' as const,
+            operator: ((): QuestionVisibilityOperator => {
+              if ('operator' in raw && typeof raw.operator === 'string') {
+                if (
+                  raw.operator === 'is_empty' ||
+                  raw.operator === 'is_filled' ||
+                  raw.operator === 'equals'
+                ) {
+                  return raw.operator;
+                }
+              }
+              return 'equals';
+            })(),
             value: 'value' in raw && typeof raw.value === 'string' ? raw.value : '',
           }
         : null;
 
     if (!current) return;
 
+    const nextOperator = patch.operator ?? current.operator;
+    const nextSourceKey = patch.sourceQuestionKey ?? current.sourceQuestionKey;
+    let nextValue = patch.value !== undefined ? patch.value : current.value;
+
+    if (nextOperator !== 'equals') {
+      nextValue = '';
+    } else if (patch.operator === 'equals' && !nextValue.trim()) {
+      const sibling = availableSiblings.find((item) => item.key === nextSourceKey);
+      nextValue = defaultEqualsValueForSibling(sibling);
+    }
+
     form.setValue(
       'visibility',
       {
-        ...current,
-        ...patch,
         enabled: true,
-        operator: 'equals',
+        sourceQuestionKey: nextSourceKey,
+        operator: nextOperator,
+        value: nextValue,
       },
       { shouldDirty: true, shouldValidate: false }
     );
   };
 
-  // If a select/boolean source is chosen but value is still empty, fill the first option.
+  // If equals mode + select/boolean source is chosen but value is still empty, fill the first option.
   // Native <select> can look like "Yes" while the form value is still "".
   useEffect(() => {
-    if (!visibilityEnabled || !sourceSibling) return;
+    if (!visibilityEnabled || visibilityOperator !== 'equals' || !sourceSibling) return;
     if (visibilityValue.trim()) return;
     const fallback = defaultEqualsValueForSibling(sourceSibling);
     if (!fallback) return;
     patchVisibility({ value: fallback });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync empty select values
-  }, [visibilityEnabled, sourceKey, sourceType, visibilityValue, sourceSibling]);
+  }, [
+    visibilityEnabled,
+    visibilityOperator,
+    sourceKey,
+    sourceType,
+    visibilityValue,
+    sourceSibling,
+  ]);
 
   const applySuggestion = (suggestion: QuestionLabelSuggestion) => {
     skipNextSearchRef.current = true;
@@ -414,7 +461,7 @@ export function QuestionFormModal({
       ) {
         message = String(visibilityError.sourceQuestionKey.message || message);
       } else {
-        message = 'Complete the visibility rule (question + equals value), or turn it off.';
+        message = 'Complete the visibility rule (question + match mode), or turn it off.';
       }
     } else if (errors.label?.message) {
       message = errors.label.message;
@@ -577,7 +624,7 @@ export function QuestionFormModal({
                     <p className="text-xs text-slate-helper mt-0.5">
                       {availableSiblings.length === 0
                         ? 'Add another question first to use conditional visibility'
-                        : 'Hide this field until another question equals a chosen value'}
+                        : 'Hide this field until another question matches the selected condition'}
                     </p>
                   </div>
                   <Toggle
@@ -603,83 +650,137 @@ export function QuestionFormModal({
                       const sibling = availableSiblings.find((item) => item.key === nextKey);
                       patchVisibility({
                         sourceQuestionKey: nextKey,
-                        value: defaultEqualsValueForSibling(sibling),
+                        value:
+                          visibilityOperator === 'equals'
+                            ? defaultEqualsValueForSibling(sibling)
+                            : '',
                       });
                     }}
                   />
 
-                  <p className="text-sm font-medium text-portrait-ink">Equals</p>
+                  <fieldset className="space-y-2">
+                    <legend className="text-sm font-medium text-portrait-ink">Match when</legend>
+                    <div className="space-y-2">
+                      {(
+                        [
+                          {
+                            value: 'equals' as const,
+                            label: 'Equals',
+                            description: 'Source answer matches a specific value',
+                          },
+                          {
+                            value: 'is_empty' as const,
+                            label: 'Not filled / null',
+                            description: 'Source answer is missing, blank, or empty',
+                          },
+                          {
+                            value: 'is_filled' as const,
+                            label: 'Any value',
+                            description: 'Source answer has any filled value',
+                          },
+                        ] as const
+                      ).map((option) => (
+                        <label
+                          key={option.value}
+                          className="flex items-start gap-3 cursor-pointer rounded-2xl border border-fog-edge bg-white px-3 py-2.5"
+                        >
+                          <input
+                            type="radio"
+                            name="visibility-operator"
+                            className="mt-1 h-4 w-4 accent-portrait-ink"
+                            checked={visibilityOperator === option.value}
+                            onChange={() => patchVisibility({ operator: option.value })}
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium text-portrait-ink">
+                              {option.label}
+                            </span>
+                            <span className="block text-xs text-slate-helper mt-0.5">
+                              {option.description}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
 
-                  {sourceType === 'dropdown' ||
-                  sourceType === 'radio' ||
-                  sourceType === 'checkbox' ? (
-                    <Select
-                      label="Value"
-                      helperText={
-                        sourceType === 'checkbox'
-                          ? 'Shows when this option is among the selected checkboxes'
-                          : undefined
-                      }
-                      options={(sourceSibling?.options || []).map((option) => ({
-                        value: option.value,
-                        label: option.label,
-                      }))}
-                      value={visibilityValue}
-                      onChange={(event) =>
-                        patchVisibility({ value: event.target.value })
-                      }
-                      error={
-                        typeof form.formState.errors.visibility === 'object' &&
-                        form.formState.errors.visibility &&
-                        'value' in form.formState.errors.visibility
-                          ? String(
-                              (form.formState.errors.visibility as { value?: { message?: string } })
-                                .value?.message || ''
-                            ) || undefined
-                          : undefined
-                      }
-                    />
-                  ) : null}
+                  {visibilityOperator === 'equals' && (
+                    <>
+                      {sourceType === 'dropdown' ||
+                      sourceType === 'radio' ||
+                      sourceType === 'checkbox' ? (
+                        <Select
+                          label="Value"
+                          helperText={
+                            sourceType === 'checkbox'
+                              ? 'Shows when this option is among the selected checkboxes'
+                              : undefined
+                          }
+                          options={(sourceSibling?.options || []).map((option) => ({
+                            value: option.value,
+                            label: option.label,
+                          }))}
+                          value={visibilityValue}
+                          onChange={(event) =>
+                            patchVisibility({ value: event.target.value })
+                          }
+                          error={
+                            typeof form.formState.errors.visibility === 'object' &&
+                            form.formState.errors.visibility &&
+                            'value' in form.formState.errors.visibility
+                              ? String(
+                                  (
+                                    form.formState.errors.visibility as {
+                                      value?: { message?: string };
+                                    }
+                                  ).value?.message || ''
+                                ) || undefined
+                              : undefined
+                          }
+                        />
+                      ) : null}
 
-                  {sourceType === 'boolean' && (
-                    <Select
-                      label="Value"
-                      options={[
-                        { value: 'true', label: 'Yes' },
-                        { value: 'false', label: 'No' },
-                      ]}
-                      value={visibilityValue}
-                      onChange={(event) =>
-                        patchVisibility({ value: event.target.value })
-                      }
-                    />
-                  )}
+                      {sourceType === 'boolean' && (
+                        <Select
+                          label="Value"
+                          options={[
+                            { value: 'true', label: 'Yes' },
+                            { value: 'false', label: 'No' },
+                          ]}
+                          value={visibilityValue}
+                          onChange={(event) =>
+                            patchVisibility({ value: event.target.value })
+                          }
+                        />
+                      )}
 
-                  {sourceType === 'date' && (
-                    <Input
-                      label="Value"
-                      type="date"
-                      value={visibilityValue}
-                      onChange={(event) =>
-                        patchVisibility({ value: event.target.value })
-                      }
-                    />
-                  )}
+                      {sourceType === 'date' && (
+                        <Input
+                          label="Value"
+                          type="date"
+                          value={visibilityValue}
+                          onChange={(event) =>
+                            patchVisibility({ value: event.target.value })
+                          }
+                        />
+                      )}
 
-                  {(sourceType === 'text' || !sourceType) && (
-                    <Input
-                      label="Value"
-                      placeholder="Exact answer to match"
-                      value={visibilityValue}
-                      onChange={(event) =>
-                        patchVisibility({ value: event.target.value })
-                      }
-                      error={visibilityFieldError}
-                    />
-                  )}
+                      {(sourceType === 'text' || !sourceType) && (
+                        <Input
+                          label="Value"
+                          placeholder="Exact answer to match"
+                          value={visibilityValue}
+                          onChange={(event) =>
+                            patchVisibility({ value: event.target.value })
+                          }
+                          error={visibilityFieldError}
+                        />
+                      )}
 
-                  {sourceType && sourceType !== 'text' && visibilityFieldError && (
-                    <p className="text-sm text-red-600">{visibilityFieldError}</p>
+                      {sourceType && sourceType !== 'text' && visibilityFieldError && (
+                        <p className="text-sm text-red-600">{visibilityFieldError}</p>
+                      )}
+                    </>
                   )}
                 </div>
               )}

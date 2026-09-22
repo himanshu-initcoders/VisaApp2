@@ -285,7 +285,7 @@ export type QuestionLabelSuggestion = {
   visibility: {
     enabled: true;
     sourceQuestionKey: string;
-    operator: 'equals';
+    operator: 'equals' | 'is_empty' | 'is_filled';
     value: string;
   } | null;
 };

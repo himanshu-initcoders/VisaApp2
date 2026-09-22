@@ -190,7 +190,8 @@ export const additionalQuestionSchema = z.object({
         path: ['visibility', 'sourceQuestionKey'],
       });
     }
-    if (!data.visibility.value.trim()) {
+    const operator = data.visibility.operator ?? 'equals';
+    if (operator === 'equals' && !data.visibility.value.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Enter a value to match',

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { BRAND_NAME, Logo } from '@/components/shared/Logo';
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
@@ -141,10 +142,10 @@ export function Footer() {
         <div className="border-t border-white/10 pt-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             {/* Logo & Copyright */}
-            <div className="flex items-center gap-3">
-              <div className="w-6 h-6 bg-gradient-rainbow rounded-full" />
+            <div className="flex flex-col items-center gap-3 sm:flex-row">
+              <Logo href="/" size="md" />
               <span className="text-sm text-white/70">
-                © {currentYear} VisaFlow. All rights reserved.
+                © {currentYear} {BRAND_NAME}. All rights reserved.
               </span>
             </div>
 

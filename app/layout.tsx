@@ -17,9 +17,9 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: 'Visa & Passport Services - Fast, Easy, Reliable',
+  title: 'Viserv — Visa & Passport Services',
   description:
-    'Get your visa and passport services done quickly and easily. We help Indian citizens with visa applications and passport services.',
+    'Get your visa and passport services done quickly and easily with Viserv. We help Indian citizens with visa applications and passport services.',
 };
 
 export default function RootLayout({

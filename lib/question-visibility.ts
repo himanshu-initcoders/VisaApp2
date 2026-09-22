@@ -1,15 +1,35 @@
 import { z } from 'zod';
 
 /**
- * Show-if visibility for additional questions (v1: single equals rule).
+ * Show-if visibility for additional questions.
+ * Modes: equals (match value), is_empty (not filled/null), is_filled (any value).
  * null / disabled = always visible.
  */
-export const questionVisibilityRuleSchema = z.object({
-  enabled: z.literal(true),
-  sourceQuestionKey: z.string().min(1, 'Select a question'),
-  operator: z.literal('equals'),
-  value: z.string().min(1, 'Enter a value to match'),
-});
+export const QUESTION_VISIBILITY_OPERATORS = ['equals', 'is_empty', 'is_filled'] as const;
+export type QuestionVisibilityOperator = (typeof QUESTION_VISIBILITY_OPERATORS)[number];
+
+export const questionVisibilityOperatorSchema = z.enum(QUESTION_VISIBILITY_OPERATORS);
+
+export const questionVisibilityRuleSchema = z
+  .object({
+    enabled: z.literal(true),
+    sourceQuestionKey: z.string().min(1, 'Select a question'),
+    operator: questionVisibilityOperatorSchema,
+    value: z.string(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.operator === 'equals' && !data.value.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Enter a value to match',
+        path: ['value'],
+      });
+    }
+  })
+  .transform((data) => ({
+    ...data,
+    value: data.operator === 'equals' ? data.value : '',
+  }));
 
 /**
  * Form-friendly draft: allows empty strings while editing.
@@ -21,7 +41,7 @@ export const questionVisibilityDraftSchema = z
     z.object({
       enabled: z.literal(true),
       sourceQuestionKey: z.string(),
-      operator: z.literal('equals'),
+      operator: questionVisibilityOperatorSchema.default('equals'),
       value: z.string(),
     }),
   ])
@@ -42,8 +62,34 @@ export function normalizeQuestionVisibility(
   value: unknown
 ): QuestionVisibilityRule | null {
   if (!value || typeof value !== 'object') return null;
-  const parsed = questionVisibilityRuleSchema.safeParse(value);
+
+  // Legacy rows may omit operator; treat as equals.
+  const raw = value as Record<string, unknown>;
+  const withOperator =
+    typeof raw.operator === 'string'
+      ? value
+      : { ...raw, operator: 'equals' };
+
+  const parsed = questionVisibilityRuleSchema.safeParse(withOperator);
   return parsed.success ? parsed.data : null;
+}
+
+/**
+ * Missing, whitespace-only, or empty checkbox JSON array [] counts as empty.
+ * Boolean "false" is filled (an explicit answer).
+ */
+export function isAnswerEmpty(sourceValue: string): boolean {
+  const trimmed = sourceValue.trim();
+  if (!trimmed) return true;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      return parsed.length === 0;
+    }
+  } catch {
+    // not JSON
+  }
+  return false;
 }
 
 /**
@@ -62,7 +108,16 @@ export function isQuestionVisible(
   }
 
   const sourceValue = (answers[rule.sourceQuestionKey] ?? '').trim();
-  return answerMatchesEquals(sourceValue, rule.value.trim());
+
+  switch (rule.operator) {
+    case 'is_empty':
+      return isAnswerEmpty(sourceValue);
+    case 'is_filled':
+      return !isAnswerEmpty(sourceValue);
+    case 'equals':
+    default:
+      return answerMatchesEquals(sourceValue, rule.value.trim());
+  }
 }
 
 /** Exact match, or includes when source is a checkbox JSON array. */

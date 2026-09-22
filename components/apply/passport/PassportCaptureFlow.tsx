@@ -127,6 +127,7 @@ const PASSPORT_ACCEPT =
   'image/jpeg,image/png,image/webp,image/jpg,application/pdf';
 
 export function PassportCaptureFlow({
+  travellerName,
   initialFile,
   formConfig,
   arrivalPrefill,
@@ -310,6 +311,7 @@ export function PassportCaptureFlow({
       <div className="fixed inset-0 z-[90] overflow-y-auto bg-white">
         {retryInput}
         <PassportReviewStage
+          travellerName={travellerName}
           initial={extraction}
           formConfig={formConfig}
           savedTrip={resume?.tripDetails}

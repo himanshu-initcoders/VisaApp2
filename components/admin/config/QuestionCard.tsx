@@ -30,7 +30,7 @@ interface Question {
   visibility?: {
     enabled: true;
     sourceQuestionKey: string;
-    operator: 'equals';
+    operator: 'equals' | 'is_empty' | 'is_filled';
     value: string;
   } | null;
 }
@@ -66,7 +66,8 @@ export function QuestionCard({ question, index, onEdit, onDelete }: QuestionCard
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const isConditional = Boolean(normalizeQuestionVisibility(question.visibility));
+  const visibilityRule = normalizeQuestionVisibility(question.visibility);
+  const isConditional = Boolean(visibilityRule);
 
   // Get question type color
   const getTypeColor = (type: string) => {
@@ -131,7 +132,11 @@ export function QuestionCard({ question, index, onEdit, onDelete }: QuestionCard
 
           {isConditional && (
             <span className="px-3 py-1 rounded-full text-xs font-medium bg-peach-wash text-portrait-ink">
-              Conditional
+              {visibilityRule?.operator === 'is_empty'
+                ? 'Show if empty'
+                : visibilityRule?.operator === 'is_filled'
+                  ? 'Show if filled'
+                  : 'Conditional'}
             </span>
           )}
 

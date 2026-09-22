@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Badge, getRoleVariant, Button } from '@/components/ui';
+import { Logo } from '@/components/shared/Logo';
 import { cn } from '@/lib/utils';
 
 /**
@@ -100,12 +100,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
     <>
       {/* Mobile menu button */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-ash px-4 py-3 flex items-center justify-between">
-        <Link
-          href="/admin"
-          className="font-basier text-xl text-portrait-ink"
-        >
-          VisaPass Admin
-        </Link>
+        <Logo href="/admin" size="lg" subtitle="Admin" />
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           className="p-2 text-portrait-ink hover:bg-sky-wash/20 rounded-lg transition-colors"
@@ -142,23 +137,12 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
         <div className="flex flex-col h-full">
           {/* Logo/Branding */}
           <div className="px-6 py-6 border-b border-ash">
-            <Link
+            <Logo
               href="/admin"
-              className="flex items-center space-x-3 group"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              <div className="w-10 h-10 bg-gradient-to-br from-nautical-teal to-portrait-ink rounded-[12px] flex items-center justify-center">
-                <span className="font-basier text-white text-xl font-bold">V</span>
-              </div>
-              <div>
-                <h1 className="font-basier text-lg text-portrait-ink group-hover:opacity-80 transition-opacity">
-                  VisaPass
-                </h1>
-                <p className="font-switzer text-xs text-slate-helper">
-                  Admin Panel
-                </p>
-              </div>
-            </Link>
+              size="lg"
+              subtitle=""
+              onNavigate={() => setIsMobileMenuOpen(false)}
+            />
           </div>
 
           {/* Navigation */}

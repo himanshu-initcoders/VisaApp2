@@ -4,6 +4,7 @@ import { type ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Menu, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Logo } from '@/components/shared/Logo';
 import { cn } from '@/lib/utils';
 
 interface HeaderProps {
@@ -51,25 +52,15 @@ export function Header({
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2 sm:gap-4">
-            <Link
-              href="/"
-              className={cn(
-                'pointer-events-auto flex shrink-0 items-center gap-2 font-basier text-xl font-medium transition-colors',
-                inverted
-                  ? 'text-white hover:text-white/80'
-                  : 'text-portrait-ink hover:text-nautical-teal'
-              )}
-            >
-              <div className="h-8 w-8 rounded-full bg-gradient-rainbow" />
-              <span
+            <div className="pointer-events-auto shrink-0">
+              <Logo
+                size="lg"
+                priority
                 className={cn(
-                  'transition-opacity',
-                  (isScrolled || center) && 'hidden lg:block'
+                  (isScrolled || center) && 'scale-90 lg:scale-100'
                 )}
-              >
-                VisaFlow
-              </span>
-            </Link>
+              />
+            </div>
 
             {center && (
               <div className="pointer-events-auto mx-auto min-w-0 max-w-md flex-1">

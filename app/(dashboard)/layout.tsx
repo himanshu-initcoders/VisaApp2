@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui';
+import { Logo } from '@/components/shared/Logo';
 
 /**
  * Dashboard Layout
@@ -26,9 +27,7 @@ async function DashboardNav() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/dashboard" className="font-basier text-xl text-portrait-ink">
-            VisaPass
-          </Link>
+          <Logo href="/dashboard" size="lg" />
 
           {/* Navigation Links */}
           <div className="hidden md:flex items-center space-x-8">

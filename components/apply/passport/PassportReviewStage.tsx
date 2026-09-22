@@ -26,6 +26,7 @@ import {
   type TravellerDocumentUpload,
   type TravellerTripDetails,
 } from '@/lib/apply/applicationForm';
+import { formatProfileName } from '@/lib/apply/travellerProfiles';
 import type { IndianPassportFields } from '@/lib/passport/types';
 import { isReviewComplete } from '@/lib/passport/schema';
 
@@ -38,6 +39,7 @@ export interface PassportApplicationPayload {
 }
 
 interface PassportReviewStageProps {
+  travellerName?: string;
   initial: IndianPassportFields & {
     frontPreviewUrl: string;
     backPreviewUrl?: string;
@@ -54,6 +56,7 @@ interface PassportReviewStageProps {
 }
 
 export function PassportReviewStage({
+  travellerName,
   initial,
   formConfig: formConfigProp,
   savedTrip,
@@ -215,6 +218,11 @@ export function PassportReviewStage({
 
   const firstTab = visibleTabs[0] ?? 'review';
 
+  const displayName =
+    formatProfileName(
+      `${form.givenNames} ${form.surname}`.trim() || travellerName || ''
+    ) || 'Traveller';
+
   return (
     <div className="min-h-dvh bg-white">
       <header className="relative flex items-center justify-between px-4 py-4 sm:px-6">
@@ -226,9 +234,14 @@ export function PassportReviewStage({
           <ArrowLeft className="h-3.5 w-3.5" />
           Back
         </button>
-        <h1 className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-basier text-xl text-portrait-ink sm:text-2xl">
-          Complete application
-        </h1>
+        <div className="pointer-events-none absolute left-1/2 top-1/2 max-w-[min(70%,20rem)] -translate-x-1/2 -translate-y-1/2 text-center sm:max-w-md">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-helper sm:text-xs">
+            Complete application
+          </p>
+          <h1 className="truncate font-basier text-xl text-portrait-ink sm:text-2xl">
+            {displayName}
+          </h1>
+        </div>
         <button
           type="button"
           aria-label="Close"
