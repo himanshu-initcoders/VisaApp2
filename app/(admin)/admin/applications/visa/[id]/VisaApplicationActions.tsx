@@ -1,21 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent, Button } from '@/components/ui';
 import { StatusUpdateModal } from '@/components/admin/StatusUpdateModal';
 import { NotesModal } from '@/components/admin/NotesModal';
 import { DocumentViewer } from '@/components/admin/DocumentViewer';
 import { Timeline } from '@/components/admin/Timeline';
+import { useTravellerSelectionOptional } from '@/components/admin/TravellerSelectionContext';
 import type { DocumentWithVerification, StatusHistoryItem } from '@/types/admin';
 
 /**
- * Visa Application Actions Component
- *
- * Client-side component for managing application actions:
- * - Status updates
- * - Document verification
- * - Adding notes
+ * Visa Application Actions — status, history, documents (filtered by active traveller).
  */
 
 interface VisaApplicationActionsProps {
@@ -32,8 +28,20 @@ export function VisaApplicationActions({
   statusHistory,
 }: VisaApplicationActionsProps) {
   const router = useRouter();
+  const selection = useTravellerSelectionOptional();
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
+
+  const visibleDocuments = useMemo(() => {
+    if (!selection) return documents;
+    return selection.filterDocuments(documents);
+  }, [documents, selection]);
+
+  const travellerLabel =
+    selection && selection.travellers.length > 1 && selection.activeTraveller
+      ? selection.activeTraveller.name?.trim() ||
+        `Traveller ${selection.activeTravellerIndex + 1}`
+      : null;
 
   const handleSuccess = () => {
     router.refresh();
@@ -41,7 +49,6 @@ export function VisaApplicationActions({
 
   return (
     <>
-      {/* Status Management */}
       <Card>
         <CardHeader>
           <CardTitle>Status Management</CardTitle>
@@ -64,7 +71,6 @@ export function VisaApplicationActions({
         </CardContent>
       </Card>
 
-      {/* Status History */}
       <Card>
         <CardHeader>
           <CardTitle>Status History</CardTitle>
@@ -74,20 +80,25 @@ export function VisaApplicationActions({
         </CardContent>
       </Card>
 
-      {/* Documents */}
       <Card>
         <CardHeader>
-          <CardTitle>Documents</CardTitle>
+          <CardTitle>
+            Documents
+            {travellerLabel ? (
+              <span className="mt-1 block font-switzer text-sm font-normal text-slate-helper">
+                {travellerLabel}
+              </span>
+            ) : null}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <DocumentViewer
-            documents={documents}
+            documents={visibleDocuments}
             onDocumentVerified={handleSuccess}
           />
         </CardContent>
       </Card>
 
-      {/* Modals */}
       <StatusUpdateModal
         isOpen={showStatusModal}
         onClose={() => setShowStatusModal(false)}

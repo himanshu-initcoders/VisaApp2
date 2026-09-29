@@ -43,6 +43,20 @@
       "when": 1789550000000,
       "tag": "0005_question_type_checkbox_radio",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790164603823,
+      "tag": "0006_phase2_otp_drafts",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790168000000,
+      "tag": "0007_phase3_applications",
+      "breakpoints": true
     }
   ]
 }

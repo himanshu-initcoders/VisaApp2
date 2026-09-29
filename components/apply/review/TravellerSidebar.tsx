@@ -4,6 +4,7 @@ import { AddTravellerCard } from '@/components/apply/review/AddTravellerCard';
 import { TravellerSidebarItem } from '@/components/apply/review/TravellerSidebarItem';
 import {
   isTravellerFilled,
+  isTravellerStarted,
   travellerDisplayName,
 } from '@/lib/apply/reviewFields';
 import type { ApplyTraveller } from '@/lib/apply/types';
@@ -33,6 +34,7 @@ export function TravellerSidebar({
             key={traveller.id}
             name={travellerDisplayName(traveller, index)}
             filled={isTravellerFilled(traveller)}
+            started={isTravellerStarted(traveller)}
             selected={selectedId === traveller.id}
             canRemove={travellers.length > 1}
             onSelect={() => onSelect(traveller.id)}

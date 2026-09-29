@@ -4,52 +4,61 @@ import { NextResponse } from 'next/server';
 /**
  * NextAuth Middleware
  *
- * Protects routes that require authentication
- *
- * Protected routes:
- * - /dashboard/*
- * - /applications/*
- * - /profile/*
- *
- * Public routes:
- * - /
- * - /login
- * - /register
- * - /signin (mock mobile OTP; not an admin auth page)
- * - /api/auth/*
+ * Protected: /dashboard, /applications, /documents, /profile, /admin
+ * Auth pages:
+ * - /login, /register → staff; applicants redirected away
+ * - /signin → applicant OTP; staff redirected to admin
  */
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
+  const role = req.auth?.user?.role;
   const { pathname } = req.nextUrl;
 
-  // Define protected routes
-  const protectedRoutes = ['/dashboard', '/applications', '/profile', '/admin'];
+  const protectedRoutes = [
+    '/dashboard',
+    '/applications',
+    '/documents',
+    '/profile',
+    '/admin',
+  ];
   const isProtectedRoute = protectedRoutes.some((route) =>
     pathname.startsWith(route)
   );
 
-  // Redirect to login if accessing protected route without auth
   if (isProtectedRoute && !isLoggedIn) {
-    const loginUrl = new URL('/login', req.url);
+    const loginUrl = new URL(
+      pathname.startsWith('/admin') ? '/login' : '/signin',
+      req.url
+    );
     loginUrl.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Check admin role for admin routes
   if (pathname.startsWith('/admin') && isLoggedIn) {
-    const userRole = req.auth?.user?.role;
-    if (userRole !== 'admin' && userRole !== 'reviewer') {
+    if (role !== 'admin' && role !== 'reviewer') {
       const dashboardUrl = new URL('/dashboard', req.url);
       dashboardUrl.searchParams.set('error', 'unauthorized');
       return NextResponse.redirect(dashboardUrl);
     }
   }
 
-  // Redirect to admin if accessing auth pages while logged in
-  const authPages = ['/login', '/register'];
-  if (authPages.includes(pathname) && isLoggedIn) {
-    return NextResponse.redirect(new URL('/admin', req.url));
+  if (isLoggedIn) {
+    const isStaff = role === 'admin' || role === 'reviewer';
+
+    if (pathname === '/login' || pathname === '/register') {
+      if (isStaff) {
+        return NextResponse.redirect(new URL('/admin', req.url));
+      }
+      return NextResponse.redirect(new URL('/dashboard', req.url));
+    }
+
+    if (pathname === '/signin') {
+      if (isStaff) {
+        return NextResponse.redirect(new URL('/admin', req.url));
+      }
+      return NextResponse.redirect(new URL('/dashboard', req.url));
+    }
   }
 
   return NextResponse.next();

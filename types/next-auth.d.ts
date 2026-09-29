@@ -7,6 +7,7 @@ declare module 'next-auth' {
   interface User {
     id: string;
     role: string;
+    phone?: string | null;
     /** App uses boolean; NextAuth adapter default is Date | null */
     emailVerified?: boolean | Date | null;
   }
@@ -14,9 +15,10 @@ declare module 'next-auth' {
   interface Session {
     user: {
       id: string;
-      email: string;
+      email?: string | null;
       name: string | null;
       role: string;
+      phone?: string | null;
       emailVerified?: boolean | Date | null;
     };
   }
@@ -26,6 +28,7 @@ declare module 'next-auth/jwt' {
   interface JWT {
     id: string;
     role: string;
+    phone?: string | null;
     emailVerified: boolean;
   }
 }

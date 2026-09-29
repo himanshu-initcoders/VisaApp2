@@ -33,8 +33,8 @@ export function AnimatedTabs({
   if (items.length < 2) return null;
 
   const isDark = tone === 'dark';
-  // Apply form can show up to 5 sections; stretch so the row stays centered/full-width
-  const stretch = items.length <= 5;
+  // Apply form can show up to 6 sections; stretch so the row stays centered/full-width
+  const stretch = items.length <= 6;
 
   return (
     <LayoutGroup id={layoutId}>

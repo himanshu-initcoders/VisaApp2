@@ -20,12 +20,19 @@ export interface ApplicationListItem {
   userId: string;
   userName: string;
   userEmail: string;
+  userPhone?: string | null;
   status: string;
   submittedAt: Date | null;
   createdAt: Date;
   // Visa-specific fields
   country?: string | null;
+  countryCode?: string | null;
   visaType?: string | null;
+  applicantName?: string | null;
+  applicantPhone?: string | null;
+  passengerNames?: string | null;
+  formVersionId?: string | null;
+  formVersionNumber?: number | null;
   // Passport-specific fields
   serviceType?: string;
 }
@@ -36,9 +43,12 @@ export interface ApplicationListItem {
 export interface ApplicationFilters {
   status?: string; // draft, submitted, under_review, approved, rejected
   type?: 'visa' | 'passport' | 'all';
-  search?: string; // search by user name or email
-  dateFrom?: string; // ISO date string
-  dateTo?: string; // ISO date string
+  search?: string; // search by applicant / user name
+  phone?: string; // mobile (last 10 digits)
+  country?: string; // ISO2 country code
+  passenger?: string; // passenger name ILIKE
+  dateFrom?: string; // ISO date string (IST day start)
+  dateTo?: string; // ISO date string (IST day end)
   userId?: string; // filter by specific user
   page?: number;
   limit?: number;
@@ -72,6 +82,8 @@ export interface ApplicationDetail {
   documents: DocumentWithVerification[];
   statusHistory: StatusHistoryItem[];
   notes: NoteItem[];
+  callLogs: CallLogItem[];
+  formVersionNumber?: number | null;
 }
 
 /**
@@ -116,6 +128,19 @@ export interface NoteItem {
   note: string;
   addedBy: string | null;
   addedByName: string | null;
+  createdAt: Date;
+}
+
+/**
+ * Append-only call log entry
+ */
+export interface CallLogItem {
+  id: string;
+  applicationId: string;
+  phone: string;
+  note: string;
+  adminUserId: string | null;
+  adminName: string;
   createdAt: Date;
 }
 
@@ -180,6 +205,15 @@ export interface DocumentVerificationRequest {
 export interface AddNoteRequest {
   applicationId: string;
   applicationType: 'visa' | 'passport';
+  note: string;
+}
+
+/**
+ * Add call log request
+ */
+export interface AddCallLogRequest {
+  applicationId: string;
+  phone: string;
   note: string;
 }
 

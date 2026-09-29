@@ -30,6 +30,8 @@ interface TravellerDetailPaneProps {
   traveller: ApplyTraveller;
   name: string;
   filled: boolean;
+  /** Passport/form started but not fully submitted — resume after reload. */
+  started?: boolean;
   showGeneralInfo?: boolean;
   showTripDetails?: boolean;
   extraQuestions?: ApplyTripQuestion[];
@@ -43,6 +45,7 @@ export function TravellerDetailPane({
   traveller,
   name,
   filled,
+  started = false,
   showGeneralInfo = true,
   showTripDetails = true,
   extraQuestions = [],
@@ -75,18 +78,23 @@ export function TravellerDetailPane({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {filled && <FilledBadge />}
+          {!filled && started && (
+            <span className="rounded-full bg-peach-wash px-2.5 py-0.5 text-[11px] font-medium text-portrait-ink">
+              In progress
+            </span>
+          )}
           <h2 className="truncate font-switzer text-lg font-semibold text-portrait-ink sm:text-xl">
             {displayName}
           </h2>
         </div>
-        {filled && (
+        {(filled || started) && (
           <button
             type="button"
             onClick={onEdit}
             className="inline-flex items-center gap-1.5 rounded-full bg-[#eef4ff] px-4 py-2 text-sm font-medium text-[#3b82f6] transition-colors hover:bg-[#dce8ff]"
           >
             <Pencil className="h-3.5 w-3.5" />
-            Edit application
+            {filled ? 'Edit application' : 'Continue application'}
           </button>
         )}
       </div>
@@ -157,6 +165,22 @@ export function TravellerDetailPane({
               />
             </div>
           </section>
+        </div>
+      ) : started ? (
+        <div className="mt-8 max-w-md">
+          <p className="text-sm leading-6 text-slate-helper">
+            This traveller&apos;s application was saved on this device. Continue
+            where you left off — your passport scan and filled fields are kept
+            until you finish.
+          </p>
+          <button
+            type="button"
+            onClick={onEdit}
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#3b82f6] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          >
+            <FileText className="h-4 w-4" />
+            Continue application
+          </button>
         </div>
       ) : showGeneralInfo ? (
         <div className="mt-8 max-w-md">

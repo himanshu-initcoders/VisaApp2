@@ -6,6 +6,7 @@ import { TravellerDetailPane } from '@/components/apply/review/TravellerDetailPa
 import { TravellerSidebar } from '@/components/apply/review/TravellerSidebar';
 import {
   isTravellerFilled,
+  isTravellerStarted,
   travellerDisplayName,
 } from '@/lib/apply/reviewFields';
 import type {
@@ -71,6 +72,7 @@ export function ReviewStep({
     ? travellers.findIndex((item) => item.id === selected.id)
     : 0;
   const selectedFilled = selected ? isTravellerFilled(selected) : false;
+  const selectedStarted = selected ? isTravellerStarted(selected) : false;
 
   return (
     <section className="mx-auto max-w-5xl pt-2 sm:pt-4">
@@ -89,6 +91,7 @@ export function ReviewStep({
             traveller={selected}
             name={travellerDisplayName(selected, Math.max(0, selectedIndex))}
             filled={selectedFilled}
+            started={selectedStarted}
             showGeneralInfo={showGeneralInfo}
             showTripDetails={showTripDetails}
             extraQuestions={extraQuestions}

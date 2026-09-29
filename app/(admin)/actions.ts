@@ -8,14 +8,18 @@ import {
   documents,
   statusHistory,
   users,
+  applicationNotes,
+  applicationCallLogs,
 } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { requireRole, isValidStatusTransition, isAdmin } from '@/lib/auth-utils';
+import { uploadService } from '@/lib/upload';
 import type {
   ActionResponse,
   StatusUpdateRequest,
   DocumentVerificationRequest,
   AddNoteRequest,
+  AddCallLogRequest,
   UpdateUserRoleRequest,
 } from '@/types/admin';
 
@@ -215,13 +219,12 @@ export async function verifyDocument(
 }
 
 /**
- * Add internal note to application
+ * Add internal note to application (append-only application_notes)
  */
 export async function addApplicationNote(
   request: AddNoteRequest
 ): Promise<ActionResponse> {
   try {
-    // Authorization check
     const session = await requireRole(['admin', 'reviewer']);
 
     const { applicationId, applicationType, note } = request;
@@ -234,61 +237,45 @@ export async function addApplicationNote(
       };
     }
 
-    // Validate note length
-    if (note.length > 1000) {
+    if (note.length > 5000) {
       return {
         success: false,
         message: 'Note is too long',
-        error: 'Note must be 1000 characters or less',
+        error: 'Note must be 5000 characters or less',
       };
     }
 
-    // Get current status
-    let currentStatus: string;
+    // Ensure application exists
     if (applicationType === 'visa') {
       const result = await db
-        .select({ status: visaApplications.status })
+        .select({ id: visaApplications.id })
         .from(visaApplications)
         .where(eq(visaApplications.id, applicationId))
         .limit(1);
 
-      if (!result || result.length === 0) {
-        return {
-          success: false,
-          message: 'Application not found',
-        };
+      if (!result.length) {
+        return { success: false, message: 'Application not found' };
       }
-
-      currentStatus = result[0].status;
     } else {
       const result = await db
-        .select({ status: passportServices.status })
+        .select({ id: passportServices.id })
         .from(passportServices)
         .where(eq(passportServices.id, applicationId))
         .limit(1);
 
-      if (!result || result.length === 0) {
-        return {
-          success: false,
-          message: 'Application not found',
-        };
+      if (!result.length) {
+        return { success: false, message: 'Application not found' };
       }
-
-      currentStatus = result[0].status;
     }
 
-    // Insert status history entry with note (no status change)
-    await db.insert(statusHistory).values({
+    await db.insert(applicationNotes).values({
       applicationId,
-      applicationType,
-      oldStatus: currentStatus,
-      newStatus: currentStatus,
-      changedBy: session.user.id,
-      notes: note,
+      body: note.trim(),
+      adminUserId: session.user.id,
+      adminName: session.user.name || 'Admin',
       createdAt: new Date(),
     });
 
-    // Revalidate page
     revalidatePath(`/admin/applications/${applicationType}/${applicationId}`);
 
     return {
@@ -300,6 +287,93 @@ export async function addApplicationNote(
     return {
       success: false,
       message: 'Failed to add note',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Append a call log entry (admin/reviewer)
+ */
+export async function addApplicationCallLog(
+  request: AddCallLogRequest
+): Promise<ActionResponse> {
+  try {
+    const session = await requireRole(['admin', 'reviewer']);
+    const { applicationId, phone, note } = request;
+
+    if (!applicationId || !phone?.trim() || !note?.trim()) {
+      return {
+        success: false,
+        message: 'Missing required fields',
+        error: 'applicationId, phone, and note are required',
+      };
+    }
+
+    const [app] = await db
+      .select({ id: visaApplications.id })
+      .from(visaApplications)
+      .where(eq(visaApplications.id, applicationId))
+      .limit(1);
+
+    if (!app) {
+      return { success: false, message: 'Application not found' };
+    }
+
+    await db.insert(applicationCallLogs).values({
+      applicationId,
+      phone: phone.trim().slice(0, 30),
+      note: note.trim(),
+      adminUserId: session.user.id,
+      adminName: session.user.name || 'Admin',
+      createdAt: new Date(),
+    });
+
+    revalidatePath(`/admin/applications/visa/${applicationId}`);
+
+    return { success: true, message: 'Call log added' };
+  } catch (error) {
+    console.error('Error adding call log:', error);
+    return {
+      success: false,
+      message: 'Failed to add call log',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Resolve a document preview/download URL for admin.
+ */
+export async function getDocumentPreviewUrl(
+  documentId: string
+): Promise<ActionResponse<{ url: string }>> {
+  try {
+    await requireRole(['admin', 'reviewer']);
+
+    const [doc] = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.id, documentId))
+      .limit(1);
+
+    if (!doc) {
+      return {
+        success: false,
+        message: 'Document not found',
+      };
+    }
+
+    const url = uploadService.getUrl(doc.s3Key);
+    return {
+      success: true,
+      message: 'OK',
+      data: { url },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: 'Failed to resolve document URL',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }

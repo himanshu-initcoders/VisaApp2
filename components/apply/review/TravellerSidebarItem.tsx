@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 interface TravellerSidebarItemProps {
   name: string;
   filled: boolean;
+  started?: boolean;
   selected: boolean;
   canRemove: boolean;
   onSelect: () => void;
@@ -17,6 +18,7 @@ interface TravellerSidebarItemProps {
 export function TravellerSidebarItem({
   name,
   filled,
+  started = false,
   selected,
   canRemove,
   onSelect,
@@ -38,6 +40,8 @@ export function TravellerSidebarItem({
       >
         {filled ? (
           <FilledBadge className="h-5 w-5 shrink-0" />
+        ) : started ? (
+          <span className="h-5 w-5 shrink-0 rounded-full border-2 border-peach-wash bg-peach-wash/60" />
         ) : (
           <span className="h-5 w-5 shrink-0 rounded-full border border-fog" />
         )}

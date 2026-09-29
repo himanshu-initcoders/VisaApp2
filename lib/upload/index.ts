@@ -223,6 +223,13 @@ export const uploadService = new UploadService();
 
 // Export types
 export * from './types';
+export {
+  buildApplicationObjectKey,
+  applicationPublicId,
+  sanitizeSlotKey,
+  extensionFromMime,
+  APPLICATION_UPLOAD_FOLDER,
+} from './applicationKey';
 
 // Export providers for direct access if needed
 export { S3UploadProvider } from './providers/s3';

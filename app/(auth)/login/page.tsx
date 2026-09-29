@@ -1,28 +1,41 @@
 'use client';
 
-import { useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { useEffect, useState } from 'react';
+import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
-import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, Input } from '@/components/ui';
+import {
+  Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+  Input,
+} from '@/components/ui';
 import { loginSchema, type LoginInput } from '@/lib/validations/auth';
 
 /**
- * Login Page
- *
- * Features:
- * - Email/password authentication
- * - Client-side validation with Zod
- * - Error handling
- * - Link to register page
- * - Portrait design system styling
+ * Admin / staff email-password login.
+ * Applicants should use /signin (mobile OTP).
  */
 export default function LoginPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (status !== 'authenticated' || !session?.user) return;
+    if (session.user.role === 'admin' || session.user.role === 'reviewer') {
+      router.replace('/admin');
+    } else {
+      router.replace('/dashboard');
+    }
+  }, [status, session, router]);
 
   const {
     register,
@@ -49,10 +62,9 @@ export default function LoginPage() {
         return;
       }
 
-      // Redirect to admin on success
-      router.push('/admin');
       router.refresh();
-    } catch (err) {
+      router.push('/admin');
+    } catch {
       setError('Something went wrong. Please try again.');
       setIsLoading(false);
     }
@@ -62,13 +74,13 @@ export default function LoginPage() {
     <Card variant="elevated">
       <CardHeader>
         <CardTitle className="font-basier text-2xl">
-          Welcome{' '}
+          Staff{' '}
           <span className="italic bg-gradient-rainbow bg-clip-text text-transparent">
-            back
+            login
           </span>
         </CardTitle>
         <CardDescription>
-          Sign in to your account to continue
+          Email and password for admin and reviewer accounts
         </CardDescription>
       </CardHeader>
 
@@ -130,22 +142,15 @@ export default function LoginPage() {
       </CardContent>
 
       <CardFooter className="flex-col space-y-3">
-        <div className="relative w-full">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-ash"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white font-switzer text-slate-helper">
-              Don't have an account?
-            </span>
-          </div>
-        </div>
-
-        <Link href="/register" className="w-full">
-          <Button variant="ghost" size="lg" className="w-full">
-            Create account
-          </Button>
-        </Link>
+        <p className="text-center font-switzer text-sm text-slate-helper">
+          Applying for a visa?{' '}
+          <Link
+            href="/signin"
+            className="font-medium text-portrait-ink hover:opacity-80"
+          >
+            Sign in with mobile OTP
+          </Link>
+        </p>
       </CardFooter>
     </Card>
   );

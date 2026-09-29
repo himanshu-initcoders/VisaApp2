@@ -32,7 +32,7 @@ export class S3UploadProvider implements IUploadProvider {
   }
 
   async upload(file: File | Buffer, options: UploadOptions): Promise<UploadResult> {
-    const { folder, filename: customFilename, metadata } = options;
+    const { folder, filename: customFilename, metadata, explicitKey } = options;
 
     // Get file data
     let buffer: Buffer;
@@ -64,12 +64,16 @@ export class S3UploadProvider implements IUploadProvider {
       throw new Error(`File type ${mimeType} not allowed`);
     }
 
-    // Generate unique key
-    const timestamp = Date.now();
-    const randomString = Math.random().toString(36).substring(2, 15);
-    const sanitizedFilename = originalFilename.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const extension = mimeType.split('/')[1] || 'bin';
-    const key = `${folder}/${timestamp}-${randomString}-${sanitizedFilename}`;
+    // Generate unique key (or use explicit nested application key)
+    let key: string;
+    if (explicitKey) {
+      key = explicitKey.replace(/^\/+/, '');
+    } else {
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(2, 15);
+      const sanitizedFilename = originalFilename.replace(/[^a-zA-Z0-9.-]/g, '_');
+      key = `${folder}/${timestamp}-${randomString}-${sanitizedFilename}`;
+    }
 
     // Upload to S3
     const command = new PutObjectCommand({

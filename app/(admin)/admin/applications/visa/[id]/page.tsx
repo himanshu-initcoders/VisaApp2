@@ -2,282 +2,249 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth-utils';
 import { getApplicationDetails } from '@/lib/admin-queries';
-import { Card, CardHeader, CardTitle, CardContent, Badge, getStatusVariant } from '@/components/ui';
-import { Timeline } from '@/components/admin/Timeline';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Badge,
+  getStatusVariant,
+  Tabs,
+  TabsPanel,
+} from '@/components/ui';
 import { VisaApplicationActions } from './VisaApplicationActions';
-
-/**
- * Visa Application Detail Page
- *
- * Full view of a visa application with:
- * - Application information
- * - Personal, travel, and employment information
- * - Status management
- * - Document verification
- * - Internal notes
- */
+import { CallLogsPanel } from '@/components/admin/CallLogsPanel';
+import { NotesPanel } from '@/components/admin/NotesPanel';
+import { TravellersSection } from '@/components/admin/TravellersSection';
+import { TravellerSelectionProvider } from '@/components/admin/TravellerSelectionContext';
+import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 
 interface PageProps {
-  params: {
-    id: string;
-  };
+  params: Promise<{ id: string }>;
+}
+
+type StoredTraveller = {
+  passengerId?: string;
+  name?: string;
+  passportData?: Record<string, unknown> | null;
+  tripDetails?: Record<string, unknown> | null;
+  documents?: Array<{
+    slotKey?: string;
+    key?: string;
+    url?: string;
+    mimeType?: string;
+    filename?: string;
+  }>;
+};
+
+const DETAIL_TABS = [
+  { id: 'application', label: 'Application information' },
+  { id: 'call-logs', label: 'Call logs' },
+  { id: 'notes', label: 'Notes' },
+] as const;
+
+function Field({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div>
+      <dt className="mb-1 font-switzer text-xs text-slate-helper">{label}</dt>
+      <dd className="break-words font-switzer text-sm text-portrait-ink">
+        {value || '—'}
+      </dd>
+    </div>
+  );
 }
 
 export default async function VisaApplicationDetailPage({ params }: PageProps) {
-  // Authorization check
   await requireRole(['admin', 'reviewer']);
 
-  // Fetch application details
-  const details = await getApplicationDetails(params.id, 'visa');
+  const { id } = await params;
+  const details = await getApplicationDetails(id, 'visa');
 
   if (!details) {
     notFound();
   }
 
-  const app = details.application as any; // VisaApplication type
-  const { personalInfo, travelInfo, employmentInfo } = app;
+  const app = details.application as {
+    id: string;
+    country?: string | null;
+    countryCode?: string | null;
+    visaType?: string;
+    status: string;
+    submittedAt?: Date | null;
+    createdAt: Date;
+    applicantName?: string | null;
+    applicantPhone?: string | null;
+    travellers?: StoredTraveller[] | null;
+    formSnapshot?: ApplyFormConfig | null;
+    personalInfo?: Record<string, unknown> | null;
+    travelInfo?: Record<string, unknown> | null;
+    employmentInfo?: Record<string, unknown> | null;
+  };
+
+  const snapshot = (app.formSnapshot as ApplyFormConfig | null) ?? null;
+  const travellers: StoredTraveller[] = Array.isArray(app.travellers)
+    ? app.travellers
+    : [];
+
+  const isLegacy = travellers.length === 0;
+  const applicantPhone = app.applicantPhone || details.user.phone;
 
   return (
     <div className="space-y-6">
-      {/* Back button */}
       <Link
         href="/admin/applications"
-        className="inline-flex items-center font-switzer text-sm text-nautical-teal hover:text-portrait-ink transition-colors"
+        className="inline-flex items-center font-switzer text-sm text-nautical-teal transition-colors hover:text-portrait-ink"
       >
-        <svg
-          className="w-4 h-4 mr-1"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M15 19l-7-7 7-7"
-          />
-        </svg>
-        Back to Applications
+        ← Back to Applications
       </Link>
 
-      {/* Page Header */}
       <div>
-        <h1 className="font-basier text-[44px] text-portrait-ink leading-tight">
-          {app.country} - {app.visaType}
+        <h1 className="font-basier text-[44px] leading-tight text-portrait-ink">
+          {app.country || app.countryCode || 'Visa'} — {app.visaType}
         </h1>
-        <p className="font-switzer text-lg text-slate-helper mt-2">
+        <p className="mt-2 font-switzer text-lg text-slate-helper">
           Visa Application
+          {details.formVersionNumber != null
+            ? ` · Form v${details.formVersionNumber}`
+            : ''}
         </p>
       </div>
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column - Application Info */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Application Overview */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Application Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="font-switzer text-xs text-slate-helper mb-1">
-                    Status
-                  </p>
-                  <Badge variant={getStatusVariant(app.status)}>
-                    {app.status}
-                  </Badge>
-                </div>
-                <div>
-                  <p className="font-switzer text-xs text-slate-helper mb-1">
-                    Application ID
-                  </p>
-                  <p className="font-switzer text-sm font-mono text-portrait-ink">
-                    {app.id.slice(0, 8)}
-                  </p>
-                </div>
-                <div>
-                  <p className="font-switzer text-xs text-slate-helper mb-1">
-                    Submitted
-                  </p>
-                  <p className="font-switzer text-sm text-portrait-ink">
-                    {app.submittedAt
-                      ? new Date(app.submittedAt).toLocaleDateString('en-IN', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })
-                      : 'Not submitted'}
-                  </p>
-                </div>
-                <div>
-                  <p className="font-switzer text-xs text-slate-helper mb-1">
-                    Created
-                  </p>
-                  <p className="font-switzer text-sm text-portrait-ink">
-                    {new Date(app.createdAt).toLocaleDateString('en-IN', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <TravellerSelectionProvider travellers={travellers}>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <Tabs
+              items={[...DETAIL_TABS]}
+              defaultValue="application"
+              tone="light"
+              layoutId={`visa-app-detail-tabs-${app.id}`}
+              ariaLabel="Application detail sections"
+            >
+              <TabsPanel id="application">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Application information</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <dl className="grid grid-cols-2 gap-4">
+                      <Field
+                        label="Status"
+                        value={
+                          <Badge variant={getStatusVariant(app.status)}>
+                            {app.status}
+                          </Badge>
+                        }
+                      />
+                      <Field label="Application ID" value={app.id} />
+                      <Field
+                        label="Applicant"
+                        value={app.applicantName || details.user.name}
+                      />
+                      <Field
+                        label="Phone"
+                        value={applicantPhone || 'Not provided'}
+                      />
+                      <Field
+                        label="Country"
+                        value={app.country || app.countryCode}
+                      />
+                      <Field
+                        label="Submitted"
+                        value={
+                          app.submittedAt
+                            ? new Date(app.submittedAt).toLocaleString(
+                                'en-IN',
+                                {
+                                  timeZone: 'Asia/Kolkata',
+                                }
+                              )
+                            : 'Not submitted'
+                        }
+                      />
+                    </dl>
+                  </CardContent>
+                </Card>
 
-          {/* Personal Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Personal Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <dt className="font-switzer text-xs text-slate-helper mb-1">
-                    Full Name
-                  </dt>
-                  <dd className="font-switzer text-sm text-portrait-ink">
-                    {personalInfo?.fullName || details.user.name}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-switzer text-xs text-slate-helper mb-1">
-                    Email
-                  </dt>
-                  <dd className="font-switzer text-sm text-portrait-ink">
-                    {details.user.email}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-switzer text-xs text-slate-helper mb-1">
-                    Phone
-                  </dt>
-                  <dd className="font-switzer text-sm text-portrait-ink">
-                    {details.user.phone || 'Not provided'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-switzer text-xs text-slate-helper mb-1">
-                    Passport Number
-                  </dt>
-                  <dd className="font-switzer text-sm text-portrait-ink font-mono">
-                    {personalInfo?.passportNumber || 'Not provided'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-switzer text-xs text-slate-helper mb-1">
-                    Date of Birth
-                  </dt>
-                  <dd className="font-switzer text-sm text-portrait-ink">
-                    {personalInfo?.dateOfBirth || 'Not provided'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-switzer text-xs text-slate-helper mb-1">
-                    Nationality
-                  </dt>
-                  <dd className="font-switzer text-sm text-portrait-ink">
-                    {personalInfo?.nationality || 'Not provided'}
-                  </dd>
-                </div>
-              </dl>
-            </CardContent>
-          </Card>
+                {!isLegacy && (
+                  <TravellersSection
+                    travellers={travellers}
+                    snapshot={snapshot}
+                  />
+                )}
 
-          {/* Travel Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Travel Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <dt className="font-switzer text-xs text-slate-helper mb-1">
-                    Country
-                  </dt>
-                  <dd className="font-switzer text-sm text-portrait-ink">
-                    {app.country}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-switzer text-xs text-slate-helper mb-1">
-                    Visa Type
-                  </dt>
-                  <dd className="font-switzer text-sm text-portrait-ink">
-                    {app.visaType}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-switzer text-xs text-slate-helper mb-1">
-                    Travel Dates
-                  </dt>
-                  <dd className="font-switzer text-sm text-portrait-ink">
-                    {travelInfo?.travelDates || 'Not provided'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-switzer text-xs text-slate-helper mb-1">
-                    Duration
-                  </dt>
-                  <dd className="font-switzer text-sm text-portrait-ink">
-                    {travelInfo?.duration || 'Not provided'}
-                  </dd>
-                </div>
-                <div className="sm:col-span-2">
-                  <dt className="font-switzer text-xs text-slate-helper mb-1">
-                    Purpose of Visit
-                  </dt>
-                  <dd className="font-switzer text-sm text-portrait-ink">
-                    {travelInfo?.purpose || 'Not provided'}
-                  </dd>
-                </div>
-              </dl>
-            </CardContent>
-          </Card>
+                {isLegacy && (
+                  <>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Personal Information (legacy)</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <Field label="Full Name" value={details.user.name} />
+                          <Field label="Email" value={details.user.email} />
+                          <Field
+                            label="Phone"
+                            value={details.user.phone || 'Not provided'}
+                          />
+                          <Field
+                            label="Passport Number"
+                            value={
+                              (app.personalInfo?.passportNumber as string) ||
+                              'Not provided'
+                            }
+                          />
+                        </dl>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Travel Information (legacy)</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <pre className="whitespace-pre-wrap font-switzer text-xs text-portrait-ink">
+                          {JSON.stringify(app.travelInfo, null, 2) || '—'}
+                        </pre>
+                      </CardContent>
+                    </Card>
+                  </>
+                )}
+              </TabsPanel>
 
-          {/* Employment Information */}
-          {employmentInfo && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Employment Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <dt className="font-switzer text-xs text-slate-helper mb-1">
-                      Occupation
-                    </dt>
-                    <dd className="font-switzer text-sm text-portrait-ink">
-                      {employmentInfo.occupation || 'Not provided'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="font-switzer text-xs text-slate-helper mb-1">
-                      Employer
-                    </dt>
-                    <dd className="font-switzer text-sm text-portrait-ink">
-                      {employmentInfo.employer || 'Not provided'}
-                    </dd>
-                  </div>
-                </dl>
-              </CardContent>
-            </Card>
-          )}
+              <TabsPanel id="call-logs">
+                <CallLogsPanel
+                  applicationId={app.id}
+                  logs={details.callLogs}
+                  defaultPhone={applicantPhone}
+                  hideTitle
+                />
+              </TabsPanel>
+
+              <TabsPanel id="notes">
+                <NotesPanel
+                  applicationId={app.id}
+                  notes={details.notes}
+                  hideTitle
+                />
+              </TabsPanel>
+            </Tabs>
+          </div>
+
+          <div className="space-y-6">
+            <VisaApplicationActions
+              applicationId={app.id}
+              currentStatus={app.status}
+              documents={details.documents}
+              statusHistory={details.statusHistory}
+            />
+          </div>
         </div>
-
-        {/* Right column - Actions and Status */}
-        <div className="space-y-6">
-          {/* Status Management - Client Component */}
-          <VisaApplicationActions
-            applicationId={app.id}
-            currentStatus={app.status}
-            documents={details.documents}
-            statusHistory={details.statusHistory}
-          />
-        </div>
-      </div>
+      </TravellerSelectionProvider>
     </div>
   );
 }

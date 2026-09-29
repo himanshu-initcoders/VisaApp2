@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import {
+  earliestFutureDateIso,
+} from '@/lib/passport/schema';
+import {
   QUESTION_CATEGORIES,
   isQuestionCategory,
   type QuestionCategory,
@@ -35,6 +38,14 @@ export const TRIP_PURPOSE_OPTIONS = [
   { value: 'transit', label: 'Transit' },
 ] as const;
 
+export type FlightStopMode = 'direct' | 'multistop';
+
+/** One flight leg: number plus arrival date (inbound) or departure date (return). */
+export interface FlightLeg {
+  flightNumber: string;
+  date: string;
+}
+
 export interface TravellerTripDetails {
   purpose: string;
   arrivalDate: string;
@@ -42,15 +53,30 @@ export interface TravellerTripDetails {
   arrivalCity: string;
   accommodationName: string;
   accommodationAddress: string;
+  /** First arrival flight number (kept in sync with arrivalFlights[0]). */
   flightNumber: string;
+  /** First arrival flight date (YYYY-MM-DD). */
+  arrivalFlightDate: string;
+  /** First return flight number. */
+  returnFlightNumber: string;
+  /** First return flight departure date (YYYY-MM-DD). */
+  returnFlightDate: string;
+  arrivalFlightMode: FlightStopMode;
+  returnFlightMode: FlightStopMode;
+  arrivalFlights: FlightLeg[];
+  returnFlights: FlightLeg[];
   extra: Record<string, string>;
 }
 
 export interface TravellerDocumentUpload {
   key: string;
   name: string;
-  previewUrl: string;
+  /** Ephemeral object URL for the current session — never persist to localStorage. */
+  previewUrl?: string;
   mimeType: string;
+  size?: number;
+  /** True when the binary lives in IndexedDB for this listing/passenger/slot. */
+  storedInIdb?: boolean;
 }
 
 export interface ApplyTripQuestion {
@@ -178,33 +204,120 @@ export function normalizeTripDetails(
   return emptyTripDetails(trip);
 }
 
+function blankFlightLeg(): FlightLeg {
+  return { flightNumber: '', date: '' };
+}
+
+function cleanFlightLeg(leg: Partial<FlightLeg> | undefined): FlightLeg {
+  return {
+    flightNumber: (leg?.flightNumber ?? '').trim().toUpperCase(),
+    date: toIsoDate(leg?.date),
+  };
+}
+
+/** Direct keeps one leg. Multi-stop keeps every leg and always at least two. */
+export function normalizeFlightLegs(
+  legs: Array<Partial<FlightLeg>> | undefined,
+  fallback: FlightLeg,
+  mode: FlightStopMode
+): FlightLeg[] {
+  const source =
+    legs && legs.length > 0 ? legs : [fallback];
+  const cleaned = source.map((leg, index) =>
+    index === 0 ? cleanFlightLeg({ ...fallback, ...leg }) : cleanFlightLeg(leg)
+  );
+
+  if (mode === 'direct') return [cleaned[0] ?? cleanFlightLeg(fallback)];
+
+  while (cleaned.length < 2) cleaned.push(blankFlightLeg());
+  return cleaned;
+}
+
+function flightModeOf(value: string | undefined): FlightStopMode {
+  return value === 'multistop' ? 'multistop' : 'direct';
+}
+
 const isoDate = z.preprocess(
   (value) => toIsoDate(typeof value === 'string' ? value : ''),
   z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter a valid date')
 );
 
+function isFutureIsoDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && value >= earliestFutureDateIso();
+}
+
+const flightLegSchema = z.object({
+  flightNumber: z.string().min(1, 'Enter the flight number'),
+  date: isoDate,
+});
+
 export const tripDetailsSchema = z
   .object({
-    purpose: z.string().min(1, 'Select the purpose of visit'),
+    purpose: z.string().optional().default(''),
     arrivalDate: isoDate,
     returnDate: isoDate,
     arrivalCity: z.string().optional().default(''),
     accommodationName: z.string().optional().default(''),
     accommodationAddress: z.string().optional().default(''),
-    flightNumber: z.string().optional().default(''),
+    flightNumber: z.string().min(1, 'Enter the arrival flight number'),
+    arrivalFlightDate: isoDate,
+    returnFlightNumber: z.string().min(1, 'Enter the return flight number'),
+    returnFlightDate: isoDate,
+    arrivalFlightMode: z.enum(['direct', 'multistop']).default('direct'),
+    returnFlightMode: z.enum(['direct', 'multistop']).default('direct'),
+    arrivalFlights: z.array(flightLegSchema).min(1),
+    returnFlights: z.array(flightLegSchema).min(1),
     extra: z.record(z.string(), z.string()).default({}),
   })
+  .refine((value) => isFutureIsoDate(value.arrivalDate), {
+    message: 'Arrival date must be in the future',
+    path: ['arrivalDate'],
+  })
+  .refine((value) => isFutureIsoDate(value.returnDate), {
+    message: 'Return date must be in the future',
+    path: ['returnDate'],
+  })
   .refine(
-    (value) => !value.arrivalDate || !value.returnDate || value.returnDate >= value.arrivalDate,
+    (value) =>
+      !value.arrivalDate ||
+      !value.returnDate ||
+      value.returnDate >= value.arrivalDate,
     {
       message: 'Return date should be on or after arrival',
       path: ['returnDate'],
     }
-  );
+  )
+  .refine((value) => isFutureIsoDate(value.arrivalFlightDate), {
+    message: 'Arrival flight date must be in the future',
+    path: ['arrivalFlightDate'],
+  })
+  .refine((value) => isFutureIsoDate(value.returnFlightDate), {
+    message: 'Return flight date must be in the future',
+    path: ['returnFlightDate'],
+  });
 
 export function emptyTripDetails(
   partial?: Partial<TravellerTripDetails>
 ): TravellerTripDetails {
+  const arrivalFlightMode = flightModeOf(partial?.arrivalFlightMode);
+  const returnFlightMode = flightModeOf(partial?.returnFlightMode);
+  const arrivalFlights = normalizeFlightLegs(
+    partial?.arrivalFlights,
+    {
+      flightNumber: partial?.flightNumber ?? '',
+      date: partial?.arrivalFlightDate ?? '',
+    },
+    arrivalFlightMode
+  );
+  const returnFlights = normalizeFlightLegs(
+    partial?.returnFlights,
+    {
+      flightNumber: partial?.returnFlightNumber ?? '',
+      date: partial?.returnFlightDate ?? '',
+    },
+    returnFlightMode
+  );
+
   return {
     purpose: normalizePurpose(partial?.purpose),
     arrivalDate: toIsoDate(partial?.arrivalDate),
@@ -212,7 +325,14 @@ export function emptyTripDetails(
     arrivalCity: partial?.arrivalCity ?? '',
     accommodationName: partial?.accommodationName ?? '',
     accommodationAddress: partial?.accommodationAddress ?? '',
-    flightNumber: partial?.flightNumber ?? '',
+    flightNumber: arrivalFlights[0]?.flightNumber ?? '',
+    arrivalFlightDate: arrivalFlights[0]?.date ?? '',
+    returnFlightNumber: returnFlights[0]?.flightNumber ?? '',
+    returnFlightDate: returnFlights[0]?.date ?? '',
+    arrivalFlightMode,
+    returnFlightMode,
+    arrivalFlights,
+    returnFlights,
     extra: { ...(partial?.extra ?? {}) },
   };
 }
@@ -396,24 +516,78 @@ export function getCoreTripIssues(trip: TravellerTripDetails | undefined) {
   const normalized = normalizeTripDetails(trip);
   const issues: string[] = [];
 
-  if (!normalized.purpose) {
-    issues.push('Select the purpose of visit');
-  }
   if (!normalized.arrivalDate) {
     issues.push('Enter the intended arrival date');
+  } else if (!isFutureIsoDate(normalized.arrivalDate)) {
+    issues.push('Intended arrival date must be in the future');
   }
   if (!normalized.returnDate) {
     issues.push('Enter the intended return date');
+  } else if (!isFutureIsoDate(normalized.returnDate)) {
+    issues.push('Intended return date must be in the future');
   }
   if (
     normalized.arrivalDate &&
     normalized.returnDate &&
+    isFutureIsoDate(normalized.arrivalDate) &&
+    isFutureIsoDate(normalized.returnDate) &&
     normalized.returnDate < normalized.arrivalDate
   ) {
     issues.push('Return date should be on or after arrival');
   }
 
   return issues;
+}
+
+function flightLegIssues(
+  legs: FlightLeg[],
+  mode: FlightStopMode,
+  label: string,
+  dateLabel: string
+): string[] {
+  const required = mode === 'multistop' ? legs : legs.slice(0, 1);
+  const issues: string[] = [];
+
+  if (mode === 'multistop' && required.length < 2) {
+    issues.push(`Add at least two ${label.toLowerCase()} flights`);
+  }
+
+  required.forEach((leg, index) => {
+    const which =
+      mode === 'multistop' ? `${label} flight ${index + 1}` : `${label} flight`;
+    if (!leg.flightNumber.trim()) {
+      issues.push(`Enter the ${which.toLowerCase()} number`);
+    }
+    if (!leg.date) {
+      issues.push(`Enter the ${which.toLowerCase()} ${dateLabel.toLowerCase()}`);
+    } else if (!isFutureIsoDate(leg.date)) {
+      issues.push(`${which} ${dateLabel.toLowerCase()} must be in the future`);
+    }
+  });
+
+  return issues;
+}
+
+export function getMultiStopIssues(trip: TravellerTripDetails | undefined) {
+  const normalized = normalizeTripDetails(trip);
+  return [
+    ...flightLegIssues(
+      normalized.arrivalFlights,
+      normalized.arrivalFlightMode,
+      'Arrival',
+      'date'
+    ),
+    ...flightLegIssues(
+      normalized.returnFlights,
+      normalized.returnFlightMode,
+      'Return',
+      'departure date'
+    ),
+  ];
+}
+
+export function isMultiStopComplete(trip: TravellerTripDetails | undefined) {
+  return getMultiStopIssues(trip).length === 0;
 }
 
 export function getAdditionalQuestionIssues(
@@ -472,6 +646,15 @@ export function isTripComplete(
   return getTripIssues(trip, questions).length === 0;
 }
 
+export function isDocumentSlotFilled(upload: TravellerDocumentUpload | undefined) {
+  if (!upload) return false;
+  return Boolean(
+    upload.storedInIdb ||
+      upload.previewUrl ||
+      (upload.name && upload.mimeType)
+  );
+}
+
 export function isDocumentsComplete(
   uploads: TravellerDocumentUpload[] | undefined,
   slots: ApplyDocumentSlot[]
@@ -479,7 +662,7 @@ export function isDocumentsComplete(
   const byKey = new Map((uploads ?? []).map((item) => [item.key, item]));
   return slots
     .filter((slot) => slot.required)
-    .every((slot) => Boolean(byKey.get(slot.key)?.previewUrl));
+    .every((slot) => isDocumentSlotFilled(byKey.get(slot.key)));
 }
 
 /** Tabs shown for this listing based on admin flags + configured questions. */

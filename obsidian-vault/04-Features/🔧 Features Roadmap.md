@@ -70,10 +70,12 @@
 - [x] Passport capture + Indian MRZ/OCR review (client-side)
 - [x] Passport OCR hardened against real upload layouts (extra pages, rotations, visa pages, PIN-as-MRZ) — see [[Passport OCR]]
 - [x] After passport scan, application form uses AnimatedTabs: General details / Trip details / Documents / Review & submit
-- [ ] Persist application to DB + real S3 upload
-- [ ] Payment gateway on Pay step
+- [ ] **Submission finish line** — see [[📋 Upcoming Tasks Hub]]
+  - [x] [[Phase 1 - Document Upload Module]] — IndexDB immediate; cloud key builder + submit helper ready
+  - [x] [[Phase 2 - Mobile OTP Applicant Login]] — phone OTP; checkout lock until login
+  - [ ] [[Phase 3 - Application Storage & Admin Inbox]] — mock pay = submit; form versions; admin filters/CSV/detail
+- [ ] Real payment gateway (after mock pay)
 - [ ] Form validation (client + server)
-- [ ] Application submission
 
 ### Passport Services
 - [ ] Service type selection (New, Renewal, Update)
@@ -83,9 +85,10 @@
 - [ ] Service submission
 
 ### Application Management
-- [ ] Dashboard with all applications
-- [ ] Application status tracking
-- [ ] Document management
+- [x] Dashboard with all applications (`/applications` list)
+- [x] Application detail view-only (visa + passport; mirrors admin UI, no admin actions)
+- [x] Application status tracking (customer-facing status history)
+- [x] Document library with auto passenger profiles (`/documents`)
 - [ ] Status notifications (email)
 
 ### Payments

@@ -1,9 +1,69 @@
 import { z } from 'zod';
 import type { IndianPassportFields } from './types';
 
+/** Calendar day in India (IST), as YYYY-MM-DD. */
+export function todayIsoIST(now = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+  }).format(now);
+}
+
+export function shiftIsoDate(iso: string, days: number): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Latest date allowed for DOB and passport issue dates (yesterday, IST). */
+export function latestPastDateIso(now = new Date()): string {
+  return shiftIsoDate(todayIsoIST(now), -1);
+}
+
+/** Earliest date allowed for passport expiry (tomorrow, IST). */
+export function earliestFutureDateIso(now = new Date()): string {
+  return shiftIsoDate(todayIsoIST(now), 1);
+}
+
+export function isIsoDate(value: string | undefined): value is string {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+}
+
+export function pastDateError(value: string | undefined): string | null {
+  if (!value) return null;
+  if (!isIsoDate(value)) return 'Use a valid date';
+  if (value > latestPastDateIso()) return 'Must be a past date';
+  return null;
+}
+
+export function futureDateError(value: string | undefined): string | null {
+  if (!value) return null;
+  if (!isIsoDate(value)) return 'Use a valid date';
+  if (value < earliestFutureDateIso()) return 'Must be a future date';
+  return null;
+}
+
 const dateString = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
+
+const pastDate = dateString.refine(
+  (value) => value <= latestPastDateIso(),
+  'Must be a past date'
+);
+
+const optionalPastDate = z
+  .string()
+  .optional()
+  .refine(
+    (value) => !value || (/^\d{4}-\d{2}-\d{2}$/.test(value) && value <= latestPastDateIso()),
+    'Must be a past date'
+  );
+
+const futureDate = dateString.refine(
+  (value) => value >= earliestFutureDateIso(),
+  'Must be a future date'
+);
 
 export const indianPassportFieldsSchema = z.object({
   passportNumber: z
@@ -14,33 +74,21 @@ export const indianPassportFieldsSchema = z.object({
   surname: z.string().min(1, 'Last name is required'),
   givenNames: z.string().min(1, 'First name is required'),
   nationality: z.string().default('IND'),
-  dateOfBirth: dateString,
+  dateOfBirth: pastDate,
   sex: z.enum(['M', 'F', 'X'], { message: 'Select gender' }),
-  dateOfExpiry: dateString,
+  dateOfExpiry: futureDate,
   documentType: z.string().default('P'),
   countryOfIssue: z.string().default('IND'),
   fathersName: z.string().optional(),
   mothersName: z.string().optional(),
   spouseName: z.string().optional(),
-  dateOfIssue: z
-    .string()
-    .optional()
-    .refine(
-      (value) => !value || /^\d{4}-\d{2}-\d{2}$/.test(value),
-      'Use YYYY-MM-DD'
-    ),
+  dateOfIssue: optionalPastDate,
   placeOfBirth: z.string().optional(),
   placeOfIssue: z.string().optional(),
   address: z.string().optional(),
   fileNumber: z.string().optional(),
   oldPassportNumber: z.string().optional(),
-  oldPassportDateOfIssue: z
-    .string()
-    .optional()
-    .refine(
-      (value) => !value || /^\d{4}-\d{2}-\d{2}$/.test(value),
-      'Use YYYY-MM-DD'
-    ),
+  oldPassportDateOfIssue: optionalPastDate,
   oldPassportPlaceOfIssue: z.string().optional(),
   email: z.string().email('Enter a valid email'),
   phone: z

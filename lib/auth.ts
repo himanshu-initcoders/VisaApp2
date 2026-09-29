@@ -5,15 +5,14 @@ import { db } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { normalizeIndianPhone } from '@/lib/auth/phone';
+import { verifyOtpAndEnsureUser } from '@/lib/auth/otp';
 
 /**
  * NextAuth Configuration
  *
- * Implements:
- * - Credentials provider for email/password login
- * - JWT session strategy
- * - Custom callbacks for session and JWT
- * - Type-safe user object
+ * - Email/password credentials (admins)
+ * - Phone OTP credentials (applicants) — mock OTP always passes
  */
 
 const loginSchema = z.object({
@@ -24,6 +23,7 @@ const loginSchema = z.object({
 export const authConfig: NextAuthConfig = {
   providers: [
     CredentialsProvider({
+      id: 'credentials',
       name: 'Credentials',
       credentials: {
         email: { label: 'Email', type: 'email' },
@@ -31,41 +31,78 @@ export const authConfig: NextAuthConfig = {
       },
       async authorize(credentials) {
         try {
-          // Validate credentials
           const { email, password } = loginSchema.parse(credentials);
 
-          // Find user by email
           const [user] = await db
             .select()
             .from(users)
             .where(eq(users.email, email))
             .limit(1);
 
-          if (!user) {
+          if (!user || !user.passwordHash) {
             return null;
           }
 
-          // Verify password
           const isValidPassword = await compare(password, user.passwordHash);
           if (!isValidPassword) {
             return null;
           }
 
-          // Check if email is verified
           if (!user.emailVerified) {
             throw new Error('Please verify your email before logging in');
           }
 
-          // Return user object (without password hash)
           return {
             id: user.id,
             email: user.email,
             name: user.name,
             role: user.role,
+            phone: user.phone ?? undefined,
             emailVerified: Boolean(user.emailVerified),
           };
         } catch (error) {
           console.error('Auth error:', error);
+          return null;
+        }
+      },
+    }),
+
+    CredentialsProvider({
+      id: 'phone-otp',
+      name: 'Phone OTP',
+      credentials: {
+        phone: { label: 'Phone', type: 'text' },
+        otp: { label: 'OTP', type: 'text' },
+      },
+      async authorize(credentials) {
+        try {
+          const phone = normalizeIndianPhone(String(credentials?.phone ?? ''));
+          const otp = String(credentials?.otp ?? '');
+          if (!phone) return null;
+
+          const result = await verifyOtpAndEnsureUser({ phone, otp });
+          if (!result.success) {
+            throw new Error(result.error);
+          }
+
+          const [user] = await db
+            .select()
+            .from(users)
+            .where(eq(users.id, result.userId))
+            .limit(1);
+
+          if (!user) return null;
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            phone: user.phone ?? phone,
+            emailVerified: Boolean(user.emailVerified),
+          };
+        } catch (error) {
+          console.error('Phone OTP auth error:', error);
           return null;
         }
       },
@@ -84,22 +121,46 @@ export const authConfig: NextAuthConfig = {
   },
 
   callbacks: {
-    async jwt({ token, user }) {
-      // Add user info to token on sign in
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
-        token.emailVerified = user.emailVerified;
+        token.emailVerified = Boolean(user.emailVerified);
+        token.phone = user.phone;
       }
+
+      // On session.update(): re-read allowlisted fields from DB only.
+      // Never trust client-supplied role, phone, or other sensitive values.
+      if (trigger === 'update' && token.id) {
+        const [row] = await db
+          .select({
+            name: users.name,
+            // Re-assert sensitive fields from DB so forged client payloads cannot escalate
+            role: users.role,
+            phone: users.phone,
+          })
+          .from(users)
+          .where(eq(users.id, token.id as string))
+          .limit(1);
+
+        if (row) {
+          token.name = row.name;
+          token.role = row.role;
+          token.phone = row.phone ?? undefined;
+        }
+      }
+
       return token;
     },
 
     async session({ session, token }) {
-      // Add user info from token to session
       if (token && session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
-        // Cast: NextAuth DefaultSession keeps emailVerified as Date | null
+        session.user.phone = (token.phone as string | undefined) ?? null;
+        if (typeof token.name === 'string') {
+          session.user.name = token.name;
+        }
         (session.user as { emailVerified?: boolean }).emailVerified =
           Boolean(token.emailVerified);
       }

@@ -1,6 +1,9 @@
 import type { IndianPassportFields } from '@/lib/passport/types';
 import type { ApplyTraveller } from '@/lib/apply/types';
-import { isReviewComplete } from '@/lib/passport/schema';
+import {
+  parseCheckboxValues,
+  type ApplyTripQuestion,
+} from '@/lib/apply/applicationForm';
 
 export interface ReviewField {
   key: keyof IndianPassportFields;
@@ -73,6 +76,42 @@ export function formatReviewDate(iso: string) {
   });
 }
 
+/**
+ * Applicant-facing text for an extra-question answer.
+ * Dropdown, radio, and checkbox answers are stored as option ids.
+ */
+export function formatExtraAnswer(
+  question: Pick<ApplyTripQuestion, 'type' | 'options'> | undefined,
+  raw: string | null | undefined
+): string {
+  const value = raw?.trim() ?? '';
+  if (!question) return value;
+
+  if (question.type === 'boolean') {
+    if (!value) return '';
+    return value === 'true' ? 'Yes' : 'No';
+  }
+  if (!value) return '';
+  if (question.type === 'checkbox') {
+    const selected = parseCheckboxValues(value);
+    if (selected.length === 0) return '';
+    return selected
+      .map(
+        (item) =>
+          question.options?.find((option) => option.value === item)?.label ||
+          item
+      )
+      .join(', ');
+  }
+  if (question.type === 'dropdown' || question.type === 'radio') {
+    return (
+      question.options?.find((option) => option.value === value)?.label || value
+    );
+  }
+  if (question.type === 'date') return formatReviewDate(value);
+  return value;
+}
+
 export function formatReviewValue(
   key: keyof IndianPassportFields,
   value: string | undefined
@@ -91,12 +130,23 @@ export function formatReviewValue(
   return value;
 }
 
+/**
+ * Green check means the full application form was finished
+ * (general, trip, required extra questions, and required documents).
+ * Passport data alone is not enough — other listings can leave required tabs empty.
+ */
 export function isTravellerFilled(traveller: ApplyTraveller) {
-  if (traveller.applicationComplete) return true;
+  return traveller.applicationComplete === true;
+}
+
+/** Passport uploaded or form started — used to resume after reload mid-flow. */
+export function isTravellerStarted(traveller: ApplyTraveller) {
+  if (isTravellerFilled(traveller)) return true;
   return Boolean(
-    traveller.passportUploaded &&
-      traveller.passportData &&
-      isReviewComplete(traveller.passportData)
+    traveller.passportUploaded ||
+      traveller.passportData ||
+      traveller.applicationComplete ||
+      (traveller.documents && traveller.documents.length > 0)
   );
 }
 

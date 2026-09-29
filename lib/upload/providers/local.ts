@@ -35,7 +35,7 @@ export class LocalUploadProvider implements IUploadProvider {
   }
 
   async upload(file: File | Buffer, options: UploadOptions): Promise<UploadResult> {
-    const { folder, filename: customFilename, metadata } = options;
+    const { folder, filename: customFilename, metadata, explicitKey } = options;
 
     // Get file data
     let buffer: Buffer;
@@ -67,14 +67,19 @@ export class LocalUploadProvider implements IUploadProvider {
       throw new Error(`File type ${mimeType} not allowed`);
     }
 
-    // Generate unique key (relative path)
-    const timestamp = Date.now();
-    const randomString = Math.random().toString(36).substring(2, 15);
-    const sanitizedFilename = originalFilename.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const key = `${folder}/${timestamp}-${randomString}-${sanitizedFilename}`;
+    // Generate unique key (relative path) or use explicit nested key
+    let key: string;
+    if (explicitKey) {
+      key = explicitKey.replace(/^\/+/, '');
+    } else {
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(2, 15);
+      const sanitizedFilename = originalFilename.replace(/[^a-zA-Z0-9.-]/g, '_');
+      key = `${folder}/${timestamp}-${randomString}-${sanitizedFilename}`;
+    }
 
-    // Ensure folder exists
-    const folderPath = path.join(UPLOAD_ROOT, folder);
+    // Ensure parent folder exists (supports nested application paths)
+    const folderPath = path.join(UPLOAD_ROOT, path.dirname(key));
     await this.ensureDir(folderPath);
 
     // Write file to disk

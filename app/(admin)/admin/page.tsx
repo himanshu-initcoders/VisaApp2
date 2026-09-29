@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui
 import { getStatusVariant } from '@/components/ui/Badge';
 import { db } from '@/lib/db';
 import { visaApplications, passportServices, documents } from '@/lib/db/schema';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import Link from 'next/link';
 
 /**
@@ -47,11 +47,11 @@ export default async function AdminDashboardPage() {
         .then((res) => res[0]?.count || 0),
     ]).then(([visa, passport]) => visa + passport),
 
-    // Unverified documents
+    // Unverified documents (null = pending review)
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(documents)
-      .where(eq(documents.verified, false))
+      .where(isNull(documents.verified))
       .then((res) => res[0]?.count || 0),
 
     // Recent applications (last 10, both visa and passport)

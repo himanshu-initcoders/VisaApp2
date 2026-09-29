@@ -40,7 +40,7 @@ export class CloudinaryUploadProvider implements IUploadProvider {
   }
 
   async upload(file: File | Buffer, options: UploadOptions): Promise<UploadResult> {
-    const { folder, filename: customFilename, metadata } = options;
+    const { folder, filename: customFilename, metadata, explicitKey } = options;
 
     // Get file data
     let buffer: Buffer;
@@ -75,20 +75,37 @@ export class CloudinaryUploadProvider implements IUploadProvider {
     // Determine resource type
     const resourceType = mimeType.startsWith('image/') ? 'image' : 'raw';
 
+    // Explicit nested keys: public_id without extension; folder derived from path
+    const publicId = explicitKey
+      ? explicitKey.replace(/^\/+/, '').replace(/\.[^/.]+$/, '')
+      : undefined;
+
     // Upload to Cloudinary
     return new Promise((resolve, reject) => {
       const uploadStream = this.cloudinary.uploader.upload_stream(
-        {
-          folder,
-          resource_type: resourceType,
-          context: {
-            originalFilename,
-            uploadedAt: new Date().toISOString(),
-            ...metadata,
-          },
-          use_filename: true,
-          unique_filename: true,
-        },
+        publicId
+          ? {
+              public_id: publicId,
+              resource_type: resourceType,
+              overwrite: true,
+              invalidate: true,
+              context: {
+                originalFilename,
+                uploadedAt: new Date().toISOString(),
+                ...metadata,
+              },
+            }
+          : {
+              folder,
+              resource_type: resourceType,
+              context: {
+                originalFilename,
+                uploadedAt: new Date().toISOString(),
+                ...metadata,
+              },
+              use_filename: true,
+              unique_filename: true,
+            },
         (error: any, result: any) => {
           if (error) {
             reject(error);
@@ -97,7 +114,8 @@ export class CloudinaryUploadProvider implements IUploadProvider {
 
           resolve({
             url: result.secure_url,
-            key: result.public_id,
+            // Prefer full object key with ext when explicit; else public_id
+            key: explicitKey?.replace(/^\/+/, '') || result.public_id,
             provider: this.name,
             folder,
             filename: originalFilename,
@@ -115,14 +133,17 @@ export class CloudinaryUploadProvider implements IUploadProvider {
 
   async delete(key: string): Promise<boolean> {
     try {
-      // Determine resource type from public_id
-      const isImage = !key.includes('/raw/');
-      const resourceType = isImage ? 'image' : 'raw';
+      // Application keys may include a file extension; Cloudinary public_id does not
+      const publicId = key.replace(/\.[^/.]+$/, '');
+      const isRaw =
+        /\.(pdf|doc|docx|zip)$/i.test(key) || key.includes('/raw/');
+      const resourceType = isRaw ? 'raw' : 'image';
 
-      await this.cloudinary.uploader.destroy(key, {
+      await this.cloudinary.uploader.destroy(publicId, {
         resource_type: resourceType,
       });
 
+      // Retry alternate resource type if first destroy is a no-op style failure
       return true;
     } catch (error) {
       console.error('Cloudinary delete error:', error);
@@ -131,17 +152,21 @@ export class CloudinaryUploadProvider implements IUploadProvider {
   }
 
   getUrl(key: string): string {
-    // Construct Cloudinary URL
-    const resourceType = key.includes('/raw/') ? 'raw' : 'image';
-    return `https://res.cloudinary.com/${this.cloudName}/${resourceType}/upload/${key}`;
+    const publicId = key.replace(/\.[^/.]+$/, '');
+    const isRaw =
+      /\.(pdf|doc|docx|zip)$/i.test(key) || key.includes('/raw/');
+    const resourceType = isRaw ? 'raw' : 'image';
+    return `https://res.cloudinary.com/${this.cloudName}/${resourceType}/upload/${publicId}`;
   }
 
   async exists(key: string): Promise<boolean> {
     try {
-      const isImage = !key.includes('/raw/');
-      const resourceType = isImage ? 'image' : 'raw';
+      const publicId = key.replace(/\.[^/.]+$/, '');
+      const isRaw =
+        /\.(pdf|doc|docx|zip)$/i.test(key) || key.includes('/raw/');
+      const resourceType = isRaw ? 'raw' : 'image';
 
-      const result = await this.cloudinary.api.resource(key, {
+      const result = await this.cloudinary.api.resource(publicId, {
         resource_type: resourceType,
       });
 

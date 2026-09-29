@@ -30,4 +30,10 @@ export type { SelectProps, SelectOption } from './Select';
 export { AnimatedTabs } from './AnimatedTabs';
 export type { AnimatedTabItem } from './AnimatedTabs';
 
+export { Tabs, TabsPanel } from './Tabs';
+export type { TabsPanelProps } from './Tabs';
+
+export { InitialTabs } from './InitialTabs';
+export type { InitialTabItem } from './InitialTabs';
+
 export { AnimatedStatValue } from './AnimatedStatValue';

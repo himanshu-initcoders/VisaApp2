@@ -12,6 +12,9 @@ export interface TravellerProfile {
   passportUploaded?: boolean;
   passportFrontUrl?: string;
   isSample?: boolean;
+  /** True when profile came from the signed-in user's past applications. */
+  isServerProfile?: boolean;
+  applicationCount?: number;
 }
 
 const PROFILES_KEY = 'visa-traveller-profiles:v1';
@@ -116,7 +119,8 @@ export function profileFromTraveller(
     avatarVariant: avatarVariantFromName(name),
     photoUploaded: traveller.photoUploaded,
     passportUploaded: traveller.passportUploaded,
-    passportFrontUrl: traveller.passportFrontUrl,
+    // Do not persist large passport binaries on profiles
+    passportFrontUrl: undefined,
   };
 }
 
@@ -127,7 +131,12 @@ function readSavedProfiles(): TravellerProfile[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as TravellerProfile[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item) => item?.name);
+    return parsed
+      .filter((item) => item?.name)
+      .map((item) => ({
+        ...item,
+        passportFrontUrl: undefined,
+      }));
   } catch {
     return [];
   }
@@ -146,7 +155,12 @@ export function saveTravellerProfile(profile: TravellerProfile) {
   if (profile.isSample) return;
   const current = readSavedProfiles();
   const next = [
-    { ...profile, isSample: false },
+    {
+      ...profile,
+      isSample: false,
+      // Never store data:/blob: passport images in profile cache
+      passportFrontUrl: undefined,
+    },
     ...current.filter(
       (item) => item.name.trim().toUpperCase() !== profile.name.trim().toUpperCase()
     ),
@@ -183,7 +197,10 @@ function profilesFromDrafts(): TravellerProfile[] {
   return found;
 }
 
-export function listTravellerProfiles(): TravellerProfile[] {
+export function listTravellerProfiles(options?: {
+  includeSamples?: boolean;
+}): TravellerProfile[] {
+  const includeSamples = options?.includeSamples === true;
   const merged = new Map<string, TravellerProfile>();
 
   for (const profile of [...readSavedProfiles(), ...profilesFromDrafts()]) {
@@ -197,6 +214,8 @@ export function listTravellerProfiles(): TravellerProfile[] {
   }
 
   const saved = [...merged.values()];
+  if (!includeSamples) return saved;
+
   const extras = SAMPLE_TRAVELLER_PROFILES.filter((sample) => {
     const token = sample.name.trim().toUpperCase();
     return !merged.has(token);

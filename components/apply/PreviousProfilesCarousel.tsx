@@ -10,11 +10,18 @@ import { cn } from '@/lib/utils';
 interface PreviousProfilesCarouselProps {
   profiles: TravellerProfile[];
   onSelect: (profile: TravellerProfile) => void;
+  /** When true and empty, show an empty-state message instead of hiding. */
+  showEmptyState?: boolean;
+  emptyMessage?: string;
+  selecting?: boolean;
 }
 
 export function PreviousProfilesCarousel({
   profiles,
   onSelect,
+  showEmptyState = false,
+  emptyMessage = 'No previous passengers yet. Submit an application and they’ll show up here.',
+  selecting = false,
 }: PreviousProfilesCarouselProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canPrev, setCanPrev] = useState(false);
@@ -45,7 +52,19 @@ export function PreviousProfilesCarousel({
     node.scrollBy({ left: direction * 260, behavior: 'smooth' });
   };
 
-  if (profiles.length === 0) return null;
+  if (profiles.length === 0) {
+    if (!showEmptyState) return null;
+    return (
+      <section className="mt-8 sm:mt-10">
+        <h2 className="mb-4 px-1 font-switzer text-lg font-semibold text-portrait-ink sm:text-xl">
+          Your Previous Profiles
+        </h2>
+        <div className="rounded-[24px] border border-dashed border-ash bg-white/80 px-5 py-8 text-center">
+          <p className="font-switzer text-sm text-slate-helper">{emptyMessage}</p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="mt-8 sm:mt-10">
@@ -61,11 +80,17 @@ export function PreviousProfilesCarousel({
         )}
       </div>
 
+      {selecting && (
+        <p className="mb-3 px-1 font-switzer text-sm text-nautical-teal">
+          Restoring your previous answers and documents…
+        </p>
+      )}
+
       <div className="relative">
         <button
           type="button"
           aria-label="Previous profiles"
-          disabled={!canPrev}
+          disabled={!canPrev || selecting}
           onClick={() => scrollByCard(-1)}
           className={cn(
             'absolute -left-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white bg-white text-slate-helper shadow-card transition-opacity sm:flex',
@@ -83,8 +108,9 @@ export function PreviousProfilesCarousel({
             <button
               key={profile.id}
               type="button"
+              disabled={selecting}
               onClick={() => onSelect(profile)}
-              className="group flex min-w-[240px] max-w-[240px] shrink-0 items-center gap-3 rounded-[24px] border border-white bg-white px-4 py-4 text-left shadow-card transition-transform hover:-translate-y-0.5"
+              className="group flex min-w-[240px] max-w-[240px] shrink-0 items-center gap-3 rounded-[24px] border border-white bg-white px-4 py-4 text-left shadow-card transition-transform hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-60"
             >
               <ProfileAvatar
                 name={profile.name}
@@ -103,6 +129,9 @@ export function PreviousProfilesCarousel({
                 </span>
                 <span className="mt-2 inline-flex rounded-full bg-[#eef4ff] px-2.5 py-0.5 text-[11px] font-medium text-[#3b82f6]">
                   {profile.visaType}
+                  {profile.applicationCount && profile.applicationCount > 1
+                    ? ` · ${profile.applicationCount} apps`
+                    : ''}
                 </span>
               </span>
             </button>
@@ -112,7 +141,7 @@ export function PreviousProfilesCarousel({
         <button
           type="button"
           aria-label="Next profiles"
-          disabled={!canNext}
+          disabled={!canNext || selecting}
           onClick={() => scrollByCard(1)}
           className={cn(
             'absolute -right-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white bg-white text-slate-helper shadow-card transition-opacity sm:flex',

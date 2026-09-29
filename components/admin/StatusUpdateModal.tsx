@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Button, Badge, Select, getStatusVariant } from '@/components/ui';
 import { updateApplicationStatus } from '@/app/(admin)/actions';
 import { cn } from '@/lib/utils';
@@ -8,11 +9,8 @@ import { cn } from '@/lib/utils';
 /**
  * Status Update Modal
  *
- * Modal for changing application status with validation:
- * - Shows current status
- * - Dropdown for new status (filtered by valid transitions)
- * - Required notes for rejection
- * - Calls updateApplicationStatus Server Action
+ * Portaled to document.body so the backdrop covers the full viewport
+ * (avoids top gap from admin layout padding / containing blocks).
  */
 
 interface StatusUpdateModalProps {
@@ -24,7 +22,6 @@ interface StatusUpdateModalProps {
   onSuccess?: () => void;
 }
 
-// Valid status transitions
 const STATUS_TRANSITIONS: Record<string, string[]> = {
   draft: ['submitted'],
   submitted: ['under_review'],
@@ -53,23 +50,26 @@ export function StatusUpdateModal({
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [mounted, setMounted] = useState(false);
 
-  // Get valid next statuses
   const validStatuses = STATUS_TRANSITIONS[currentStatus] || [];
-  const allowedOptions = STATUS_OPTIONS.filter(
-    (opt) => validStatuses.includes(opt.value)
+  const allowedOptions = STATUS_OPTIONS.filter((opt) =>
+    validStatuses.includes(opt.value)
   );
 
-  // Reset form when modal opens
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       setNewStatus(allowedOptions[0]?.value || currentStatus);
       setNotes('');
       setError('');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when opening / status changes
   }, [isOpen, currentStatus]);
 
-  // Handle escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -81,11 +81,19 @@ export function StatusUpdateModal({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [isOpen]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    // Validate
     if (newStatus === currentStatus) {
       setError('Please select a different status');
       return;
@@ -112,134 +120,147 @@ export function StatusUpdateModal({
       } else {
         setError(result.message || 'Failed to update status');
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
+  return createPortal(
+    <div className="fixed inset-0 z-[100]" role="presentation">
+      {/* Full-viewport backdrop — no padding so it covers edge-to-edge */}
+      <button
+        type="button"
+        aria-label="Close dialog"
         className="absolute inset-0 bg-portrait-ink/50"
         onClick={onClose}
       />
 
-      {/* Modal */}
-      <div className="relative bg-white rounded-[24px] shadow-elevated max-w-md w-full p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-basier text-[31px] text-portrait-ink">
-            Update Status
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-slate-helper hover:text-portrait-ink transition-colors"
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+      {/* Centering layer; padding only here so backdrop stays flush */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="status-update-title"
+          className="pointer-events-auto relative w-full max-w-md rounded-[24px] bg-white p-6 shadow-elevated"
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h2
+              id="status-update-title"
+              className="font-basier text-[31px] text-portrait-ink"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Current Status */}
-          <div>
-            <label className="block font-switzer text-sm font-medium text-portrait-ink mb-2">
-              Current Status
-            </label>
-            <Badge variant={getStatusVariant(currentStatus)}>
-              {currentStatus}
-            </Badge>
-          </div>
-
-          {/* New Status */}
-          {allowedOptions.length > 0 ? (
-            <Select
-              label="New Status"
-              options={allowedOptions}
-              value={newStatus}
-              onChange={(e) => setNewStatus(e.target.value)}
-              disabled={isSubmitting}
-            />
-          ) : (
-            <p className="font-switzer text-sm text-slate-helper">
-              No status transitions available from {currentStatus}
-            </p>
-          )}
-
-          {/* Notes */}
-          <div>
-            <label
-              htmlFor="notes"
-              className="block font-switzer text-sm font-medium text-portrait-ink mb-2"
-            >
-              Notes {newStatus === 'rejected' && <span className="text-red-600">*</span>}
-            </label>
-            <textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder={
-                newStatus === 'rejected'
-                  ? 'Please provide a reason for rejection...'
-                  : 'Optional notes about this status change...'
-              }
-              rows={4}
-              maxLength={1000}
-              disabled={isSubmitting}
-              className={cn(
-                'w-full font-switzer text-sm text-portrait-ink',
-                'bg-white border border-ash rounded-[16px]',
-                'px-4 py-3',
-                'focus:outline-none focus:ring-2 focus:ring-portrait-ink focus:ring-opacity-20',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-                'resize-none'
-              )}
-            />
-            <p className="mt-1 font-switzer text-xs text-slate-helper">
-              {notes.length}/1000 characters
-            </p>
-          </div>
-
-          {/* Error message */}
-          {error && (
-            <p className="font-switzer text-sm text-red-600">{error}</p>
-          )}
-
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <Button
+              Update Status
+            </h2>
+            <button
               type="button"
-              variant="ghost"
               onClick={onClose}
-              disabled={isSubmitting}
+              className="text-slate-helper transition-colors hover:text-portrait-ink"
+              aria-label="Close"
             >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={isSubmitting || allowedOptions.length === 0}
-            >
-              {isSubmitting ? 'Updating...' : 'Update Status'}
-            </Button>
+              <svg
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
           </div>
-        </form>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="mb-2 block font-switzer text-sm font-medium text-portrait-ink">
+                Current Status
+              </label>
+              <Badge variant={getStatusVariant(currentStatus)}>
+                {currentStatus}
+              </Badge>
+            </div>
+
+            {allowedOptions.length > 0 ? (
+              <Select
+                label="New Status"
+                options={allowedOptions}
+                value={newStatus}
+                onChange={(e) => setNewStatus(e.target.value)}
+                disabled={isSubmitting}
+              />
+            ) : (
+              <p className="font-switzer text-sm text-slate-helper">
+                No status transitions available from {currentStatus}
+              </p>
+            )}
+
+            <div>
+              <label
+                htmlFor="notes"
+                className="mb-2 block font-switzer text-sm font-medium text-portrait-ink"
+              >
+                Notes{' '}
+                {newStatus === 'rejected' && (
+                  <span className="text-red-600">*</span>
+                )}
+              </label>
+              <textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={
+                  newStatus === 'rejected'
+                    ? 'Please provide a reason for rejection...'
+                    : 'Optional notes about this status change...'
+                }
+                rows={4}
+                maxLength={1000}
+                disabled={isSubmitting}
+                className={cn(
+                  'w-full font-switzer text-sm text-portrait-ink',
+                  'rounded-[16px] border border-ash bg-white',
+                  'px-4 py-3',
+                  'focus:outline-none focus:ring-2 focus:ring-portrait-ink focus:ring-opacity-20',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                  'resize-none'
+                )}
+              />
+              <p className="mt-1 font-switzer text-xs text-slate-helper">
+                {notes.length}/1000 characters
+              </p>
+            </div>
+
+            {error && (
+              <p className="font-switzer text-sm text-red-600">{error}</p>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onClose}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={isSubmitting || allowedOptions.length === 0}
+              >
+                {isSubmitting ? 'Updating...' : 'Update Status'}
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

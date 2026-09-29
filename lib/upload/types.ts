@@ -15,7 +15,8 @@ export type UploadFolder =
   | 'country-flags'
   | 'documents'
   | 'passports'
-  | 'photos';
+  | 'photos'
+  | 'applications';
 
 export interface UploadResult {
   url: string;           // Public URL to access the file
@@ -32,6 +33,8 @@ export interface UploadResult {
 export interface UploadOptions {
   folder: UploadFolder;
   filename?: string;     // Optional custom filename
+  /** When set, providers use this exact object key / public_id path instead of generating one. */
+  explicitKey?: string;
   maxSizeMB?: number;    // Max file size in MB
   allowedTypes?: string[]; // Allowed MIME types
   metadata?: Record<string, string>; // Additional metadata

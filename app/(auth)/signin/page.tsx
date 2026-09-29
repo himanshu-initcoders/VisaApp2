@@ -1,3 +1,7 @@
+'use client';
+
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import {
   Card,
   CardContent,
@@ -6,6 +10,15 @@ import {
   CardTitle,
 } from '@/components/ui';
 import { MobileOtpSignIn } from '@/components/auth/MobileOtpSignIn';
+
+function SignInForm() {
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
+
+  return (
+    <MobileOtpSignIn variant="page" redirectTo={callbackUrl} />
+  );
+}
 
 export default function SignInPage() {
   return (
@@ -22,7 +35,9 @@ export default function SignInPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <MobileOtpSignIn />
+        <Suspense fallback={<p className="text-sm text-slate-helper">Loading…</p>}>
+          <SignInForm />
+        </Suspense>
       </CardContent>
     </Card>
   );

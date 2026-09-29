@@ -10,6 +10,9 @@ interface UnderlineFieldProps {
   required?: boolean;
   type?: string;
   trailing?: React.ReactNode;
+  min?: string;
+  max?: string;
+  error?: string | null;
 }
 
 export function isoToDisplay(iso: string) {
@@ -41,6 +44,9 @@ export function UnderlineField({
   required,
   type = 'text',
   trailing,
+  min,
+  max,
+  error,
 }: UnderlineFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const isDate = type === 'date';
@@ -66,12 +72,19 @@ export function UnderlineField({
         {label}
         {required && <span className="text-[#ff4940]"> *</span>}
       </span>
-      <div className="relative mt-1 flex items-end gap-2 border-b border-ash pb-2">
+      <div
+        className={[
+          'relative mt-1 flex items-end gap-2 border-b pb-2',
+          error ? 'border-[#ff4940]' : 'border-ash',
+        ].join(' ')}
+      >
         {trailing}
         <input
           ref={inputRef}
           type={type}
           value={value}
+          min={min}
+          max={max}
           spellCheck={false}
           autoComplete="off"
           onChange={(event) => onChange(event.target.value)}
@@ -98,6 +111,11 @@ export function UnderlineField({
           </button>
         )}
       </div>
+      {error ? (
+        <p className="mt-1 text-xs text-[#ff4940]" role="alert">
+          {error}
+        </p>
+      ) : null}
     </label>
   );
 }

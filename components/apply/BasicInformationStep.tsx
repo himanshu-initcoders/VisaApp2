@@ -13,6 +13,8 @@ interface BasicInformationStepProps {
   onContinue: () => void;
   onSelectProfile: (profile: TravellerProfile) => void;
   profiles: TravellerProfile[];
+  isAuthenticated?: boolean;
+  selectingProfile?: boolean;
 }
 
 export function BasicInformationStep({
@@ -21,6 +23,8 @@ export function BasicInformationStep({
   onContinue,
   onSelectProfile,
   profiles,
+  isAuthenticated = false,
+  selectingProfile = false,
 }: BasicInformationStepProps) {
   const [attempted, setAttempted] = useState(false);
   const empty = !primaryName.trim();
@@ -110,6 +114,8 @@ export function BasicInformationStep({
       <PreviousProfilesCarousel
         profiles={profiles}
         onSelect={onSelectProfile}
+        showEmptyState={isAuthenticated}
+        selecting={selectingProfile}
       />
     </section>
   );

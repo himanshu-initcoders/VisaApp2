@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Caveat, Instrument_Serif } from 'next/font/google';
+import { AuthSessionProvider } from '@/components/auth/AuthSessionProvider';
 import './globals.css';
 
 const caveat = Caveat({
@@ -50,7 +51,9 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <AuthSessionProvider>{children}</AuthSessionProvider>
+      </body>
     </html>
   );
 }

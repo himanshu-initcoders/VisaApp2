@@ -8,17 +8,37 @@ import { ApplyStepper } from '@/components/apply/ApplyStepper';
 import { BasicInformationStep } from '@/components/apply/BasicInformationStep';
 import { ReviewStep } from '@/components/apply/review/ReviewStep';
 import { PassportCaptureFlow } from '@/components/apply/passport/PassportCaptureFlow';
+import { CheckoutPayStep } from '@/components/apply/CheckoutPayStep';
 import type { PassportApplicationPayload } from '@/components/apply/passport/PassportReviewStage';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
-import { defaultApplyFormConfig } from '@/lib/apply/applicationForm';
+import {
+  defaultApplyFormConfig,
+  isAdditionalQuestionsComplete,
+  isCoreTripComplete,
+  isDocumentsComplete,
+  isMultiStopComplete,
+} from '@/lib/apply/applicationForm';
+import { isReviewComplete } from '@/lib/passport/schema';
 import type { ApplyStep, ApplyTraveller } from '@/lib/apply/types';
 import { isTravellerFilled } from '@/lib/apply/reviewFields';
 import {
-  persistPreviewUrl,
-  readApplyDraft,
+  draftSubstanceScore,
+  migrateLegacyDraftBinaries,
+  readApplyDraftAsync,
+  rehydrateTravellerPreviews,
   writeApplyDraft,
+  writeApplyDraftAsync,
   type ApplyDraftDeparture,
 } from '@/lib/apply/draftStorage';
+import {
+  PASSPORT_BACK_SLOT,
+  PASSPORT_FRONT_SLOT,
+  deletePassengerFiles,
+  idbErrorMessage,
+  isIdbAvailable,
+  putFile,
+  urlToBlob,
+} from '@/lib/apply/idbDraftStorage';
 import {
   formatProfileName,
   listTravellerProfiles,
@@ -26,6 +46,8 @@ import {
   saveTravellerProfile,
   type TravellerProfile,
 } from '@/lib/apply/travellerProfiles';
+import { getMyPassengerAutofill } from '@/app/visa/actions';
+import { restoreAutofillDocumentsToIdb } from '@/lib/apply/restoreAutofillDocuments';
 import { getFlagEmoji } from '@/lib/public';
 
 export type { ApplyStep, ApplyTraveller };
@@ -44,6 +66,8 @@ interface ApplyVisaWizardProps {
   departureMeta?: ApplyDraftDeparture;
   formConfig?: ApplyFormConfig;
   resume?: boolean;
+  isAuthenticated?: boolean;
+  previousProfiles?: TravellerProfile[];
 }
 
 const MAX_TRAVELLERS = 100;
@@ -57,6 +81,35 @@ function createTraveller(index: number, name = ''): ApplyTraveller {
     applicationComplete: false,
     editing: false,
   };
+}
+
+/** True only when every required tab on this listing is filled. */
+function isListingApplicationComplete(
+  traveller: ApplyTraveller,
+  formConfig: ApplyFormConfig
+) {
+  const generalComplete = formConfig.showGeneralInfo
+    ? Boolean(traveller.passportData && isReviewComplete(traveller.passportData))
+    : true;
+  const tripComplete = formConfig.showTripDetails
+    ? isCoreTripComplete(traveller.tripDetails) &&
+      isMultiStopComplete(traveller.tripDetails)
+    : true;
+  const additionalComplete =
+    formConfig.extraQuestions.length === 0
+      ? true
+      : isAdditionalQuestionsComplete(
+          traveller.tripDetails,
+          formConfig.extraQuestions
+        );
+  const documentsComplete = isDocumentsComplete(
+    traveller.documents,
+    formConfig.documentSlots
+  );
+
+  return (
+    generalComplete && tripComplete && additionalComplete && documentsComplete
+  );
 }
 
 function createInitialTravellers(count: number): ApplyTraveller[] {
@@ -78,6 +131,8 @@ export function ApplyVisaWizard({
   departureMeta,
   formConfig = defaultApplyFormConfig(countryName, processName),
   resume: _resume = false,
+  isAuthenticated = false,
+  previousProfiles = [],
 }: ApplyVisaWizardProps) {
   void _resume;
   const router = useRouter();
@@ -87,6 +142,11 @@ export function ApplyVisaWizard({
   const [travellers, setTravellers] = useState<ApplyTraveller[]>(() =>
     createInitialTravellers(initialTravellerCount)
   );
+  const [profiles, setProfiles] = useState<TravellerProfile[]>(() =>
+    isAuthenticated ? previousProfiles : []
+  );
+  const [selectingProfile, setSelectingProfile] = useState(false);
+  const [autofillWarning, setAutofillWarning] = useState<string | null>(null);
   const [passportTravellerId, setPassportTravellerId] = useState<string | null>(
     null
   );
@@ -97,9 +157,18 @@ export function ApplyVisaWizard({
     label: departureLabel,
   });
   const [hydrating, setHydrating] = useState(true);
-  const [profiles, setProfiles] = useState<TravellerProfile[]>([]);
   const skipFirstPersist = useRef(true);
   const hydratedResume = useRef(false);
+  /** Only true after hydrate finishes — blocks empty overwrite races. */
+  const persistEnabled = useRef(false);
+  const travellersRef = useRef(travellers);
+  travellersRef.current = travellers;
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  const primaryNameRef = useRef(primaryName);
+  primaryNameRef.current = primaryName;
+  const departureRef = useRef(departure);
+  departureRef.current = departure;
 
   const backHref = `/visa/${countryCode.toLowerCase()}/${listingId}`;
   const namedTraveller = travellers.some((t) => t.name.trim());
@@ -110,19 +179,75 @@ export function ApplyVisaWizard({
 
   // Restore draft for this listing (resume CTA, or page refresh mid-flow)
   useEffect(() => {
-    const draft = readApplyDraft(listingId);
-    if (draft) {
-      hydratedResume.current = true;
-      setStep(draft.step);
-      setPrimaryName(
-        formatProfileName(draft.primaryName || draft.travellers[0]?.name || '')
-      );
-      setTravellers(draft.travellers.map((t) => ({ ...t, editing: false })));
-      setDeparture(draft.departure);
+    let cancelled = false;
+    persistEnabled.current = false;
+    skipFirstPersist.current = true;
+    hydratedResume.current = false;
+    setHydrating(true);
+
+    async function hydrate() {
+      try {
+        const draft = await readApplyDraftAsync(listingId);
+        if (cancelled) return;
+
+        if (draft) {
+          hydratedResume.current = true;
+          try {
+            const migrated = await migrateLegacyDraftBinaries(draft);
+            const hydrated = await rehydrateTravellerPreviews(
+              listingId,
+              migrated
+            );
+            if (cancelled) return;
+            setStep(draft.step);
+            setPrimaryName(
+              formatProfileName(
+                draft.primaryName || draft.travellers[0]?.name || ''
+              )
+            );
+            setTravellers(hydrated.map((t) => ({ ...t, editing: false })));
+            setDeparture(draft.departure ?? {});
+          } catch (error) {
+            console.warn('Draft hydrate failed', error);
+            if (cancelled) return;
+            setStep(draft.step);
+            setPrimaryName(
+              formatProfileName(
+                draft.primaryName || draft.travellers[0]?.name || ''
+              )
+            );
+            setTravellers(
+              draft.travellers.map((t) => ({ ...t, editing: false }))
+            );
+            setDeparture(draft.departure ?? {});
+          }
+        } else {
+          hydratedResume.current = false;
+        }
+
+        if (cancelled) return;
+        if (!isAuthenticated) {
+          setProfiles(listTravellerProfiles({ includeSamples: false }));
+        }
+      } finally {
+        if (!cancelled) {
+          persistEnabled.current = true;
+          setHydrating(false);
+        }
+      }
     }
-    setProfiles(listTravellerProfiles());
-    setHydrating(false);
-  }, [listingId]);
+
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [listingId, isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      setProfiles(previousProfiles);
+    }
+  }, [isAuthenticated, previousProfiles]);
 
   // Keep departure label in sync if page props change on a fresh start
   useEffect(() => {
@@ -136,7 +261,7 @@ export function ApplyVisaWizard({
 
   // Realtime persist — travellers add/edit/remove, step, passport, names
   useEffect(() => {
-    if (hydrating) return;
+    if (hydrating || !persistEnabled.current) return;
 
     if (skipFirstPersist.current) {
       skipFirstPersist.current = false;
@@ -152,6 +277,14 @@ export function ApplyVisaWizard({
           ) ||
           step !== 'travellers';
         if (!hasContent) return;
+      } else {
+        // After resume hydrate: skip one write only if state is still an empty shell
+        const score = draftSubstanceScore({
+          primaryName,
+          step,
+          travellers,
+        });
+        if (score <= 2) return;
       }
     }
 
@@ -184,7 +317,9 @@ export function ApplyVisaWizard({
     const profile = profileFromTraveller(traveller, visaType);
     if (!profile) return;
     saveTravellerProfile(profile);
-    setProfiles(listTravellerProfiles());
+    if (!isAuthenticated) {
+      setProfiles(listTravellerProfiles({ includeSamples: false }));
+    }
   };
 
   const handlePrimaryContinue = () => {
@@ -204,10 +339,98 @@ export function ApplyVisaWizard({
     setStep('documents');
   };
 
-  const handleSelectProfile = (profile: TravellerProfile) => {
+  const handleSelectProfile = async (profile: TravellerProfile) => {
     const name = profile.name.trim().toUpperCase();
     if (!name) return;
 
+    setAutofillWarning(null);
+
+    // Server profile: hydrate passport / trip / docs from past applications
+    if (profile.isServerProfile && isAuthenticated) {
+      setSelectingProfile(true);
+      try {
+        const result = await getMyPassengerAutofill({
+          profileId: profile.id,
+          formConfig,
+        });
+
+        if (!result.success || !result.data) {
+          setAutofillWarning(
+            result.message || 'Could not load previous answers. Continuing with name only.'
+          );
+          setPrimaryName(formatProfileName(profile.name));
+          const fallback = createTraveller(1, name);
+          setTravellers([fallback]);
+          setStep('documents');
+          return;
+        }
+
+        const payload = result.data;
+        const nextTraveller = createTraveller(1, name);
+        const displayName = formatProfileName(payload.name || profile.name);
+        setPrimaryName(displayName);
+
+        const restored = await restoreAutofillDocumentsToIdb({
+          listingId,
+          travellerId: nextTraveller.id,
+          refs: payload.documents,
+        });
+
+        const draftTraveller: ApplyTraveller = {
+          ...nextTraveller,
+          name: displayName.toUpperCase(),
+          passportData: payload.passportData ?? undefined,
+          tripDetails: payload.tripDetails ?? undefined,
+          passportUploaded:
+            restored.passportUploaded || Boolean(payload.passportData),
+          photoUploaded: restored.photoUploaded,
+          passportFrontUrl: restored.passportFrontUrl,
+          passportBackUrl: restored.passportBackUrl,
+          documents: restored.documents,
+          applicationComplete: false,
+          editing: false,
+        };
+        const applicationComplete = isListingApplicationComplete(
+          draftTraveller,
+          formConfig
+        );
+        const filled: ApplyTraveller = {
+          ...draftTraveller,
+          applicationComplete,
+        };
+
+        setTravellers([filled]);
+        persistNamedProfile(filled);
+
+        if (restored.failedSlots.length > 0) {
+          setAutofillWarning(
+            `Some documents could not be restored (${restored.failedSlots.length}). You can re-upload them.`
+          );
+        }
+
+        setStep('documents');
+        // Required tabs still empty (e.g. extra questions from another form):
+        // open Complete application on the first unfilled tab.
+        if (!applicationComplete) {
+          setPassportFile(null);
+          setPassportResume(true);
+          setPassportTravellerId(filled.id);
+        }
+      } catch (error) {
+        console.error('Profile autofill failed', error);
+        setAutofillWarning(
+          'Could not restore previous data. Continuing with name only.'
+        );
+        setPrimaryName(formatProfileName(profile.name));
+        setTravellers([createTraveller(1, name)]);
+        setStep('documents');
+      } finally {
+        setSelectingProfile(false);
+      }
+      return;
+    }
+
+    // Local / logged-out: name-only (existing behaviour)
     setPrimaryName(formatProfileName(profile.name));
     setTravellers((current) => {
       const next: ApplyTraveller = {
@@ -245,6 +468,11 @@ export function ApplyVisaWizard({
       if (current.length <= 1) return current;
       return current.filter((item) => item.id !== id);
     });
+    if (isIdbAvailable()) {
+      void deletePassengerFiles(listingId, id).catch((error) => {
+        console.warn('Could not clear traveller files', error);
+      });
+    }
   };
 
   const openPassport = (id: string, resume = false, file?: File) => {
@@ -257,61 +485,173 @@ export function ApplyVisaWizard({
     openPassport(id, true);
   };
 
+  /** Persist passport images + traveller fields to IDB/draft. Does not close overlay when complete=false. */
+  const persistTravellerApplication = async (
+    id: string,
+    payload: PassportApplicationPayload,
+    options: { complete: boolean; closeOverlay: boolean }
+  ) => {
+    const fullName =
+      `${payload.fields.givenNames} ${payload.fields.surname}`.trim();
+
+    let frontUrl = payload.frontPreviewUrl;
+    let backUrl = payload.backPreviewUrl;
+    const documents = [...payload.documents];
+
+    try {
+      if (!isIdbAvailable()) {
+        throw new Error(idbErrorMessage(new Error('IndexedDB unavailable')));
+      }
+
+      const frontBlob = await urlToBlob(payload.frontPreviewUrl);
+      if (frontBlob) {
+        await putFile(listingId, id, PASSPORT_FRONT_SLOT, {
+          blob: frontBlob,
+          mimeType: frontBlob.type || 'image/jpeg',
+          filename: 'passport-front.jpg',
+        });
+        if (!frontUrl?.startsWith('blob:')) {
+          frontUrl = URL.createObjectURL(frontBlob);
+        }
+      }
+
+      if (payload.backPreviewUrl) {
+        const backBlob = await urlToBlob(payload.backPreviewUrl);
+        if (backBlob) {
+          await putFile(listingId, id, PASSPORT_BACK_SLOT, {
+            blob: backBlob,
+            mimeType: backBlob.type || 'image/jpeg',
+            filename: 'passport-back.jpg',
+          });
+          if (!backUrl?.startsWith('blob:')) {
+            backUrl = URL.createObjectURL(backBlob);
+          }
+        }
+      }
+
+      for (let i = 0; i < documents.length; i += 1) {
+        const item = documents[i];
+        if (item.storedInIdb) continue;
+        if (!item.previewUrl) continue;
+        const blob = await urlToBlob(item.previewUrl);
+        if (!blob) continue;
+        await putFile(listingId, id, item.key, {
+          blob,
+          mimeType: item.mimeType || blob.type,
+          filename: item.name || `${item.key}.bin`,
+        });
+        documents[i] = {
+          ...item,
+          size: blob.size,
+          storedInIdb: true,
+          previewUrl: item.previewUrl.startsWith('blob:')
+            ? item.previewUrl
+            : URL.createObjectURL(blob),
+        };
+      }
+    } catch (error) {
+      console.error('Failed to persist passport files to IndexedDB', error);
+      if (options.complete) {
+        window.alert(
+          idbErrorMessage(error) ||
+            'Could not save documents in this browser. Try again in a normal window.'
+        );
+      }
+      if (options.complete) return;
+      // Progress saves: still keep field JSON even if a binary write fails
+    }
+
+    const photoUploaded = documents.some((item) => item.key === 'photo');
+    const currentTravellers = travellersRef.current;
+
+    const nextTravellers = currentTravellers.map((item) => {
+      if (item.id !== id) return item;
+      return {
+        ...item,
+        passportUploaded: true,
+        photoUploaded: photoUploaded || item.photoUploaded,
+        applicationComplete: options.complete
+          ? true
+          : item.applicationComplete,
+        passportData: payload.fields,
+        passportFrontUrl: frontUrl || item.passportFrontUrl,
+        passportBackUrl: backUrl || item.passportBackUrl,
+        tripDetails: payload.tripDetails,
+        documents:
+          documents.length > 0 ? documents : item.documents,
+        name: fullName || item.name,
+      };
+    });
+
+    setTravellers(nextTravellers);
+    travellersRef.current = nextTravellers;
+
+    // Ensure review step is restored after reload mid-flow
+    const nextStep =
+      stepRef.current === 'travellers' ? 'documents' : stepRef.current;
+    if (nextStep !== stepRef.current) {
+      setStep(nextStep);
+      stepRef.current = nextStep;
+    }
+
+    await writeApplyDraftAsync({
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      countryCode,
+      countryName,
+      listingId,
+      processName,
+      step: nextStep,
+      primaryName: primaryNameRef.current,
+      travellers: nextTravellers,
+      departure: departureRef.current,
+      travellersCount: nextTravellers.length,
+    });
+
+    if (options.complete) {
+      persistNamedProfile({
+        id,
+        name: fullName,
+        photoUploaded,
+        passportUploaded: true,
+        passportData: payload.fields,
+        passportFrontUrl: undefined,
+        passportBackUrl: undefined,
+        tripDetails: payload.tripDetails,
+        documents: documents.map((doc) => ({
+          key: doc.key,
+          name: doc.name,
+          mimeType: doc.mimeType,
+          size: doc.size,
+          storedInIdb: true,
+        })),
+        applicationComplete: true,
+        editing: false,
+      });
+    }
+
+    if (options.closeOverlay) {
+      setPassportTravellerId(null);
+      setPassportResume(false);
+      setPassportFile(null);
+    }
+  };
+
+  const savePassportProgress = (id: string, payload: PassportApplicationPayload) => {
+    void persistTravellerApplication(id, payload, {
+      complete: false,
+      closeOverlay: false,
+    });
+  };
+
   const savePassport = async (
     id: string,
     payload: PassportApplicationPayload
   ) => {
-    const [front, back, ...documentUrls] = await Promise.all([
-      persistPreviewUrl(payload.frontPreviewUrl),
-      persistPreviewUrl(payload.backPreviewUrl),
-      ...payload.documents.map((item) => persistPreviewUrl(item.previewUrl)),
-    ]);
-
-    const fullName =
-      `${payload.fields.givenNames} ${payload.fields.surname}`.trim();
-    const frontUrl = front || payload.frontPreviewUrl;
-    const backUrl = back || payload.backPreviewUrl;
-    const documents = payload.documents.map((item, index) => ({
-      ...item,
-      previewUrl: documentUrls[index] || item.previewUrl,
-    }));
-    const photoUploaded = documents.some((item) => item.key === 'photo');
-
-    setTravellers((current) =>
-      current.map((item) => {
-        if (item.id !== id) return item;
-        return {
-          ...item,
-          passportUploaded: formConfig.showGeneralInfo
-            ? true
-            : item.passportUploaded,
-          photoUploaded,
-          applicationComplete: true,
-          passportData: payload.fields,
-          passportFrontUrl: frontUrl,
-          passportBackUrl: backUrl,
-          tripDetails: payload.tripDetails,
-          documents,
-          name: fullName || item.name,
-        };
-      })
-    );
-    persistNamedProfile({
-      id,
-      name: fullName,
-      photoUploaded,
-      passportUploaded: formConfig.showGeneralInfo,
-      passportData: payload.fields,
-      passportFrontUrl: frontUrl,
-      passportBackUrl: backUrl,
-      tripDetails: payload.tripDetails,
-      documents,
-      applicationComplete: true,
-      editing: false,
+    await persistTravellerApplication(id, payload, {
+      complete: true,
+      closeOverlay: true,
     });
-    setPassportTravellerId(null);
-    setPassportResume(false);
-    setPassportFile(null);
   };
 
   if (hydrating) {
@@ -391,60 +731,99 @@ export function ApplyVisaWizard({
         )}
 
         {step === 'travellers' && (
-          <BasicInformationStep
-            primaryName={primaryName}
-            onNameChange={setPrimaryName}
-            onContinue={handlePrimaryContinue}
-            onSelectProfile={handleSelectProfile}
-            profiles={profiles}
-          />
+          <>
+            <BasicInformationStep
+              primaryName={primaryName}
+              onNameChange={setPrimaryName}
+              onContinue={handlePrimaryContinue}
+              onSelectProfile={(profile) => {
+                void handleSelectProfile(profile);
+              }}
+              profiles={profiles}
+              isAuthenticated={isAuthenticated}
+              selectingProfile={selectingProfile}
+            />
+            {autofillWarning && (
+              <p
+                className="mx-auto mt-4 max-w-5xl px-1 font-switzer text-sm text-[#b45309]"
+                role="status"
+              >
+                {autofillWarning}
+              </p>
+            )}
+          </>
         )}
 
         {step === 'documents' && (
-          <ReviewStep
-            countryName={countryName}
-            travellers={travellers}
-            canAdd={travellers.length < MAX_TRAVELLERS}
-            extraQuestions={formConfig.extraQuestions}
-            documentSlots={formConfig.documentSlots}
-            showGeneralInfo={formConfig.showGeneralInfo}
-            showTripDetails={formConfig.showTripDetails}
-            onAddTraveller={addTraveller}
-            onRemoveTraveller={removeTraveller}
-            onUploadPassport={(id, file) => openPassport(id, false, file)}
-            onFillApplication={openFillApplication}
-            onEditTraveller={(id) => openPassport(id, true)}
-            onProceedCheckout={() => {
-              if (filledTravellers.length === 0) return;
-              setStep('pay');
-            }}
-          />
+          <>
+            {autofillWarning && (
+              <p
+                className="mb-4 font-switzer text-sm text-[#b45309]"
+                role="status"
+              >
+                {autofillWarning}
+              </p>
+            )}
+            <ReviewStep
+              countryName={countryName}
+              travellers={travellers}
+              canAdd={travellers.length < MAX_TRAVELLERS}
+              extraQuestions={formConfig.extraQuestions}
+              documentSlots={formConfig.documentSlots}
+              showGeneralInfo={formConfig.showGeneralInfo}
+              showTripDetails={formConfig.showTripDetails}
+              onAddTraveller={addTraveller}
+              onRemoveTraveller={removeTraveller}
+              onUploadPassport={(id, file) => openPassport(id, false, file)}
+              onFillApplication={openFillApplication}
+              onEditTraveller={(id) => openPassport(id, true)}
+              onProceedCheckout={() => {
+                if (filledTravellers.length === 0) return;
+                setStep('pay');
+              }}
+            />
+          </>
         )}
 
         {step === 'pay' && (
-          <section className="mx-auto max-w-xl pt-10 text-center sm:pt-16">
-            <h1 className="font-basier text-3xl text-portrait-ink sm:text-4xl">
-              Ready to pay
-            </h1>
-            <p className="mt-3 text-sm leading-7 text-slate-helper sm:text-base">
-              Payment for {filledTravellers.length} traveller
-              {filledTravellers.length === 1 ? '' : 's'} to {countryName} will
-              connect here next.
-            </p>
-            <button
-              type="button"
-              onClick={() => setStep('documents')}
-              className="mt-10 inline-flex items-center gap-2 rounded-full border border-portrait-ink px-6 py-3 text-sm font-medium text-portrait-ink transition-colors hover:bg-portrait-ink hover:text-white"
-            >
-              Back to review
-            </button>
-          </section>
+          <CheckoutPayStep
+            countryName={countryName}
+            countryCode={countryCode}
+            listingId={listingId}
+            filledCount={filledTravellers.length}
+            onBack={() => setStep('documents')}
+            onDraftRestored={() => {
+              // Re-run hydrate path by toggling hydrating
+              setHydrating(true);
+              void (async () => {
+                const draft = await readApplyDraftAsync(listingId);
+                if (draft) {
+                  const migrated = await migrateLegacyDraftBinaries(draft);
+                  const hydrated = await rehydrateTravellerPreviews(
+                    listingId,
+                    migrated
+                  );
+                  setStep(draft.step);
+                  setPrimaryName(
+                    formatProfileName(
+                      draft.primaryName || draft.travellers[0]?.name || ''
+                    )
+                  );
+                  setTravellers(hydrated.map((t) => ({ ...t, editing: false })));
+                  setDeparture(draft.departure ?? {});
+                }
+                setHydrating(false);
+              })();
+            }}
+          />
         )}
       </main>
 
       {passportTravellerId && (passportFile || passportResume) && (
         <PassportCaptureFlow
           travellerName={activePassportTraveller?.name}
+          travellerId={passportTravellerId}
+          listingId={listingId}
           initialFile={passportFile ?? undefined}
           formConfig={formConfig}
           arrivalPrefill={departure.departure}
@@ -474,6 +853,9 @@ export function ApplyVisaWizard({
             setPassportTravellerId(null);
             setPassportResume(false);
             setPassportFile(null);
+          }}
+          onProgress={(payload) => {
+            savePassportProgress(passportTravellerId, payload);
           }}
           onComplete={(payload) => {
             void savePassport(passportTravellerId, payload);

@@ -15,6 +15,18 @@ export const mobileOtpSchema = z
   .string()
   .regex(/^\d{5}$/, 'Enter the 5-digit OTP');
 
+export const requestOtpSchema = z.object({
+  phone: indianMobileSchema,
+});
+
+export const verifyOtpSchema = z.object({
+  phone: indianMobileSchema,
+  otp: mobileOtpSchema,
+});
+
+export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
+export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
+
 export const registerSchema = z.object({
   name: z
     .string()
@@ -70,15 +82,17 @@ export const resetPasswordSchema = z.object({
   path: ['confirmPassword'],
 });
 
+/**
+ * Applicant self-service profile update.
+ * Only non-sensitive fields — never phone, role, email, or password.
+ */
 export const updateProfileSchema = z.object({
   name: z
     .string()
+    .trim()
     .min(2, 'Name must be at least 2 characters')
     .max(100, 'Name must be less than 100 characters')
-    .regex(/^[a-zA-Z\s]+$/, 'Name can only contain letters and spaces')
-    .optional(),
-
-  phone: indianMobileSchema.optional(),
+    .regex(/^[a-zA-Z\s]+$/, 'Name can only contain letters and spaces'),
 });
 
 // Type exports for TypeScript

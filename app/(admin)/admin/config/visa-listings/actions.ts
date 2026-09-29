@@ -6,7 +6,7 @@ import { countries, visaListings, visaListingPrices, additionalQuestions, compon
 import { eq, and, sql } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth-utils';
 import { processBasicInfoSchema, type ProcessBasicInfo, createVisaListingSchema, visaListingPriceSchema, type VisaListingPriceInput, additionalQuestionSchema, type AdditionalQuestion, componentRequiredSchema, type ComponentRequired, createComponentsBulkSchema, type CreateComponentsBulk, faqSchema, type FAQ, postCheckoutStepSchema, type PostCheckoutStep, multiCountrySchema, type MultiCountry } from '@/lib/validations/config';
-import { getQuestionById, getMaxQuestionSortOrder, getAdditionalQuestions, searchAdditionalQuestionsByLabel, getComponentById, getMaxComponentSortOrder, getComponentsRequired, getFaqById, getMaxFaqSortOrder, getPostCheckoutStepById, getMaxStepSortOrder } from '@/lib/db/queries/config';
+import { getQuestionById, getMaxQuestionSortOrder, getAdditionalQuestions, searchAdditionalQuestionsByLabel, getComponentById, getMaxComponentSortOrder, getComponentsRequired, getFaqById, getMaxFaqSortOrder, getPostCheckoutStepById, getMaxStepSortOrder, getProcessWithAllRelations } from '@/lib/db/queries/config';
 import { revalidatePublicVisaCatalog } from '@/lib/revalidate-public-catalog';
 import { documentTypeLabel } from '@/lib/document-types';
 import { validateVisibilityAgainstSiblings } from '@/lib/question-visibility';
@@ -1141,3 +1141,67 @@ export async function removeMultiTripCountry(countryId: string) {
     return { error: 'Failed to remove multi-trip country' };
   }
 }
+
+/**
+ * Publish an immutable form version snapshot for a listing (Phase 3).
+ * Freezes buildApplyFormConfig output so submitted apps keep historical labels.
+ */
+export async function publishFormVersion(listingId: string) {
+  const session = await requireRole(['admin']);
+
+  try {
+    const process = await getProcessWithAllRelations(listingId);
+    if (!process) {
+      return { error: 'Visa listing not found' };
+    }
+
+    const { buildApplyFormConfig } = await import('@/lib/apply/applicationForm');
+    const {
+      getNextFormVersionNumber,
+    } = await import('@/lib/db/queries/formVersions');
+    const { formVersions } = await import('@/lib/db/schema');
+
+    const config = buildApplyFormConfig({
+      purpose: process.purpose,
+      countryName: process.country.name,
+      processName: process.processName,
+      showGeneralInfo: process.showGeneralInfo,
+      showTripDetails: process.showTripDetails,
+      components: process.componentsRequired,
+      questions: process.additionalQuestions,
+    });
+
+    const version = await getNextFormVersionNumber(listingId);
+
+    const [created] = await db
+      .insert(formVersions)
+      .values({
+        listingId,
+        version,
+        config,
+        publishedBy: session.user.id,
+        publishedAt: new Date(),
+      })
+      .returning({
+        id: formVersions.id,
+        version: formVersions.version,
+        publishedAt: formVersions.publishedAt,
+      });
+
+    revalidatePath(`/admin/config/visa-listings/${listingId}/forms`);
+    revalidatePath(`/admin/config/visa-listings/${listingId}/docs`);
+    revalidatePath(`/admin/config/visa-listings/${listingId}`);
+
+    return {
+      success: true,
+      message: `Form version ${created.version} published`,
+      version: created.version,
+      id: created.id,
+      publishedAt: created.publishedAt?.toISOString?.() ?? null,
+    };
+  } catch (error) {
+    console.error('Error publishing form version:', error);
+    return { error: 'Failed to publish form version' };
+  }
+}
+

@@ -7,6 +7,12 @@ import {
   displayToIso,
 } from '@/components/apply/form/UnderlineField';
 import type { IndianPassportFields } from '@/lib/passport/types';
+import {
+  earliestFutureDateIso,
+  futureDateError,
+  latestPastDateIso,
+  pastDateError,
+} from '@/lib/passport/schema';
 
 interface GeneralDetailsTabProps {
   form: IndianPassportFields;
@@ -33,6 +39,9 @@ export function GeneralDetailsTab({
   warnings,
   onEditFront,
 }: GeneralDetailsTabProps) {
+  const pastMax = latestPastDateIso();
+  const futureMin = earliestFutureDateIso();
+
   const set =
     (key: keyof IndianPassportFields) =>
     (value: string) => {
@@ -140,7 +149,9 @@ export function GeneralDetailsTab({
             label="Date of birth"
             required
             type="date"
+            max={pastMax}
             value={toDateInputValue(form.dateOfBirth)}
+            error={pastDateError(toDateInputValue(form.dateOfBirth) || undefined)}
             onChange={(value) =>
               onChange({ ...form, dateOfBirth: value })
             }
@@ -148,7 +159,9 @@ export function GeneralDetailsTab({
           <UnderlineField
             label="Passport issued on"
             type="date"
+            max={pastMax}
             value={toDateInputValue(form.dateOfIssue)}
+            error={pastDateError(toDateInputValue(form.dateOfIssue) || undefined)}
             onChange={(value) =>
               onChange({ ...form, dateOfIssue: value })
             }
@@ -157,7 +170,9 @@ export function GeneralDetailsTab({
             label="Passport valid till"
             required
             type="date"
+            min={futureMin}
             value={toDateInputValue(form.dateOfExpiry)}
+            error={futureDateError(toDateInputValue(form.dateOfExpiry) || undefined)}
             onChange={(value) =>
               onChange({ ...form, dateOfExpiry: value })
             }
@@ -212,7 +227,11 @@ export function GeneralDetailsTab({
             <UnderlineField
               label="Old passport issued on"
               type="date"
+              max={pastMax}
               value={toDateInputValue(form.oldPassportDateOfIssue)}
+              error={pastDateError(
+                toDateInputValue(form.oldPassportDateOfIssue) || undefined
+              )}
               onChange={(value) =>
                 onChange({
                   ...form,

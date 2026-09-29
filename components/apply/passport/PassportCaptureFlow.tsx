@@ -25,6 +25,8 @@ import type {
 
 interface PassportCaptureFlowProps {
   travellerName?: string;
+  travellerId: string;
+  listingId: string;
   initialFile?: File;
   formConfig: ApplyFormConfig;
   arrivalPrefill?: string;
@@ -36,6 +38,7 @@ interface PassportCaptureFlowProps {
     documents?: TravellerDocumentUpload[];
   };
   onClose: () => void;
+  onProgress?: (payload: PassportApplicationPayload) => void;
   onComplete: (payload: PassportApplicationPayload) => void;
 }
 
@@ -128,11 +131,14 @@ const PASSPORT_ACCEPT =
 
 export function PassportCaptureFlow({
   travellerName,
+  travellerId,
+  listingId,
   initialFile,
   formConfig,
   arrivalPrefill,
   resume,
   onClose,
+  onProgress,
   onComplete,
 }: PassportCaptureFlowProps) {
   const canResume = Boolean(resume);
@@ -312,6 +318,8 @@ export function PassportCaptureFlow({
         {retryInput}
         <PassportReviewStage
           travellerName={travellerName}
+          travellerId={travellerId}
+          listingId={listingId}
           initial={extraction}
           formConfig={formConfig}
           savedTrip={resume?.tripDetails}
@@ -320,6 +328,7 @@ export function PassportCaptureFlow({
           onBack={onClose}
           onClose={onClose}
           onEditFront={() => reuploadRef.current?.click()}
+          onProgress={onProgress}
           onContinue={onComplete}
         />
       </div>

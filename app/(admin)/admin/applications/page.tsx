@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireRole } from '@/lib/auth-utils';
 import { getApplicationsWithFilters } from '@/lib/admin-queries';
 import { PageHeader } from '@/components/admin/PageHeader';
@@ -7,63 +8,92 @@ import { PaginationClient } from './PaginationClient';
 import type { ApplicationFilters } from '@/types/admin';
 
 /**
- * Applications Management Page
- *
- * Lists all visa and passport applications with filtering and pagination
+ * Applications Management Page — Phase 3 inbox
  */
 
 interface PageProps {
-  searchParams: {
+  searchParams: Promise<{
+    q?: string;
     search?: string;
+    phone?: string;
+    country?: string;
+    passenger?: string;
+    from?: string;
+    to?: string;
     status?: string;
     type?: 'visa' | 'passport' | 'all';
     page?: string;
     limit?: string;
-  };
+  }>;
 }
 
 export default async function ApplicationsPage({ searchParams }: PageProps) {
-  // Authorization check
   await requireRole(['admin', 'reviewer']);
 
-  // Parse search params
+  const params = await searchParams;
+
   const filters: ApplicationFilters = {
-    search: searchParams.search,
-    status: searchParams.status,
-    type: searchParams.type || 'all',
-    page: searchParams.page ? parseInt(searchParams.page) : 1,
-    limit: searchParams.limit ? parseInt(searchParams.limit) : 25,
+    search: params.q || params.search,
+    phone: params.phone,
+    country: params.country,
+    passenger: params.passenger,
+    dateFrom: params.from,
+    dateTo: params.to,
+    status: params.status,
+    type: params.type || 'all',
+    page: params.page ? parseInt(params.page, 10) : 1,
+    limit: params.limit ? parseInt(params.limit, 10) : 20,
     sortBy: 'submittedAt',
     sortOrder: 'desc',
   };
 
-  // Fetch applications
   const result = await getApplicationsWithFilters(filters);
+
+  const exportParams = new URLSearchParams();
+  if (filters.search) exportParams.set('q', filters.search);
+  if (filters.phone) exportParams.set('phone', filters.phone);
+  if (filters.country) exportParams.set('country', filters.country);
+  if (filters.passenger) exportParams.set('passenger', filters.passenger);
+  if (filters.dateFrom) exportParams.set('from', filters.dateFrom);
+  if (filters.dateTo) exportParams.set('to', filters.dateTo);
+  if (filters.status) exportParams.set('status', filters.status);
+  if (filters.type && filters.type !== 'all') exportParams.set('type', filters.type);
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
       <PageHeader
         title="Applications"
         description="View and manage all visa and passport applications"
       />
 
-      {/* Filter Bar */}
       <FilterBar />
 
-      {/* Results Summary */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="font-switzer text-sm text-slate-helper">
           {result.total === 0
             ? 'No applications found'
             : `Showing ${result.applications.length} of ${result.total} application${result.total === 1 ? '' : 's'}`}
         </p>
+        <div className="flex items-center gap-3">
+          {result.total === 0 && (
+            <Link
+              href="/admin/applications"
+              className="font-switzer text-sm text-nautical-teal hover:text-portrait-ink"
+            >
+              Reset filters
+            </Link>
+          )}
+          <a
+            href={`/api/admin/applications/export?${exportParams.toString()}`}
+            className="inline-flex items-center rounded-full border border-portrait-ink px-4 py-2 text-sm font-medium text-portrait-ink hover:bg-portrait-ink hover:text-white"
+          >
+            Export CSV
+          </a>
+        </div>
       </div>
 
-      {/* Applications Table */}
       <ApplicationsTable applications={result.applications} />
 
-      {/* Pagination */}
       {result.totalPages > 1 && (
         <PaginationClient
           currentPage={result.page}
@@ -75,4 +105,3 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
     </div>
   );
 }
-

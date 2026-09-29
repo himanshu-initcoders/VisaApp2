@@ -1,7 +1,10 @@
 import { notFound } from 'next/navigation';
 import { ApplyVisaWizard } from '@/components/apply/ApplyVisaWizard';
+import { auth } from '@/lib/auth';
 import { getPublicProcessPageData } from '@/lib/db/queries/public';
+import { getApplyPreviousProfiles } from '@/lib/apply/previousProfilesAutofill';
 import { formatFullVisaLabel } from '@/lib/public';
+import type { TravellerProfile } from '@/lib/apply/travellerProfiles';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,6 +87,28 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
     notFound();
   }
 
+  const session = await auth();
+  const isAuthenticated = Boolean(
+    session?.user?.id &&
+      session.user.role !== 'admin' &&
+      session.user.role !== 'reviewer'
+  );
+
+  let previousProfiles: TravellerProfile[] = [];
+  if (isAuthenticated && session?.user?.id) {
+    const serverProfiles = await getApplyPreviousProfiles(session.user.id);
+    previousProfiles = serverProfiles.map((p) => ({
+      id: p.id,
+      name: p.name,
+      nationality: p.nationality,
+      countryCode: p.countryCode,
+      visaType: p.visaType,
+      avatarVariant: p.avatarVariant,
+      isServerProfile: true,
+      applicationCount: p.applicationCount,
+    }));
+  }
+
   const parsedCount = Number.parseInt(query.travellers || '1', 10);
   const initialTravellerCount = Number.isFinite(parsedCount)
     ? Math.min(100, Math.max(1, parsedCount))
@@ -128,6 +153,8 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
       }}
       formConfig={data.page.applyForm}
       resume={resume}
+      isAuthenticated={isAuthenticated}
+      previousProfiles={previousProfiles}
     />
   );
 }

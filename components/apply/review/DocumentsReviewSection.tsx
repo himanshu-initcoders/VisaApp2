@@ -19,6 +19,7 @@ interface DocumentsReviewSectionProps {
 }
 
 function isImagePreview(item: DocumentPreviewItem) {
+  if (!item.previewUrl) return false;
   return Boolean(
     item.mimeType?.startsWith('image/') ||
       /^data:image\//.test(item.previewUrl) ||
@@ -67,11 +68,11 @@ export function DocumentsReviewSection({
       : []),
     ...slots.map((slot) => {
       const upload = byKey.get(slot.key);
-      if (upload) {
+      if (upload && (upload.previewUrl || upload.storedInIdb || upload.name)) {
         return {
           title: slot.title,
           name: upload.name,
-          previewUrl: upload.previewUrl,
+          previewUrl: upload.previewUrl || '',
           mimeType: upload.mimeType,
         };
       }
@@ -153,8 +154,9 @@ export function DocumentsReviewSection({
                 </div>
                 <button
                   type="button"
+                  disabled={!item.previewUrl}
                   onClick={() => setActive(item)}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#eef4ff] px-3 py-1.5 text-xs font-medium text-[#3b82f6] transition-colors hover:bg-[#dce8ff]"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#eef4ff] px-3 py-1.5 text-xs font-medium text-[#3b82f6] transition-colors hover:bg-[#dce8ff] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Eye className="h-3.5 w-3.5" />
                   View

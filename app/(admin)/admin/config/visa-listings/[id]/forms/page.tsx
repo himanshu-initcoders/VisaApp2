@@ -2,7 +2,9 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth-utils';
 import { getProcessWithAllRelations, getAdditionalQuestions } from '@/lib/db/queries/config';
+import { getLatestPublishedFormVersion } from '@/lib/db/queries/formVersions';
 import { QuestionsManager } from '@/components/admin/config/QuestionsManager';
+import { PublishFormVersionButton } from '@/components/admin/config/PublishFormVersionButton';
 import { ChevronLeft } from 'lucide-react';
 
 /**
@@ -16,6 +18,7 @@ import { ChevronLeft } from 'lucide-react';
  * - Required category from a hardcoded list (groups apply-form sections)
  * - Question keys are UUID-generated and hidden from the admin UI
  * - Manage dropdown options
+ * - Publish immutable form versions for applicant submit (Phase 3)
  */
 export default async function FormsPage({
   params,
@@ -37,6 +40,7 @@ export default async function FormsPage({
 
   // Fetch questions ordered by sortOrder
   const questions = await getAdditionalQuestions(id);
+  const latestVersion = await getLatestPublishedFormVersion(id);
 
   // Get flag emoji
   const getFlag = (iso2Code: string) => {
@@ -73,6 +77,18 @@ export default async function FormsPage({
           <p className="text-base text-slate-helper">
             Configure dynamic questions for {process.processName}
           </p>
+        </div>
+
+        <div className="mb-8">
+          <PublishFormVersionButton
+            listingId={id}
+            latestVersion={latestVersion?.version ?? null}
+            latestPublishedAt={
+              latestVersion?.publishedAt
+                ? latestVersion.publishedAt.toISOString()
+                : null
+            }
+          />
         </div>
 
         {/* Questions Manager */}

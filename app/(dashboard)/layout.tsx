@@ -1,90 +1,40 @@
 import { ReactNode } from 'react';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
-import { Button } from '@/components/ui';
-import { Logo } from '@/components/shared/Logo';
+import { UserShell } from '@/components/dashboard/UserShell';
+import { signOutAction } from '@/app/(dashboard)/actions';
 
 /**
- * Dashboard Layout
- *
- * Features:
- * - Server-side auth check
- * - Navigation bar with Portrait design
- * - User menu
- * - Sign out functionality
+ * Dashboard layout — sidebar shell (mirrors admin panel pattern).
  */
-
-async function DashboardNav() {
-  const session = await auth();
-
-  if (!session) {
-    redirect('/login');
-  }
-
-  return (
-    <nav className="bg-white border-b border-ash">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Logo href="/dashboard" size="lg" />
-
-          {/* Navigation Links */}
-          <div className="hidden md:flex items-center space-x-8">
-            <Link
-              href="/dashboard"
-              className="font-switzer text-sm text-portrait-ink hover:opacity-80 transition-opacity"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/applications"
-              className="font-switzer text-sm text-portrait-ink hover:opacity-80 transition-opacity"
-            >
-              Applications
-            </Link>
-            <Link
-              href="/documents"
-              className="font-switzer text-sm text-portrait-ink hover:opacity-80 transition-opacity"
-            >
-              Documents
-            </Link>
-            <Link
-              href="/profile"
-              className="font-switzer text-sm text-portrait-ink hover:opacity-80 transition-opacity"
-            >
-              Profile
-            </Link>
-          </div>
-
-          {/* User Menu */}
-          <div className="flex items-center space-x-4">
-            <span className="font-switzer text-sm text-slate-helper">
-              {session.user.name || session.user.email}
-            </span>
-            <form action="/api/auth/signout" method="POST">
-              <Button variant="ghost" size="sm" type="submit">
-                Sign out
-              </Button>
-            </form>
-          </div>
-        </div>
-      </div>
-    </nav>
-  );
-}
-
 export default async function DashboardLayout({
   children,
 }: {
   children: ReactNode;
 }) {
+  const session = await auth();
+
+  if (!session) {
+    redirect('/signin');
+  }
+
+  // Staff should use admin panel
+  if (session.user.role === 'admin' || session.user.role === 'reviewer') {
+    redirect('/admin');
+  }
+
   return (
-    <div className="min-h-screen bg-canvas">
-      <DashboardNav />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-[#fafbfc]">
+      <UserShell
+        user={{
+          name: session.user.name,
+          email: session.user.email,
+          phone: session.user.phone,
+        }}
+        signOutAction={signOutAction}
+      >
         {children}
-      </main>
+      </UserShell>
     </div>
   );
 }

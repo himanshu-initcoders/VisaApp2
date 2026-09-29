@@ -51,6 +51,7 @@ Open [🏠 Home.md](00-Index/🏠%20Home.md) - your main navigation hub
 | **08-Templates** | Note templates | Use for new notes |
 | **09-Daily-Notes** | Work logs | Create daily |
 | **10-Resources** | Links & references | 📚 Resources Library.md |
+| **Upcoming tasks** | Submission finish line (3 phases) | [[📋 Upcoming Tasks Hub]] |
 
 ## 5️⃣ Recommended Workflow
 

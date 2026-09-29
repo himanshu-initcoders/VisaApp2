@@ -1,17 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui';
 import { addApplicationNote } from '@/app/(admin)/actions';
 import { cn } from '@/lib/utils';
 
 /**
- * Notes Modal
- *
- * Modal for adding internal notes to an application:
- * - Textarea for note content
- * - Character count (max 1000)
- * - Calls addApplicationNote Server Action
+ * Notes Modal — portaled to document.body for full-viewport backdrop.
  */
 
 interface NotesModalProps {
@@ -32,8 +28,12 @@ export function NotesModal({
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [mounted, setMounted] = useState(false);
 
-  // Reset form when modal opens
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       setNote('');
@@ -41,7 +41,6 @@ export function NotesModal({
     }
   }, [isOpen]);
 
-  // Handle escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -53,11 +52,19 @@ export function NotesModal({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [isOpen]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    // Validate
     if (note.trim() === '') {
       setError('Please enter a note');
       return;
@@ -83,105 +90,115 @@ export function NotesModal({
       } else {
         setError(result.message || 'Failed to add note');
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
+  return createPortal(
+    <div className="fixed inset-0 z-[100]" role="presentation">
+      <button
+        type="button"
+        aria-label="Close dialog"
         className="absolute inset-0 bg-portrait-ink/50"
         onClick={onClose}
       />
 
-      {/* Modal */}
-      <div className="relative bg-white rounded-[24px] shadow-elevated max-w-md w-full p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-basier text-[31px] text-portrait-ink">
-            Add Note
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-slate-helper hover:text-portrait-ink transition-colors"
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-note-title"
+          className="pointer-events-auto relative w-full max-w-md rounded-[24px] bg-white p-6 shadow-elevated"
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h2
+              id="add-note-title"
+              className="font-basier text-[31px] text-portrait-ink"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Note textarea */}
-          <div>
-            <label
-              htmlFor="note"
-              className="block font-switzer text-sm font-medium text-portrait-ink mb-2"
-            >
-              Internal Note
-            </label>
-            <textarea
-              id="note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Add an internal note about this application..."
-              rows={6}
-              maxLength={1000}
-              disabled={isSubmitting}
-              className={cn(
-                'w-full font-switzer text-sm text-portrait-ink',
-                'bg-white border border-ash rounded-[16px]',
-                'px-4 py-3',
-                'focus:outline-none focus:ring-2 focus:ring-portrait-ink focus:ring-opacity-20',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-                'resize-none'
-              )}
-            />
-            <p className="mt-1 font-switzer text-xs text-slate-helper">
-              {note.length}/1000 characters
-            </p>
-          </div>
-
-          {/* Error message */}
-          {error && (
-            <p className="font-switzer text-sm text-red-600">{error}</p>
-          )}
-
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <Button
+              Add Note
+            </h2>
+            <button
               type="button"
-              variant="ghost"
               onClick={onClose}
-              disabled={isSubmitting}
+              className="text-slate-helper transition-colors hover:text-portrait-ink"
+              aria-label="Close"
             >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={isSubmitting || note.trim() === ''}
-            >
-              {isSubmitting ? 'Adding...' : 'Add Note'}
-            </Button>
+              <svg
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
           </div>
-        </form>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label
+                htmlFor="note"
+                className="mb-2 block font-switzer text-sm font-medium text-portrait-ink"
+              >
+                Note
+              </label>
+              <textarea
+                id="note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Add an internal note…"
+                rows={5}
+                maxLength={1000}
+                disabled={isSubmitting}
+                className={cn(
+                  'w-full font-switzer text-sm text-portrait-ink',
+                  'rounded-[16px] border border-ash bg-white',
+                  'px-4 py-3',
+                  'focus:outline-none focus:ring-2 focus:ring-portrait-ink focus:ring-opacity-20',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                  'resize-none'
+                )}
+              />
+              <p className="mt-1 font-switzer text-xs text-slate-helper">
+                {note.length}/1000 characters
+              </p>
+            </div>
+
+            {error && (
+              <p className="font-switzer text-sm text-red-600">{error}</p>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onClose}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={isSubmitting || !note.trim()}
+              >
+                {isSubmitting ? 'Saving…' : 'Add Note'}
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,14 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { AnimatedTabs } from '@/components/ui';
 import { AdditionalQuestionsTab } from '@/components/apply/form/AdditionalQuestionsTab';
 import { DocumentsTab } from '@/components/apply/form/DocumentsTab';
 import { FormTabFooter } from '@/components/apply/form/FormTabFooter';
 import { GeneralDetailsTab } from '@/components/apply/form/GeneralDetailsTab';
-import { ReviewSubmitTab } from '@/components/apply/form/ReviewSubmitTab';
 import { TripDetailsTab } from '@/components/apply/form/TripDetailsTab';
+import { ReviewSubmitTab } from '@/components/apply/form/ReviewSubmitTab';
 import {
   APPLICATION_FORM_TABS,
   defaultApplyFormConfig,
@@ -16,10 +16,12 @@ import {
   firstIncompleteTab,
   getAdditionalQuestionIssues,
   getCoreTripIssues,
+  getMultiStopIssues,
   getVisibleApplicationTabs,
   isAdditionalQuestionsComplete,
   isCoreTripComplete,
   isDocumentsComplete,
+  isMultiStopComplete,
   tabUnlockState,
   type ApplicationFormTabId,
   type ApplyFormConfig,
@@ -40,6 +42,8 @@ export interface PassportApplicationPayload {
 
 interface PassportReviewStageProps {
   travellerName?: string;
+  travellerId: string;
+  listingId: string;
   initial: IndianPassportFields & {
     frontPreviewUrl: string;
     backPreviewUrl?: string;
@@ -52,11 +56,15 @@ interface PassportReviewStageProps {
   onBack: () => void;
   onClose: () => void;
   onEditFront: () => void;
+  /** Autosave while the user fills tabs (debounced). */
+  onProgress?: (data: PassportApplicationPayload) => void;
   onContinue: (data: PassportApplicationPayload) => void;
 }
 
 export function PassportReviewStage({
   travellerName,
+  travellerId,
+  listingId,
   initial,
   formConfig: formConfigProp,
   savedTrip,
@@ -65,6 +73,7 @@ export function PassportReviewStage({
   onBack,
   onClose,
   onEditFront,
+  onProgress,
   onContinue,
 }: PassportReviewStageProps) {
   const formConfig = formConfigProp ?? defaultApplyFormConfig();
@@ -104,27 +113,61 @@ export function PassportReviewStage({
   });
   const [trip, setTrip] = useState<TravellerTripDetails>(() =>
     emptyTripDetails({
+      ...savedTrip,
       purpose: savedTrip?.purpose || formConfig.purpose,
       arrivalDate: savedTrip?.arrivalDate || arrivalPrefill || '',
-      returnDate: savedTrip?.returnDate || '',
-      arrivalCity: savedTrip?.arrivalCity || '',
-      accommodationName: savedTrip?.accommodationName || '',
-      accommodationAddress: savedTrip?.accommodationAddress || '',
-      flightNumber: savedTrip?.flightNumber || '',
-      extra: savedTrip?.extra,
     })
   );
   const [documents, setDocuments] = useState<TravellerDocumentUpload[]>(
     savedDocuments ?? []
   );
 
+  const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onProgressRef = useRef(onProgress);
+  onProgressRef.current = onProgress;
+
+  const buildPayload = (): PassportApplicationPayload => ({
+    fields: form,
+    tripDetails: trip,
+    documents,
+    frontPreviewUrl: initial.frontPreviewUrl,
+    backPreviewUrl: initial.backPreviewUrl,
+  });
+
+  // Persist in-progress form so reload can resume (not only final Continue)
+  useEffect(() => {
+    if (!onProgressRef.current) return;
+    if (progressTimer.current) clearTimeout(progressTimer.current);
+    progressTimer.current = setTimeout(() => {
+      onProgressRef.current?.(buildPayload());
+    }, 450);
+    return () => {
+      if (progressTimer.current) clearTimeout(progressTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, trip, documents, initial.frontPreviewUrl, initial.backPreviewUrl]);
+
+  // Immediate first save when review opens (OCR fields + passport images)
+  useEffect(() => {
+    onProgressRef.current?.(buildPayload());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const generalComplete = useMemo(
     () => (formConfig.showGeneralInfo ? isReviewComplete(form) : true),
     [form, formConfig.showGeneralInfo]
   );
   const coreTripIssues = useMemo(() => getCoreTripIssues(trip), [trip]);
+  const multiStopIssues = useMemo(() => getMultiStopIssues(trip), [trip]);
+  const tripStepIssues = useMemo(
+    () => [...coreTripIssues, ...multiStopIssues],
+    [coreTripIssues, multiStopIssues]
+  );
   const tripComplete = useMemo(
-    () => (formConfig.showTripDetails ? isCoreTripComplete(trip) : true),
+    () =>
+      formConfig.showTripDetails
+        ? isCoreTripComplete(trip) && isMultiStopComplete(trip)
+        : true,
     [trip, formConfig.showTripDetails]
   );
   const additionalIssues = useMemo(
@@ -157,7 +200,7 @@ export function PassportReviewStage({
         ? isReviewComplete(form)
         : true,
       tripComplete: formConfig.showTripDetails
-        ? isCoreTripComplete(trip)
+        ? isCoreTripComplete(trip) && isMultiStopComplete(trip)
         : true,
       additionalComplete:
         formConfig.extraQuestions.length === 0
@@ -170,14 +213,6 @@ export function PassportReviewStage({
     })
   );
 
-  const payload = (): PassportApplicationPayload => ({
-    fields: form,
-    tripDetails: trip,
-    documents,
-    frontPreviewUrl: initial.frontPreviewUrl,
-    backPreviewUrl: initial.backPreviewUrl,
-  });
-
   const goNext = () => {
     const index = visibleTabs.indexOf(tab);
     if (tab === 'general' && !generalComplete) return;
@@ -185,7 +220,7 @@ export function PassportReviewStage({
     if (tab === 'additional' && !additionalComplete) return;
     if (tab === 'documents' && !documentsComplete) return;
     if (tab === 'review') {
-      onContinue(payload());
+      onContinue(buildPayload());
       return;
     }
     const next = visibleTabs[index + 1];
@@ -210,8 +245,8 @@ export function PassportReviewStage({
     (tab === 'documents' && !documentsComplete);
 
   const footerHint =
-    tab === 'trip' && coreTripIssues.length > 0
-      ? coreTripIssues[0]
+    tab === 'trip' && tripStepIssues.length > 0
+      ? tripStepIssues[0]
       : tab === 'additional' && additionalIssues.length > 0
         ? additionalIssues[0]
         : null;
@@ -294,6 +329,8 @@ export function PassportReviewStage({
         )}
         {tab === 'documents' && (
           <DocumentsTab
+            listingId={listingId}
+            passengerId={travellerId}
             slots={formConfig.documentSlots}
             uploads={documents}
             passportPreviewUrl={

@@ -1,10 +1,8 @@
 'use client';
 
-import { formatReviewDate } from '@/lib/apply/reviewFields';
+import { formatExtraAnswer, formatReviewDate } from '@/lib/apply/reviewFields';
 import {
   groupApplyTripQuestions,
-  parseCheckboxValues,
-  purposeLabel,
   type ApplyTripQuestion,
   type TravellerTripDetails,
 } from '@/lib/apply/applicationForm';
@@ -47,32 +45,6 @@ function Row({
   );
 }
 
-function extraValue(question: ApplyTripQuestion, raw?: string) {
-  if (question.type === 'boolean') {
-    if (!raw) return '';
-    return raw === 'true' ? 'Yes' : 'No';
-  }
-  if (!raw) return '';
-  if (question.type === 'checkbox') {
-    const selected = parseCheckboxValues(raw);
-    if (selected.length === 0) return '';
-    return selected
-      .map(
-        (value) =>
-          question.options?.find((option) => option.value === value)?.label ||
-          value
-      )
-      .join(', ');
-  }
-  if (question.type === 'dropdown' || question.type === 'radio') {
-    return (
-      question.options?.find((option) => option.value === raw)?.label || raw
-    );
-  }
-  if (question.type === 'date') return formatReviewDate(raw);
-  return raw;
-}
-
 export function TripDetailsReview({
   trip,
   extraQuestions = [],
@@ -90,11 +62,6 @@ export function TripDetailsReview({
     <div className="space-y-4">
       {includeCore && (
         <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-          <Row
-            label="Purpose"
-            value={trip.purpose ? purposeLabel(trip.purpose) : ''}
-            showEmpty={showEmpty}
-          />
           <Row label="Arrival city" value={trip.arrivalCity} showEmpty={showEmpty} />
           <Row
             label="Arrival date"
@@ -106,11 +73,54 @@ export function TripDetailsReview({
             value={trip.returnDate ? formatReviewDate(trip.returnDate) : ''}
             showEmpty={showEmpty}
           />
-          <Row
-            label="Flight number"
-            value={trip.flightNumber}
-            showEmpty={showEmpty}
-          />
+          {(trip.arrivalFlights?.length
+            ? trip.arrivalFlights
+            : [
+                {
+                  flightNumber: trip.flightNumber,
+                  date: trip.arrivalFlightDate,
+                },
+              ]
+          ).map((leg, index) => (
+            <Row
+              key={`arrival-${index}`}
+              label={
+                (trip.arrivalFlights?.length ?? 0) > 1
+                  ? `Arrival flight ${index + 1}`
+                  : 'Arrival flight'
+              }
+              value={
+                [leg.flightNumber, leg.date ? formatReviewDate(leg.date) : '']
+                  .filter(Boolean)
+                  .join(' · ')
+              }
+              showEmpty={showEmpty}
+            />
+          ))}
+          {(trip.returnFlights?.length
+            ? trip.returnFlights
+            : [
+                {
+                  flightNumber: trip.returnFlightNumber,
+                  date: trip.returnFlightDate,
+                },
+              ]
+          ).map((leg, index) => (
+            <Row
+              key={`return-${index}`}
+              label={
+                (trip.returnFlights?.length ?? 0) > 1
+                  ? `Return flight ${index + 1}`
+                  : 'Return flight'
+              }
+              value={
+                [leg.flightNumber, leg.date ? formatReviewDate(leg.date) : '']
+                  .filter(Boolean)
+                  .join(' · ')
+              }
+              showEmpty={showEmpty}
+            />
+          ))}
           <Row
             label="Accommodation"
             value={trip.accommodationName}
@@ -132,7 +142,7 @@ export function TripDetailsReview({
               <Row
                 key={question.id}
                 label={question.label}
-                value={extraValue(question, trip.extra[question.key])}
+                value={formatExtraAnswer(question, trip.extra[question.key])}
                 showEmpty={showEmpty}
               />
             ))}
