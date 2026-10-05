@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
 import { DocumentViewer } from '@/components/admin/DocumentViewer';
 import { Timeline } from '@/components/admin/Timeline';
 import { useTravellerSelectionOptional } from '@/components/admin/TravellerSelectionContext';
+import { historyForSelectedTraveller } from '@/lib/visa/caseStatus';
 import { getMyDocumentPreviewUrl } from '@/app/(dashboard)/actions';
 import type {
   DocumentWithVerification,
@@ -30,29 +31,41 @@ export function ApplicationSidebar({
     return selection.filterDocuments(documents);
   }, [documents, selection]);
 
+  const activeTraveller = selection?.activeTraveller ?? null;
   const travellerLabel =
-    selection && selection.travellers.length > 1 && selection.activeTraveller
-      ? selection.activeTraveller.name?.trim() ||
+    selection && selection.travellers.length > 1 && activeTraveller
+      ? activeTraveller.name?.trim() ||
         `Traveller ${selection.activeTravellerIndex + 1}`
       : null;
 
   const customerHistory = useMemo(
     () =>
-      statusHistory
+      historyForSelectedTraveller(
+        statusHistory,
+        activeTraveller?.travellerRowId,
+        selection?.travellers.length ?? 1
+      )
         .filter((item) => item.oldStatus !== item.newStatus)
         .map((item) => ({
           ...item,
           changedByName: 'Visa team',
           notes: null,
         })),
-    [statusHistory]
+    [activeTraveller?.travellerRowId, selection?.travellers.length, statusHistory]
   );
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Status History</CardTitle>
+          <CardTitle>
+            Status History
+            {travellerLabel ? (
+              <span className="mt-1 block font-switzer text-sm font-normal text-slate-helper">
+                {travellerLabel}
+              </span>
+            ) : null}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Timeline history={customerHistory} />

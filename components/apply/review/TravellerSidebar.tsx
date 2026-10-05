@@ -7,14 +7,20 @@ import {
   isTravellerStarted,
   travellerDisplayName,
 } from '@/lib/apply/reviewFields';
+import type { TravellerProfile } from '@/lib/apply/travellerProfiles';
 import type { ApplyTraveller } from '@/lib/apply/types';
 
 interface TravellerSidebarProps {
   travellers: ApplyTraveller[];
   selectedId: string | null;
   canAdd: boolean;
+  profiles?: TravellerProfile[];
+  allProfilesAdded?: boolean;
+  showEmptyProfiles?: boolean;
+  selectingProfile?: boolean;
   onSelect: (id: string) => void;
   onAdd: (name: string) => void;
+  onSelectProfile?: (profile: TravellerProfile) => void;
   onRemove: (id: string) => void;
 }
 
@@ -22,8 +28,13 @@ export function TravellerSidebar({
   travellers,
   selectedId,
   canAdd,
+  profiles = [],
+  allProfilesAdded = false,
+  showEmptyProfiles = false,
+  selectingProfile = false,
   onSelect,
   onAdd,
+  onSelectProfile,
   onRemove,
 }: TravellerSidebarProps) {
   return (
@@ -43,7 +54,15 @@ export function TravellerSidebar({
         ))}
       </div>
       <div className="mt-2 border-t border-mist pt-2">
-        <AddTravellerCard disabled={!canAdd} onAdd={onAdd} />
+        <AddTravellerCard
+          disabled={!canAdd}
+          onAdd={onAdd}
+          profiles={profiles}
+          allProfilesAdded={allProfilesAdded}
+          showEmptyProfiles={showEmptyProfiles}
+          selectingProfile={selectingProfile}
+          onSelectProfile={onSelectProfile}
+        />
       </div>
     </aside>
   );

@@ -4,6 +4,7 @@ import {
   EMPTY_TRIP_EXPORT,
   getApplicationsForCsvExport,
 } from '@/lib/admin-queries';
+import { travellerSummaryLabel } from '@/lib/visa/caseStatus';
 import type { ApplicationFilters } from '@/types/admin';
 
 export const dynamic = 'force-dynamic';
@@ -30,6 +31,14 @@ export async function GET(request: NextRequest) {
     search: sp.get('q') || sp.get('search') || undefined,
     phone: sp.get('phone') || undefined,
     country: sp.get('country') || undefined,
+    countryCodes: (sp.get('countries') || '')
+      .split(',')
+      .map((code) => code.trim().toUpperCase())
+      .filter((code) => code.length === 2),
+    visaListingIds: (sp.get('listings') || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean),
     passenger: sp.get('passenger') || undefined,
     dateFrom: sp.get('from') || undefined,
     dateTo: sp.get('to') || undefined,
@@ -52,6 +61,7 @@ export async function GET(request: NextRequest) {
     'country',
     'countryCode',
     'status',
+    'travellerStatus',
     'submittedAt',
     'passengerNames',
     'formVersion',
@@ -80,6 +90,14 @@ export async function GET(request: NextRequest) {
         csvEscape(r.country || ''),
         csvEscape(r.countryCode || ''),
         csvEscape(r.status),
+        csvEscape(
+          r.type === 'visa'
+            ? travellerSummaryLabel(
+                r.travellerCount ?? 0,
+                r.approvedTravellerCount ?? 0
+              )
+            : ''
+        ),
         csvEscape(
           r.submittedAt
             ? new Date(r.submittedAt).toISOString()

@@ -30,5 +30,7 @@ declare module 'next-auth/jwt' {
     role: string;
     phone?: string | null;
     emailVerified: boolean;
+    /** Set when the account row has deactivatedAt. */
+    deactivated?: boolean;
   }
 }

@@ -38,6 +38,36 @@ export async function getCountriesWithProcessCounts() {
   });
 }
 
+export type CountryFilterOption = {
+  iso2Code: string;
+  name: string;
+  visaListings: { id: string; processName: string }[];
+};
+
+/**
+ * Slim country + visa listing tree for inbox filters.
+ * Includes disabled countries so older applications stay selectable.
+ */
+export async function getCountryFilterOptions(): Promise<CountryFilterOption[]> {
+  const rows = await db.query.countries.findMany({
+    columns: { iso2Code: true, name: true },
+    with: {
+      visaListings: {
+        columns: { id: true, processName: true },
+      },
+    },
+    orderBy: [countries.name],
+  });
+
+  return rows.map((row) => ({
+    iso2Code: row.iso2Code,
+    name: row.name,
+    visaListings: [...row.visaListings].sort((a, b) =>
+      a.processName.localeCompare(b.processName)
+    ),
+  }));
+}
+
 /**
  * Get single country with all related data
  */

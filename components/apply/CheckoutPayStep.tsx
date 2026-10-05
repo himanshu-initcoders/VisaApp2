@@ -11,6 +11,12 @@ import {
   collectIdbFilesForSubmit,
 } from '@/lib/apply/collectSubmitFiles';
 import { submitApplication } from '@/lib/apply/submitApplication';
+import {
+  createVisaCheckoutOrder,
+  quoteVisaCheckout,
+  verifyVisaCheckout,
+} from '@/lib/payments/actions';
+import { formatInrFromPaise } from '@/lib/payments/money';
 import { cn } from '@/lib/utils';
 
 interface CheckoutPayStepProps {
@@ -23,6 +29,35 @@ interface CheckoutPayStepProps {
   onDraftRestored?: () => void;
 }
 
+interface CheckoutQuote {
+  amountPaise: number;
+  free: boolean;
+  governmentFeePaise: number;
+  serviceFeePaise: number;
+  gstFeePaise: number;
+  travellerCount: number;
+}
+
+interface RazorpaySuccess {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+}
+
+interface RazorpayCheckout {
+  open: () => void;
+  on: (
+    event: 'payment.failed',
+    handler: (response: { error?: { description?: string } }) => void
+  ) => void;
+}
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => RazorpayCheckout;
+  }
+}
+
 function newSubmitId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -31,6 +66,29 @@ function newSubmitId(): string {
     const r = (Math.random() * 16) | 0;
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
+  });
+}
+
+function loadRazorpayScript(): Promise<boolean> {
+  if (typeof window === 'undefined') return Promise.resolve(false);
+  if (window.Razorpay) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+    );
+    if (existing) {
+      existing.addEventListener('load', () => resolve(true), { once: true });
+      existing.addEventListener('error', () => resolve(false), { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
   });
 }
 
@@ -47,6 +105,8 @@ export function CheckoutPayStep({
   const isAuthed = status === 'authenticated' && Boolean(session?.user?.id);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [quoting, setQuoting] = useState(false);
+  const [quote, setQuote] = useState<CheckoutQuote | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
@@ -77,8 +137,52 @@ export function CheckoutPayStep({
     };
   }, [isAuthed, listingId, countryCode, onDraftRestored]);
 
-  const handleMockPay = async () => {
-    if (!isAuthed || submitting) return;
+  useEffect(() => {
+    if (!isAuthed || filledCount < 1) return;
+    let cancelled = false;
+
+    async function run() {
+      setQuoting(true);
+      const draft = readApplyDraft(listingId);
+      const travellerCount = draft?.travellers?.length || filledCount;
+      const result = await quoteVisaCheckout({
+        listingId,
+        priceOptionId: draft?.departure?.priceOption ?? null,
+        travellerCount,
+      });
+      if (cancelled) return;
+      if (!result.success) {
+        setQuote(null);
+        setError(result.error);
+      } else {
+        setQuote({
+          amountPaise: result.amountPaise,
+          free: result.free,
+          governmentFeePaise: result.governmentFeePaise,
+          serviceFeePaise: result.serviceFeePaise,
+          gstFeePaise: result.gstFeePaise,
+          travellerCount: result.travellerCount,
+        });
+        setError(null);
+      }
+      setQuoting(false);
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthed, listingId, filledCount]);
+
+  const finishSubmitted = async (applicationId: string) => {
+    await clearLocalDraftAfterSubmit(listingId);
+    setSuccessId(applicationId);
+    setSubmitting(false);
+    router.push(`/dashboard?submitted=${applicationId}`);
+  };
+
+  const handlePay = async () => {
+    if (!isAuthed || submitting || successId) return;
     setError(null);
     setSubmitting(true);
 
@@ -86,6 +190,7 @@ export function CheckoutPayStep({
       if (!submitIdRef.current) {
         submitIdRef.current = newSubmitId();
       }
+      const submitId = submitIdRef.current;
 
       const draft = readApplyDraft(listingId);
       if (!draft || !draft.travellers?.length) {
@@ -94,45 +199,164 @@ export function CheckoutPayStep({
         return;
       }
 
-      const files = await collectIdbFilesForSubmit(listingId, draft.travellers);
+      const travellers = draft.travellers.map((t) => ({
+        id: t.id,
+        name: t.name,
+        passportData: (t.passportData as unknown as Record<string, unknown>) ?? null,
+        tripDetails: (t.tripDetails as unknown as Record<string, unknown>) ?? null,
+        documents: (t.documents ?? []).map((d) => ({
+          key: d.key,
+          name: d.name,
+          mimeType: d.mimeType,
+          size: d.size,
+        })),
+        passportUploaded: t.passportUploaded,
+        photoUploaded: t.photoUploaded,
+        applicationComplete: t.applicationComplete,
+      }));
 
-      const result = await submitApplication({
-        submitId: submitIdRef.current,
+      const files = await collectIdbFilesForSubmit(listingId, draft.travellers);
+      const priceOptionId = draft.departure?.priceOption ?? null;
+
+      const created = await createVisaCheckoutOrder({
+        submitId,
         listingId,
         countryCode,
-        travellers: draft.travellers.map((t) => ({
-          id: t.id,
-          name: t.name,
-          passportData: (t.passportData as unknown as Record<string, unknown>) ?? null,
-          tripDetails: (t.tripDetails as unknown as Record<string, unknown>) ?? null,
-          documents: (t.documents ?? []).map((d) => ({
-            key: d.key,
-            name: d.name,
-            mimeType: d.mimeType,
-            size: d.size,
-          })),
-          passportUploaded: t.passportUploaded,
-          photoUploaded: t.photoUploaded,
-          applicationComplete: t.applicationComplete,
-        })),
-        files,
+        priceOptionId,
+        travellers,
       });
 
-      if (!result.success) {
-        setError(result.error);
+      if (!created.success) {
+        setError(created.error);
         setSubmitting(false);
         return;
       }
 
-      await clearLocalDraftAfterSubmit(listingId);
-      setSuccessId(result.applicationId);
-      setSubmitting(false);
-      router.push(`/dashboard?submitted=${result.applicationId}`);
+      if (created.kind === 'already_submitted') {
+        await finishSubmitted(created.applicationId);
+        return;
+      }
+
+      if (created.kind === 'free') {
+        const result = await submitApplication({
+          submitId,
+          listingId,
+          countryCode,
+          priceOptionId,
+          travellers,
+          files,
+        });
+        if (!result.success) {
+          setError(result.error);
+          setSubmitting(false);
+          return;
+        }
+        await finishSubmitted(result.applicationId);
+        return;
+      }
+
+      if (created.kind === 'resume') {
+        const result = await verifyVisaCheckout({
+          submitId,
+          listingId,
+          countryCode,
+          priceOptionId,
+          travellers,
+          files,
+          razorpayOrderId: created.orderId,
+        });
+        if (!result.success) {
+          setError(result.error);
+          setSubmitting(false);
+          return;
+        }
+        await finishSubmitted(result.applicationId);
+        return;
+      }
+
+      const scriptReady = await loadRazorpayScript();
+      if (!scriptReady || !window.Razorpay) {
+        setError('Could not load Razorpay. Check your connection and try again.');
+        setSubmitting(false);
+        return;
+      }
+
+      let checkoutFinished = false;
+      const razorpay = new window.Razorpay({
+        key: created.keyId,
+        amount: created.amount,
+        currency: created.currency,
+        name: 'Viserv',
+        description: `Visa for ${countryName}`,
+        order_id: created.orderId,
+        prefill: session?.user?.phone
+          ? { contact: `+91${session.user.phone}` }
+          : undefined,
+        theme: { color: '#08304c' },
+        handler: (response: RazorpaySuccess) => {
+          checkoutFinished = true;
+          void (async () => {
+            const result = await verifyVisaCheckout({
+              submitId,
+              listingId,
+              countryCode,
+              priceOptionId,
+              travellers,
+              files,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            });
+            if (!result.success) {
+              setError(
+                result.error ||
+                  'Payment received, but the application was not submitted. Try again.'
+              );
+              setSubmitting(false);
+              return;
+            }
+            await finishSubmitted(result.applicationId);
+          })();
+        },
+        modal: {
+          ondismiss: () => {
+            if (!checkoutFinished) setSubmitting(false);
+          },
+        },
+      });
+
+      razorpay.on('payment.failed', (response) => {
+        checkoutFinished = true;
+        setError(
+          response.error?.description ||
+            'Payment failed. You have not been charged, or the charge did not complete.'
+        );
+        setSubmitting(false);
+      });
+
+      razorpay.open();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Submit failed');
+      setError(err instanceof Error ? err.message : 'Payment failed');
       setSubmitting(false);
     }
   };
+
+  const totalLabel = quote ? formatInrFromPaise(quote.amountPaise) : null;
+  const payLabel = !isAuthed
+    ? 'Login required to pay'
+    : submitting
+      ? quote?.free
+        ? 'Submitting…'
+        : 'Processing…'
+      : successId
+        ? 'Submitted'
+        : quoting
+          ? 'Calculating fee…'
+          : quote?.free
+            ? 'Submit application'
+            : quote
+              ? `Pay ${totalLabel} & submit`
+              : 'Pay & submit';
 
   return (
     <section className="mx-auto max-w-xl pt-8 sm:pt-12">
@@ -183,9 +407,45 @@ export function CheckoutPayStep({
             aria-hidden
           />
         )}
-        <p className="text-sm text-slate-helper">
-          Mock payment submits your application (no real charge).
-        </p>
+        {quoting && (
+          <p className="text-sm text-slate-helper">Calculating fee…</p>
+        )}
+        {quote && totalLabel && (
+          <div className="space-y-2 text-sm text-portrait-ink">
+            <p className="font-basier text-3xl">{totalLabel}</p>
+            <p className="text-slate-helper">
+              {quote.free
+                ? 'No payment is due. Submitting sends your application.'
+                : `Government, service, and GST for ${quote.travellerCount} traveller${quote.travellerCount === 1 ? '' : 's'}.`}
+            </p>
+            {!quote.free && (
+              <dl className="mx-auto mt-3 max-w-xs space-y-1 text-left text-xs text-slate-helper">
+                <div className="flex justify-between gap-4">
+                  <dt>Government fee</dt>
+                  <dd>
+                    {formatInrFromPaise(
+                      quote.governmentFeePaise * quote.travellerCount
+                    )}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Service fee</dt>
+                  <dd>
+                    {formatInrFromPaise(
+                      quote.serviceFeePaise * quote.travellerCount
+                    )}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>GST</dt>
+                  <dd>
+                    {formatInrFromPaise(quote.gstFeePaise * quote.travellerCount)}
+                  </dd>
+                </div>
+              </dl>
+            )}
+          </div>
+        )}
         {error && (
           <p className="mt-3 text-sm text-red-600" role="alert">
             {error}
@@ -198,24 +458,18 @@ export function CheckoutPayStep({
         )}
         <button
           type="button"
-          disabled={!isAuthed || submitting || Boolean(successId)}
+          disabled={!isAuthed || submitting || quoting || Boolean(successId) || !quote}
           className={cn(
             'mt-4 inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-medium text-white transition-opacity',
-            isAuthed && !submitting
+            isAuthed && !submitting && quote
               ? 'bg-[#3b82f6] hover:opacity-90'
               : 'cursor-not-allowed bg-slate-helper/40'
           )}
           onClick={() => {
-            void handleMockPay();
+            void handlePay();
           }}
         >
-          {!isAuthed
-            ? 'Login required to pay'
-            : submitting
-              ? 'Submitting…'
-              : successId
-                ? 'Submitted'
-                : 'Mock pay & submit'}
+          {payLabel}
         </button>
       </div>
 

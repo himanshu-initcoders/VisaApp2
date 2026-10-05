@@ -1,8 +1,8 @@
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
-import { visaApplications, passportServices } from '@/lib/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { visaApplications, passportServices, payments } from '@/lib/db/schema';
+import { and, eq, desc } from 'drizzle-orm';
 import {
   Card,
   CardHeader,
@@ -10,9 +10,10 @@ import {
   CardDescription,
   CardContent,
   Button,
-  Badge,
-  getStatusVariant,
 } from '@/components/ui';
+import { ApplicationStatusCell } from '@/components/shared/ApplicationStatusCell';
+import { PaymentHistory } from '@/components/applications/PaymentHistory';
+import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
 import Link from 'next/link';
 
 /**
@@ -62,20 +63,59 @@ export default async function DashboardPage({
       ['approved', 'completed'].includes(a.status)
     ).length;
 
+  const [summaries, paymentRows] = await Promise.all([
+    loadTravellerSummaries(visaApps.map((app) => app.id)),
+    db
+      .select({
+        id: payments.id,
+        amount: payments.amount,
+        currency: payments.currency,
+        status: payments.status,
+        paymentMethod: payments.paymentMethod,
+        razorpayPaymentId: payments.razorpayPaymentId,
+        razorpayOrderId: payments.razorpayOrderId,
+        createdAt: payments.createdAt,
+        completedAt: payments.completedAt,
+        applicationId: payments.applicationId,
+        applicationType: payments.applicationType,
+        country: visaApplications.country,
+        countryCode: visaApplications.countryCode,
+        visaType: visaApplications.visaType,
+      })
+      .from(payments)
+      .leftJoin(
+        visaApplications,
+        and(
+          eq(payments.applicationId, visaApplications.id),
+          eq(visaApplications.userId, session.user.id)
+        )
+      )
+      .where(eq(payments.userId, session.user.id))
+      .orderBy(desc(payments.createdAt))
+      .limit(10),
+  ]);
+
   const recent = [
-    ...visaApps.map((app) => ({
-      id: app.id,
-      kind: 'visa' as const,
-      title: `${app.country || app.countryCode || 'Visa'} · ${app.visaType}`,
-      status: app.status,
-      date: app.submittedAt || app.createdAt,
-      href: `/applications`,
-    })),
+    ...visaApps.map((app) => {
+      const summary = summaries.get(app.id);
+      return {
+        id: app.id,
+        kind: 'visa' as const,
+        title: `${app.country || app.countryCode || 'Visa'} · ${app.visaType}`,
+        status: app.status,
+        travellerCount: summary?.travellerCount ?? 0,
+        approvedTravellerCount: summary?.approvedCount ?? 0,
+        date: app.submittedAt || app.createdAt,
+        href: `/applications`,
+      };
+    }),
     ...passportApps.map((app) => ({
       id: app.id,
       kind: 'passport' as const,
       title: `Passport · ${app.serviceType}`,
       status: app.status,
+      travellerCount: 0,
+      approvedTravellerCount: 0,
       date: app.submittedAt || app.createdAt,
       href: `/applications`,
     })),
@@ -232,14 +272,56 @@ export default async function DashboardPage({
                       })}
                     </p>
                   </div>
-                  <Badge variant={getStatusVariant(item.status)}>
-                    {item.status.replace(/_/g, ' ')}
-                  </Badge>
+                  <ApplicationStatusCell
+                    status={item.status}
+                    travellerCount={item.travellerCount}
+                    approvedTravellerCount={item.approvedTravellerCount}
+                    readable
+                  />
                 </Link>
               </li>
             ))}
           </ul>
         )}
+      </section>
+
+      <section>
+        <div className="mb-4">
+          <h2 className="font-basier text-2xl text-portrait-ink">
+            Payment history
+          </h2>
+          <p className="mt-1 font-switzer text-sm text-slate-helper">
+            Charges for your visa applications
+          </p>
+        </div>
+        <PaymentHistory
+          hideTitle
+          payments={paymentRows.map((payment) => {
+            const place = payment.country || payment.countryCode;
+            const label = place
+              ? `${place}${payment.visaType ? ` · ${payment.visaType}` : ''}`
+              : payment.applicationType === 'visa'
+                ? 'Visa payment'
+                : 'Payment';
+            const href =
+              payment.applicationId && payment.applicationType === 'visa'
+                ? `/applications/visa/${payment.applicationId}`
+                : null;
+            return {
+              id: payment.id,
+              amount: payment.amount,
+              currency: payment.currency,
+              status: payment.status,
+              paymentMethod: payment.paymentMethod,
+              razorpayPaymentId: payment.razorpayPaymentId,
+              razorpayOrderId: payment.razorpayOrderId,
+              createdAt: payment.createdAt,
+              completedAt: payment.completedAt,
+              label,
+              href,
+            };
+          })}
+        />
       </section>
     </div>
   );

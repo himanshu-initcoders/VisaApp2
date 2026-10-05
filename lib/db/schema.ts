@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   pgTable,
   uuid,
@@ -29,6 +30,8 @@ export const users = pgTable(
     emailVerified: timestamp('email_verified'),
     phoneVerified: timestamp('phone_verified'),
     role: varchar('role', { length: 50 }).notNull().default('user'), // user, admin, reviewer
+    /** Set when an admin deactivates the account. Null means the account can sign in. */
+    deactivatedAt: timestamp('deactivated_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -103,7 +106,8 @@ export const visaApplications = pgTable(
     country: varchar('country', { length: 100 }),
 
     visaType: varchar('visa_type', { length: 100 }).notNull(), // tourist, business, student, etc.
-    status: varchar('status', { length: 50 }).notNull().default('draft'), // draft, submitted, under_review, approved, rejected
+    /** Case rollup of traveller visa statuses. */
+    status: varchar('status', { length: 50 }).notNull().default('draft'), // draft, submitted, under_review, approved, rejected, partially_approved
     personalInfo: jsonb('personal_info'), // stores form data
     travelInfo: jsonb('travel_info'), // travel dates, purpose, etc.
     employmentInfo: jsonb('employment_info'), // work details if needed
@@ -122,6 +126,10 @@ export const visaApplications = pgTable(
     submitId: uuid('submit_id'),
 
     paymentId: uuid('payment_id'),
+    /** Staff reviewer assigned to this visa application. */
+    assignedReviewerId: uuid('assigned_reviewer_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     submittedAt: timestamp('submitted_at'),
     reviewedAt: timestamp('reviewed_at'),
     completedAt: timestamp('completed_at'),
@@ -136,6 +144,41 @@ export const visaApplications = pgTable(
     ),
     index('visa_applications_country_code_idx').on(table.countryCode),
     index('visa_applications_applicant_phone_idx').on(table.applicantPhone),
+    index('visa_applications_assigned_reviewer_id_idx').on(
+      table.assignedReviewerId
+    ),
+  ]
+);
+
+/**
+ * One visa outcome per traveller on a shared application.
+ * The JSON `travellers` blob stays the form payload; this table is the status source.
+ */
+export const visaApplicationTravellers = pgTable(
+  'visa_application_travellers',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    applicationId: uuid('application_id')
+      .references(() => visaApplications.id, { onDelete: 'cascade' })
+      .notNull(),
+    /** Matches the JSON passengerId (or `legacy-{applicationId}` / `traveller-{index}`). */
+    passengerId: varchar('passenger_id', { length: 100 }).notNull(),
+    name: varchar('name', { length: 255 }).notNull(),
+    status: varchar('status', { length: 50 }).notNull().default('submitted'),
+    reviewedAt: timestamp('reviewed_at'),
+    completedAt: timestamp('completed_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('visa_application_travellers_app_passenger_unique').on(
+      table.applicationId,
+      table.passengerId
+    ),
+    index('visa_application_travellers_application_id_idx').on(
+      table.applicationId
+    ),
+    index('visa_application_travellers_status_idx').on(table.status),
   ]
 );
 
@@ -179,38 +222,72 @@ export const documents = pgTable('documents', {
 });
 
 /**
- * Payments table
+ * Payments table.
+ * application_id stays null until the visa application row exists.
+ * amount is paise.
  */
-export const payments = pgTable('payments', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id')
-    .references(() => users.id)
-    .notNull(),
-  applicationId: uuid('application_id').notNull(),
-  applicationType: varchar('application_type', { length: 50 }).notNull(), // 'visa' or 'passport'
-  amount: integer('amount').notNull(), // in paise (smallest currency unit)
-  currency: varchar('currency', { length: 10 }).notNull().default('INR'),
-  status: varchar('status', { length: 50 }).notNull().default('pending'), // pending, completed, failed, refunded
-  paymentMethod: varchar('payment_method', { length: 50 }), // upi, card, netbanking
-  transactionId: varchar('transaction_id', { length: 255 }),
-  metadata: jsonb('metadata'), // payment gateway response
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  completedAt: timestamp('completed_at'),
-});
+export const payments = pgTable(
+  'payments',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id)
+      .notNull(),
+    applicationId: uuid('application_id'),
+    applicationType: varchar('application_type', { length: 50 }).notNull(), // 'visa' or 'passport'
+    amount: integer('amount').notNull(), // in paise (smallest currency unit)
+    currency: varchar('currency', { length: 10 }).notNull().default('INR'),
+    status: varchar('status', { length: 50 }).notNull().default('pending'), // pending, completed, failed, refunded
+    paymentMethod: varchar('payment_method', { length: 50 }), // upi, card, netbanking
+    transactionId: varchar('transaction_id', { length: 255 }),
+    metadata: jsonb('metadata'), // payment gateway response
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    completedAt: timestamp('completed_at'),
+    razorpayOrderId: varchar('razorpay_order_id', { length: 255 }),
+    razorpayPaymentId: varchar('razorpay_payment_id', { length: 255 }),
+    /** Same client idempotency key as visa_applications.submit_id */
+    submitId: uuid('submit_id'),
+    priceOptionId: uuid('price_option_id'),
+    governmentFeePaise: integer('government_fee_paise'),
+    serviceFeePaise: integer('service_fee_paise'),
+    gstFeePaise: integer('gst_fee_paise'),
+    travellerCount: integer('traveller_count'),
+  },
+  (table) => [
+    uniqueIndex('payments_razorpay_order_id_unique').on(table.razorpayOrderId),
+    uniqueIndex('payments_razorpay_payment_id_unique').on(table.razorpayPaymentId),
+    uniqueIndex('payments_one_pending_per_submit')
+      .on(table.submitId)
+      .where(sql`${table.status} = 'pending'`),
+    index('payments_user_created_at_idx').on(table.userId, table.createdAt),
+    index('payments_application_id_idx').on(table.applicationId),
+    index('payments_submit_id_idx').on(table.submitId),
+  ]
+);
 
 /**
  * Application Status History - tracks status changes
  */
-export const statusHistory = pgTable('status_history', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  applicationId: uuid('application_id').notNull(),
-  applicationType: varchar('application_type', { length: 50 }).notNull(),
-  oldStatus: varchar('old_status', { length: 50 }),
-  newStatus: varchar('new_status', { length: 50 }).notNull(),
-  changedBy: uuid('changed_by').references(() => users.id),
-  notes: text('notes'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const statusHistory = pgTable(
+  'status_history',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    applicationId: uuid('application_id').notNull(),
+    applicationType: varchar('application_type', { length: 50 }).notNull(),
+    /** Null for passport and for visa events that apply to the whole file. */
+    travellerId: uuid('traveller_id').references(() => visaApplicationTravellers.id, {
+      onDelete: 'set null',
+    }),
+    oldStatus: varchar('old_status', { length: 50 }),
+    newStatus: varchar('new_status', { length: 50 }).notNull(),
+    changedBy: uuid('changed_by').references(() => users.id),
+    notes: text('notes'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('status_history_traveller_id_idx').on(table.travellerId),
+  ]
+);
 
 /**
  * Append-only admin call logs (Phase 3).
@@ -255,6 +332,10 @@ export type NewUser = typeof users.$inferInsert;
 
 export type VisaApplication = typeof visaApplications.$inferSelect;
 export type NewVisaApplication = typeof visaApplications.$inferInsert;
+
+export type VisaApplicationTraveller = typeof visaApplicationTravellers.$inferSelect;
+export type NewVisaApplicationTraveller =
+  typeof visaApplicationTravellers.$inferInsert;
 
 export type PassportService = typeof passportServices.$inferSelect;
 export type NewPassportService = typeof passportServices.$inferInsert;

@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { ProcessTypeBadge } from './ProcessTypeBadge';
+import { ArrowRight } from 'lucide-react';
 
 interface ProcessWithCountry {
   id: string;
@@ -157,7 +158,7 @@ export function ProcessesTable({ processes }: ProcessesTableProps) {
                       'text-portrait-ink hover:bg-mint-wash'
                     )}
                   >
-                    View Details →
+                    <ArrowRight className="w-4 h-4" />
                   </Link>
                 </td>
               </tr>

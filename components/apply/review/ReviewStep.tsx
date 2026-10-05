@@ -13,17 +13,23 @@ import type {
   ApplyDocumentSlot,
   ApplyTripQuestion,
 } from '@/lib/apply/applicationForm';
+import type { TravellerProfile } from '@/lib/apply/travellerProfiles';
 import type { ApplyTraveller } from '@/lib/apply/types';
 
 interface ReviewStepProps {
   countryName: string;
   travellers: ApplyTraveller[];
   canAdd: boolean;
+  profiles?: TravellerProfile[];
+  allProfilesAdded?: boolean;
+  showEmptyProfiles?: boolean;
+  selectingProfile?: boolean;
   showGeneralInfo?: boolean;
   showTripDetails?: boolean;
   extraQuestions?: ApplyTripQuestion[];
   documentSlots?: ApplyDocumentSlot[];
   onAddTraveller: (name: string) => void;
+  onSelectProfile?: (profile: TravellerProfile) => void;
   onRemoveTraveller: (id: string) => void;
   onUploadPassport: (id: string, file: File) => void;
   onFillApplication: (id: string) => void;
@@ -35,11 +41,16 @@ export function ReviewStep({
   countryName,
   travellers,
   canAdd,
+  profiles = [],
+  allProfilesAdded = false,
+  showEmptyProfiles = false,
+  selectingProfile = false,
   showGeneralInfo = true,
   showTripDetails = true,
   extraQuestions = [],
   documentSlots = [],
   onAddTraveller,
+  onSelectProfile,
   onRemoveTraveller,
   onUploadPassport,
   onFillApplication,
@@ -81,8 +92,13 @@ export function ReviewStep({
           travellers={travellers}
           selectedId={selected?.id ?? null}
           canAdd={canAdd}
+          profiles={profiles}
+          allProfilesAdded={allProfilesAdded}
+          showEmptyProfiles={showEmptyProfiles}
+          selectingProfile={selectingProfile}
           onSelect={(id) => setSelectedId(id)}
           onAdd={onAddTraveller}
+          onSelectProfile={onSelectProfile}
           onRemove={onRemoveTraveller}
         />
 

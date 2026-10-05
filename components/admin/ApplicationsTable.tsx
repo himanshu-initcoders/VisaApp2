@@ -1,5 +1,8 @@
 import Link from 'next/link';
-import { Badge, getStatusVariant, Card } from '@/components/ui';
+import { ArrowRight } from 'lucide-react';
+import { Card } from '@/components/ui';
+import { ApplicationStatusCell } from '@/components/shared/ApplicationStatusCell';
+import { AssignReviewerButton } from '@/components/admin/AssignReviewerDialog';
 import type { ApplicationListItem } from '@/types/admin';
 
 /**
@@ -14,9 +17,14 @@ import type { ApplicationListItem } from '@/types/admin';
 
 export interface ApplicationsTableProps {
   applications: ApplicationListItem[];
+  /** Admins can assign a reviewer from visa rows. */
+  canAssign?: boolean;
 }
 
-export function ApplicationsTable({ applications }: ApplicationsTableProps) {
+export function ApplicationsTable({
+  applications,
+  canAssign = false,
+}: ApplicationsTableProps) {
   if (applications.length === 0) {
     return (
       <Card className="py-12">
@@ -123,9 +131,11 @@ export function ApplicationsTable({ applications }: ApplicationsTableProps) {
 
                 {/* Status */}
                 <td className="px-6 py-4">
-                  <Badge variant={getStatusVariant(app.status)}>
-                    {app.status}
-                  </Badge>
+                  <ApplicationStatusCell
+                    status={app.status}
+                    travellerCount={app.travellerCount}
+                    approvedTravellerCount={app.approvedTravellerCount}
+                  />
                 </td>
 
                 {/* Submitted date */}
@@ -143,12 +153,24 @@ export function ApplicationsTable({ applications }: ApplicationsTableProps) {
 
                 {/* Actions */}
                 <td className="px-6 py-4">
-                  <Link
-                    href={`/admin/applications/${app.type}/${app.id}`}
-                    className="font-switzer text-sm text-nautical-teal hover:text-portrait-ink font-medium transition-colors"
-                  >
-                    View Details →
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    {canAssign && app.type === 'visa' && (
+                      <AssignReviewerButton
+                        applicationId={app.id}
+                        assignedReviewerId={app.assignedReviewerId}
+                        assignedReviewerName={app.assignedReviewerName}
+                        iconOnly
+                      />
+                    )}
+                    <Link
+                      href={`/admin/applications/${app.type}/${app.id}`}
+                      aria-label="View details"
+                      title="View details"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] border border-ash text-portrait-ink transition-colors hover:bg-sky-wash"
+                    >
+                      <ArrowRight className="h-4 w-4" aria-hidden />
+                    </Link>
+                  </div>
                 </td>
               </tr>
             ))}

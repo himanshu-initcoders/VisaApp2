@@ -1,10 +1,5 @@
-'use client';
-
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Card, Badge, getRoleVariant, Button } from '@/components/ui';
-import { UserRoleModal } from '@/components/admin/UserRoleModal';
+import { Card, Badge, getRoleVariant } from '@/components/ui';
+import { DetailArrowLink } from '@/components/admin/DetailArrowLink';
 import type { UserWithStats } from '@/types/admin';
 
 /**
@@ -13,8 +8,7 @@ import type { UserWithStats } from '@/types/admin';
  * Displays all users with:
  * - Name, Email, Role, Registration Date
  * - Application counts
- * - Change Role action (admin only)
- * - View Applications link
+ * - Arrow to the user detail page
  */
 
 interface UsersTableProps {
@@ -22,14 +16,6 @@ interface UsersTableProps {
 }
 
 export function UsersTable({ users }: UsersTableProps) {
-  const router = useRouter();
-  const [selectedUser, setSelectedUser] = useState<UserWithStats | null>(null);
-
-  const handleRoleUpdateSuccess = () => {
-    setSelectedUser(null);
-    router.refresh();
-  };
-
   if (users.length === 0) {
     return (
       <Card className="py-12">
@@ -56,8 +42,7 @@ export function UsersTable({ users }: UsersTableProps) {
   }
 
   return (
-    <>
-      <Card className="shadow-sm">
+    <Card className="shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -145,43 +130,13 @@ export function UsersTable({ users }: UsersTableProps) {
 
                   {/* Actions */}
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      {user.totalApplicationsCount > 0 && (
-                        <Link
-                          href={`/admin/applications?userId=${user.id}`}
-                          className="font-switzer text-xs text-nautical-teal hover:text-portrait-ink transition-colors"
-                        >
-                          View Apps
-                        </Link>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedUser(user)}
-                        className="text-xs"
-                      >
-                        Change Role
-                      </Button>
-                    </div>
+                    <DetailArrowLink href={`/admin/users/${user.id}`} />
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </Card>
-
-      {/* User Role Modal */}
-      {selectedUser && (
-        <UserRoleModal
-          isOpen={true}
-          onClose={() => setSelectedUser(null)}
-          userId={selectedUser.id}
-          userName={selectedUser.name}
-          currentRole={selectedUser.role}
-          onSuccess={handleRoleUpdateSuccess}
-        />
-      )}
-    </>
+    </Card>
   );
 }

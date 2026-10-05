@@ -1,6 +1,7 @@
 import { StatsCard } from '@/components/admin/StatsCard';
-import { Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui';
-import { getStatusVariant } from '@/components/ui/Badge';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
+import { ApplicationStatusCell } from '@/components/shared/ApplicationStatusCell';
+import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
 import { db } from '@/lib/db';
 import { visaApplications, passportServices, documents } from '@/lib/db/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
@@ -106,6 +107,19 @@ export default async function AdminDashboardPage() {
         .slice(0, 10);
     }),
   ]);
+
+  const travellerSummaries = await loadTravellerSummaries(
+    recentApplications.filter((app) => app.type === 'visa').map((app) => app.id)
+  );
+  const recentWithSummary = recentApplications.map((app) => {
+    const summary =
+      app.type === 'visa' ? travellerSummaries.get(app.id) : undefined;
+    return {
+      ...app,
+      travellerCount: summary?.travellerCount ?? 0,
+      approvedTravellerCount: summary?.approvedCount ?? 0,
+    };
+  });
 
   const totalApplications = totalVisaApps + totalPassportApps;
 
@@ -213,12 +227,12 @@ export default async function AdminDashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {recentApplications.length === 0 ? (
+            {recentWithSummary.length === 0 ? (
               <p className="font-switzer text-slate-helper text-center py-8">
                 No applications yet
               </p>
             ) : (
-              recentApplications.map((app) => (
+              recentWithSummary.map((app) => (
                 <Link
                   key={`${app.type}-${app.id}`}
                   href={`/admin/applications/${app.type}/${app.id}`}
@@ -239,9 +253,11 @@ export default async function AdminDashboardPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Badge variant={getStatusVariant(app.status)}>
-                      {app.status}
-                    </Badge>
+                    <ApplicationStatusCell
+                      status={app.status}
+                      travellerCount={app.travellerCount}
+                      approvedTravellerCount={app.approvedTravellerCount}
+                    />
                     <span className="font-switzer text-xs text-slate-helper uppercase">
                       {app.type}
                     </span>

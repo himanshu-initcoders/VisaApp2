@@ -7,6 +7,8 @@ import {
   CardTitle,
   CardContent,
   InitialTabs,
+  Badge,
+  getStatusVariant,
 } from '@/components/ui';
 import type {
   ApplyFormConfig,
@@ -21,6 +23,9 @@ import {
 export type AdminStoredTraveller = {
   passengerId?: string;
   name?: string;
+  /** visa_application_travellers.id */
+  travellerRowId?: string;
+  status?: string;
   passportData?: Record<string, unknown> | null;
   tripDetails?: Record<string, unknown> | null;
   documents?: Array<{
@@ -132,10 +137,17 @@ export function TravellersSection({
 
       <Card>
         <CardHeader>
-          <CardTitle>
-            Traveller {index + 1}
-            {traveller.name ? `: ${traveller.name}` : ''}
-          </CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle>
+              Traveller {index + 1}
+              {traveller.name ? `: ${traveller.name}` : ''}
+            </CardTitle>
+            {traveller.status ? (
+              <Badge variant={getStatusVariant(traveller.status)}>
+                {traveller.status.replace(/_/g, ' ')}
+              </Badge>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div>

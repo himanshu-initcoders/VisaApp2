@@ -18,6 +18,8 @@ interface StatusUpdateModalProps {
   onClose: () => void;
   applicationId: string;
   applicationType: 'visa' | 'passport';
+  travellerId?: string;
+  travellerName?: string | null;
   currentStatus: string;
   onSuccess?: () => void;
 }
@@ -43,6 +45,8 @@ export function StatusUpdateModal({
   onClose,
   applicationId,
   applicationType,
+  travellerId,
+  travellerName,
   currentStatus,
   onSuccess,
 }: StatusUpdateModalProps) {
@@ -110,6 +114,7 @@ export function StatusUpdateModal({
       const result = await updateApplicationStatus({
         applicationId,
         applicationType,
+        travellerId,
         newStatus,
         notes: notes.trim() || undefined,
       });
@@ -148,12 +153,19 @@ export function StatusUpdateModal({
           className="pointer-events-auto relative w-full max-w-md rounded-[24px] bg-white p-6 shadow-elevated"
         >
           <div className="mb-4 flex items-center justify-between">
-            <h2
-              id="status-update-title"
-              className="font-basier text-[31px] text-portrait-ink"
-            >
-              Update Status
-            </h2>
+            <div>
+              <h2
+                id="status-update-title"
+                className="font-basier text-[31px] text-portrait-ink"
+              >
+                Update Status
+              </h2>
+              {travellerName ? (
+                <p className="font-switzer text-sm text-slate-helper">
+                  {travellerName}
+                </p>
+              ) : null}
+            </div>
             <button
               type="button"
               onClick={onClose}

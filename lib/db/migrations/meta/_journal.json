@@ -57,6 +57,34 @@
       "when": 1790168000000,
       "tag": "0007_phase3_applications",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790757492582,
+      "tag": "0008_far_reavers",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790832970788,
+      "tag": "0009_charming_mister_fear",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791190828337,
+      "tag": "0010_traveller_visa_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791192377888,
+      "tag": "0011_razorpay_visa_payments",
+      "breakpoints": true
     }
   ]
 }

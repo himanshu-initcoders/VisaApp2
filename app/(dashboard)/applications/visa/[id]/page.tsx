@@ -12,6 +12,9 @@ import {
 } from '@/components/ui';
 import { TravellersSection } from '@/components/admin/TravellersSection';
 import { TravellerSelectionProvider } from '@/components/admin/TravellerSelectionContext';
+import { Timeline } from '@/components/admin/Timeline';
+import { PaymentHistory } from '@/components/applications/PaymentHistory';
+import { attachStatusToTravellers } from '@/lib/visa/caseStatus';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 import { ApplicationSidebar } from '@/components/dashboard/ApplicationSidebar';
 
@@ -80,11 +83,18 @@ export default async function UserVisaApplicationDetailPage({
   };
 
   const snapshot = (app.formSnapshot as ApplyFormConfig | null) ?? null;
-  const travellers: StoredTraveller[] = Array.isArray(app.travellers)
+  const storedTravellers: StoredTraveller[] = Array.isArray(app.travellers)
     ? app.travellers
     : [];
-
-  const isLegacy = travellers.length === 0;
+  const travellers = attachStatusToTravellers(
+    storedTravellers,
+    details.travellers
+  );
+  const isLegacy = storedTravellers.length === 0;
+  const fileHistory =
+    travellers.length > 1
+      ? details.statusHistory.filter((item) => item.travellerId == null)
+      : [];
   const applicantPhone = app.applicantPhone || details.user.phone;
 
   return (
@@ -151,6 +161,23 @@ export default async function UserVisaApplicationDetailPage({
                 </dl>
               </CardContent>
             </Card>
+
+            <PaymentHistory payments={details.payments} />
+
+            {fileHistory.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>File history</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="mb-4 font-switzer text-sm text-slate-helper">
+                    These updates were recorded for the whole application,
+                    before each traveller had a separate visa status.
+                  </p>
+                  <Timeline history={fileHistory} />
+                </CardContent>
+              </Card>
+            )}
 
             {!isLegacy && (
               <TravellersSection travellers={travellers} snapshot={snapshot} />

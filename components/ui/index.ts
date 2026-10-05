@@ -27,6 +27,14 @@ export type { BadgeProps } from './Badge';
 export { Select } from './Select';
 export type { SelectProps, SelectOption } from './Select';
 
+export { NestedMultiSelect } from './NestedMultiSelect';
+export type {
+  NestedMultiSelectProps,
+  NestedMultiSelectItem,
+  NestedMultiSelectChild,
+  NestedMultiSelectValue,
+} from './NestedMultiSelect';
+
 export { AnimatedTabs } from './AnimatedTabs';
 export type { AnimatedTabItem } from './AnimatedTabs';
 

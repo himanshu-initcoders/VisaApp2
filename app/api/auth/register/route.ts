@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
 import { db } from '@/lib/db';
+import { notifyUserWelcome } from '@/lib/email/notify';
 import { users } from '@/lib/db/schema';
 import { registerSchema } from '@/lib/validations/auth';
 import { eq } from 'drizzle-orm';
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
         phone: phone || null,
         passwordHash,
         role: 'user',
-        emailVerified: null, // Will be verified via email
+        emailVerified: null,
       })
       .returning({
         id: users.id,
@@ -72,14 +73,16 @@ export async function POST(request: NextRequest) {
         name: users.name,
       });
 
-    // TODO: Send verification email
-    // await sendVerificationEmail(newUser.email, verificationToken);
+    await notifyUserWelcome({
+      name: newUser.name,
+      email: newUser.email,
+    });
 
     return NextResponse.json(
       {
         success: true,
         user: newUser,
-        message: 'Account created successfully. Please check your email to verify your account.',
+        message: 'Account created successfully. Please check your email for a welcome message.',
       },
       { status: 201 }
     );

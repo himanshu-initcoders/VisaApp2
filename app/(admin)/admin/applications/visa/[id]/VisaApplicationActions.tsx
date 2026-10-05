@@ -8,6 +8,7 @@ import { NotesModal } from '@/components/admin/NotesModal';
 import { DocumentViewer } from '@/components/admin/DocumentViewer';
 import { Timeline } from '@/components/admin/Timeline';
 import { useTravellerSelectionOptional } from '@/components/admin/TravellerSelectionContext';
+import { historyForSelectedTraveller } from '@/lib/visa/caseStatus';
 import type { DocumentWithVerification, StatusHistoryItem } from '@/types/admin';
 
 /**
@@ -37,9 +38,21 @@ export function VisaApplicationActions({
     return selection.filterDocuments(documents);
   }, [documents, selection]);
 
+  const activeTraveller = selection?.activeTraveller ?? null;
+  const statusForUpdate = activeTraveller?.status || currentStatus;
+  const visibleHistory = useMemo(
+    () =>
+      historyForSelectedTraveller(
+        statusHistory,
+        activeTraveller?.travellerRowId,
+        selection?.travellers.length ?? 1
+      ),
+    [activeTraveller?.travellerRowId, selection?.travellers.length, statusHistory]
+  );
+
   const travellerLabel =
-    selection && selection.travellers.length > 1 && selection.activeTraveller
-      ? selection.activeTraveller.name?.trim() ||
+    selection && selection.travellers.length > 1 && activeTraveller
+      ? activeTraveller.name?.trim() ||
         `Traveller ${selection.activeTravellerIndex + 1}`
       : null;
 
@@ -51,13 +64,21 @@ export function VisaApplicationActions({
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Status Management</CardTitle>
+          <CardTitle>
+            Status Management
+            {travellerLabel ? (
+              <span className="mt-1 block font-switzer text-sm font-normal text-slate-helper">
+                {travellerLabel}
+              </span>
+            ) : null}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <Button
             variant="primary"
             className="w-full"
             onClick={() => setShowStatusModal(true)}
+            disabled={!activeTraveller?.travellerRowId}
           >
             Update Status
           </Button>
@@ -73,10 +94,17 @@ export function VisaApplicationActions({
 
       <Card>
         <CardHeader>
-          <CardTitle>Status History</CardTitle>
+          <CardTitle>
+            Status History
+            {travellerLabel ? (
+              <span className="mt-1 block font-switzer text-sm font-normal text-slate-helper">
+                {travellerLabel}
+              </span>
+            ) : null}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <Timeline history={statusHistory} />
+          <Timeline history={visibleHistory} />
         </CardContent>
       </Card>
 
@@ -104,7 +132,9 @@ export function VisaApplicationActions({
         onClose={() => setShowStatusModal(false)}
         applicationId={applicationId}
         applicationType="visa"
-        currentStatus={currentStatus}
+        travellerId={activeTraveller?.travellerRowId}
+        travellerName={travellerLabel}
+        currentStatus={statusForUpdate}
         onSuccess={handleSuccess}
       />
 

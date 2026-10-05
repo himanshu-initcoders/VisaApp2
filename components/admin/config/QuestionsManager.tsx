@@ -177,9 +177,9 @@ export function QuestionsManager({ processId, initialQuestions }: QuestionsManag
         <p className="text-sm text-slate-helper">
           {questions.length} question{questions.length !== 1 ? 's' : ''} configured
         </p>
-        <Button onClick={() => setShowAddModal(true)} variant="primary" size="md">
+        <Button onClick={() => setShowAddModal(true)} variant="primary" size="md" className="flex items-center">
           <Plus className="h-4 w-4 mr-2" />
-          Add Question
+           <span>Add Question</span>
         </Button>
       </div>
 

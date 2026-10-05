@@ -3,7 +3,9 @@ import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { visaApplications, passportServices } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
-import { Badge, Button, getStatusVariant } from '@/components/ui';
+import { Button } from '@/components/ui';
+import { ApplicationStatusCell } from '@/components/shared/ApplicationStatusCell';
+import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
 import Link from 'next/link';
 
 export default async function ApplicationsPage() {
@@ -23,19 +25,28 @@ export default async function ApplicationsPage() {
       .orderBy(desc(passportServices.createdAt)),
   ]);
 
+  const summaries = await loadTravellerSummaries(visaApps.map((app) => app.id));
+
   const rows = [
-    ...visaApps.map((app) => ({
-      id: app.id,
-      title: `${app.country || app.countryCode || 'Visa'} · ${app.visaType}`,
-      status: app.status,
-      date: app.submittedAt || app.createdAt,
-      kind: 'visa' as const,
-      href: `/applications/visa/${app.id}`,
-    })),
+    ...visaApps.map((app) => {
+      const summary = summaries.get(app.id);
+      return {
+        id: app.id,
+        title: `${app.country || app.countryCode || 'Visa'} · ${app.visaType}`,
+        status: app.status,
+        travellerCount: summary?.travellerCount ?? 0,
+        approvedTravellerCount: summary?.approvedCount ?? 0,
+        date: app.submittedAt || app.createdAt,
+        kind: 'visa' as const,
+        href: `/applications/visa/${app.id}`,
+      };
+    }),
     ...passportApps.map((app) => ({
       id: app.id,
       title: `Passport · ${app.serviceType}`,
       status: app.status,
+      travellerCount: 0,
+      approvedTravellerCount: 0,
       date: app.submittedAt || app.createdAt,
       kind: 'passport' as const,
       href: `/applications/passport/${app.id}`,
@@ -91,9 +102,12 @@ export default async function ApplicationsPage() {
                     })}
                   </p>
                 </div>
-                <Badge variant={getStatusVariant(row.status)}>
-                  {row.status.replace(/_/g, ' ')}
-                </Badge>
+                <ApplicationStatusCell
+                  status={row.status}
+                  travellerCount={row.travellerCount}
+                  approvedTravellerCount={row.approvedTravellerCount}
+                  readable
+                />
               </Link>
             </li>
           ))}

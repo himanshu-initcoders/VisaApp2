@@ -6,6 +6,7 @@ import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { normalizeIndianPhone } from '@/lib/auth/phone';
+import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { verifyOtpAndEnsureUser } from '@/lib/auth/otp';
 
 /**
@@ -52,6 +53,10 @@ export const authConfig: NextAuthConfig = {
             throw new Error('Please verify your email before logging in');
           }
 
+          if (user.deactivatedAt) {
+            throw new Error('This account has been deactivated');
+          }
+
           return {
             id: user.id,
             email: user.email,
@@ -93,6 +98,10 @@ export const authConfig: NextAuthConfig = {
 
           if (!user) return null;
 
+          if (user.deactivatedAt) {
+            throw new Error('This account has been deactivated');
+          }
+
           return {
             id: user.id,
             email: user.email,
@@ -121,7 +130,7 @@ export const authConfig: NextAuthConfig = {
   },
 
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
@@ -129,24 +138,33 @@ export const authConfig: NextAuthConfig = {
         token.phone = user.phone;
       }
 
-      // On session.update(): re-read allowlisted fields from DB only.
-      // Never trust client-supplied role, phone, or other sensitive values.
-      if (trigger === 'update' && token.id) {
-        const [row] = await db
-          .select({
-            name: users.name,
-            // Re-assert sensitive fields from DB so forged client payloads cannot escalate
-            role: users.role,
-            phone: users.phone,
-          })
-          .from(users)
-          .where(eq(users.id, token.id as string))
-          .limit(1);
+      // Node requests only. Middleware stays edge and must not open Postgres.
+      // Rebind a stale JWT id (account reseeded, same email) and refresh role from the DB.
+      if (process.env.NEXT_RUNTIME === 'nodejs' && token.email) {
+        const resolvedId = await resolveSessionUserId({
+          id: typeof token.id === 'string' ? token.id : null,
+          email: token.email,
+        });
 
-        if (row) {
-          token.name = row.name;
-          token.role = row.role;
-          token.phone = row.phone ?? undefined;
+        if (resolvedId) {
+          const [row] = await db
+            .select({
+              name: users.name,
+              role: users.role,
+              phone: users.phone,
+              deactivatedAt: users.deactivatedAt,
+            })
+            .from(users)
+            .where(eq(users.id, resolvedId))
+            .limit(1);
+
+          if (row) {
+            token.id = resolvedId;
+            token.name = row.name;
+            token.role = row.role;
+            token.phone = row.phone ?? undefined;
+            token.deactivated = Boolean(row.deactivatedAt);
+          }
         }
       }
 
@@ -154,6 +172,10 @@ export const authConfig: NextAuthConfig = {
     },
 
     async session({ session, token }) {
+      if (token.deactivated) {
+        return { expires: session.expires } as typeof session;
+      }
+
       if (token && session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;

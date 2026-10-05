@@ -1,5 +1,7 @@
 /**
- * Phase 3: mock-pay submit — create one submitted visa application.
+ * Submit one visa application.
+ * Paid listings are accepted only after a captured Razorpay payment.
+ * A zero-fee listing submits without a charge.
  */
 
 'use server';
@@ -7,43 +9,36 @@
 import { and, eq } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { auth } from '@/lib/auth';
+import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { db } from '@/lib/db';
 import {
   applicationDrafts,
   documents,
+  payments,
   statusHistory,
   users,
+  visaApplicationTravellers,
   visaApplications,
 } from '@/lib/db/schema';
 import { visaListings, countries } from '@/lib/db/schema-extended';
 import { ensureFormVersionForSubmit } from '@/lib/db/queries/formVersions';
 import {
+  notifyVisaSubmittedToAdmin,
+  notifyVisaSubmittedToApplicant,
+} from '@/lib/email/notify';
+import {
   uploadApplicationDocuments,
   type ApplicationDocumentUploadItem,
 } from '@/lib/upload/application-actions';
+import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 import {
-  emptyTripDetails,
-  getCoreTripIssues,
-  getMultiStopIssues,
-  type ApplyFormConfig,
-  type TravellerTripDetails,
-} from '@/lib/apply/applicationForm';
+  validateSubmitTravellers,
+  type SubmitTravellerPayload,
+} from '@/lib/apply/validateSubmitTravellers';
+import { quoteVisaListing } from '@/lib/payments/quote';
+import { attachPaymentsToApplication } from '@/lib/payments/record';
 
-export interface SubmitTravellerPayload {
-  id: string;
-  name: string;
-  passportData?: Record<string, unknown> | null;
-  tripDetails?: Record<string, unknown> | null;
-  documents?: Array<{
-    key: string;
-    name?: string;
-    mimeType?: string;
-    size?: number;
-  }>;
-  passportUploaded?: boolean;
-  photoUploaded?: boolean;
-  applicationComplete?: boolean;
-}
+export type { SubmitTravellerPayload } from '@/lib/apply/validateSubmitTravellers';
 
 export interface SubmitApplicationInput {
   submitId: string;
@@ -52,6 +47,9 @@ export interface SubmitApplicationInput {
   travellers: SubmitTravellerPayload[];
   /** IndexDB files encoded as base64 (no data: prefix). */
   files: ApplicationDocumentUploadItem[];
+  priceOptionId?: string | null;
+  /** Captured payments.id. Required when the listing fee is above zero. */
+  paymentId?: string | null;
 }
 
 export type SubmitApplicationResult =
@@ -75,40 +73,61 @@ function buildPassengerNames(travellers: SubmitTravellerPayload[]): string {
     .join(' ');
 }
 
-function validateTravellers(
-  travellers: SubmitTravellerPayload[],
-  snapshot: ApplyFormConfig
-): string | null {
-  if (!travellers.length) {
-    return 'Add at least one traveller before submitting.';
+async function requireCapturedPayment(input: {
+  userId: string;
+  submitId: string;
+  paymentId: string | null | undefined;
+  amountPaise: number;
+  travellerCount: number;
+  priceOptionId: string | null;
+}): Promise<{ ok: true; paymentId: string } | { ok: false; error: string }> {
+  if (!input.paymentId || !isUuid(input.paymentId)) {
+    return { ok: false, error: 'Payment is required before submitting.' };
   }
 
-  for (const traveller of travellers) {
-    if (!traveller.name?.trim()) {
-      return 'Each traveller needs a name.';
-    }
-    if (!traveller.passportData) {
-      return `Complete passport details for ${traveller.name || 'each traveller'}.`;
-    }
+  const [payment] = await db
+    .select()
+    .from(payments)
+    .where(eq(payments.id, input.paymentId))
+    .limit(1);
 
-    if (snapshot.showTripDetails !== false) {
-      const trip = emptyTripDetails(
-        (traveller.tripDetails ?? undefined) as
-          | Partial<TravellerTripDetails>
-          | undefined
-      );
-      const issue = [
-        ...getCoreTripIssues(trip),
-        ...getMultiStopIssues(trip),
-      ][0];
-      if (issue) {
-        const who = traveller.name?.trim() || 'Traveller';
-        return `${who}: ${issue}`;
-      }
-    }
+  if (
+    !payment ||
+    payment.userId !== input.userId ||
+    payment.submitId !== input.submitId
+  ) {
+    return { ok: false, error: 'Payment not found for this submission.' };
+  }
+  if (payment.status !== 'completed') {
+    return { ok: false, error: 'Payment is not complete.' };
+  }
+  if (payment.applicationType !== 'visa' || payment.currency !== 'INR') {
+    return { ok: false, error: 'Payment is not valid for this application.' };
+  }
+  if (payment.amount !== input.amountPaise) {
+    return {
+      ok: false,
+      error: 'Payment amount does not match the current fee.',
+    };
+  }
+  if (payment.travellerCount !== input.travellerCount) {
+    return {
+      ok: false,
+      error: 'Payment does not match the number of travellers.',
+    };
+  }
+  if (
+    input.priceOptionId &&
+    payment.priceOptionId &&
+    payment.priceOptionId !== input.priceOptionId
+  ) {
+    return {
+      ok: false,
+      error: 'Payment does not match the selected visa option.',
+    };
   }
 
-  return null;
+  return { ok: true, paymentId: payment.id };
 }
 
 export async function submitApplication(
@@ -116,9 +135,16 @@ export async function submitApplication(
 ): Promise<SubmitApplicationResult> {
   try {
     const session = await auth();
-    const userId = session?.user?.id;
-    if (!userId) {
+    if (!session?.user) {
       return { success: false, error: 'You must be signed in to submit.' };
+    }
+
+    const userId = await resolveSessionUserId(session.user);
+    if (!userId) {
+      return {
+        success: false,
+        error: 'Your session is out of date. Sign out and sign in again.',
+      };
     }
 
     if (!input.submitId || !isUuid(input.submitId)) {
@@ -129,12 +155,26 @@ export async function submitApplication(
     }
 
     const [existing] = await db
-      .select({ id: visaApplications.id })
+      .select({
+        id: visaApplications.id,
+        userId: visaApplications.userId,
+      })
       .from(visaApplications)
       .where(eq(visaApplications.submitId, input.submitId))
       .limit(1);
 
     if (existing) {
+      if (existing.userId !== userId) {
+        return {
+          success: false,
+          error: 'This submission belongs to another account.',
+        };
+      }
+      await attachPaymentsToApplication({
+        applicationId: existing.id,
+        submitId: input.submitId,
+        paymentId: input.paymentId,
+      });
       return {
         success: true,
         applicationId: existing.id,
@@ -155,9 +195,32 @@ export async function submitApplication(
     }
 
     const snapshot = formVersion.config as ApplyFormConfig;
-    const validationError = validateTravellers(input.travellers, snapshot);
+    const validationError = validateSubmitTravellers(input.travellers, snapshot);
     if (validationError) {
       return { success: false, error: validationError };
+    }
+
+    const quoted = await quoteVisaListing({
+      listingId: input.listingId,
+      priceOptionId: input.priceOptionId,
+      travellerCount: input.travellers.length,
+    });
+    if (!quoted.ok) {
+      return { success: false, error: quoted.error };
+    }
+
+    let resolvedPaymentId: string | null = null;
+    if (quoted.quote.amountPaise > 0) {
+      const paid = await requireCapturedPayment({
+        userId,
+        submitId: input.submitId,
+        paymentId: input.paymentId,
+        amountPaise: quoted.quote.amountPaise,
+        travellerCount: quoted.quote.travellerCount,
+        priceOptionId: quoted.quote.priceOptionId,
+      });
+      if (!paid.ok) return { success: false, error: paid.error };
+      resolvedPaymentId = paid.paymentId;
     }
 
     const [listing] = await db
@@ -192,6 +255,7 @@ export async function submitApplication(
         id: users.id,
         name: users.name,
         phone: users.phone,
+        email: users.email,
       })
       .from(users)
       .where(eq(users.id, userId))
@@ -290,6 +354,7 @@ export async function submitApplication(
         applicantPhone: userRow.phone,
         passengerNames,
         submitId: input.submitId,
+        paymentId: resolvedPaymentId,
         submittedAt: now,
         updatedAt: now,
         personalInfo: {
@@ -311,6 +376,11 @@ export async function submitApplication(
         .where(eq(visaApplications.submitId, input.submitId))
         .limit(1);
       if (raced) {
+        await attachPaymentsToApplication({
+          applicationId: raced.id,
+          submitId: input.submitId,
+          paymentId: resolvedPaymentId,
+        });
         return {
           success: true,
           applicationId: raced.id,
@@ -336,14 +406,42 @@ export async function submitApplication(
       );
     }
 
-    await db.insert(statusHistory).values({
+    const insertedTravellers = await db
+      .insert(visaApplicationTravellers)
+      .values(
+        travellersJson.map((traveller) => ({
+          applicationId,
+          passengerId: traveller.passengerId.slice(0, 100),
+          name: (traveller.name || 'Traveller').slice(0, 255),
+          status: 'submitted',
+          updatedAt: now,
+        }))
+      )
+      .returning({
+        id: visaApplicationTravellers.id,
+      });
+
+    if (insertedTravellers.length > 0) {
+      await db.insert(statusHistory).values(
+        insertedTravellers.map((traveller) => ({
+          applicationId,
+          applicationType: 'visa' as const,
+          travellerId: traveller.id,
+          oldStatus: null,
+          newStatus: 'submitted',
+          changedBy: userId,
+          notes: resolvedPaymentId
+            ? 'Submitted after Razorpay payment'
+            : 'Submitted with no fee',
+          createdAt: now,
+        }))
+      );
+    }
+
+    await attachPaymentsToApplication({
       applicationId,
-      applicationType: 'visa',
-      oldStatus: null,
-      newStatus: 'submitted',
-      changedBy: userId,
-      notes: 'Submitted via mock pay',
-      createdAt: now,
+      submitId: input.submitId,
+      paymentId: resolvedPaymentId,
     });
 
     await db
@@ -355,15 +453,42 @@ export async function submitApplication(
         )
       );
 
+    const passportData = travellersJson[0]?.passportData;
+    const passportEmail =
+      passportData &&
+      typeof passportData === 'object' &&
+      typeof (passportData as { email?: unknown }).email === 'string'
+        ? (passportData as { email: string }).email
+        : null;
+
+    const countryName = country?.name ?? countryCode;
+    const visaTypeLabel = String(resolvedVisaType);
+
+    await notifyVisaSubmittedToApplicant({
+      accountEmail: userRow.email,
+      passportEmail,
+      applicantName: primaryName,
+      country: countryName,
+      visaType: visaTypeLabel,
+      applicationId,
+    });
+    await notifyVisaSubmittedToAdmin({
+      applicantName: primaryName,
+      phone: userRow.phone,
+      country: countryName,
+      visaType: visaTypeLabel,
+      applicationId,
+    });
+
     return { success: true, applicationId };
   } catch (error) {
     console.error('submitApplication error:', error);
+    const message = error instanceof Error ? error.message : '';
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Failed to submit application',
+      error: message.startsWith('Failed query')
+        ? 'Failed to submit application'
+        : message || 'Failed to submit application',
     };
   }
 }

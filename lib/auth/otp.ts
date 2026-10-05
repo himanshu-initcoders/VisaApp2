@@ -120,6 +120,13 @@ export async function verifyOtpAndEnsureUser(input: {
       };
     }
 
+    if (existing.deactivatedAt) {
+      return {
+        success: false,
+        error: 'This account has been deactivated',
+      };
+    }
+
     if (!existing.phoneVerified) {
       await db
         .update(users)

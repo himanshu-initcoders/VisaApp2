@@ -53,6 +53,8 @@ export async function ensureFormVersionForSubmit(
 
   const version = await getNextFormVersionNumber(listingId);
 
+  const publishedAt = new Date();
+
   try {
     const [created] = await db
       .insert(formVersions)
@@ -61,12 +63,33 @@ export async function ensureFormVersionForSubmit(
         version,
         config,
         publishedBy: publishedBy ?? null,
-        publishedAt: new Date(),
+        publishedAt,
       })
       .returning();
 
     return created;
-  } catch {
+  } catch (error) {
+    // Stale session ids fail the published_by foreign key. Publish anyway.
+    if (publishedBy) {
+      try {
+        const [created] = await db
+          .insert(formVersions)
+          .values({
+            listingId,
+            version,
+            config,
+            publishedBy: null,
+            publishedAt,
+          })
+          .returning();
+        return created;
+      } catch (retryError) {
+        console.error('ensureFormVersionForSubmit retry error:', retryError);
+      }
+    } else {
+      console.error('ensureFormVersionForSubmit error:', error);
+    }
+
     // Race: another submit published first — re-read
     return getLatestPublishedFormVersion(listingId);
   }

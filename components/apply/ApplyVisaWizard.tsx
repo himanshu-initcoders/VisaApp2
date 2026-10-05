@@ -172,6 +172,16 @@ export function ApplyVisaWizard({
 
   const backHref = `/visa/${countryCode.toLowerCase()}/${listingId}`;
   const namedTraveller = travellers.some((t) => t.name.trim());
+  const usedProfileNames = new Set(
+    travellers
+      .map((traveller) => traveller.name.trim().toUpperCase())
+      .filter(Boolean)
+  );
+  const availableProfiles = profiles.filter(
+    (profile) => !usedProfileNames.has(profile.name.trim().toUpperCase())
+  );
+  const allProfilesAdded =
+    profiles.length > 0 && availableProfiles.length === 0;
   const filledTravellers = travellers.filter(isTravellerFilled);
   const activePassportTraveller = travellers.find(
     (item) => item.id === passportTravellerId
@@ -461,6 +471,127 @@ export function ApplyVisaWizard({
     const newbie = createTraveller(travellers.length + 1, nextName);
     setTravellers((current) => [...current, newbie]);
     persistNamedProfile(newbie);
+  };
+
+  const appendTraveller = (traveller: ApplyTraveller) => {
+    const token = traveller.name.trim().toUpperCase();
+    const current = travellersRef.current;
+    if (current.length >= MAX_TRAVELLERS) return false;
+    if (
+      token &&
+      current.some((item) => item.name.trim().toUpperCase() === token)
+    ) {
+      return false;
+    }
+    const next = [...current, traveller];
+    travellersRef.current = next;
+    setTravellers(next);
+    persistNamedProfile(traveller);
+    return true;
+  };
+
+  const addTravellerFromProfile = async (profile: TravellerProfile) => {
+    if (travellersRef.current.length >= MAX_TRAVELLERS) return;
+    const name = profile.name.trim().toUpperCase();
+    if (!name) return;
+    if (
+      travellersRef.current.some(
+        (item) => item.name.trim().toUpperCase() === name
+      )
+    ) {
+      return;
+    }
+
+    setAutofillWarning(null);
+
+    if (profile.isServerProfile && isAuthenticated) {
+      setSelectingProfile(true);
+      try {
+        const result = await getMyPassengerAutofill({
+          profileId: profile.id,
+          formConfig,
+        });
+
+        const newbie = createTraveller(
+          travellersRef.current.length + 1,
+          name
+        );
+
+        if (!result.success || !result.data) {
+          setAutofillWarning(
+            result.message ||
+              'Could not load previous answers. Added the name only.'
+          );
+          appendTraveller(newbie);
+          return;
+        }
+
+        const payload = result.data;
+        const displayName = formatProfileName(payload.name || profile.name);
+        const restored = await restoreAutofillDocumentsToIdb({
+          listingId,
+          travellerId: newbie.id,
+          refs: payload.documents,
+        });
+
+        const draftTraveller: ApplyTraveller = {
+          ...newbie,
+          name: displayName.toUpperCase(),
+          passportData: payload.passportData ?? undefined,
+          tripDetails: payload.tripDetails ?? undefined,
+          passportUploaded:
+            restored.passportUploaded || Boolean(payload.passportData),
+          photoUploaded: restored.photoUploaded,
+          passportFrontUrl: restored.passportFrontUrl,
+          passportBackUrl: restored.passportBackUrl,
+          documents: restored.documents,
+          applicationComplete: false,
+          editing: false,
+        };
+        const applicationComplete = isListingApplicationComplete(
+          draftTraveller,
+          formConfig
+        );
+        const filled: ApplyTraveller = {
+          ...draftTraveller,
+          applicationComplete,
+        };
+
+        const added = appendTraveller(filled);
+        if (!added) return;
+
+        if (restored.failedSlots.length > 0) {
+          setAutofillWarning(
+            `Some documents could not be restored (${restored.failedSlots.length}). You can re-upload them.`
+          );
+        }
+
+        if (!applicationComplete) {
+          setPassportFile(null);
+          setPassportResume(true);
+          setPassportTravellerId(filled.id);
+        }
+      } catch (error) {
+        console.error('Profile autofill failed', error);
+        setAutofillWarning(
+          'Could not restore previous data. Added the name only.'
+        );
+        appendTraveller(
+          createTraveller(travellersRef.current.length + 1, name)
+        );
+      } finally {
+        setSelectingProfile(false);
+      }
+      return;
+    }
+
+    const newbie = createTraveller(travellersRef.current.length + 1, name);
+    appendTraveller({
+      ...newbie,
+      photoUploaded: profile.photoUploaded ?? false,
+      passportUploaded: profile.passportUploaded ?? false,
+      passportFrontUrl: profile.passportFrontUrl,
+    });
   };
 
   const removeTraveller = (id: string) => {
@@ -756,6 +887,11 @@ export function ApplyVisaWizard({
 
         {step === 'documents' && (
           <>
+            {selectingProfile && (
+              <p className="mb-4 font-switzer text-sm text-nautical-teal" role="status">
+                Restoring your previous answers and documents…
+              </p>
+            )}
             {autofillWarning && (
               <p
                 className="mb-4 font-switzer text-sm text-[#b45309]"
@@ -768,11 +904,18 @@ export function ApplyVisaWizard({
               countryName={countryName}
               travellers={travellers}
               canAdd={travellers.length < MAX_TRAVELLERS}
+              profiles={availableProfiles}
+              allProfilesAdded={allProfilesAdded}
+              showEmptyProfiles={isAuthenticated}
+              selectingProfile={selectingProfile}
               extraQuestions={formConfig.extraQuestions}
               documentSlots={formConfig.documentSlots}
               showGeneralInfo={formConfig.showGeneralInfo}
               showTripDetails={formConfig.showTripDetails}
               onAddTraveller={addTraveller}
+              onSelectProfile={(profile) => {
+                void addTravellerFromProfile(profile);
+              }}
               onRemoveTraveller={removeTraveller}
               onUploadPassport={(id, file) => openPassport(id, false, file)}
               onFillApplication={openFillApplication}

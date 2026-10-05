@@ -13,10 +13,14 @@ import {
   TabsPanel,
 } from '@/components/ui';
 import { VisaApplicationActions } from './VisaApplicationActions';
+import { AssignReviewerCard } from '@/components/admin/AssignReviewerDialog';
 import { CallLogsPanel } from '@/components/admin/CallLogsPanel';
 import { NotesPanel } from '@/components/admin/NotesPanel';
 import { TravellersSection } from '@/components/admin/TravellersSection';
 import { TravellerSelectionProvider } from '@/components/admin/TravellerSelectionContext';
+import { Timeline } from '@/components/admin/Timeline';
+import { PaymentHistory } from '@/components/applications/PaymentHistory';
+import { attachStatusToTravellers } from '@/lib/visa/caseStatus';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 
 interface PageProps {
@@ -39,6 +43,7 @@ type StoredTraveller = {
 
 const DETAIL_TABS = [
   { id: 'application', label: 'Application information' },
+  { id: 'payments', label: 'Payments' },
   { id: 'call-logs', label: 'Call logs' },
   { id: 'notes', label: 'Notes' },
 ] as const;
@@ -61,7 +66,7 @@ function Field({
 }
 
 export default async function VisaApplicationDetailPage({ params }: PageProps) {
-  await requireRole(['admin', 'reviewer']);
+  const session = await requireRole(['admin', 'reviewer']);
 
   const { id } = await params;
   const details = await getApplicationDetails(id, 'visa');
@@ -88,11 +93,18 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
   };
 
   const snapshot = (app.formSnapshot as ApplyFormConfig | null) ?? null;
-  const travellers: StoredTraveller[] = Array.isArray(app.travellers)
+  const storedTravellers: StoredTraveller[] = Array.isArray(app.travellers)
     ? app.travellers
     : [];
-
-  const isLegacy = travellers.length === 0;
+  const travellers = attachStatusToTravellers(
+    storedTravellers,
+    details.travellers
+  );
+  const isLegacy = storedTravellers.length === 0;
+  const fileHistory =
+    travellers.length > 1
+      ? details.statusHistory.filter((item) => item.travellerId == null)
+      : [];
   const applicantPhone = app.applicantPhone || details.user.phone;
 
   return (
@@ -171,6 +183,21 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
                   </CardContent>
                 </Card>
 
+                {fileHistory.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>File history</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="mb-4 font-switzer text-sm text-slate-helper">
+                        These updates were recorded for the whole application,
+                        before each traveller had a separate visa status.
+                      </p>
+                      <Timeline history={fileHistory} />
+                    </CardContent>
+                  </Card>
+                )}
+
                 {!isLegacy && (
                   <TravellersSection
                     travellers={travellers}
@@ -216,6 +243,10 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
                 )}
               </TabsPanel>
 
+              <TabsPanel id="payments">
+                <PaymentHistory payments={details.payments} />
+              </TabsPanel>
+
               <TabsPanel id="call-logs">
                 <CallLogsPanel
                   applicationId={app.id}
@@ -236,6 +267,12 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
           </div>
 
           <div className="space-y-6">
+            <AssignReviewerCard
+              applicationId={app.id}
+              assignedReviewerId={details.assignedReviewer?.id ?? null}
+              assignedReviewerName={details.assignedReviewer?.name ?? null}
+              canAssign={session.user.role === 'admin'}
+            />
             <VisaApplicationActions
               applicationId={app.id}
               currentStatus={app.status}

@@ -8,8 +8,12 @@ import {
   applicationNotes,
   applicationCallLogs,
   formVersions,
+  visaApplicationTravellers,
+  payments,
 } from '@/lib/db/schema';
 import { eq, and, or, like, gte, lte, desc, sql, count, ilike, inArray } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
 import type {
   ApplicationListItem,
   ApplicationFilters,
@@ -21,6 +25,11 @@ import type {
   CallLogItem,
   UserWithStats,
   PaginatedUsers,
+  AdminUserProfile,
+  UserApplicationSummary,
+  UserPassengerDocuments,
+  UserPassengerDocumentGroup,
+  ReviewerActivityItem,
 } from '@/types/admin';
 
 /**
@@ -45,6 +54,9 @@ function last10Digits(raw: string): string {
   return digits.slice(-10);
 }
 
+/** Second users join so the applicant join stays `users`. */
+const assignedReviewers = alias(users, 'assigned_reviewers');
+
 /**
  * Get applications with filtering, sorting, and pagination
  */
@@ -57,6 +69,8 @@ export async function getApplicationsWithFilters(
     search,
     phone,
     country,
+    countryCodes,
+    visaListingIds,
     passenger,
     dateFrom,
     dateTo,
@@ -68,6 +82,18 @@ export async function getApplicationsWithFilters(
   } = filters;
 
   const phoneDigits = phone ? last10Digits(phone) : '';
+  const selectedCountryCodes = [
+    ...new Set(
+      [...(countryCodes ?? []), ...(country ? [country] : [])]
+        .map((code) => code.trim().toUpperCase())
+        .filter((code) => code.length === 2)
+    ),
+  ];
+  const selectedListingIds = [
+    ...new Set((visaListingIds ?? []).map((id) => id.trim()).filter(Boolean)),
+  ];
+  const hasDestinationFilter =
+    selectedCountryCodes.length > 0 || selectedListingIds.length > 0;
 
   // Fetch visa applications
   let visaApps: ApplicationListItem[] = [];
@@ -80,10 +106,19 @@ export async function getApplicationsWithFilters(
     if (userId) {
       visaConditions.push(eq(visaApplications.userId, userId));
     }
-    if (country) {
-      visaConditions.push(
-        eq(visaApplications.countryCode, country.toUpperCase())
-      );
+    if (hasDestinationFilter) {
+      const destinationMatch = [];
+      if (selectedCountryCodes.length > 0) {
+        destinationMatch.push(
+          inArray(visaApplications.countryCode, selectedCountryCodes)
+        );
+      }
+      if (selectedListingIds.length > 0) {
+        destinationMatch.push(
+          inArray(visaApplications.visaListingId, selectedListingIds)
+        );
+      }
+      visaConditions.push(or(...destinationMatch)!);
     }
     if (dateFrom) {
       visaConditions.push(
@@ -138,9 +173,15 @@ export async function getApplicationsWithFilters(
         passengerNames: visaApplications.passengerNames,
         formVersionId: visaApplications.formVersionId,
         formVersionNumber: formVersions.version,
+        assignedReviewerId: visaApplications.assignedReviewerId,
+        assignedReviewerName: assignedReviewers.name,
       })
       .from(visaApplications)
       .innerJoin(users, eq(visaApplications.userId, users.id))
+      .leftJoin(
+        assignedReviewers,
+        eq(visaApplications.assignedReviewerId, assignedReviewers.id)
+      )
       .leftJoin(
         formVersions,
         eq(visaApplications.formVersionId, formVersions.id)
@@ -165,6 +206,8 @@ export async function getApplicationsWithFilters(
       passengerNames: v.passengerNames,
       formVersionId: v.formVersionId,
       formVersionNumber: v.formVersionNumber,
+      assignedReviewerId: v.assignedReviewerId,
+      assignedReviewerName: v.assignedReviewerName,
     }));
   }
 
@@ -172,7 +215,7 @@ export async function getApplicationsWithFilters(
   let passportApps: ApplicationListItem[] = [];
   if (
     (type === 'all' || type === 'passport') &&
-    !country &&
+    !hasDestinationFilter &&
     !passenger &&
     !phoneDigits
   ) {
@@ -260,14 +303,31 @@ export async function getApplicationsWithFilters(
   const totalPages = Math.ceil(total / limit) || 1;
   const offset = (page - 1) * limit;
   const paginatedApps = allApps.slice(offset, offset + limit);
+  const applications = await attachVisaTravellerSummaries(paginatedApps);
 
   return {
-    applications: paginatedApps,
+    applications,
     total,
     page,
     limit,
     totalPages,
   };
+}
+
+async function attachVisaTravellerSummaries<
+  T extends { id: string; type: 'visa' | 'passport' },
+>(rows: T[]): Promise<Array<T & { travellerCount?: number; approvedTravellerCount?: number }>> {
+  const visaIds = rows.filter((row) => row.type === 'visa').map((row) => row.id);
+  const summaries = await loadTravellerSummaries(visaIds);
+  return rows.map((row) => {
+    if (row.type !== 'visa') return row;
+    const summary = summaries.get(row.id);
+    return {
+      ...row,
+      travellerCount: summary?.travellerCount ?? 0,
+      approvedTravellerCount: summary?.approvedCount ?? 0,
+    };
+  });
 }
 
 export type VisaTripExportCells = {
@@ -425,6 +485,7 @@ export async function getApplicationDetails(
   let application: ApplicationDetail['application'];
   let user: ApplicationDetail['user'];
   let formVersionNumber: number | null = null;
+  let assignedReviewer: ApplicationDetail['assignedReviewer'] = null;
 
   if (type === 'visa') {
     const visaResult = await db
@@ -437,9 +498,16 @@ export async function getApplicationDetails(
           phone: users.phone,
         },
         formVersionNumber: formVersions.version,
+        assignedReviewerId: assignedReviewers.id,
+        assignedReviewerName: assignedReviewers.name,
+        assignedReviewerEmail: assignedReviewers.email,
       })
       .from(visaApplications)
       .innerJoin(users, eq(visaApplications.userId, users.id))
+      .leftJoin(
+        assignedReviewers,
+        eq(visaApplications.assignedReviewerId, assignedReviewers.id)
+      )
       .leftJoin(
         formVersions,
         eq(visaApplications.formVersionId, formVersions.id)
@@ -454,6 +522,13 @@ export async function getApplicationDetails(
     application = visaResult[0].application;
     user = visaResult[0].user;
     formVersionNumber = visaResult[0].formVersionNumber ?? null;
+    if (visaResult[0].assignedReviewerId && visaResult[0].assignedReviewerName) {
+      assignedReviewer = {
+        id: visaResult[0].assignedReviewerId,
+        name: visaResult[0].assignedReviewerName,
+        email: visaResult[0].assignedReviewerEmail ?? '',
+      };
+    }
   } else {
     const passportResult = await db
       .select({
@@ -482,6 +557,25 @@ export async function getApplicationDetails(
   const history = await getStatusHistoryByApplicationId(id, type);
   const notes = await getApplicationNotes(id);
   const callLogs = type === 'visa' ? await getApplicationCallLogs(id) : [];
+  const travellers =
+    type === 'visa' ? await getVisaTravellers(id) : [];
+  const paymentRows = await db
+    .select({
+      id: payments.id,
+      amount: payments.amount,
+      currency: payments.currency,
+      status: payments.status,
+      paymentMethod: payments.paymentMethod,
+      razorpayPaymentId: payments.razorpayPaymentId,
+      razorpayOrderId: payments.razorpayOrderId,
+      createdAt: payments.createdAt,
+      completedAt: payments.completedAt,
+    })
+    .from(payments)
+    .where(
+      and(eq(payments.applicationId, id), eq(payments.applicationType, type))
+    )
+    .orderBy(desc(payments.createdAt));
 
   return {
     application,
@@ -489,10 +583,27 @@ export async function getApplicationDetails(
     user,
     documents: docs,
     statusHistory: history,
+    travellers,
     notes,
     callLogs,
+    payments: paymentRows,
     formVersionNumber,
+    assignedReviewer,
   };
+}
+
+export async function getVisaTravellers(applicationId: string) {
+  return db
+    .select({
+      id: visaApplicationTravellers.id,
+      applicationId: visaApplicationTravellers.applicationId,
+      passengerId: visaApplicationTravellers.passengerId,
+      name: visaApplicationTravellers.name,
+      status: visaApplicationTravellers.status,
+    })
+    .from(visaApplicationTravellers)
+    .where(eq(visaApplicationTravellers.applicationId, applicationId))
+    .orderBy(visaApplicationTravellers.createdAt);
 }
 
 export async function getApplicationNotes(
@@ -568,6 +679,7 @@ export async function getStatusHistoryByApplicationId(
       id: statusHistory.id,
       applicationId: statusHistory.applicationId,
       applicationType: statusHistory.applicationType,
+      travellerId: statusHistory.travellerId,
       oldStatus: statusHistory.oldStatus,
       newStatus: statusHistory.newStatus,
       changedBy: statusHistory.changedBy,
@@ -670,4 +782,406 @@ export async function getUsersWithApplicationCounts(
     limit,
     totalPages,
   };
+}
+
+function toDocumentRow(
+  row: typeof documents.$inferSelect
+): DocumentWithVerification {
+  return {
+    id: row.id,
+    applicationId: row.applicationId,
+    applicationType: row.applicationType,
+    documentType: row.documentType,
+    s3Key: row.s3Key,
+    filename: row.filename,
+    fileSize: row.fileSize,
+    mimeType: row.mimeType,
+    verified: row.verified,
+    verificationNotes: row.verificationNotes,
+    uploadedAt: row.uploadedAt,
+  };
+}
+
+/** Same passenger match as documentBelongsToTraveller. */
+function documentBelongsToPassenger(s3Key: string, passengerId: string): boolean {
+  if (!passengerId) return false;
+  const needle = `/passengers/${passengerId}/`;
+  if (s3Key.includes(needle)) return true;
+  return s3Key.includes(passengerId);
+}
+
+function asStoredTravellers(
+  value: unknown
+): Array<{ passengerId?: string; name?: string }> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const record = item as { passengerId?: unknown; name?: unknown };
+    return [
+      {
+        passengerId:
+          typeof record.passengerId === 'string' ? record.passengerId : undefined,
+        name: typeof record.name === 'string' ? record.name : undefined,
+      },
+    ];
+  });
+}
+
+function visaPlaceLabel(
+  country: string | null,
+  countryCode: string | null,
+  visaType: string | null
+): string {
+  return country || countryCode || visaType || 'Visa';
+}
+
+function byNewestApplication(
+  a: UserApplicationSummary,
+  b: UserApplicationSummary
+): number {
+  const aTime = (a.submittedAt ?? a.createdAt).getTime();
+  const bTime = (b.submittedAt ?? b.createdAt).getTime();
+  return bTime - aTime;
+}
+
+/**
+ * Load one account for the admin user detail page.
+ */
+export async function getAdminUserById(
+  id: string
+): Promise<AdminUserProfile | null> {
+  const rows = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      phone: users.phone,
+      role: users.role,
+      emailVerified: users.emailVerified,
+      createdAt: users.createdAt,
+      deactivatedAt: users.deactivatedAt,
+    })
+    .from(users)
+    .where(eq(users.id, id))
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+/**
+ * Visa and passport applications owned by this user, newest first.
+ */
+export async function getApplicationsForUser(
+  userId: string
+): Promise<UserApplicationSummary[]> {
+  const [visaRows, passportRows] = await Promise.all([
+    db
+      .select({
+        id: visaApplications.id,
+        country: visaApplications.country,
+        countryCode: visaApplications.countryCode,
+        visaType: visaApplications.visaType,
+        status: visaApplications.status,
+        submittedAt: visaApplications.submittedAt,
+        createdAt: visaApplications.createdAt,
+      })
+      .from(visaApplications)
+      .where(eq(visaApplications.userId, userId)),
+    db
+      .select({
+        id: passportServices.id,
+        serviceType: passportServices.serviceType,
+        status: passportServices.status,
+        submittedAt: passportServices.submittedAt,
+        createdAt: passportServices.createdAt,
+      })
+      .from(passportServices)
+      .where(eq(passportServices.userId, userId)),
+  ]);
+
+  const applications: UserApplicationSummary[] = await attachVisaTravellerSummaries([
+    ...visaRows.map((row) => ({
+      id: row.id,
+      type: 'visa' as const,
+      title: visaPlaceLabel(row.country, row.countryCode, row.visaType),
+      detail: row.visaType,
+      status: row.status,
+      submittedAt: row.submittedAt,
+      createdAt: row.createdAt,
+    })),
+    ...passportRows.map((row) => ({
+      id: row.id,
+      type: 'passport' as const,
+      title: 'Passport',
+      detail: row.serviceType,
+      status: row.status,
+      submittedAt: row.submittedAt,
+      createdAt: row.createdAt,
+    })),
+  ]);
+
+  applications.sort(byNewestApplication);
+  return applications;
+}
+
+/**
+ * Passengers across this user's visa applications, plus files that
+ * are not tied to a passenger id.
+ */
+export async function getUserPassengerDocuments(
+  userId: string
+): Promise<UserPassengerDocuments> {
+  const [visaRows, passportRows] = await Promise.all([
+    db
+      .select({
+        id: visaApplications.id,
+        country: visaApplications.country,
+        countryCode: visaApplications.countryCode,
+        visaType: visaApplications.visaType,
+        travellers: visaApplications.travellers,
+      })
+      .from(visaApplications)
+      .where(eq(visaApplications.userId, userId)),
+    db
+      .select({ id: passportServices.id })
+      .from(passportServices)
+      .where(eq(passportServices.userId, userId)),
+  ]);
+
+  const visaIds = visaRows.map((row) => row.id);
+  const passportIds = passportRows.map((row) => row.id);
+
+  const [visaDocs, passportDocs] = await Promise.all([
+    visaIds.length > 0
+      ? db
+          .select()
+          .from(documents)
+          .where(
+            and(
+              inArray(documents.applicationId, visaIds),
+              eq(documents.applicationType, 'visa')
+            )
+          )
+      : Promise.resolve([]),
+    passportIds.length > 0
+      ? db
+          .select()
+          .from(documents)
+          .where(
+            and(
+              inArray(documents.applicationId, passportIds),
+              eq(documents.applicationType, 'passport')
+            )
+          )
+      : Promise.resolve([]),
+  ]);
+
+  const visaDocuments = visaDocs.map(toDocumentRow);
+  const claimed = new Set<string>();
+  const usedIds = new Set<string>();
+  const passengers: UserPassengerDocumentGroup[] = [];
+
+  for (const visa of visaRows) {
+    const place = visaPlaceLabel(visa.country, visa.countryCode, visa.visaType);
+    const travellers = asStoredTravellers(visa.travellers);
+
+    travellers.forEach((traveller, index) => {
+      const passengerId = traveller.passengerId?.trim() ?? '';
+      const name = traveller.name?.trim() || `Traveller ${index + 1}`;
+      let id = passengerId || `${visa.id}:traveller-${index}`;
+      if (usedIds.has(id)) {
+        id = `${id}:${visa.id}:${index}`;
+      }
+      usedIds.add(id);
+      const matched = passengerId
+        ? visaDocuments.filter(
+            (doc) =>
+              !claimed.has(doc.id) &&
+              documentBelongsToPassenger(doc.s3Key, passengerId)
+          )
+        : [];
+
+      for (const doc of matched) claimed.add(doc.id);
+
+      passengers.push({
+        id,
+        label: `${name} · ${place}`,
+        documents: matched,
+      });
+    });
+  }
+
+  const otherDocuments = [
+    ...visaDocuments.filter((doc) => !claimed.has(doc.id)),
+    ...passportDocs.map(toDocumentRow),
+  ];
+
+  return { passengers, otherDocuments };
+}
+
+/**
+ * Visa applications assigned to this reviewer, newest first.
+ */
+export async function getVisaApplicationsAssignedToReviewer(
+  reviewerId: string
+): Promise<UserApplicationSummary[]> {
+  const rows = await db
+    .select({
+      id: visaApplications.id,
+      country: visaApplications.country,
+      countryCode: visaApplications.countryCode,
+      visaType: visaApplications.visaType,
+      applicantName: visaApplications.applicantName,
+      status: visaApplications.status,
+      submittedAt: visaApplications.submittedAt,
+      createdAt: visaApplications.createdAt,
+    })
+    .from(visaApplications)
+    .where(eq(visaApplications.assignedReviewerId, reviewerId));
+
+  const applications: UserApplicationSummary[] = await attachVisaTravellerSummaries(
+    rows.map((row) => ({
+      id: row.id,
+      type: 'visa' as const,
+      title: visaPlaceLabel(row.country, row.countryCode, row.visaType),
+      detail: row.applicantName?.trim() || row.visaType,
+      status: row.status,
+      submittedAt: row.submittedAt,
+      createdAt: row.createdAt,
+    }))
+  );
+
+  applications.sort(byNewestApplication);
+  return applications;
+}
+
+function visaActivityLabel(row: {
+  country: string | null;
+  countryCode: string | null;
+  visaType: string | null;
+  applicantName: string | null;
+}): string {
+  const place = row.country || row.countryCode || 'Visa';
+  const type = row.visaType ? ` — ${row.visaType}` : '';
+  const who = row.applicantName?.trim() ? ` · ${row.applicantName.trim()}` : '';
+  return `${place}${type}${who}`;
+}
+
+/**
+ * Call logs, notes, and status changes made by this reviewer, newest first.
+ */
+export async function getReviewerActivity(
+  reviewerId: string
+): Promise<ReviewerActivityItem[]> {
+  const [calls, notes, changes] = await Promise.all([
+    db
+      .select({
+        id: applicationCallLogs.id,
+        applicationId: applicationCallLogs.applicationId,
+        phone: applicationCallLogs.phone,
+        note: applicationCallLogs.note,
+        createdAt: applicationCallLogs.createdAt,
+        country: visaApplications.country,
+        countryCode: visaApplications.countryCode,
+        visaType: visaApplications.visaType,
+        applicantName: visaApplications.applicantName,
+      })
+      .from(applicationCallLogs)
+      .leftJoin(
+        visaApplications,
+        eq(applicationCallLogs.applicationId, visaApplications.id)
+      )
+      .where(eq(applicationCallLogs.adminUserId, reviewerId)),
+    db
+      .select({
+        id: applicationNotes.id,
+        applicationId: applicationNotes.applicationId,
+        body: applicationNotes.body,
+        createdAt: applicationNotes.createdAt,
+        country: visaApplications.country,
+        countryCode: visaApplications.countryCode,
+        visaType: visaApplications.visaType,
+        applicantName: visaApplications.applicantName,
+      })
+      .from(applicationNotes)
+      .leftJoin(
+        visaApplications,
+        eq(applicationNotes.applicationId, visaApplications.id)
+      )
+      .where(eq(applicationNotes.adminUserId, reviewerId)),
+    db
+      .select({
+        id: statusHistory.id,
+        applicationId: statusHistory.applicationId,
+        applicationType: statusHistory.applicationType,
+        oldStatus: statusHistory.oldStatus,
+        newStatus: statusHistory.newStatus,
+        notes: statusHistory.notes,
+        createdAt: statusHistory.createdAt,
+        country: visaApplications.country,
+        countryCode: visaApplications.countryCode,
+        visaType: visaApplications.visaType,
+        applicantName: visaApplications.applicantName,
+        serviceType: passportServices.serviceType,
+      })
+      .from(statusHistory)
+      .leftJoin(
+        visaApplications,
+        eq(statusHistory.applicationId, visaApplications.id)
+      )
+      .leftJoin(
+        passportServices,
+        eq(statusHistory.applicationId, passportServices.id)
+      )
+      .where(eq(statusHistory.changedBy, reviewerId)),
+  ]);
+
+  const items: ReviewerActivityItem[] = [
+    ...calls.map((row) => ({
+      id: `call-${row.id}`,
+      kind: 'call' as const,
+      applicationId: row.applicationId,
+      applicationType: 'visa' as const,
+      applicationLabel: visaActivityLabel(row),
+      createdAt: row.createdAt,
+      body: row.note,
+      phone: row.phone,
+    })),
+    ...notes.map((row) => ({
+      id: `note-${row.id}`,
+      kind: 'note' as const,
+      applicationId: row.applicationId,
+      applicationType: 'visa' as const,
+      applicationLabel: visaActivityLabel(row),
+      createdAt: row.createdAt,
+      body: row.body,
+    })),
+    ...changes.map((row) => {
+      const applicationType: 'visa' | 'passport' =
+        row.applicationType === 'passport' ? 'passport' : 'visa';
+      const applicationLabel =
+        applicationType === 'passport'
+          ? row.serviceType
+            ? `Passport · ${row.serviceType}`
+            : 'Passport'
+          : visaActivityLabel(row);
+
+      return {
+        id: `status-${row.id}`,
+        kind: 'status' as const,
+        applicationId: row.applicationId,
+        applicationType,
+        applicationLabel,
+        createdAt: row.createdAt,
+        body: row.notes?.trim() || '',
+        oldStatus: row.oldStatus,
+        newStatus: row.newStatus,
+      };
+    }),
+  ];
+
+  items.sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+  );
+  return items;
 }

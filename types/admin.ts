@@ -22,6 +22,9 @@ export interface ApplicationListItem {
   userEmail: string;
   userPhone?: string | null;
   status: string;
+  /** Visa files only. Used for the "2 of 3 approved" line. */
+  travellerCount?: number;
+  approvedTravellerCount?: number;
   submittedAt: Date | null;
   createdAt: Date;
   // Visa-specific fields
@@ -35,17 +38,33 @@ export interface ApplicationListItem {
   formVersionNumber?: number | null;
   // Passport-specific fields
   serviceType?: string;
+  /** Visa applications only. */
+  assignedReviewerId?: string | null;
+  assignedReviewerName?: string | null;
+}
+
+/**
+ * Reviewer option for the assign dialog (max 5).
+ */
+export interface ReviewerOption {
+  id: string;
+  name: string;
+  email: string;
+  /** Assigned visa applications that are not draft, approved, or rejected. */
+  openCount: number;
 }
 
 /**
  * Filter criteria for applications list
  */
 export interface ApplicationFilters {
-  status?: string; // draft, submitted, under_review, approved, rejected
+  status?: string; // draft, submitted, under_review, approved, rejected, partially_approved
   type?: 'visa' | 'passport' | 'all';
   search?: string; // search by applicant / user name
   phone?: string; // mobile (last 10 digits)
-  country?: string; // ISO2 country code
+  country?: string; // legacy single ISO2 country code
+  countryCodes?: string[]; // fully selected countries (all visas)
+  visaListingIds?: string[]; // partial visa listing selections
   passenger?: string; // passenger name ILIKE
   dateFrom?: string; // ISO date string (IST day start)
   dateTo?: string; // ISO date string (IST day end)
@@ -67,6 +86,21 @@ export interface PaginatedApplications {
   totalPages: number;
 }
 
+export interface ApplicationPaymentItem {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  paymentMethod: string | null;
+  razorpayPaymentId: string | null;
+  razorpayOrderId: string | null;
+  createdAt: Date;
+  completedAt: Date | null;
+  /** Shown on the account dashboard, where payments span applications. */
+  label?: string | null;
+  href?: string | null;
+}
+
 /**
  * Full application details with all related data
  */
@@ -81,9 +115,18 @@ export interface ApplicationDetail {
   };
   documents: DocumentWithVerification[];
   statusHistory: StatusHistoryItem[];
+  /** Visa traveller rows. Empty for passport. */
+  travellers: VisaTravellerStatus[];
   notes: NoteItem[];
   callLogs: CallLogItem[];
+  payments: ApplicationPaymentItem[];
   formVersionNumber?: number | null;
+  /** Visa applications only. Null when unassigned or for passport. */
+  assignedReviewer: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
 }
 
 /**
@@ -106,10 +149,19 @@ export interface DocumentWithVerification {
 /**
  * Status history item with user information
  */
+export interface VisaTravellerStatus {
+  id: string;
+  applicationId: string;
+  passengerId: string;
+  name: string;
+  status: string;
+}
+
 export interface StatusHistoryItem {
   id: string;
   applicationId: string;
   applicationType: string;
+  travellerId: string | null;
   oldStatus: string | null;
   newStatus: string;
   changedBy: string | null;
@@ -186,6 +238,8 @@ export interface ActionResponse<T = void> {
 export interface StatusUpdateRequest {
   applicationId: string;
   applicationType: 'visa' | 'passport';
+  /** Required for visa. The visa_application_travellers row being updated. */
+  travellerId?: string;
   newStatus: string;
   notes?: string;
 }
@@ -223,4 +277,71 @@ export interface AddCallLogRequest {
 export interface UpdateUserRoleRequest {
   userId: string;
   newRole: 'user' | 'admin' | 'reviewer';
+}
+
+/**
+ * Account shown on the admin user detail page.
+ */
+export interface AdminUserProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: string;
+  emailVerified: Date | null;
+  createdAt: Date;
+  deactivatedAt: Date | null;
+}
+
+/**
+ * Deactivate or restore a non-admin account.
+ */
+export interface SetUserDeactivatedRequest {
+  userId: string;
+  deactivated: boolean;
+}
+
+/**
+ * Visa or passport application row on a user detail page.
+ */
+export interface UserApplicationSummary {
+  id: string;
+  type: 'visa' | 'passport';
+  title: string;
+  detail: string;
+  status: string;
+  travellerCount?: number;
+  approvedTravellerCount?: number;
+  submittedAt: Date | null;
+  createdAt: Date;
+}
+
+/**
+ * One passenger (or the Other bucket) and the files that belong to them.
+ */
+export interface UserPassengerDocumentGroup {
+  id: string;
+  label: string;
+  documents: DocumentWithVerification[];
+}
+
+export interface UserPassengerDocuments {
+  passengers: UserPassengerDocumentGroup[];
+  otherDocuments: DocumentWithVerification[];
+}
+
+/**
+ * One reviewer action: a call log, a note, or a status change.
+ */
+export interface ReviewerActivityItem {
+  id: string;
+  kind: 'call' | 'note' | 'status';
+  applicationId: string;
+  applicationType: 'visa' | 'passport';
+  applicationLabel: string;
+  createdAt: Date;
+  body: string;
+  phone?: string;
+  oldStatus?: string | null;
+  newStatus?: string | null;
 }

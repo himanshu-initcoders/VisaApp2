@@ -68,11 +68,16 @@ export function getStatusVariant(
     case 'pending':
       return 'pending';
     case 'under_review':
+    case 'partially_approved':
       return 'review';
     case 'approved':
+    case 'completed':
       return 'approved';
     case 'rejected':
+    case 'failed':
       return 'rejected';
+    case 'refunded':
+      return 'review';
     default:
       return 'default';
   }

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth-utils';
 import { getApplicationsWithFilters } from '@/lib/admin-queries';
+import { getCountryFilterOptions } from '@/lib/db/queries/config';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { FilterBar } from '@/components/admin/FilterBar';
 import { ApplicationsTable } from '@/components/admin/ApplicationsTable';
@@ -17,6 +18,8 @@ interface PageProps {
     search?: string;
     phone?: string;
     country?: string;
+    countries?: string;
+    listings?: string;
     passenger?: string;
     from?: string;
     to?: string;
@@ -28,7 +31,7 @@ interface PageProps {
 }
 
 export default async function ApplicationsPage({ searchParams }: PageProps) {
-  await requireRole(['admin', 'reviewer']);
+  const session = await requireRole(['admin', 'reviewer']);
 
   const params = await searchParams;
 
@@ -36,6 +39,14 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
     search: params.q || params.search,
     phone: params.phone,
     country: params.country,
+    countryCodes: (params.countries || '')
+      .split(',')
+      .map((code) => code.trim().toUpperCase())
+      .filter((code) => code.length === 2),
+    visaListingIds: (params.listings || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean),
     passenger: params.passenger,
     dateFrom: params.from,
     dateTo: params.to,
@@ -47,12 +58,25 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
     sortOrder: 'desc',
   };
 
-  const result = await getApplicationsWithFilters(filters);
+  const [result, countryOptions] = await Promise.all([
+    getApplicationsWithFilters(filters),
+    getCountryFilterOptions(),
+  ]);
+  const countryItems = countryOptions.map((country) => ({
+    id: country.iso2Code,
+    label: `${country.name} (${country.iso2Code})`,
+    children: country.visaListings.map((listing) => ({
+      id: listing.id,
+      label: listing.processName,
+    })),
+  }));
 
   const exportParams = new URLSearchParams();
   if (filters.search) exportParams.set('q', filters.search);
   if (filters.phone) exportParams.set('phone', filters.phone);
   if (filters.country) exportParams.set('country', filters.country);
+  if (filters.countryCodes?.length) exportParams.set('countries', filters.countryCodes.join(','));
+  if (filters.visaListingIds?.length) exportParams.set('listings', filters.visaListingIds.join(','));
   if (filters.passenger) exportParams.set('passenger', filters.passenger);
   if (filters.dateFrom) exportParams.set('from', filters.dateFrom);
   if (filters.dateTo) exportParams.set('to', filters.dateTo);
@@ -66,7 +90,7 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
         description="View and manage all visa and passport applications"
       />
 
-      <FilterBar />
+      <FilterBar countryItems={countryItems} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="font-switzer text-sm text-slate-helper">
@@ -92,7 +116,10 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <ApplicationsTable applications={result.applications} />
+      <ApplicationsTable
+        applications={result.applications}
+        canAssign={session.user.role === 'admin'}
+      />
 
       {result.totalPages > 1 && (
         <PaginationClient
