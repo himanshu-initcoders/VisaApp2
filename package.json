@@ -68,5 +68,13 @@
     "tailwindcss": "^3.4.19",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "next-auth": {
+      "nodemailer": "$nodemailer"
+    },
+    "@auth/core": {
+      "nodemailer": "$nodemailer"
+    }
   }
 }
