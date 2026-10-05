@@ -2,7 +2,7 @@ import { auth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 
 /**
- * NextAuth Middleware
+ * Route protection (Next.js proxy).
  *
  * Protected: /dashboard, /applications, /documents, /profile, /admin
  * Auth pages:
