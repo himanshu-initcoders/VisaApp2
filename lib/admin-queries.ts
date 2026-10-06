@@ -14,6 +14,7 @@ import {
 import { eq, and, or, like, gte, lte, desc, sql, count, ilike, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
+import { passengerProfileKey } from '@/lib/dashboard/passengerProfiles';
 import type {
   ApplicationListItem,
   ApplicationFilters,
@@ -817,21 +818,46 @@ function documentBelongsToPassenger(s3Key: string, passengerId: string): boolean
   return s3Key.includes(passengerId);
 }
 
-function asStoredTravellers(
-  value: unknown
-): Array<{ passengerId?: string; name?: string }> {
+type StoredPassenger = {
+  passengerId?: string;
+  name?: string;
+  passportData?: Record<string, unknown> | null;
+};
+
+function asStoredTravellers(value: unknown): StoredPassenger[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) => {
     if (!item || typeof item !== 'object') return [];
-    const record = item as { passengerId?: unknown; name?: unknown };
+    const record = item as {
+      passengerId?: unknown;
+      name?: unknown;
+      passportData?: unknown;
+    };
+    const passportData =
+      record.passportData && typeof record.passportData === 'object'
+        ? (record.passportData as Record<string, unknown>)
+        : null;
     return [
       {
         passengerId:
           typeof record.passengerId === 'string' ? record.passengerId : undefined,
         name: typeof record.name === 'string' ? record.name : undefined,
+        passportData,
       },
     ];
   });
+}
+
+/** Same slot and filename across visas is one file. Keep the newest upload. */
+function documentFingerprint(doc: DocumentWithVerification): string {
+  return `${doc.documentType.trim().toLowerCase()}:${doc.filename.trim().toLowerCase()}`;
+}
+
+function newerDocument(
+  current: DocumentWithVerification,
+  next: DocumentWithVerification
+): DocumentWithVerification {
+  return next.uploadedAt.getTime() >= current.uploadedAt.getTime() ? next : current;
 }
 
 function visaPlaceLabel(
@@ -932,8 +958,10 @@ export async function getApplicationsForUser(
 }
 
 /**
- * Passengers across this user's visa applications, plus files that
- * are not tied to a passenger id.
+ * One circle per person across this user's visa applications.
+ * The same passport (or name + date of birth) on several visas is one person.
+ * Files that share a slot and filename collapse to the newest upload.
+ * Files with no passenger id, plus passport-service files, stay in Other.
  */
 export async function getUserPassengerDocuments(
   userId: string
@@ -985,38 +1013,59 @@ export async function getUserPassengerDocuments(
 
   const visaDocuments = visaDocs.map(toDocumentRow);
   const claimed = new Set<string>();
-  const usedIds = new Set<string>();
-  const passengers: UserPassengerDocumentGroup[] = [];
+  const groups = new Map<
+    string,
+    {
+      id: string;
+      label: string;
+      documents: Map<string, DocumentWithVerification>;
+    }
+  >();
 
   for (const visa of visaRows) {
-    const place = visaPlaceLabel(visa.country, visa.countryCode, visa.visaType);
     const travellers = asStoredTravellers(visa.travellers);
 
     travellers.forEach((traveller, index) => {
-      const passengerId = traveller.passengerId?.trim() ?? '';
+      const id = passengerProfileKey(traveller);
       const name = traveller.name?.trim() || `Traveller ${index + 1}`;
-      let id = passengerId || `${visa.id}:traveller-${index}`;
-      if (usedIds.has(id)) {
-        id = `${id}:${visa.id}:${index}`;
+      let group = groups.get(id);
+      if (!group) {
+        group = { id, label: name, documents: new Map() };
+        groups.set(id, group);
+      } else if (name && !/^traveller \d+$/i.test(name)) {
+        group.label = name;
       }
-      usedIds.add(id);
-      const matched = passengerId
-        ? visaDocuments.filter(
-            (doc) =>
-              !claimed.has(doc.id) &&
-              documentBelongsToPassenger(doc.s3Key, passengerId)
-          )
-        : [];
 
-      for (const doc of matched) claimed.add(doc.id);
+      const passengerId = traveller.passengerId?.trim() ?? '';
+      if (!passengerId) return;
 
-      passengers.push({
-        id,
-        label: `${name} · ${place}`,
-        documents: matched,
-      });
+      const matched = visaDocuments.filter(
+        (doc) =>
+          !claimed.has(doc.id) &&
+          documentBelongsToPassenger(doc.s3Key, passengerId)
+      );
+
+      for (const doc of matched) {
+        claimed.add(doc.id);
+        const fingerprint = documentFingerprint(doc);
+        const existing = group.documents.get(fingerprint);
+        group.documents.set(
+          fingerprint,
+          existing ? newerDocument(existing, doc) : doc
+        );
+      }
     });
   }
+
+  const passengers: UserPassengerDocumentGroup[] = [...groups.values()]
+    .map((group) => ({
+      id: group.id,
+      label: group.label,
+      documents: [...group.documents.values()].sort(
+        (a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime()
+      ),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   const otherDocuments = [
     ...visaDocuments.filter((doc) => !claimed.has(doc.id)),

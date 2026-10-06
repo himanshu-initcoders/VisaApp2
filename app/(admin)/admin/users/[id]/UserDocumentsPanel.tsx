@@ -56,7 +56,7 @@ export function UserDocumentsPanel({
       />
       <Card className="shadow-sm">
         <div className="p-6">
-          <DocumentViewer documents={documents} />
+          <DocumentViewer documents={documents} layout="grid" />
         </div>
       </Card>
     </div>
