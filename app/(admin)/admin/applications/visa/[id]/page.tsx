@@ -75,6 +75,13 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
     notFound();
   }
 
+  if (
+    session.user.role === 'reviewer' &&
+    details.assignedReviewer?.id !== session.user.id
+  ) {
+    notFound();
+  }
+
   const app = details.application as {
     id: string;
     country?: string | null;

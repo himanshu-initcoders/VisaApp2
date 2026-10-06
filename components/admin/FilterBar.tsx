@@ -52,7 +52,14 @@ function selectionFromParams(
  * Filter Bar — Phase 3 inbox filters (URL query params as source of truth).
  * Country options are loaded on the server and passed in.
  */
-export function FilterBar({ countryItems }: { countryItems: NestedMultiSelectItem[] }) {
+export function FilterBar({
+  countryItems,
+  visaOnly = false,
+}: {
+  countryItems: NestedMultiSelectItem[];
+  /** Reviewers only see assigned visas, so the passport type filter is hidden. */
+  visaOnly?: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -91,7 +98,7 @@ export function FilterBar({ countryItems }: { countryItems: NestedMultiSelectIte
     if (dateFrom) params.set('from', dateFrom);
     if (dateTo) params.set('to', dateTo);
     if (status && status !== 'all') params.set('status', status);
-    if (type && type !== 'all') params.set('type', type);
+    if (!visaOnly && type && type !== 'all') params.set('type', type);
     params.set('page', '1');
 
     router.push(`${pathname}?${params.toString()}`);
@@ -118,7 +125,7 @@ export function FilterBar({ countryItems }: { countryItems: NestedMultiSelectIte
     dateFrom !== '' ||
     dateTo !== '' ||
     status !== 'all' ||
-    type !== 'all';
+    (!visaOnly && type !== 'all');
 
   const onEnterApply = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') applyFilters();
@@ -222,16 +229,18 @@ export function FilterBar({ countryItems }: { countryItems: NestedMultiSelectIte
             value={status}
             onChange={(e) => setStatus(e.target.value)}
           />
-          <Select
-            label="Type"
-            options={[
-              { value: 'all', label: 'All Types' },
-              { value: 'visa', label: 'Visa' },
-              { value: 'passport', label: 'Passport' },
-            ]}
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-          />
+          {!visaOnly && (
+            <Select
+              label="Type"
+              options={[
+                { value: 'all', label: 'All Types' },
+                { value: 'visa', label: 'Visa' },
+                { value: 'passport', label: 'Passport' },
+              ]}
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+            />
+          )}
         </div>
       )}
 

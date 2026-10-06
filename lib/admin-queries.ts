@@ -75,6 +75,7 @@ export async function getApplicationsWithFilters(
     dateFrom,
     dateTo,
     userId,
+    assignedReviewerId,
     page = 1,
     limit = 20,
     sortBy = 'submittedAt',
@@ -105,6 +106,11 @@ export async function getApplicationsWithFilters(
     }
     if (userId) {
       visaConditions.push(eq(visaApplications.userId, userId));
+    }
+    if (assignedReviewerId) {
+      visaConditions.push(
+        eq(visaApplications.assignedReviewerId, assignedReviewerId)
+      );
     }
     if (hasDestinationFilter) {
       const destinationMatch = [];
@@ -215,6 +221,7 @@ export async function getApplicationsWithFilters(
   let passportApps: ApplicationListItem[] = [];
   if (
     (type === 'all' || type === 'passport') &&
+    !assignedReviewerId &&
     !hasDestinationFilter &&
     !passenger &&
     !phoneDigits

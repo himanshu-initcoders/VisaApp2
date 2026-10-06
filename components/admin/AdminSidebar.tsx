@@ -18,12 +18,14 @@ interface AdminSidebarProps {
   };
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  signOutAction: () => Promise<void>;
 }
 
 export function AdminSidebar({
   user,
   collapsed = false,
   onToggleCollapsed,
+  signOutAction,
 }: AdminSidebarProps) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -383,6 +385,37 @@ export function AdminSidebar({
                 </div>
               </div>
             )}
+
+            <form action={signOutAction} className={collapsed ? 'flex justify-center' : 'px-1'}>
+              <button
+                type="submit"
+                title="Sign out"
+                className={cn(
+                  'font-switzer text-sm text-slate-helper transition-colors hover:text-portrait-ink',
+                  collapsed
+                    ? 'rounded-lg p-2 hover:bg-sky-wash/30'
+                    : 'w-full rounded-[12px] px-3 py-2 text-left hover:bg-sky-wash/20'
+                )}
+              >
+                {collapsed ? (
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                    />
+                  </svg>
+                ) : (
+                  'Sign out'
+                )}
+              </button>
+            </form>
           </div>
         </div>
       </aside>

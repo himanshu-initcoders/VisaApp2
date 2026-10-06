@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { requireRole } from '@/lib/auth-utils';
 import { AdminShell } from '@/components/admin/AdminShell';
+import { signOutAction } from '@/app/(admin)/actions';
 
 /**
  * Admin Layout
@@ -17,7 +18,9 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen bg-[#fafbfc]">
-      <AdminShell user={session.user}>{children}</AdminShell>
+      <AdminShell user={session.user} signOutAction={signOutAction}>
+        {children}
+      </AdminShell>
     </div>
   );
 }

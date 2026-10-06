@@ -25,8 +25,10 @@ interface PageProps {
 }
 
 export default async function PassportApplicationDetailPage({ params }: PageProps) {
-  // Authorization check
-  await requireRole(['admin', 'reviewer']);
+  const session = await requireRole(['admin', 'reviewer']);
+  if (session.user.role === 'reviewer') {
+    notFound();
+  }
 
   // Fetch application details
   const details = await getApplicationDetails(params.id, 'passport');

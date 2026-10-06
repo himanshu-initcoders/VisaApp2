@@ -20,12 +20,14 @@ function csvEscape(value: string | null | undefined): string {
 }
 
 export async function GET(request: NextRequest) {
+  let session;
   try {
-    await requireRole(['admin', 'reviewer']);
+    session = await requireRole(['admin', 'reviewer']);
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const isReviewer = session.user.role === 'reviewer';
   const sp = request.nextUrl.searchParams;
   const filters: ApplicationFilters = {
     search: sp.get('q') || sp.get('search') || undefined,
@@ -43,7 +45,10 @@ export async function GET(request: NextRequest) {
     dateFrom: sp.get('from') || undefined,
     dateTo: sp.get('to') || undefined,
     status: sp.get('status') || undefined,
-    type: (sp.get('type') as ApplicationFilters['type']) || 'all',
+    type: isReviewer
+      ? 'visa'
+      : (sp.get('type') as ApplicationFilters['type']) || 'all',
+    assignedReviewerId: isReviewer ? session.user.id : undefined,
     sortBy: 'submittedAt',
     sortOrder: 'desc',
   };

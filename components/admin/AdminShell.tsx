@@ -12,13 +12,14 @@ interface AdminShellProps {
     email?: string | null;
     role?: string;
   };
+  signOutAction: () => Promise<void>;
   children: ReactNode;
 }
 
 /**
  * Client shell that owns sidebar collapse state and shifts main content.
  */
-export function AdminShell({ user, children }: AdminShellProps) {
+export function AdminShell({ user, signOutAction, children }: AdminShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
@@ -50,6 +51,7 @@ export function AdminShell({ user, children }: AdminShellProps) {
         user={user}
         collapsed={collapsed}
         onToggleCollapsed={toggleCollapsed}
+        signOutAction={signOutAction}
       />
       <main
         className={cn(

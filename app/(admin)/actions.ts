@@ -14,6 +14,7 @@ import {
   applicationCallLogs,
 } from '@/lib/db/schema';
 import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
+import { signOut } from '@/lib/auth';
 import { requireRole, isValidStatusTransition, isAdmin } from '@/lib/auth-utils';
 import {
   notifyReviewerAssigned,
@@ -22,6 +23,10 @@ import {
 import { createReviewerSchema } from '@/lib/validations/auth';
 import { recomputeVisaCaseStatus } from '@/lib/visa/travellerStatus';
 import { uploadService } from '@/lib/upload';
+import {
+  reviewerOwnsDocument,
+  reviewerOwnsVisa,
+} from '@/lib/reviewer-access';
 import type {
   ActionResponse,
   StatusUpdateRequest,
@@ -39,6 +44,27 @@ import type {
  * All admin mutations with proper authorization and audit logging
  * Each action uses requireRole(['admin', 'reviewer']) for security
  */
+
+/** Clears the staff session and returns to the home page. */
+export async function signOutAction() {
+  await signOut({ redirectTo: '/' });
+}
+
+async function denyReviewerUnlessAssigned(
+  session: { user: { id: string; role?: string } },
+  applicationId: string,
+  applicationType: 'visa' | 'passport'
+): Promise<ActionResponse | null> {
+  if (session.user.role !== 'reviewer') return null;
+  if (applicationType !== 'visa') {
+    return { success: false, message: 'Application not found' };
+  }
+  const allowed = await reviewerOwnsVisa(session.user.id, applicationId);
+  if (!allowed) {
+    return { success: false, message: 'Application not found' };
+  }
+  return null;
+}
 
 /**
  * Update application status with validation and audit logging
@@ -69,6 +95,13 @@ export async function updateApplicationStatus(
         error: 'travellerId is required when updating a visa status',
       };
     }
+
+    const denied = await denyReviewerUnlessAssigned(
+      session,
+      applicationId,
+      applicationType
+    );
+    if (denied) return denied;
 
     // Get current application
     let currentStatus: string;
@@ -208,8 +241,7 @@ export async function verifyDocument(
   request: DocumentVerificationRequest
 ): Promise<ActionResponse> {
   try {
-    // Authorization check
-    await requireRole(['admin', 'reviewer']);
+    const session = await requireRole(['admin', 'reviewer']);
 
     const { documentId, verified, notes } = request;
 
@@ -219,6 +251,13 @@ export async function verifyDocument(
         message: 'Document ID is required',
         error: 'documentId is required',
       };
+    }
+
+    if (
+      session.user.role === 'reviewer' &&
+      !(await reviewerOwnsDocument(session.user.id, documentId))
+    ) {
+      return { success: false, message: 'Document not found' };
     }
 
     // Update document
@@ -283,6 +322,13 @@ export async function addApplicationNote(
         error: 'Note must be 5000 characters or less',
       };
     }
+
+    const denied = await denyReviewerUnlessAssigned(
+      session,
+      applicationId,
+      applicationType
+    );
+    if (denied) return denied;
 
     // Ensure application exists
     if (applicationType === 'visa') {
@@ -349,6 +395,13 @@ export async function addApplicationCallLog(
       };
     }
 
+    const denied = await denyReviewerUnlessAssigned(
+      session,
+      applicationId,
+      'visa'
+    );
+    if (denied) return denied;
+
     const [app] = await db
       .select({ id: visaApplications.id })
       .from(visaApplications)
@@ -388,7 +441,7 @@ export async function getDocumentPreviewUrl(
   documentId: string
 ): Promise<ActionResponse<{ url: string }>> {
   try {
-    await requireRole(['admin', 'reviewer']);
+    const session = await requireRole(['admin', 'reviewer']);
 
     const [doc] = await db
       .select()
@@ -401,6 +454,13 @@ export async function getDocumentPreviewUrl(
         success: false,
         message: 'Document not found',
       };
+    }
+
+    if (
+      session.user.role === 'reviewer' &&
+      !(await reviewerOwnsDocument(session.user.id, documentId))
+    ) {
+      return { success: false, message: 'Document not found' };
     }
 
     const url = uploadService.getUrl(doc.s3Key);

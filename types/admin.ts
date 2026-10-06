@@ -69,6 +69,8 @@ export interface ApplicationFilters {
   dateFrom?: string; // ISO date string (IST day start)
   dateTo?: string; // ISO date string (IST day end)
   userId?: string; // filter by specific user
+  /** When set, only visa applications assigned to this reviewer are returned. */
+  assignedReviewerId?: string;
   page?: number;
   limit?: number;
   sortBy?: 'submittedAt' | 'createdAt' | 'status';

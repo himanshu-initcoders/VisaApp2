@@ -35,6 +35,8 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
 
   const params = await searchParams;
 
+  const isReviewer = session.user.role === 'reviewer';
+
   const filters: ApplicationFilters = {
     search: params.q || params.search,
     phone: params.phone,
@@ -51,7 +53,8 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
     dateFrom: params.from,
     dateTo: params.to,
     status: params.status,
-    type: params.type || 'all',
+    type: isReviewer ? 'visa' : params.type || 'all',
+    assignedReviewerId: isReviewer ? session.user.id : undefined,
     page: params.page ? parseInt(params.page, 10) : 1,
     limit: params.limit ? parseInt(params.limit, 10) : 20,
     sortBy: 'submittedAt',
@@ -87,10 +90,14 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
     <div className="space-y-6">
       <PageHeader
         title="Applications"
-        description="View and manage all visa and passport applications"
+        description={
+          isReviewer
+            ? 'Visa applications assigned to you'
+            : 'View and manage all visa and passport applications'
+        }
       />
 
-      <FilterBar countryItems={countryItems} />
+      <FilterBar countryItems={countryItems} visaOnly={isReviewer} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="font-switzer text-sm text-slate-helper">

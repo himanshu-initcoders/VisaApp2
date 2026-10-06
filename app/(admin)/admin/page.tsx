@@ -1,6 +1,7 @@
 import { StatsCard } from '@/components/admin/StatsCard';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
 import { ApplicationStatusCell } from '@/components/shared/ApplicationStatusCell';
+import { requireRole } from '@/lib/auth-utils';
 import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
 import { db } from '@/lib/db';
 import { visaApplications, passportServices, documents } from '@/lib/db/schema';
@@ -14,6 +15,13 @@ import Link from 'next/link';
  */
 
 export default async function AdminDashboardPage() {
+  const session = await requireRole(['admin', 'reviewer']);
+  const reviewerId =
+    session.user.role === 'reviewer' ? session.user.id : null;
+  const visaScope = reviewerId
+    ? eq(visaApplications.assignedReviewerId, reviewerId)
+    : undefined;
+
   // Parallel data fetching for performance
   const [
     totalVisaApps,
@@ -26,34 +34,51 @@ export default async function AdminDashboardPage() {
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(visaApplications)
+      .where(visaScope)
       .then((res) => res[0]?.count || 0),
 
-    // Total passport applications
-    db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(passportServices)
-      .then((res) => res[0]?.count || 0),
+    // Total passport applications (reviewers only see assigned visas)
+    reviewerId
+      ? Promise.resolve(0)
+      : db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(passportServices)
+          .then((res) => res[0]?.count || 0),
 
     // Pending reviews (under_review status)
     Promise.all([
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(visaApplications)
-        .where(eq(visaApplications.status, 'under_review'))
+        .where(and(eq(visaApplications.status, 'under_review'), visaScope))
         .then((res) => res[0]?.count || 0),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(passportServices)
-        .where(eq(passportServices.status, 'under_review'))
-        .then((res) => res[0]?.count || 0),
+      reviewerId
+        ? Promise.resolve(0)
+        : db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(passportServices)
+            .where(eq(passportServices.status, 'under_review'))
+            .then((res) => res[0]?.count || 0),
     ]).then(([visa, passport]) => visa + passport),
 
     // Unverified documents (null = pending review)
-    db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(documents)
-      .where(isNull(documents.verified))
-      .then((res) => res[0]?.count || 0),
+    (reviewerId
+      ? db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(documents)
+          .innerJoin(
+            visaApplications,
+            and(
+              eq(documents.applicationId, visaApplications.id),
+              eq(documents.applicationType, 'visa')
+            )
+          )
+          .where(and(isNull(documents.verified), visaScope))
+      : db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(documents)
+          .where(isNull(documents.verified))
+    ).then((res) => res[0]?.count || 0),
 
     // Recent applications (last 10, both visa and passport)
     Promise.all([
@@ -67,19 +92,22 @@ export default async function AdminDashboardPage() {
           type: sql<string>`'visa'`,
         })
         .from(visaApplications)
+        .where(visaScope)
         .orderBy(desc(visaApplications.submittedAt))
         .limit(5),
-      db
-        .select({
-          id: passportServices.id,
-          serviceType: passportServices.serviceType,
-          status: passportServices.status,
-          submittedAt: passportServices.submittedAt,
-          type: sql<string>`'passport'`,
-        })
-        .from(passportServices)
-        .orderBy(desc(passportServices.submittedAt))
-        .limit(5),
+      reviewerId
+        ? Promise.resolve([])
+        : db
+            .select({
+              id: passportServices.id,
+              serviceType: passportServices.serviceType,
+              status: passportServices.status,
+              submittedAt: passportServices.submittedAt,
+              type: sql<string>`'passport'`,
+            })
+            .from(passportServices)
+            .orderBy(desc(passportServices.submittedAt))
+            .limit(5),
     ]).then(([visa, passport]) => {
       // Combine and sort by submittedAt
       const combined = [
@@ -131,7 +159,9 @@ export default async function AdminDashboardPage() {
           Dashboard
         </h1>
         <p className="font-switzer text-lg text-slate-helper mt-2">
-          Overview of visa applications and passport services
+          {reviewerId
+            ? 'Visa applications assigned to you'
+            : 'Overview of visa applications and passport services'}
         </p>
       </div>
 
