@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent, Button } from '@/components/ui';
 import { StatusUpdateModal } from '@/components/admin/StatusUpdateModal';
 import { NotesModal } from '@/components/admin/NotesModal';
+import { RequestCorrectionModal } from '@/components/admin/RequestCorrectionModal';
 import { DocumentViewer } from '@/components/admin/DocumentViewer';
 import { Timeline } from '@/components/admin/Timeline';
 import { useTravellerSelectionOptional } from '@/components/admin/TravellerSelectionContext';
 import { historyForSelectedTraveller } from '@/lib/visa/caseStatus';
 import type { DocumentWithVerification, StatusHistoryItem } from '@/types/admin';
+import type { CorrectableTarget } from '@/lib/visa/corrections';
 
 /**
  * Visa Application Actions — status, history, documents (filtered by active traveller).
@@ -20,6 +22,8 @@ interface VisaApplicationActionsProps {
   currentStatus: string;
   documents: DocumentWithVerification[];
   statusHistory: StatusHistoryItem[];
+  travellers: Array<{ id: string; name: string }>;
+  correctionTargets: CorrectableTarget[];
 }
 
 export function VisaApplicationActions({
@@ -27,11 +31,15 @@ export function VisaApplicationActions({
   currentStatus,
   documents,
   statusHistory,
+  travellers,
+  correctionTargets,
 }: VisaApplicationActionsProps) {
   const router = useRouter();
   const selection = useTravellerSelectionOptional();
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+  const [prefillSlot, setPrefillSlot] = useState<string | undefined>();
 
   const visibleDocuments = useMemo(() => {
     if (!selection) return documents;
@@ -83,6 +91,17 @@ export function VisaApplicationActions({
             Update Status
           </Button>
           <Button
+            variant="secondary"
+            className="w-full"
+            onClick={() => {
+              setPrefillSlot(undefined);
+              setShowCorrectionModal(true);
+            }}
+            disabled={travellers.length === 0 || correctionTargets.length === 0}
+          >
+            Request changes
+          </Button>
+          <Button
             variant="ghost"
             className="w-full"
             onClick={() => setShowNotesModal(true)}
@@ -123,6 +142,10 @@ export function VisaApplicationActions({
           <DocumentViewer
             documents={visibleDocuments}
             onDocumentVerified={handleSuccess}
+            onRequestReupload={(slotKey) => {
+              setPrefillSlot(slotKey);
+              setShowCorrectionModal(true);
+            }}
           />
         </CardContent>
       </Card>
@@ -143,6 +166,17 @@ export function VisaApplicationActions({
         onClose={() => setShowNotesModal(false)}
         applicationId={applicationId}
         applicationType="visa"
+        onSuccess={handleSuccess}
+      />
+
+      <RequestCorrectionModal
+        isOpen={showCorrectionModal}
+        onClose={() => setShowCorrectionModal(false)}
+        applicationId={applicationId}
+        travellers={travellers}
+        targets={correctionTargets}
+        initialTravellerId={activeTraveller?.travellerRowId}
+        initialSlotKey={prefillSlot}
         onSuccess={handleSuccess}
       />
     </>

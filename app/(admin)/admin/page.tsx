@@ -3,9 +3,10 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
 import { ApplicationStatusCell } from '@/components/shared/ApplicationStatusCell';
 import { requireRole } from '@/lib/auth-utils';
 import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
+import { listStaffAttention } from '@/lib/visa/corrections';
 import { db } from '@/lib/db';
 import { visaApplications, passportServices, documents } from '@/lib/db/schema';
-import { eq, and, sql, desc, isNull } from 'drizzle-orm';
+import { eq, and, sql, desc, isNull, inArray } from 'drizzle-orm';
 import Link from 'next/link';
 
 /**
@@ -45,12 +46,17 @@ export default async function AdminDashboardPage() {
           .from(passportServices)
           .then((res) => res[0]?.count || 0),
 
-    // Pending reviews (under_review status)
+    // Open reviews: staff queue plus files waiting on the applicant
     Promise.all([
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(visaApplications)
-        .where(and(eq(visaApplications.status, 'under_review'), visaScope))
+        .where(
+          and(
+            inArray(visaApplications.status, ['under_review', 'action_required']),
+            visaScope
+          )
+        )
         .then((res) => res[0]?.count || 0),
       reviewerId
         ? Promise.resolve(0)
@@ -149,10 +155,39 @@ export default async function AdminDashboardPage() {
     };
   });
 
+  const attention = await listStaffAttention({
+    staffUserId: session.user.id,
+    reviewerId,
+  });
+
   const totalApplications = totalVisaApps + totalPassportApps;
 
   return (
     <div className="space-y-8">
+      {attention.length > 0 && (
+        <div className="space-y-3">
+          {attention.map((item) => (
+            <a
+              key={item.applicationId}
+              href={item.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block rounded-[24px] border border-[#f3c9a0] bg-peach-wash px-5 py-4"
+            >
+              <p className="font-switzer text-xs font-semibold uppercase tracking-wider text-portrait-ink">
+                Needs your review
+              </p>
+              <p className="mt-1 font-basier text-2xl text-portrait-ink">
+                {item.title}
+              </p>
+              <p className="mt-1 font-switzer text-sm text-portrait-ink">
+                {item.body}
+              </p>
+            </a>
+          ))}
+        </div>
+      )}
+
       {/* Page Header */}
       <div>
         <h1 className="font-basier text-[44px] text-portrait-ink leading-tight tracking-tight">

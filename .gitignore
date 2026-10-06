@@ -50,6 +50,7 @@ next-env.d.ts
 
 # drizzle
 /lib/db/migrations/*.sql
+!/lib/db/migrations/0012_correction_loop.sql
 
 # obsidian
 .obsidian/workspace

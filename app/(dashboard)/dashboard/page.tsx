@@ -14,6 +14,8 @@ import {
 import { ApplicationStatusCell } from '@/components/shared/ApplicationStatusCell';
 import { PaymentHistory } from '@/components/applications/PaymentHistory';
 import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
+import { listApplicantActionItems } from '@/lib/visa/corrections';
+import { ActionRequiredBanner } from '@/components/dashboard/ActionRequiredBanner';
 import Link from 'next/link';
 
 /**
@@ -52,7 +54,7 @@ export default async function DashboardPage({
   const totalApplications = visaApps.length + passportApps.length;
   const inProgress =
     visaApps.filter((a) =>
-      ['submitted', 'under_review', 'draft'].includes(a.status)
+      ['submitted', 'under_review', 'action_required', 'draft'].includes(a.status)
     ).length +
     passportApps.filter((a) =>
       ['submitted', 'under_review', 'draft', 'in_progress'].includes(a.status)
@@ -63,7 +65,7 @@ export default async function DashboardPage({
       ['approved', 'completed'].includes(a.status)
     ).length;
 
-  const [summaries, paymentRows] = await Promise.all([
+  const [summaries, paymentRows, actionItems] = await Promise.all([
     loadTravellerSummaries(visaApps.map((app) => app.id)),
     db
       .select({
@@ -93,6 +95,7 @@ export default async function DashboardPage({
       .where(eq(payments.userId, session.user.id))
       .orderBy(desc(payments.createdAt))
       .limit(10),
+    listApplicantActionItems(session.user.id),
   ]);
 
   const recent = [
@@ -125,6 +128,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-8">
+      <ActionRequiredBanner items={actionItems} />
       {submittedId && (
         <div className="rounded-[24px] border border-ash bg-mint-wash/60 px-6 py-4">
           <p className="font-switzer text-sm text-portrait-ink">

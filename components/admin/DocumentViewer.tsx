@@ -20,6 +20,8 @@ interface DocumentViewerProps {
   onDocumentVerified?: () => void;
   /** Override preview URL resolver (e.g. user ownership check). Defaults to admin action. */
   getPreviewUrl?: PreviewUrlFn;
+  /** Prefill a correction request for this document slot. */
+  onRequestReupload?: (slotKey: string) => void;
 }
 
 function statusOf(doc: DocumentWithVerification) {
@@ -60,9 +62,11 @@ function DownloadIcon({ className }: { className?: string }) {
 function DocumentCard({
   doc,
   getPreviewUrl,
+  onRequestReupload,
 }: {
   doc: DocumentWithVerification;
   getPreviewUrl: PreviewUrlFn;
+  onRequestReupload?: (slotKey: string) => void;
 }) {
   const status = statusOf(doc);
   const [url, setUrl] = useState<string | null>(null);
@@ -178,6 +182,15 @@ function DocumentCard({
             </p>
           </div>
         )}
+        {onRequestReupload && (
+          <button
+            type="button"
+            onClick={() => onRequestReupload(doc.documentType)}
+            className="font-switzer text-xs font-semibold text-nautical-teal hover:text-portrait-ink"
+          >
+            Request reupload
+          </button>
+        )}
 
         {/* Preview under status — fixed preview height */}
         <div className="h-48 overflow-hidden rounded-2xl border border-ash bg-white">
@@ -233,6 +246,7 @@ function DocumentCard({
 export function DocumentViewer({
   documents,
   getPreviewUrl = getDocumentPreviewUrl,
+  onRequestReupload,
 }: DocumentViewerProps) {
   if (documents.length === 0) {
     return (
@@ -265,6 +279,7 @@ export function DocumentViewer({
             key={doc.id}
             doc={doc}
             getPreviewUrl={getPreviewUrl}
+            onRequestReupload={onRequestReupload}
           />
         ))}
       </div>

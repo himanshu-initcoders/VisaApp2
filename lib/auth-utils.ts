@@ -91,8 +91,9 @@ export function canAccessApplication(
  *
  * Valid transitions:
  * - draft → submitted
- * - submitted → under_review
- * - under_review → approved | rejected
+ * - submitted → under_review | action_required
+ * - under_review → approved | rejected | submitted | action_required
+ * - action_required → under_review | approved | rejected
  * - approved/rejected → (terminal states, no transitions)
  */
 export function isValidStatusTransition(
@@ -101,8 +102,9 @@ export function isValidStatusTransition(
 ): boolean {
   const validTransitions: Record<string, string[]> = {
     draft: ['submitted'],
-    submitted: ['under_review'],
-    under_review: ['approved', 'rejected', 'submitted'], // Can send back for resubmission
+    submitted: ['under_review', 'action_required'],
+    under_review: ['approved', 'rejected', 'submitted', 'action_required'],
+    action_required: ['under_review', 'approved', 'rejected'],
     approved: [], // Terminal state
     rejected: ['submitted'], // Can resubmit after rejection
   };

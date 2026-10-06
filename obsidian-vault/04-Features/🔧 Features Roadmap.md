@@ -154,6 +154,12 @@
 - [ ] Regional payment methods
 - [ ] Local currency support
 
+### Visa correction loop
+- [x] Staff can request specific document reuploads and field fixes, with a comment on each item
+- [x] Applicant dashboard alert and email, then the same apply form with only those items enabled
+- [x] Two-way conversation, in-app notifications, and email on comments, resubmits, and status changes
+- [ ] Passport services reuse the same correction tables later
+
 ---
 
 ## Feature Details

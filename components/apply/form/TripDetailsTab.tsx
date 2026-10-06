@@ -3,6 +3,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { AnimatedTabs } from '@/components/ui';
 import { UnderlineField } from '@/components/apply/form/UnderlineField';
+import { CorrectionGate } from '@/components/apply/form/CorrectionGate';
 import {
   emptyTripDetails,
   toIsoDate,
@@ -19,6 +20,8 @@ interface TripDetailsTabProps {
   trip: TravellerTripDetails;
   countryName: string;
   onChange: (next: TravellerTripDetails) => void;
+  editableKeys?: ReadonlySet<string>;
+  comments?: Record<string, string>;
 }
 
 const FLIGHT_MODES = [
@@ -40,6 +43,10 @@ function FlightRouteSection({
   legs,
   dateLabel,
   layoutId,
+  numberKey,
+  dateKey,
+  editableKeys,
+  comments,
   onChange,
 }: {
   title: string;
@@ -48,10 +55,17 @@ function FlightRouteSection({
   legs: FlightLeg[];
   dateLabel: string;
   layoutId: string;
+  numberKey: string;
+  dateKey: string;
+  editableKeys?: ReadonlySet<string>;
+  comments?: Record<string, string>;
   onChange: (next: { mode: FlightStopMode; legs: FlightLeg[] }) => void;
 }) {
   const futureMin = earliestFutureDateIso();
   const shown = mode === 'direct' ? legs.slice(0, 1) : legs;
+  const numberLocked = Boolean(editableKeys && !editableKeys.has(numberKey));
+  const dateLocked = Boolean(editableKeys && !editableKeys.has(dateKey));
+  const structureLocked = Boolean(editableKeys && (numberLocked || dateLocked));
 
   const setLeg = (index: number, patch: Partial<FlightLeg>) => {
     const next = legs.map((leg, legIndex) =>
@@ -69,19 +83,22 @@ function FlightRouteSection({
         <p className="mt-1 text-sm text-slate-helper">{hint}</p>
       </div>
 
-      <AnimatedTabs
-        items={[...FLIGHT_MODES]}
-        value={mode}
-        onChange={(id) =>
-          onChange({
-            mode: id as FlightStopMode,
-            legs,
-          })
-        }
-        tone="light"
-        layoutId={layoutId}
-        ariaLabel={title}
-      />
+      <div className={structureLocked ? 'pointer-events-none opacity-60' : undefined}>
+        <AnimatedTabs
+          items={[...FLIGHT_MODES]}
+          value={mode}
+          onChange={(id) => {
+            if (structureLocked) return;
+            onChange({
+              mode: id as FlightStopMode,
+              legs,
+            });
+          }}
+          tone="light"
+          layoutId={layoutId}
+          ariaLabel={title}
+        />
+      </div>
 
       <div className="space-y-4">
         {shown.map((leg, index) => (
@@ -94,29 +111,43 @@ function FlightRouteSection({
                 Flight {index + 1}
               </p>
             )}
-            <UnderlineField
-              label="Flight number"
-              required
-              value={leg.flightNumber}
-              onChange={(value) =>
-                setLeg(index, { flightNumber: value.toUpperCase() })
-              }
-            />
+            <CorrectionGate
+              targetKey={index === 0 ? numberKey : `${numberKey}-${index}`}
+              editableKeys={editableKeys}
+              comment={index === 0 ? comments?.[numberKey] : undefined}
+            >
+              <UnderlineField
+                label="Flight number"
+                required
+                value={leg.flightNumber}
+                onChange={(value) => {
+                  if (numberLocked || (editableKeys && index > 0)) return;
+                  setLeg(index, { flightNumber: value.toUpperCase() });
+                }}
+              />
+            </CorrectionGate>
             <div className="flex items-end gap-2">
               <div className="min-w-0 flex-1">
-                <UnderlineField
-                  label={dateLabel}
-                  required
-                  type="date"
-                  min={futureMin}
-                  value={leg.date}
-                  error={futureDateError(leg.date || undefined)}
-                  onChange={(value) =>
-                    setLeg(index, { date: toIsoDate(value) || value })
-                  }
-                />
+                <CorrectionGate
+                  targetKey={index === 0 ? dateKey : `${dateKey}-${index}`}
+                  editableKeys={editableKeys}
+                  comment={index === 0 ? comments?.[dateKey] : undefined}
+                >
+                  <UnderlineField
+                    label={dateLabel}
+                    required
+                    type="date"
+                    min={futureMin}
+                    value={leg.date}
+                    error={futureDateError(leg.date || undefined)}
+                    onChange={(value) => {
+                      if (dateLocked || (editableKeys && index > 0)) return;
+                      setLeg(index, { date: toIsoDate(value) || value });
+                    }}
+                  />
+                </CorrectionGate>
               </div>
-              {mode === 'multistop' && shown.length > 2 && (
+              {mode === 'multistop' && shown.length > 2 && !structureLocked && (
                 <button
                   type="button"
                   aria-label={`Remove flight ${index + 1}`}
@@ -136,7 +167,7 @@ function FlightRouteSection({
         ))}
       </div>
 
-      {mode === 'multistop' && (
+      {mode === 'multistop' && !structureLocked && (
         <button
           type="button"
           onClick={() =>
@@ -159,6 +190,8 @@ export function TripDetailsTab({
   trip,
   countryName,
   onChange,
+  editableKeys,
+  comments,
 }: TripDetailsTabProps) {
   const futureMin = earliestFutureDateIso();
   const normalized = emptyTripDetails(trip);
@@ -174,43 +207,55 @@ export function TripDetailsTab({
           </p>
         </div>
         <div className="grid gap-5 sm:grid-cols-2">
-          <UnderlineField
-            label="Intended arrival date"
-            required
-            type="date"
-            min={futureMin}
-            value={normalized.arrivalDate}
-            error={futureDateError(normalized.arrivalDate || undefined)}
-            onChange={(value) =>
-              onChange(
-                updateTrip(normalized, {
-                  arrivalDate: toIsoDate(value) || value,
-                })
-              )
-            }
-          />
-          <UnderlineField
-            label="Intended return date"
-            required
-            type="date"
-            min={futureMin}
-            value={normalized.returnDate}
-            error={
-              futureDateError(normalized.returnDate || undefined) ||
-              (normalized.arrivalDate &&
-              normalized.returnDate &&
-              normalized.returnDate < normalized.arrivalDate
-                ? 'Return date should be on or after arrival'
-                : null)
-            }
-            onChange={(value) =>
-              onChange(
-                updateTrip(normalized, {
-                  returnDate: toIsoDate(value) || value,
-                })
-              )
-            }
-          />
+          <CorrectionGate
+            targetKey="trip.arrivalDate"
+            editableKeys={editableKeys}
+            comment={comments?.['trip.arrivalDate']}
+          >
+            <UnderlineField
+              label="Intended arrival date"
+              required
+              type="date"
+              min={futureMin}
+              value={normalized.arrivalDate}
+              error={futureDateError(normalized.arrivalDate || undefined)}
+              onChange={(value) =>
+                onChange(
+                  updateTrip(normalized, {
+                    arrivalDate: toIsoDate(value) || value,
+                  })
+                )
+              }
+            />
+          </CorrectionGate>
+          <CorrectionGate
+            targetKey="trip.returnDate"
+            editableKeys={editableKeys}
+            comment={comments?.['trip.returnDate']}
+          >
+            <UnderlineField
+              label="Intended return date"
+              required
+              type="date"
+              min={futureMin}
+              value={normalized.returnDate}
+              error={
+                futureDateError(normalized.returnDate || undefined) ||
+                (normalized.arrivalDate &&
+                normalized.returnDate &&
+                normalized.returnDate < normalized.arrivalDate
+                  ? 'Return date should be on or after arrival'
+                  : null)
+              }
+              onChange={(value) =>
+                onChange(
+                  updateTrip(normalized, {
+                    returnDate: toIsoDate(value) || value,
+                  })
+                )
+              }
+            />
+          </CorrectionGate>
         </div>
       </div>
 
@@ -221,6 +266,10 @@ export function TripDetailsTab({
         legs={normalized.arrivalFlights}
         dateLabel="Arrival date"
         layoutId="arrival-flight-mode"
+        numberKey="trip.flightNumber"
+        dateKey="trip.arrivalFlightDate"
+        editableKeys={editableKeys}
+        comments={comments}
         onChange={({ mode, legs }) =>
           onChange(
             updateTrip(normalized, {
@@ -238,6 +287,10 @@ export function TripDetailsTab({
         legs={normalized.returnFlights}
         dateLabel="Departure date"
         layoutId="return-flight-mode"
+        numberKey="trip.returnFlightNumber"
+        dateKey="trip.returnFlightDate"
+        editableKeys={editableKeys}
+        comments={comments}
         onChange={({ mode, legs }) =>
           onChange(
             updateTrip(normalized, {
@@ -258,30 +311,48 @@ export function TripDetailsTab({
           </p>
         </div>
         <div className="grid gap-5 sm:grid-cols-2">
-          <UnderlineField
-            label="Hotel / accommodation name"
-            value={normalized.accommodationName}
-            onChange={(value) =>
-              onChange(updateTrip(normalized, { accommodationName: value }))
-            }
-          />
-          <UnderlineField
-            label="Arrival city / port of entry"
-            value={normalized.arrivalCity}
-            onChange={(value) =>
-              onChange(updateTrip(normalized, { arrivalCity: value }))
-            }
-          />
-          <div className="sm:col-span-2">
+          <CorrectionGate
+            targetKey="trip.accommodationName"
+            editableKeys={editableKeys}
+            comment={comments?.['trip.accommodationName']}
+          >
             <UnderlineField
-              label="Stay address"
-              value={normalized.accommodationAddress}
+              label="Hotel / accommodation name"
+              value={normalized.accommodationName}
               onChange={(value) =>
-                onChange(
-                  updateTrip(normalized, { accommodationAddress: value })
-                )
+                onChange(updateTrip(normalized, { accommodationName: value }))
               }
             />
+          </CorrectionGate>
+          <CorrectionGate
+            targetKey="trip.arrivalCity"
+            editableKeys={editableKeys}
+            comment={comments?.['trip.arrivalCity']}
+          >
+            <UnderlineField
+              label="Arrival city / port of entry"
+              value={normalized.arrivalCity}
+              onChange={(value) =>
+                onChange(updateTrip(normalized, { arrivalCity: value }))
+              }
+            />
+          </CorrectionGate>
+          <div className="sm:col-span-2">
+            <CorrectionGate
+              targetKey="trip.accommodationAddress"
+              editableKeys={editableKeys}
+              comment={comments?.['trip.accommodationAddress']}
+            >
+              <UnderlineField
+                label="Stay address"
+                value={normalized.accommodationAddress}
+                onChange={(value) =>
+                  onChange(
+                    updateTrip(normalized, { accommodationAddress: value })
+                  )
+                }
+              />
+            </CorrectionGate>
           </div>
         </div>
       </section>

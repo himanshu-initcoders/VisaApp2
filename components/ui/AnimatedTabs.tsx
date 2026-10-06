@@ -7,6 +7,8 @@ export interface AnimatedTabItem {
   id: string;
   label: string;
   disabled?: boolean;
+  /** Red dot beside the label. Used when this section still has requested changes. */
+  dot?: boolean;
 }
 
 interface AnimatedTabsProps {
@@ -93,7 +95,15 @@ export function AnimatedTabs({
                   }
                 />
               )}
-              <span className="relative z-10 whitespace-nowrap">{item.label}</span>
+              <span className="relative z-10 inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
+                {item.label}
+                {item.dot ? (
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full bg-[#ff4940]"
+                    aria-label="Changes requested"
+                  />
+                ) : null}
+              </span>
             </button>
           );
         })}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { UserSidebar } from '@/components/dashboard/UserSidebar';
+import { NotificationBell } from '@/components/dashboard/NotificationBell';
 import { cn } from '@/lib/utils';
 
 const STORAGE_KEY = 'user-sidebar-collapsed';
@@ -13,13 +14,29 @@ interface UserShellProps {
     phone?: string | null;
   };
   signOutAction: () => Promise<void>;
+  unread: number;
+  notifications: Array<{
+    id: string;
+    title: string;
+    body: string;
+    href: string;
+    readAt: Date | null;
+    createdAt: Date;
+    type: string;
+  }>;
   children: ReactNode;
 }
 
 /**
  * Applicant shell — collapsible sidebar + main content padding.
  */
-export function UserShell({ user, signOutAction, children }: UserShellProps) {
+export function UserShell({
+  user,
+  signOutAction,
+  unread,
+  notifications,
+  children,
+}: UserShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
@@ -60,6 +77,9 @@ export function UserShell({ user, signOutAction, children }: UserShellProps) {
         )}
       >
         <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mb-4 flex justify-end">
+            <NotificationBell unread={unread} items={notifications} />
+          </div>
           {children}
         </div>
       </main>

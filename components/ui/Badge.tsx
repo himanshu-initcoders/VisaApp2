@@ -70,6 +70,8 @@ export function getStatusVariant(
     case 'under_review':
     case 'partially_approved':
       return 'review';
+    case 'action_required':
+      return 'pending';
     case 'approved':
     case 'completed':
       return 'approved';

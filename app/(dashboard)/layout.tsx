@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { UserShell } from '@/components/dashboard/UserShell';
 import { signOutAction } from '@/app/(dashboard)/actions';
+import { listNotifications } from '@/lib/notifications';
 
 /**
  * Dashboard layout — sidebar shell (mirrors admin panel pattern).
@@ -23,6 +24,8 @@ export default async function DashboardLayout({
     redirect('/admin');
   }
 
+  const notices = await listNotifications(session.user.id);
+
   return (
     <div className="min-h-screen bg-[#fafbfc]">
       <UserShell
@@ -32,6 +35,8 @@ export default async function DashboardLayout({
           phone: session.user.phone,
         }}
         signOutAction={signOutAction}
+        unread={notices.unread}
+        notifications={notices.items}
       >
         {children}
       </UserShell>

@@ -28,6 +28,15 @@ export function rollupCaseStatus(statuses: string[]): CaseStatusRollup {
   const unique = new Set(statuses);
   const allTerminal = statuses.every((status) => TERMINAL.has(status));
 
+  if (statuses.some((status) => status === 'action_required')) {
+    return {
+      status: 'action_required',
+      setReviewedAt: true,
+      setCompletedAt: false,
+      clearCompletedAt: true,
+    };
+  }
+
   if (allTerminal) {
     if (unique.size === 1 && unique.has('approved')) {
       return {

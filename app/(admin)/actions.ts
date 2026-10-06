@@ -12,6 +12,9 @@ import {
   users,
   applicationNotes,
   applicationCallLogs,
+  applicationComments,
+  correctionItems,
+  correctionRequests,
 } from '@/lib/db/schema';
 import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
 import { signOut } from '@/lib/auth';
@@ -22,6 +25,22 @@ import {
 } from '@/lib/email/notify';
 import { createReviewerSchema } from '@/lib/validations/auth';
 import { recomputeVisaCaseStatus } from '@/lib/visa/travellerStatus';
+import {
+  commentBodySchema,
+  getOpenCorrection,
+  readTargetValue,
+  requestCorrectionSchema,
+  resolveCorrectionSchema,
+  reviewerAccessDenied,
+  validateRequestedItems,
+  type StoredTraveller,
+} from '@/lib/visa/corrections';
+import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
+import {
+  notifyCommentEvent,
+  notifyCorrectionRequestedEvent,
+  notifyStatusChangedEvent,
+} from '@/lib/notifications';
 import { uploadService } from '@/lib/upload';
 import {
   reviewerOwnsDocument,
@@ -218,6 +237,16 @@ export async function updateApplicationStatus(
       revalidatePath(`/applications/visa/${applicationId}`);
       revalidatePath('/applications');
       revalidatePath('/dashboard');
+      try {
+        await notifyStatusChangedEvent({
+          applicationId,
+          actorId: session.user.id,
+          newStatus,
+          notes,
+        });
+      } catch (notifyError) {
+        console.error('Status notification failed', notifyError);
+      }
     }
 
     return {
@@ -875,6 +904,334 @@ export async function assignVisaReviewer(
     return {
       success: false,
       message: 'Failed to assign reviewer',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+function revalidateVisaSurfaces(applicationId: string) {
+  revalidatePath('/admin');
+  revalidatePath('/admin/applications');
+  revalidatePath(`/admin/applications/visa/${applicationId}`);
+  revalidatePath(`/applications/visa/${applicationId}`);
+  revalidatePath(`/applications/visa/${applicationId}/fix`);
+  revalidatePath('/applications');
+  revalidatePath('/dashboard');
+}
+
+function staffRole(role: string | undefined): 'admin' | 'reviewer' {
+  return role === 'reviewer' ? 'reviewer' : 'admin';
+}
+
+/**
+ * Ask the applicant to reupload documents or refill specific fields.
+ */
+export async function requestCorrection(
+  input: unknown
+): Promise<ActionResponse> {
+  try {
+    const session = await requireRole(['admin', 'reviewer']);
+    const parsed = requestCorrectionSchema.safeParse(input);
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message ?? 'Invalid request';
+      return { success: false, message, error: message };
+    }
+
+    const { applicationId, travellerId, message, items } = parsed.data;
+    if (
+      await reviewerAccessDenied(
+        session.user.id,
+        session.user.role,
+        applicationId
+      )
+    ) {
+      return { success: false, message: 'Application not found' };
+    }
+
+    const [application] = await db
+      .select()
+      .from(visaApplications)
+      .where(eq(visaApplications.id, applicationId))
+      .limit(1);
+    if (!application || application.status === 'draft') {
+      return {
+        success: false,
+        message: 'Application not found',
+      };
+    }
+
+    const [traveller] = await db
+      .select()
+      .from(visaApplicationTravellers)
+      .where(
+        and(
+          eq(visaApplicationTravellers.id, travellerId),
+          eq(visaApplicationTravellers.applicationId, applicationId)
+        )
+      )
+      .limit(1);
+    if (!traveller) {
+      return { success: false, message: 'Traveller not found' };
+    }
+    if (traveller.status === 'approved' || traveller.status === 'rejected') {
+      return {
+        success: false,
+        message: 'This traveller is already finished',
+      };
+    }
+
+    const config = (application.formSnapshot as ApplyFormConfig | null) ?? null;
+    const invalid = validateRequestedItems(config, items);
+    if (invalid) return { success: false, message: invalid };
+
+    const open = await getOpenCorrection(applicationId, travellerId);
+    if (open) {
+      return {
+        success: false,
+        message: 'This traveller already has an open correction request',
+      };
+    }
+
+    const storedTravellers = Array.isArray(application.travellers)
+      ? (application.travellers as StoredTraveller[])
+      : [];
+    const stored = storedTravellers.find(
+      (item) => item.passengerId === traveller.passengerId
+    );
+    const now = new Date();
+    const role = staffRole(session.user.role);
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(correctionRequests)
+        .set({ status: 'resolved', resolvedAt: now })
+        .where(
+          and(
+            eq(correctionRequests.applicationId, applicationId),
+            eq(correctionRequests.travellerId, travellerId),
+            eq(correctionRequests.status, 'resubmitted')
+          )
+        );
+
+      const [request] = await tx
+        .insert(correctionRequests)
+        .values({
+          applicationId,
+          travellerId,
+          requestedBy: session.user.id,
+          message,
+          status: 'open',
+          createdAt: now,
+        })
+        .returning();
+
+      await tx.insert(correctionItems).values(
+        items.map((item) => ({
+          requestId: request.id,
+          kind: item.kind,
+          targetKey: item.targetKey,
+          comment: item.comment,
+          status: 'open' as const,
+          previousValue: stored
+            ? readTargetValue(stored, item.targetKey)
+            : null,
+        }))
+      );
+
+      await tx
+        .update(visaApplicationTravellers)
+        .set({
+          status: 'action_required',
+          updatedAt: now,
+          completedAt: null,
+        })
+        .where(eq(visaApplicationTravellers.id, travellerId));
+
+      await tx.insert(statusHistory).values({
+        applicationId,
+        applicationType: 'visa',
+        travellerId,
+        oldStatus: traveller.status,
+        newStatus: 'action_required',
+        changedBy: session.user.id,
+        notes: message,
+        createdAt: now,
+      });
+
+      await tx.insert(applicationComments).values({
+        applicationId,
+        travellerId,
+        authorId: session.user.id,
+        authorRole: role,
+        body: message,
+        createdAt: now,
+      });
+    });
+
+    await recomputeVisaCaseStatus(applicationId);
+    revalidateVisaSurfaces(applicationId);
+    try {
+      await notifyCorrectionRequestedEvent({ applicationId, message });
+    } catch (notifyError) {
+      console.error('Correction notification failed', notifyError);
+    }
+
+    return { success: true, message: 'Correction requested' };
+  } catch (error) {
+    console.error('Error requesting correction:', error);
+    return {
+      success: false,
+      message: 'Failed to request correction',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/** Accept a resubmitted correction round and keep the file under review. */
+export async function resolveCorrection(
+  input: unknown
+): Promise<ActionResponse> {
+  try {
+    const session = await requireRole(['admin', 'reviewer']);
+    const parsed = resolveCorrectionSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, message: 'Invalid request' };
+    }
+
+    const [request] = await db
+      .select()
+      .from(correctionRequests)
+      .where(eq(correctionRequests.id, parsed.data.requestId))
+      .limit(1);
+    if (!request || request.status !== 'resubmitted') {
+      return {
+        success: false,
+        message: 'There is no resubmitted correction to accept',
+      };
+    }
+
+    if (
+      await reviewerAccessDenied(
+        session.user.id,
+        session.user.role,
+        request.applicationId
+      )
+    ) {
+      return { success: false, message: 'Application not found' };
+    }
+
+    const now = new Date();
+    await db.transaction(async (tx) => {
+      await tx
+        .update(correctionRequests)
+        .set({ status: 'resolved', resolvedAt: now })
+        .where(eq(correctionRequests.id, request.id));
+      await tx
+        .update(correctionItems)
+        .set({ status: 'accepted' })
+        .where(eq(correctionItems.requestId, request.id));
+      await tx.insert(applicationComments).values({
+        applicationId: request.applicationId,
+        travellerId: request.travellerId,
+        authorId: session.user.id,
+        authorRole: staffRole(session.user.role),
+        body: 'Updates accepted. Review is continuing.',
+        createdAt: now,
+      });
+      await tx.insert(statusHistory).values({
+        applicationId: request.applicationId,
+        applicationType: 'visa',
+        travellerId: request.travellerId,
+        oldStatus: 'under_review',
+        newStatus: 'under_review',
+        changedBy: session.user.id,
+        notes: 'Accepted applicant updates',
+        createdAt: now,
+      });
+    });
+
+    revalidateVisaSurfaces(request.applicationId);
+    try {
+      await notifyCommentEvent({
+        applicationId: request.applicationId,
+        authorId: session.user.id,
+        authorName: session.user.name || 'Reviewer',
+        authorRole: staffRole(session.user.role),
+        body: 'Updates accepted. Review is continuing.',
+      });
+    } catch (notifyError) {
+      console.error('Resolve notification failed', notifyError);
+    }
+    return { success: true, message: 'Updates accepted' };
+  } catch (error) {
+    console.error('Error resolving correction:', error);
+    return {
+      success: false,
+      message: 'Failed to accept updates',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+export async function postStaffComment(
+  input: unknown
+): Promise<ActionResponse> {
+  try {
+    const session = await requireRole(['admin', 'reviewer']);
+    const parsed = commentBodySchema.safeParse(input);
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message ?? 'Comment is required';
+      return { success: false, message, error: message };
+    }
+
+    const { applicationId, body } = parsed.data;
+    if (
+      await reviewerAccessDenied(
+        session.user.id,
+        session.user.role,
+        applicationId
+      )
+    ) {
+      return { success: false, message: 'Application not found' };
+    }
+
+    const [application] = await db
+      .select({ id: visaApplications.id })
+      .from(visaApplications)
+      .where(eq(visaApplications.id, applicationId))
+      .limit(1);
+    if (!application) {
+      return { success: false, message: 'Application not found' };
+    }
+
+    const role = staffRole(session.user.role);
+    await db.insert(applicationComments).values({
+      applicationId,
+      authorId: session.user.id,
+      authorRole: role,
+      body,
+      createdAt: new Date(),
+    });
+
+    revalidateVisaSurfaces(applicationId);
+    try {
+      await notifyCommentEvent({
+        applicationId,
+        authorId: session.user.id,
+        authorName: session.user.name || 'Reviewer',
+        authorRole: role,
+        body,
+      });
+    } catch (notifyError) {
+      console.error('Comment notification failed', notifyError);
+    }
+
+    return { success: true, message: 'Comment posted' };
+  } catch (error) {
+    console.error('Error posting comment:', error);
+    return {
+      success: false,
+      message: 'Failed to post comment',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }

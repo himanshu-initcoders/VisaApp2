@@ -58,7 +58,7 @@ export interface ReviewerOption {
  * Filter criteria for applications list
  */
 export interface ApplicationFilters {
-  status?: string; // draft, submitted, under_review, approved, rejected, partially_approved
+  status?: string; // draft, submitted, under_review, action_required, approved, rejected, partially_approved
   type?: 'visa' | 'passport' | 'all';
   search?: string; // search by applicant / user name
   phone?: string; // mobile (last 10 digits)

@@ -77,6 +77,8 @@ export interface TravellerDocumentUpload {
   size?: number;
   /** True when the binary lives in IndexedDB for this listing/passenger/slot. */
   storedInIdb?: boolean;
+  /** In-memory file for a correction reupload. Never written to a draft. */
+  file?: File;
 }
 
 export interface ApplyTripQuestion {

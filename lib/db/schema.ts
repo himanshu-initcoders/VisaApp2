@@ -107,7 +107,7 @@ export const visaApplications = pgTable(
 
     visaType: varchar('visa_type', { length: 100 }).notNull(), // tourist, business, student, etc.
     /** Case rollup of traveller visa statuses. */
-    status: varchar('status', { length: 50 }).notNull().default('draft'), // draft, submitted, under_review, approved, rejected, partially_approved
+    status: varchar('status', { length: 50 }).notNull().default('draft'), // draft, submitted, under_review, action_required, approved, rejected, partially_approved
     personalInfo: jsonb('personal_info'), // stores form data
     travelInfo: jsonb('travel_info'), // travel dates, purpose, etc.
     employmentInfo: jsonb('employment_info'), // work details if needed
@@ -326,6 +326,102 @@ export const applicationNotes = pgTable(
   ]
 );
 
+/**
+ * Public two-way thread between the applicant and staff.
+ * Private staff notes stay in application_notes.
+ */
+export const applicationComments = pgTable(
+  'application_comments',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    applicationId: uuid('application_id').notNull(),
+    travellerId: uuid('traveller_id').references(() => visaApplicationTravellers.id, {
+      onDelete: 'set null',
+    }),
+    authorId: uuid('author_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    authorRole: varchar('author_role', { length: 20 }).notNull(),
+    body: text('body').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('application_comments_application_id_idx').on(table.applicationId),
+  ]
+);
+
+/**
+ * One correction round per traveller. Staff ask for specific reuploads or field fixes.
+ */
+export const correctionRequests = pgTable(
+  'correction_requests',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    applicationId: uuid('application_id')
+      .references(() => visaApplications.id, { onDelete: 'cascade' })
+      .notNull(),
+    travellerId: uuid('traveller_id')
+      .references(() => visaApplicationTravellers.id, { onDelete: 'cascade' })
+      .notNull(),
+    requestedBy: uuid('requested_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    message: text('message').notNull(),
+    status: varchar('status', { length: 20 }).notNull().default('open'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    resubmittedAt: timestamp('resubmitted_at'),
+    resolvedAt: timestamp('resolved_at'),
+  },
+  (table) => [
+    index('correction_requests_application_id_idx').on(table.applicationId),
+    index('correction_requests_traveller_status_idx').on(
+      table.travellerId,
+      table.status
+    ),
+  ]
+);
+
+/** One document slot or form field the applicant must change. */
+export const correctionItems = pgTable(
+  'correction_items',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    requestId: uuid('request_id')
+      .references(() => correctionRequests.id, { onDelete: 'cascade' })
+      .notNull(),
+    kind: varchar('kind', { length: 20 }).notNull(),
+    targetKey: varchar('target_key', { length: 200 }).notNull(),
+    comment: text('comment').notNull(),
+    status: varchar('status', { length: 20 }).notNull().default('open'),
+    previousValue: jsonb('previous_value'),
+    newValue: jsonb('new_value'),
+  },
+  (table) => [
+    index('correction_items_request_id_idx').on(table.requestId),
+  ]
+);
+
+/** In-app alerts. Email is sent from the same event and is not stored here. */
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    applicationId: uuid('application_id'),
+    type: varchar('type', { length: 50 }).notNull(),
+    title: varchar('title', { length: 255 }).notNull(),
+    body: text('body').notNull(),
+    href: varchar('href', { length: 500 }).notNull(),
+    readAt: timestamp('read_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('notifications_user_read_idx').on(table.userId, table.readAt),
+  ]
+);
+
 // Export types
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -360,5 +456,17 @@ export type NewApplicationCallLog = typeof applicationCallLogs.$inferInsert;
 
 export type ApplicationNote = typeof applicationNotes.$inferSelect;
 export type NewApplicationNote = typeof applicationNotes.$inferInsert;
+
+export type ApplicationComment = typeof applicationComments.$inferSelect;
+export type NewApplicationComment = typeof applicationComments.$inferInsert;
+
+export type CorrectionRequest = typeof correctionRequests.$inferSelect;
+export type NewCorrectionRequest = typeof correctionRequests.$inferInsert;
+
+export type CorrectionItem = typeof correctionItems.$inferSelect;
+export type NewCorrectionItem = typeof correctionItems.$inferInsert;
+
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;
 
 export type { VisaListing, NewVisaListing } from './schema-extended';

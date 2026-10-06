@@ -16,12 +16,21 @@ import { VisaApplicationActions } from './VisaApplicationActions';
 import { AssignReviewerCard } from '@/components/admin/AssignReviewerDialog';
 import { CallLogsPanel } from '@/components/admin/CallLogsPanel';
 import { NotesPanel } from '@/components/admin/NotesPanel';
+import { CorrectionsCard } from '@/components/admin/CorrectionsCard';
+import { ConversationThread } from '@/components/visa/ConversationThread';
 import { TravellersSection } from '@/components/admin/TravellersSection';
 import { TravellerSelectionProvider } from '@/components/admin/TravellerSelectionContext';
 import { Timeline } from '@/components/admin/Timeline';
 import { PaymentHistory } from '@/components/applications/PaymentHistory';
 import { attachStatusToTravellers } from '@/lib/visa/caseStatus';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
+import { postStaffComment } from '@/app/(admin)/actions';
+import {
+  buildCorrectableTargets,
+  listComments,
+  listCorrectionRounds,
+} from '@/lib/visa/corrections';
+import { markApplicationNotificationsRead } from '@/lib/notifications';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -46,6 +55,8 @@ const DETAIL_TABS = [
   { id: 'payments', label: 'Payments' },
   { id: 'call-logs', label: 'Call logs' },
   { id: 'notes', label: 'Notes' },
+  { id: 'corrections', label: 'Corrections' },
+  { id: 'conversation', label: 'Conversation' },
 ] as const;
 
 function Field({
@@ -113,6 +124,21 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
       ? details.statusHistory.filter((item) => item.travellerId == null)
       : [];
   const applicantPhone = app.applicantPhone || details.user.phone;
+  const [comments, rounds] = await Promise.all([
+    listComments(app.id),
+    listCorrectionRounds(app.id, snapshot),
+  ]);
+  await markApplicationNotificationsRead(session.user.id, app.id);
+  const correctionTravellers = travellers.flatMap((traveller) =>
+    traveller.travellerRowId
+      ? [
+          {
+            id: traveller.travellerRowId,
+            name: traveller.name?.trim() || 'Traveller',
+          },
+        ]
+      : []
+  );
 
   return (
     <div className="space-y-6">
@@ -136,6 +162,9 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
       </div>
 
       <TravellerSelectionProvider travellers={travellers}>
+        <CorrectionsCard
+          rounds={rounds.filter((round) => round.status !== 'resolved')}
+        />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <Tabs
@@ -270,6 +299,26 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
                   hideTitle
                 />
               </TabsPanel>
+              <TabsPanel id="corrections">
+                {rounds.length === 0 ? (
+                  <Card>
+                    <CardContent className="pt-6">
+                      <p className="font-switzer text-sm text-slate-helper">
+                        No correction requests yet.
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <CorrectionsCard rounds={rounds} />
+                )}
+              </TabsPanel>
+              <TabsPanel id="conversation">
+                <ConversationThread
+                  applicationId={app.id}
+                  comments={comments}
+                  postComment={postStaffComment}
+                />
+              </TabsPanel>
             </Tabs>
           </div>
 
@@ -285,6 +334,8 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
               currentStatus={app.status}
               documents={details.documents}
               statusHistory={details.statusHistory}
+              travellers={correctionTravellers}
+              correctionTargets={buildCorrectableTargets(snapshot)}
             />
           </div>
         </div>

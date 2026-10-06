@@ -17,6 +17,14 @@ import { PaymentHistory } from '@/components/applications/PaymentHistory';
 import { attachStatusToTravellers } from '@/lib/visa/caseStatus';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 import { ApplicationSidebar } from '@/components/dashboard/ApplicationSidebar';
+import { ActionRequiredBanner } from '@/components/dashboard/ActionRequiredBanner';
+import { ConversationThread } from '@/components/visa/ConversationThread';
+import { postApplicantComment } from '@/app/(dashboard)/actions';
+import {
+  listApplicantActionItems,
+  listComments,
+} from '@/lib/visa/corrections';
+import { markApplicationNotificationsRead } from '@/lib/notifications';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -96,6 +104,12 @@ export default async function UserVisaApplicationDetailPage({
       ? details.statusHistory.filter((item) => item.travellerId == null)
       : [];
   const applicantPhone = app.applicantPhone || details.user.phone;
+  const [comments, actionItems] = await Promise.all([
+    listComments(app.id),
+    listApplicantActionItems(session.user.id),
+  ]);
+  await markApplicationNotificationsRead(session.user.id, app.id);
+  const openForThis = actionItems.filter((item) => item.applicationId === app.id);
 
   return (
     <div className="space-y-6">
@@ -117,6 +131,8 @@ export default async function UserVisaApplicationDetailPage({
             : ''}
         </p>
       </div>
+
+      <ActionRequiredBanner items={openForThis} />
 
       <TravellerSelectionProvider travellers={travellers}>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -219,6 +235,18 @@ export default async function UserVisaApplicationDetailPage({
                 </Card>
               </>
             )}
+            <Card>
+              <CardHeader>
+                <CardTitle>Conversation</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ConversationThread
+                  applicationId={app.id}
+                  comments={comments}
+                  postComment={postApplicantComment}
+                />
+              </CardContent>
+            </Card>
           </div>
 
           <ApplicationSidebar

@@ -25,6 +25,10 @@ interface DocumentsTabProps {
   uploads: TravellerDocumentUpload[];
   passportPreviewUrl?: string;
   onChange: (next: TravellerDocumentUpload[]) => void;
+  editableKeys?: ReadonlySet<string>;
+  comments?: Record<string, string>;
+  /** Correction reuploads stay in memory until send. Apply flow uses IndexedDB. */
+  storage?: 'idb' | 'memory';
 }
 
 function revokeIfObjectUrl(url?: string) {
@@ -37,12 +41,18 @@ function SlotCard({
   slot,
   upload,
   busy,
+  locked,
+  note,
+  allowRemove = true,
   onFile,
   onRemove,
 }: {
   slot: ApplyDocumentSlot;
   upload?: TravellerDocumentUpload;
   busy: boolean;
+  locked: boolean;
+  note?: string;
+  allowRemove?: boolean;
   onFile: (file: File) => void;
   onRemove: () => void;
 }) {
@@ -51,7 +61,13 @@ function SlotCard({
   const isImage = Boolean(upload?.mimeType.startsWith('image/'));
 
   return (
-    <div className="rounded-[24px] border border-ash bg-white p-4 shadow-sm">
+    <div
+      id={`correction-${slot.key}`}
+      className={[
+        'rounded-[24px] border bg-white p-4 shadow-sm',
+        locked ? 'border-ash opacity-50' : note ? 'border-[#f3c9a0] bg-peach-wash/40' : 'border-ash',
+      ].join(' ')}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-portrait-ink">
@@ -102,7 +118,7 @@ function SlotCard({
           onFile(file);
         }}
       />
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2" inert={locked ? true : undefined}>
         <button
           type="button"
           disabled={busy}
@@ -112,7 +128,7 @@ function SlotCard({
           <Upload className="h-4 w-4" />
           {upload ? 'Replace file' : 'Upload from device'}
         </button>
-        {upload && (
+        {upload && allowRemove && (
           <button
             type="button"
             disabled={busy}
@@ -125,6 +141,9 @@ function SlotCard({
         )}
       </div>
       {error && <p className="mt-2 text-xs text-[#ff4940]">{error}</p>}
+      {!locked && note && (
+        <p className="mt-2 text-xs leading-5 text-portrait-ink">{note}</p>
+      )}
     </div>
   );
 }
@@ -136,18 +155,40 @@ export function DocumentsTab({
   uploads,
   passportPreviewUrl,
   onChange,
+  editableKeys,
+  comments,
+  storage = 'idb',
 }: DocumentsTabProps) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
   const byKey = new Map(uploads.map((item) => [item.key, item]));
 
   useEffect(() => {
+    if (storage === 'memory') return;
     if (!isIdbAvailable()) {
       setStorageError(new IdbUnavailableError().message);
     }
-  }, []);
+  }, [storage]);
 
   const handleFile = async (slot: ApplyDocumentSlot, file: File) => {
+    if (editableKeys && !editableKeys.has(slot.key)) return;
+    if (storage === 'memory') {
+      const previous = byKey.get(slot.key);
+      revokeIfObjectUrl(previous?.previewUrl);
+      onChange([
+        ...uploads.filter((item) => item.key !== slot.key),
+        {
+          key: slot.key,
+          name: file.name,
+          previewUrl: URL.createObjectURL(file),
+          mimeType: file.type || 'application/octet-stream',
+          size: file.size,
+          file,
+        },
+      ]);
+      return;
+    }
+
     if (!isIdbAvailable()) {
       setStorageError(new IdbUnavailableError().message);
       return;
@@ -235,16 +276,27 @@ export function DocumentsTab({
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {slots.map((slot) => (
+        {[...slots]
+          .sort((a, b) => {
+            if (!editableKeys) return 0;
+            const aOpen = editableKeys.has(a.key) ? 0 : 1;
+            const bOpen = editableKeys.has(b.key) ? 0 : 1;
+            return aOpen - bOpen;
+          })
+          .map((slot) => (
           <SlotCard
             key={slot.id}
             slot={slot}
             upload={byKey.get(slot.key)}
             busy={busyKey === slot.key}
+            locked={Boolean(editableKeys && !editableKeys.has(slot.key))}
+            note={comments?.[slot.key]}
+            allowRemove={storage !== 'memory'}
             onFile={(file) => {
               void handleFile(slot, file);
             }}
             onRemove={() => {
+              if (storage === 'memory') return;
               void handleRemove(slot);
             }}
           />

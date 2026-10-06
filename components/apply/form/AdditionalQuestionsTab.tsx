@@ -8,6 +8,7 @@ import type {
   ApplyTripQuestion,
   TravellerTripDetails,
 } from '@/lib/apply/applicationForm';
+import { CorrectionGate } from '@/components/apply/form/CorrectionGate';
 import {
   groupApplyTripQuestions,
   parseCheckboxValues,
@@ -22,6 +23,8 @@ interface AdditionalQuestionsTabProps {
   trip: TravellerTripDetails;
   extraQuestions: ApplyTripQuestion[];
   onChange: (next: TravellerTripDetails) => void;
+  editableKeys?: ReadonlySet<string>;
+  comments?: Record<string, string>;
 }
 
 function ExtraQuestionField({
@@ -166,11 +169,14 @@ export function AdditionalQuestionsTab({
   trip,
   extraQuestions,
   onChange,
+  editableKeys,
+  comments,
 }: AdditionalQuestionsTabProps) {
   const visibleQuestions = getVisibleExtraQuestions(extraQuestions, trip.extra);
   const questionGroups = groupApplyTripQuestions(visibleQuestions);
 
   const updateExtra = (key: string, next: string) => {
+    if (editableKeys && !editableKeys.has(`extra.${key}`)) return;
     const tentative = { ...trip.extra, [key]: next };
     const cleaned = clearHiddenQuestionAnswers(extraQuestions, tentative);
     onChange({ ...trip, extra: cleaned });
@@ -194,15 +200,28 @@ export function AdditionalQuestionsTab({
           <div key={group.category} className="pt-2">
             <h3 className="font-basier text-lg text-portrait-ink">{group.label}</h3>
             <div className="mt-5 grid gap-5 sm:grid-cols-2">
-              {group.questions.map((question) => {
+              {[...group.questions]
+                .sort((a, b) => {
+                  if (!editableKeys) return 0;
+                  const aOpen = editableKeys.has(`extra.${a.key}`) ? 0 : 1;
+                  const bOpen = editableKeys.has(`extra.${b.key}`) ? 0 : 1;
+                  return aOpen - bOpen;
+                })
+                .map((question) => {
                 const value = trip.extra[question.key] ?? '';
                 return (
-                  <ExtraQuestionField
+                  <CorrectionGate
                     key={question.id}
-                    question={question}
-                    value={value}
-                    onUpdate={(next) => updateExtra(question.key, next)}
-                  />
+                    targetKey={`extra.${question.key}`}
+                    editableKeys={editableKeys}
+                    comment={comments?.[`extra.${question.key}`]}
+                  >
+                    <ExtraQuestionField
+                      question={question}
+                      value={value}
+                      onUpdate={(next) => updateExtra(question.key, next)}
+                    />
+                  </CorrectionGate>
                 );
               })}
             </div>

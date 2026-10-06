@@ -26,8 +26,9 @@ interface StatusUpdateModalProps {
 
 const STATUS_TRANSITIONS: Record<string, string[]> = {
   draft: ['submitted'],
-  submitted: ['under_review'],
-  under_review: ['approved', 'rejected', 'submitted'],
+  submitted: ['under_review', 'action_required'],
+  under_review: ['approved', 'rejected', 'submitted', 'action_required'],
+  action_required: ['under_review', 'approved', 'rejected'],
   approved: [],
   rejected: ['submitted'],
 };
@@ -36,6 +37,7 @@ const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
   { value: 'submitted', label: 'Submitted' },
   { value: 'under_review', label: 'Under Review' },
+  { value: 'action_required', label: 'Action required' },
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
 ];

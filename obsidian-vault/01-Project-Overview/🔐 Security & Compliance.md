@@ -128,6 +128,7 @@ Security and compliance requirements for handling sensitive user data (passports
 - [ ] Application submissions
 - [ ] Payment transactions
 - [ ] Admin actions (status changes, document access)
+- [x] Correction requests: the server rejects any field or document that is not on the open correction allow-list. Disabling inputs in the form is not the security boundary.
 - [ ] Data exports
 - [ ] Account deletions
 

@@ -24,6 +24,7 @@ interface ReviewSubmitTabProps {
   passportBackPreviewUrl?: string;
   showGeneralInfo?: boolean;
   showTripDetails?: boolean;
+  editableKeys?: ReadonlySet<string>;
 }
 
 function ReviewSection({
@@ -54,6 +55,7 @@ export function ReviewSubmitTab({
   passportBackPreviewUrl,
   showGeneralInfo = true,
   showTripDetails = true,
+  editableKeys,
 }: ReviewSubmitTabProps) {
   const hasAdditional = extraQuestions.length > 0;
 
@@ -64,8 +66,9 @@ export function ReviewSubmitTab({
           Review &amp; submit
         </h2>
         <p className="mt-1 text-sm text-slate-helper">
-          Check this traveller&apos;s {countryName} application before you save
-          it. You can still edit from the tabs above.
+          {editableKeys
+            ? `Only the highlighted requested items for this ${countryName} application will be sent. Everything else stays as it was.`
+            : `Check this traveller's ${countryName} application before you save it. You can still edit from the tabs above.`}
         </p>
       </div>
 

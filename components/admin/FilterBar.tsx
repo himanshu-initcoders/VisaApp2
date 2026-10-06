@@ -222,6 +222,7 @@ export function FilterBar({
               { value: 'draft', label: 'Draft' },
               { value: 'submitted', label: 'Submitted' },
               { value: 'under_review', label: 'Under Review' },
+              { value: 'action_required', label: 'Action required' },
               { value: 'approved', label: 'Approved' },
               { value: 'partially_approved', label: 'Partially approved' },
               { value: 'rejected', label: 'Rejected' },
