@@ -10,11 +10,8 @@ import {
   Badge,
   getStatusVariant,
 } from '@/components/ui';
-import type {
-  ApplyFormConfig,
-  ApplyTripQuestion,
-} from '@/lib/apply/applicationForm';
-import { formatExtraAnswer } from '@/lib/apply/reviewFields';
+import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
+import { listSubmittedExtraAnswers } from '@/lib/apply/reviewFields';
 import {
   travellerKey,
   useTravellerSelectionOptional,
@@ -40,15 +37,6 @@ export type AdminStoredTraveller = {
 interface TravellersSectionProps {
   travellers: AdminStoredTraveller[];
   snapshot: ApplyFormConfig | null;
-}
-
-function questionForAnswer(
-  snapshot: ApplyFormConfig | null,
-  key: string
-): ApplyTripQuestion | undefined {
-  return snapshot?.extraQuestions?.find(
-    (item) => item.key === key || item.id === key
-  );
 }
 
 function labelForDocSlot(
@@ -123,6 +111,16 @@ export function TravellersSection({
   const passport = traveller.passportData || {};
   const trip = traveller.tripDetails || {};
   const extra = (trip.extra as Record<string, string> | undefined) || {};
+  const extraRows = listSubmittedExtraAnswers(
+    snapshot?.extraQuestions ?? [],
+    extra
+  );
+  const uploadedSlotKeys = new Set(
+    (traveller.documents ?? []).map((doc) => doc.slotKey).filter(Boolean)
+  );
+  const missingSlots = (snapshot?.documentSlots ?? []).filter(
+    (slot) => slot.required === false && !uploadedSlotKeys.has(slot.key)
+  );
 
   return (
     <div className="space-y-4">
@@ -247,33 +245,26 @@ export function TravellersSection({
             </dl>
           </div>
 
-          {Object.keys(extra).length > 0 && (
+          {extraRows.length > 0 && (
             <div>
               <h3 className="mb-3 font-switzer text-sm font-semibold text-portrait-ink">
                 Additional answers
               </h3>
               <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {Object.entries(extra).map(([key, value]) => {
-                  const question = questionForAnswer(snapshot, key);
-                  return (
-                    <Field
-                      key={key}
-                      label={question?.label || key}
-                      value={formatExtraAnswer(question, value) || '—'}
-                    />
-                  );
-                })}
+                {extraRows.map((row) => (
+                  <Field key={row.key} label={row.label} value={row.value} />
+                ))}
               </dl>
             </div>
           )}
 
-          {(traveller.documents?.length ?? 0) > 0 && (
+          {((traveller.documents?.length ?? 0) > 0 || missingSlots.length > 0) && (
             <div>
               <h3 className="mb-3 font-switzer text-sm font-semibold text-portrait-ink">
                 Documents
               </h3>
               <ul className="space-y-2">
-                {traveller.documents!.map((doc, docIdx) => (
+                {traveller.documents?.map((doc, docIdx) => (
                   <li
                     key={`${doc.slotKey}-${docIdx}`}
                     className="flex items-center justify-between gap-3 rounded-2xl border border-ash px-3 py-2"
@@ -292,6 +283,19 @@ export function TravellersSection({
                         Open
                       </a>
                     ) : null}
+                  </li>
+                ))}
+                {missingSlots.map((slot) => (
+                  <li
+                    key={`missing-${slot.key}`}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-ash px-3 py-2"
+                  >
+                    <span className="font-switzer text-sm text-portrait-ink">
+                      {slot.title || labelForDocSlot(snapshot, slot.key)}
+                    </span>
+                    <span className="font-switzer text-sm italic text-slate-helper">
+                      Not uploaded
+                    </span>
                   </li>
                 ))}
               </ul>

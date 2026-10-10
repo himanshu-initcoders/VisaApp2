@@ -13,7 +13,7 @@ interface HeaderProps {
   theme?: 'light' | 'dark';
   center?: ReactNode;
   /** Homepage uses the account icon; other public pages keep Apply now. */
-  cta?: 'apply' | 'account';
+  cta?: 'apply' | 'account' | 'none';
 }
 
 export function Header({
@@ -69,7 +69,7 @@ export function Header({
             )}
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
-              {cta === 'account' ? (
+              {cta === 'none' ? null : cta === 'account' ? (
                 <Link
                   href="/signin"
                   aria-label="Sign in"

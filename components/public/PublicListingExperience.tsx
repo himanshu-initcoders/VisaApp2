@@ -138,7 +138,7 @@ export function PublicListingExperience({
 
   return (
     <>
-      <Header overlay theme="dark" />
+      <Header overlay theme="dark" cta="none" />
       <main className="min-h-screen bg-[#f8f6f1]">
         <ListingHero
           countryName={data.country.name}

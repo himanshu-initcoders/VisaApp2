@@ -4,6 +4,7 @@ import {
   parseCheckboxValues,
   type ApplyTripQuestion,
 } from '@/lib/apply/applicationForm';
+import { getVisibleExtraQuestions } from '@/lib/question-visibility';
 
 export interface ReviewField {
   key: keyof IndianPassportFields;
@@ -88,8 +89,8 @@ export function formatExtraAnswer(
   if (!question) return value;
 
   if (question.type === 'boolean') {
-    if (!value) return '';
-    return value === 'true' ? 'Yes' : 'No';
+    // Unchecked optional yes/no is stored as empty. Treat that as No.
+    return value === 'true' || value === 'yes' ? 'Yes' : 'No';
   }
   if (!value) return '';
   if (question.type === 'checkbox') {
@@ -110,6 +111,54 @@ export function formatExtraAnswer(
   }
   if (question.type === 'date') return formatReviewDate(value);
   return value;
+}
+
+export interface SubmittedExtraAnswer {
+  key: string;
+  label: string;
+  value: string;
+}
+
+/**
+ * Every visible listing question, including ones the applicant left blank.
+ * Yes/no with no answer displays as No. Other blanks display as an em dash.
+ * Answers stored under a key that is no longer on the form are kept at the end.
+ */
+export function listSubmittedExtraAnswers(
+  questions: ApplyTripQuestion[],
+  extra: Record<string, string | undefined> | null | undefined
+): SubmittedExtraAnswer[] {
+  const answers: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(extra ?? {})) {
+    if (typeof raw === 'string') answers[key] = raw;
+  }
+
+  const visible = getVisibleExtraQuestions(questions, answers);
+  const shown = new Set<string>();
+  const rows: SubmittedExtraAnswer[] = visible.map((question) => {
+    shown.add(question.key);
+    shown.add(question.id);
+    const raw = answers[question.key] ?? answers[question.id] ?? '';
+    return {
+      key: question.id || question.key,
+      label: question.label,
+      value: formatExtraAnswer(question, raw) || '—',
+    };
+  });
+
+  for (const [key, raw] of Object.entries(answers)) {
+    if (shown.has(key)) continue;
+    const question = questions.find(
+      (item) => item.key === key || item.id === key
+    );
+    rows.push({
+      key,
+      label: question?.label || key,
+      value: formatExtraAnswer(question, raw) || '—',
+    });
+  }
+
+  return rows;
 }
 
 export function formatReviewValue(
