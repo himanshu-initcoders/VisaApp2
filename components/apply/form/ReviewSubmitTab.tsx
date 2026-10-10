@@ -1,11 +1,13 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { Pencil } from 'lucide-react';
 import { DocumentsReviewSection } from '@/components/apply/review/DocumentsReviewSection';
 import { ReviewFieldGrid } from '@/components/apply/review/ReviewFieldGrid';
 import { TripDetailsReview } from '@/components/apply/review/TripDetailsReview';
 import { PASSPORT_REVIEW_GROUPS } from '@/lib/apply/reviewFields';
 import type {
+  ApplicationFormTabId,
   ApplyDocumentSlot,
   ApplyTripQuestion,
   TravellerDocumentUpload,
@@ -25,20 +27,35 @@ interface ReviewSubmitTabProps {
   showGeneralInfo?: boolean;
   showTripDetails?: boolean;
   editableKeys?: ReadonlySet<string>;
+  onEditSection?: (tab: ApplicationFormTabId) => void;
 }
 
 function ReviewSection({
   title,
+  onEdit,
   children,
 }: {
   title: string;
+  onEdit?: () => void;
   children: ReactNode;
 }) {
   return (
     <section className="rounded-[24px] border border-ash bg-white p-5 shadow-sm">
-      <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-helper">
-        {title}
-      </h3>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-helper">
+          {title}
+        </h3>
+        {onEdit && (
+          <button
+            type="button"
+            aria-label={`Edit ${title}`}
+            onClick={onEdit}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eef4ff] text-[#3b82f6] transition-colors hover:bg-[#dce8ff]"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
       <div className="mt-4">{children}</div>
     </section>
   );
@@ -56,8 +73,11 @@ export function ReviewSubmitTab({
   showGeneralInfo = true,
   showTripDetails = true,
   editableKeys,
+  onEditSection,
 }: ReviewSubmitTabProps) {
   const hasAdditional = extraQuestions.length > 0;
+  const edit = (tab: ApplicationFormTabId) =>
+    onEditSection ? () => onEditSection(tab) : undefined;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -73,13 +93,17 @@ export function ReviewSubmitTab({
       </div>
 
       {showGeneralInfo && (
-        <ReviewSection title="General details">
-          <ReviewFieldGrid groups={PASSPORT_REVIEW_GROUPS} data={fields} />
+        <ReviewSection title="Personal details" onEdit={edit('general')}>
+          <ReviewFieldGrid
+            groups={PASSPORT_REVIEW_GROUPS}
+            data={fields}
+            hideTitles={['Personal details']}
+          />
         </ReviewSection>
       )}
 
       {showTripDetails && (
-        <ReviewSection title="Trip details">
+        <ReviewSection title="Trip details" onEdit={edit('trip')}>
           <TripDetailsReview
             trip={trip}
             includeCore
@@ -90,7 +114,7 @@ export function ReviewSubmitTab({
       )}
 
       {hasAdditional && (
-        <ReviewSection title="Additional questions">
+        <ReviewSection title="Additional questions" onEdit={edit('additional')}>
           <TripDetailsReview
             trip={trip}
             extraQuestions={extraQuestions}
@@ -101,7 +125,7 @@ export function ReviewSubmitTab({
         </ReviewSection>
       )}
 
-      <ReviewSection title="Documents">
+      <ReviewSection title="Documents" onEdit={edit('documents')}>
         <DocumentsReviewSection
           slots={slots}
           uploads={uploads}

@@ -19,7 +19,7 @@ import {
 } from '@/lib/question-visibility';
 
 export const APPLICATION_FORM_TABS = [
-  { id: 'general', label: 'General details' },
+  { id: 'general', label: 'Personal details' },
   { id: 'trip', label: 'Trip details' },
   { id: 'additional', label: 'Additional questions' },
   { id: 'documents', label: 'Documents' },
@@ -44,6 +44,13 @@ export type FlightStopMode = 'direct' | 'multistop';
 export interface FlightLeg {
   flightNumber: string;
   date: string;
+}
+
+/** Another traveller in the same application whose trip can be copied. */
+export interface TripCopySource {
+  id: string;
+  name: string;
+  tripDetails: TravellerTripDetails;
 }
 
 export interface TravellerTripDetails {
@@ -206,10 +213,6 @@ export function normalizeTripDetails(
   return emptyTripDetails(trip);
 }
 
-function blankFlightLeg(): FlightLeg {
-  return { flightNumber: '', date: '' };
-}
-
 function cleanFlightLeg(leg: Partial<FlightLeg> | undefined): FlightLeg {
   return {
     flightNumber: (leg?.flightNumber ?? '').trim().toUpperCase(),
@@ -217,26 +220,14 @@ function cleanFlightLeg(leg: Partial<FlightLeg> | undefined): FlightLeg {
   };
 }
 
-/** Direct keeps one leg. Multi-stop keeps every leg and always at least two. */
+/** Trip flights are a single leg. Extra saved stops are dropped. */
 export function normalizeFlightLegs(
   legs: Array<Partial<FlightLeg>> | undefined,
-  fallback: FlightLeg,
-  mode: FlightStopMode
+  fallback: FlightLeg
 ): FlightLeg[] {
-  const source =
-    legs && legs.length > 0 ? legs : [fallback];
-  const cleaned = source.map((leg, index) =>
-    index === 0 ? cleanFlightLeg({ ...fallback, ...leg }) : cleanFlightLeg(leg)
-  );
-
-  if (mode === 'direct') return [cleaned[0] ?? cleanFlightLeg(fallback)];
-
-  while (cleaned.length < 2) cleaned.push(blankFlightLeg());
-  return cleaned;
-}
-
-function flightModeOf(value: string | undefined): FlightStopMode {
-  return value === 'multistop' ? 'multistop' : 'direct';
+  const source = legs && legs.length > 0 ? legs : [fallback];
+  const first = source[0];
+  return [cleanFlightLeg({ ...fallback, ...first })];
 }
 
 const isoDate = z.preprocess(
@@ -301,24 +292,16 @@ export const tripDetailsSchema = z
 export function emptyTripDetails(
   partial?: Partial<TravellerTripDetails>
 ): TravellerTripDetails {
-  const arrivalFlightMode = flightModeOf(partial?.arrivalFlightMode);
-  const returnFlightMode = flightModeOf(partial?.returnFlightMode);
-  const arrivalFlights = normalizeFlightLegs(
-    partial?.arrivalFlights,
-    {
-      flightNumber: partial?.flightNumber ?? '',
-      date: partial?.arrivalFlightDate ?? '',
-    },
-    arrivalFlightMode
-  );
-  const returnFlights = normalizeFlightLegs(
-    partial?.returnFlights,
-    {
-      flightNumber: partial?.returnFlightNumber ?? '',
-      date: partial?.returnFlightDate ?? '',
-    },
-    returnFlightMode
-  );
+  const arrivalFlightMode = 'direct' as const;
+  const returnFlightMode = 'direct' as const;
+  const arrivalFlights = normalizeFlightLegs(partial?.arrivalFlights, {
+    flightNumber: partial?.flightNumber ?? '',
+    date: partial?.arrivalFlightDate ?? '',
+  });
+  const returnFlights = normalizeFlightLegs(partial?.returnFlights, {
+    flightNumber: partial?.returnFlightNumber ?? '',
+    date: partial?.returnFlightDate ?? '',
+  });
 
   return {
     purpose: normalizePurpose(partial?.purpose),
@@ -543,29 +526,21 @@ export function getCoreTripIssues(trip: TravellerTripDetails | undefined) {
 
 function flightLegIssues(
   legs: FlightLeg[],
-  mode: FlightStopMode,
   label: string,
   dateLabel: string
 ): string[] {
-  const required = mode === 'multistop' ? legs : legs.slice(0, 1);
+  const leg = legs[0];
+  const which = `${label} flight`;
   const issues: string[] = [];
 
-  if (mode === 'multistop' && required.length < 2) {
-    issues.push(`Add at least two ${label.toLowerCase()} flights`);
+  if (!leg?.flightNumber.trim()) {
+    issues.push(`Enter the ${which.toLowerCase()} number`);
   }
-
-  required.forEach((leg, index) => {
-    const which =
-      mode === 'multistop' ? `${label} flight ${index + 1}` : `${label} flight`;
-    if (!leg.flightNumber.trim()) {
-      issues.push(`Enter the ${which.toLowerCase()} number`);
-    }
-    if (!leg.date) {
-      issues.push(`Enter the ${which.toLowerCase()} ${dateLabel.toLowerCase()}`);
-    } else if (!isFutureIsoDate(leg.date)) {
-      issues.push(`${which} ${dateLabel.toLowerCase()} must be in the future`);
-    }
-  });
+  if (!leg?.date) {
+    issues.push(`Enter the ${which.toLowerCase()} ${dateLabel.toLowerCase()}`);
+  } else if (!isFutureIsoDate(leg.date)) {
+    issues.push(`${which} ${dateLabel.toLowerCase()} must be in the future`);
+  }
 
   return issues;
 }
@@ -573,18 +548,8 @@ function flightLegIssues(
 export function getMultiStopIssues(trip: TravellerTripDetails | undefined) {
   const normalized = normalizeTripDetails(trip);
   return [
-    ...flightLegIssues(
-      normalized.arrivalFlights,
-      normalized.arrivalFlightMode,
-      'Arrival',
-      'date'
-    ),
-    ...flightLegIssues(
-      normalized.returnFlights,
-      normalized.returnFlightMode,
-      'Return',
-      'departure date'
-    ),
+    ...flightLegIssues(normalized.arrivalFlights, 'Arrival', 'date'),
+    ...flightLegIssues(normalized.returnFlights, 'Return', 'departure date'),
   ];
 }
 

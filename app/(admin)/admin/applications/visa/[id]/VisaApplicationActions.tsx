@@ -7,7 +7,7 @@ import { StatusUpdateModal } from '@/components/admin/StatusUpdateModal';
 import { NotesModal } from '@/components/admin/NotesModal';
 import { RequestCorrectionModal } from '@/components/admin/RequestCorrectionModal';
 import { DocumentViewer } from '@/components/admin/DocumentViewer';
-import { Timeline } from '@/components/admin/Timeline';
+import { StatusHistoryCard } from '@/components/admin/Timeline';
 import { useTravellerSelectionOptional } from '@/components/admin/TravellerSelectionContext';
 import { historyForSelectedTraveller } from '@/lib/visa/caseStatus';
 import type { DocumentWithVerification, StatusHistoryItem } from '@/types/admin';
@@ -111,21 +111,10 @@ export function VisaApplicationActions({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Status History
-            {travellerLabel ? (
-              <span className="mt-1 block font-switzer text-sm font-normal text-slate-helper">
-                {travellerLabel}
-              </span>
-            ) : null}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Timeline history={visibleHistory} />
-        </CardContent>
-      </Card>
+      <StatusHistoryCard
+        history={visibleHistory}
+        subtitle={travellerLabel}
+      />
 
       <Card>
         <CardHeader>

@@ -87,14 +87,14 @@ export function TravellerDetailPane({
             {displayName}
           </h2>
         </div>
-        {(filled || started) && (
+        {filled && (
           <button
             type="button"
             onClick={onEdit}
             className="inline-flex items-center gap-1.5 rounded-full bg-[#eef4ff] px-4 py-2 text-sm font-medium text-[#3b82f6] transition-colors hover:bg-[#dce8ff]"
           >
             <Pencil className="h-3.5 w-3.5" />
-            {filled ? 'Edit application' : 'Continue application'}
+            Edit application
           </button>
         )}
       </div>
@@ -104,12 +104,13 @@ export function TravellerDetailPane({
           {showGeneralInfo && traveller.passportData && (
             <section>
               <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-helper">
-                General details
+                Personal details
               </h3>
               <div className="mt-3">
                 <ReviewFieldGrid
                   groups={PASSPORT_REVIEW_GROUPS}
                   data={traveller.passportData}
+                  hideTitles={['Personal details']}
                 />
               </div>
             </section>

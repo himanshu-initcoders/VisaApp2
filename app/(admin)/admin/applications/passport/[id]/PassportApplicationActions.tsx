@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent, Button } from '@/components/u
 import { StatusUpdateModal } from '@/components/admin/StatusUpdateModal';
 import { NotesModal } from '@/components/admin/NotesModal';
 import { DocumentViewer } from '@/components/admin/DocumentViewer';
-import { Timeline } from '@/components/admin/Timeline';
+import { StatusHistoryCard } from '@/components/admin/Timeline';
 import type { DocumentWithVerification, StatusHistoryItem } from '@/types/admin';
 
 /**
@@ -64,15 +64,7 @@ export function PassportApplicationActions({
         </CardContent>
       </Card>
 
-      {/* Status History */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Status History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Timeline history={statusHistory} />
-        </CardContent>
-      </Card>
+      <StatusHistoryCard history={statusHistory} />
 
       {/* Documents */}
       <Card>

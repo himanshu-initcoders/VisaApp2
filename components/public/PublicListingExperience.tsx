@@ -19,11 +19,9 @@ import type { VisaKindOption } from '@/components/public/PricingPanel';
 
 const listingCache = new Map<string, PublicProcessPageData>();
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { id: 'overview', label: 'Overview' },
   { id: 'requirements', label: 'Requirements' },
-  // { id: 'process', label: 'Process' },
-  { id: 'faqs', label: 'FAQs' },
 ];
 
 function cacheKey(countryCode: string, listingId: string) {
@@ -133,6 +131,11 @@ export function PublicListingExperience({
     [switchListing]
   );
 
+  const hasFaqs = data.page.faqs.length > 0;
+  const navItems = hasFaqs
+    ? [...BASE_NAV_ITEMS, { id: 'faqs', label: 'FAQs' }]
+    : BASE_NAV_ITEMS;
+
   return (
     <>
       <Header overlay theme="dark" />
@@ -151,7 +154,7 @@ export function PublicListingExperience({
         />
 
         <StickySectionNav
-          items={NAV_ITEMS}
+          items={navItems}
           className="border-ash-divider/40 bg-[#f8f6f1]/95"
         />
 
@@ -203,35 +206,19 @@ export function PublicListingExperience({
             </section>
           )}
 
-          <section id="faqs" className="space-y-5 sm:space-y-8">
-            <MotionReveal className="max-w-2xl space-y-2 sm:space-y-3">
-              <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
-                Frequently asked questions
-              </p>
-              <h2 className="font-basier text-2xl text-portrait-ink sm:text-4xl">
-                Common questions, answered.
-              </h2>
-            </MotionReveal>
-            <FaqAccordion faqs={data.page.faqs} />
-            {data.page.relatedQuestions.length > 0 && (
-              <div className="rounded-2xl border border-ash-divider bg-white p-5 shadow-card sm:rounded-[28px] sm:p-6">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-helper sm:text-sm">
-                  Extra questions in this application
+          {hasFaqs && (
+            <section id="faqs" className="space-y-5 sm:space-y-8">
+              <MotionReveal className="max-w-2xl space-y-2 sm:space-y-3">
+                <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
+                  Frequently asked questions
                 </p>
-                <ul className="mt-3 grid gap-2 sm:mt-4 sm:grid-cols-2 sm:gap-3">
-                  {data.page.relatedQuestions.map((question) => (
-                    <li
-                      key={question.id}
-                      className="rounded-xl bg-[#f8fafc] px-4 py-3 text-[15px] text-portrait-ink sm:rounded-[18px] sm:text-sm"
-                    >
-                      {question.label}
-                      {question.required ? ' *' : ''}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </section>
+                <h2 className="font-basier text-2xl text-portrait-ink sm:text-4xl">
+                  Common questions, answered.
+                </h2>
+              </MotionReveal>
+              <FaqAccordion faqs={data.page.faqs} />
+            </section>
+          )}
 
           {data.page.exploreMore.length > 0 && (
             <section id="explore">

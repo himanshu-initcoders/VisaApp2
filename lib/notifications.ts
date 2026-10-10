@@ -429,3 +429,40 @@ export async function markApplicationNotificationsRead(
       )
     );
 }
+
+export async function hasUnreadStaffComment(
+  userId: string,
+  applicationId: string
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: notifications.id })
+    .from(notifications)
+    .where(
+      and(
+        eq(notifications.userId, userId),
+        eq(notifications.applicationId, applicationId),
+        eq(notifications.type, 'staff_comment'),
+        isNull(notifications.readAt)
+      )
+    )
+    .limit(1);
+
+  return Boolean(row);
+}
+
+export async function markStaffCommentNotificationsRead(
+  userId: string,
+  applicationId: string
+): Promise<void> {
+  await db
+    .update(notifications)
+    .set({ readAt: new Date() })
+    .where(
+      and(
+        eq(notifications.userId, userId),
+        eq(notifications.applicationId, applicationId),
+        eq(notifications.type, 'staff_comment'),
+        isNull(notifications.readAt)
+      )
+    );
+}

@@ -589,7 +589,10 @@ export async function getApplicationDetails(
     application,
     type,
     user,
-    documents: docs,
+    documents: sortDocumentsBySubmissionOrder(
+      docs,
+      documentKeysInSubmissionOrder(application)
+    ),
     statusHistory: history,
     travellers,
     notes,
@@ -652,6 +655,65 @@ export async function getApplicationCallLogs(
     adminName: r.adminName,
     createdAt: r.createdAt,
   }));
+}
+
+/** Original upload order: traveller documents, then the application document list. */
+function documentKeysInSubmissionOrder(application: unknown): string[] {
+  if (!application || typeof application !== 'object') return [];
+  const record = application as { travellers?: unknown; documents?: unknown };
+  const keys: string[] = [];
+
+  const pushDocs = (value: unknown) => {
+    if (!Array.isArray(value)) return;
+    for (const item of value) {
+      if (!item || typeof item !== 'object' || !('key' in item)) continue;
+      const key = (item as { key: unknown }).key;
+      if (typeof key === 'string' && key.length > 0) keys.push(key);
+    }
+  };
+
+  if (Array.isArray(record.travellers)) {
+    for (const traveller of record.travellers) {
+      if (
+        traveller &&
+        typeof traveller === 'object' &&
+        'documents' in traveller
+      ) {
+        pushDocs((traveller as { documents: unknown }).documents);
+      }
+    }
+  }
+
+  if (keys.length === 0) pushDocs(record.documents);
+  return keys;
+}
+
+/**
+ * Keep each file in the place it was submitted. Verification must not move it.
+ * Files uploaded with the same timestamp stay in submission order.
+ */
+function sortDocumentsBySubmissionOrder(
+  docs: DocumentWithVerification[],
+  submissionKeys: string[]
+): DocumentWithVerification[] {
+  const index = new Map<string, number>();
+  submissionKeys.forEach((key, position) => {
+    if (!index.has(key)) index.set(key, position);
+  });
+
+  return [...docs].sort((a, b) => {
+    const aIndex = index.get(a.s3Key);
+    const bIndex = index.get(b.s3Key);
+    if (aIndex != null && bIndex != null && aIndex !== bIndex) {
+      return aIndex - bIndex;
+    }
+    if (aIndex != null && bIndex == null) return -1;
+    if (aIndex == null && bIndex != null) return 1;
+    const uploaded =
+      new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime();
+    if (uploaded !== 0) return uploaded;
+    return a.id.localeCompare(b.id);
+  });
 }
 
 /**

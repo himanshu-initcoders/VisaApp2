@@ -20,7 +20,7 @@ import {
 } from '@/lib/apply/applicationForm';
 import { isReviewComplete } from '@/lib/passport/schema';
 import type { ApplyStep, ApplyTraveller } from '@/lib/apply/types';
-import { isTravellerFilled } from '@/lib/apply/reviewFields';
+import { isTravellerFilled, travellerDisplayName } from '@/lib/apply/reviewFields';
 import {
   draftSubstanceScore,
   migrateLegacyDraftBinaries,
@@ -970,6 +970,24 @@ export function ApplyVisaWizard({
           initialFile={passportFile ?? undefined}
           formConfig={formConfig}
           arrivalPrefill={departure.departure}
+          tripSources={travellers.flatMap((traveller, index) => {
+            if (traveller.id === passportTravellerId || !traveller.tripDetails) {
+              return [];
+            }
+            if (
+              !isCoreTripComplete(traveller.tripDetails) ||
+              !isMultiStopComplete(traveller.tripDetails)
+            ) {
+              return [];
+            }
+            return [
+              {
+                id: traveller.id,
+                name: travellerDisplayName(traveller, index),
+                tripDetails: traveller.tripDetails,
+              },
+            ];
+          })}
           resume={
             passportResume
               ? {

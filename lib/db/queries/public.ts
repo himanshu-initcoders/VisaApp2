@@ -21,7 +21,6 @@ import {
   stableDemoCount,
 } from '@/lib/public';
 import {
-  getDemoFaqs,
   getDemoHighlights,
   getDemoPriceOptions,
   getDemoRequirements,
@@ -336,17 +335,6 @@ export async function getPublicProcessPageData(
   };
   });
 
-  const questionRequirements = process.additionalQuestions.map((question) => ({
-    id: question.id,
-    key: question.key,
-    title: question.label,
-    description:
-      question.description ||
-      (question.required ? 'Required before you can submit' : 'Optional extra detail'),
-    helper: question.extraInfo || 'Asked during the application form',
-    chargeable: false,
-  }));
-
   const priceOptions =
     mappedProcess.priceOptions.length > 0
       ? mappedProcess.priceOptions
@@ -399,8 +387,8 @@ export async function getPublicProcessPageData(
           : `${process.processName} gives Indian travellers a guided application experience with document checks, timeline clarity, and transparent pricing before submission.`),
       requirements:
         dbRequirements.length > 0
-          ? [...dbRequirements, ...questionRequirements]
-          : [...getDemoRequirements(mappedProcess), ...questionRequirements],
+          ? dbRequirements
+          : getDemoRequirements(mappedProcess),
       pricing: {
         priceOptions,
         usingDemoPrices: mappedProcess.priceOptions.length === 0,
@@ -451,15 +439,7 @@ export async function getPublicProcessPageData(
                 stepNumber: 4,
               },
             ],
-      faqs:
-        process.faqs.length > 0
-          ? process.faqs
-          : getDemoFaqs(process.country.name, mappedProcess),
-      relatedQuestions: process.additionalQuestions.map((question) => ({
-        id: question.id,
-        label: question.label,
-        required: question.required,
-      })),
+      faqs: process.faqs,
       exploreMore,
       visaKinds,
       applyForm: buildApplyFormConfig({

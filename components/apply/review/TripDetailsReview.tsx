@@ -73,54 +73,38 @@ export function TripDetailsReview({
             value={trip.returnDate ? formatReviewDate(trip.returnDate) : ''}
             showEmpty={showEmpty}
           />
-          {(trip.arrivalFlights?.length
-            ? trip.arrivalFlights
-            : [
-                {
-                  flightNumber: trip.flightNumber,
-                  date: trip.arrivalFlightDate,
-                },
+          <Row
+            label="Arrival flight"
+            value={
+              [
+                trip.arrivalFlights?.[0]?.flightNumber || trip.flightNumber,
+                (trip.arrivalFlights?.[0]?.date || trip.arrivalFlightDate)
+                  ? formatReviewDate(
+                      trip.arrivalFlights?.[0]?.date || trip.arrivalFlightDate
+                    )
+                  : '',
               ]
-          ).map((leg, index) => (
-            <Row
-              key={`arrival-${index}`}
-              label={
-                (trip.arrivalFlights?.length ?? 0) > 1
-                  ? `Arrival flight ${index + 1}`
-                  : 'Arrival flight'
-              }
-              value={
-                [leg.flightNumber, leg.date ? formatReviewDate(leg.date) : '']
-                  .filter(Boolean)
-                  .join(' · ')
-              }
-              showEmpty={showEmpty}
-            />
-          ))}
-          {(trip.returnFlights?.length
-            ? trip.returnFlights
-            : [
-                {
-                  flightNumber: trip.returnFlightNumber,
-                  date: trip.returnFlightDate,
-                },
+                .filter(Boolean)
+                .join(' · ')
+            }
+            showEmpty={showEmpty}
+          />
+          <Row
+            label="Return flight"
+            value={
+              [
+                trip.returnFlights?.[0]?.flightNumber || trip.returnFlightNumber,
+                (trip.returnFlights?.[0]?.date || trip.returnFlightDate)
+                  ? formatReviewDate(
+                      trip.returnFlights?.[0]?.date || trip.returnFlightDate
+                    )
+                  : '',
               ]
-          ).map((leg, index) => (
-            <Row
-              key={`return-${index}`}
-              label={
-                (trip.returnFlights?.length ?? 0) > 1
-                  ? `Return flight ${index + 1}`
-                  : 'Return flight'
-              }
-              value={
-                [leg.flightNumber, leg.date ? formatReviewDate(leg.date) : '']
-                  .filter(Boolean)
-                  .join(' · ')
-              }
-              showEmpty={showEmpty}
-            />
-          ))}
+                .filter(Boolean)
+                .join(' · ')
+            }
+            showEmpty={showEmpty}
+          />
           <Row
             label="Accommodation"
             value={trip.accommodationName}

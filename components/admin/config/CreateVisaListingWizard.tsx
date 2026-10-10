@@ -436,7 +436,7 @@ export function CreateVisaListingWizard({
                   }
                 />
                 <Checkbox
-                  label="General Information"
+                  label="Personal details"
                   description="Show passport biodata on apply. Off = Fill Application (no OCR)."
                   checked={form.watch('showGeneralInfo') ?? true}
                   onChange={(checked) =>

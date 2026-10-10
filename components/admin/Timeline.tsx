@@ -1,5 +1,17 @@
-import { Badge, getStatusVariant } from '@/components/ui';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  getStatusVariant,
+} from '@/components/ui';
 import type { StatusHistoryItem } from '@/types/admin';
+import { cn } from '@/lib/utils';
 
 /**
  * Timeline Component
@@ -96,5 +108,64 @@ export function Timeline({ history }: TimelineProps) {
         );
       })}
     </div>
+  );
+}
+
+export function StatusHistoryCard({
+  history,
+  subtitle,
+}: {
+  history: StatusHistoryItem[];
+  subtitle?: string | null;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const latestId = history[0]?.id;
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [latestId]);
+
+  const canToggle = history.length > 1;
+  const visible = expanded || !canToggle ? history : history.slice(0, 1);
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3">
+          <CardTitle>
+            Status History
+            {subtitle ? (
+              <span className="mt-1 block font-switzer text-sm font-normal text-slate-helper">
+                {subtitle}
+              </span>
+            ) : null}
+          </CardTitle>
+          {canToggle && (
+            <button
+              type="button"
+              onClick={() => setExpanded((open) => !open)}
+              aria-expanded={expanded}
+              aria-label={
+                expanded
+                  ? 'Hide earlier status updates'
+                  : 'Show all status updates'
+              }
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-portrait-ink transition-colors hover:bg-sky-wash/60"
+            >
+              <ChevronDown
+                className={cn(
+                  'h-5 w-5 transition-transform',
+                  expanded && 'rotate-180'
+                )}
+                aria-hidden
+              />
+            </button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <Timeline history={visible} />
+      </CardContent>
+    </Card>
   );
 }

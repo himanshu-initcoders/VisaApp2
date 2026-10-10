@@ -1,7 +1,11 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { eq } from 'drizzle-orm';
+import { ExternalLink } from 'lucide-react';
 import { requireRole } from '@/lib/auth-utils';
 import { getApplicationDetails } from '@/lib/admin-queries';
+import { db } from '@/lib/db';
+import { visaListings } from '@/lib/db/schema-extended';
 import {
   Card,
   CardHeader,
@@ -59,6 +63,18 @@ const DETAIL_TABS = [
   { id: 'conversation', label: 'Conversation' },
 ] as const;
 
+function officialApplyUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function Field({
   label,
   value,
@@ -95,6 +111,7 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
 
   const app = details.application as {
     id: string;
+    visaListingId?: string | null;
     country?: string | null;
     countryCode?: string | null;
     visaType?: string;
@@ -124,10 +141,18 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
       ? details.statusHistory.filter((item) => item.travellerId == null)
       : [];
   const applicantPhone = app.applicantPhone || details.user.phone;
-  const [comments, rounds] = await Promise.all([
+  const [comments, rounds, listingRows] = await Promise.all([
     listComments(app.id),
     listCorrectionRounds(app.id, snapshot),
+    app.visaListingId
+      ? db
+          .select({ sourceUrl: visaListings.sourceUrl })
+          .from(visaListings)
+          .where(eq(visaListings.id, app.visaListingId))
+          .limit(1)
+      : Promise.resolve([]),
   ]);
+  const applyFormUrl = officialApplyUrl(listingRows[0]?.sourceUrl);
   await markApplicationNotificationsRead(session.user.id, app.id);
   const correctionTravellers = travellers.flatMap((traveller) =>
     traveller.travellerRowId
@@ -149,16 +174,29 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
         ← Back to Applications
       </Link>
 
-      <div>
-        <h1 className="font-basier text-[44px] leading-tight text-portrait-ink">
-          {app.country || app.countryCode || 'Visa'} — {app.visaType}
-        </h1>
-        <p className="mt-2 font-switzer text-lg text-slate-helper">
-          Visa Application
-          {details.formVersionNumber != null
-            ? ` · Form v${details.formVersionNumber}`
-            : ''}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-basier text-[44px] leading-tight text-portrait-ink">
+            {app.country || app.countryCode || 'Visa'} — {app.visaType}
+          </h1>
+          <p className="mt-2 font-switzer text-lg text-slate-helper">
+            Visa Application
+            {details.formVersionNumber != null
+              ? ` · Form v${details.formVersionNumber}`
+              : ''}
+          </p>
+        </div>
+        {applyFormUrl ? (
+          <a
+            href={applyFormUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 pt-2 font-switzer text-sm font-semibold text-nautical-teal hover:text-portrait-ink"
+          >
+            Apply form here
+            <ExternalLink className="h-4 w-4" aria-hidden />
+          </a>
+        ) : null}
       </div>
 
       <TravellerSelectionProvider travellers={travellers}>

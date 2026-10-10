@@ -114,7 +114,7 @@ export function NotificationBell({
                 You are all caught up.
               </p>
             ) : (
-              <ul className="mt-2 max-h-80 space-y-1 overflow-y-auto">
+              <ul className="mt-2 max-h-[min(22rem,calc(100vh-8rem))] space-y-1 overflow-y-auto overscroll-contain pr-1">
                 {items.map((item) => (
                   <li key={item.id}>
                     <Link

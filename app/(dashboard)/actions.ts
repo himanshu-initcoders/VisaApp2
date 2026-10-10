@@ -34,6 +34,7 @@ import {
 import { recomputeVisaCaseStatus } from '@/lib/visa/travellerStatus';
 import {
   markAllNotificationsRead,
+  markStaffCommentNotificationsRead,
   notifyCommentEvent,
   notifyCorrectionResubmittedEvent,
 } from '@/lib/notifications';
@@ -192,6 +193,43 @@ function revalidateCorrectionSurfaces(applicationId: string) {
   revalidatePath(`/applications/visa/${applicationId}/fix`);
   revalidatePath('/applications');
   revalidatePath('/dashboard');
+}
+
+export async function markApplicantConversationRead(
+  applicationId: string
+): Promise<ActionResponse> {
+  try {
+    const session = await auth();
+    if (
+      !session?.user?.id ||
+      session.user.role === 'admin' ||
+      session.user.role === 'reviewer'
+    ) {
+      return { success: false, message: 'Unauthorized' };
+    }
+
+    const [application] = await db
+      .select({ id: visaApplications.id })
+      .from(visaApplications)
+      .where(
+        and(
+          eq(visaApplications.id, applicationId),
+          eq(visaApplications.userId, session.user.id)
+        )
+      )
+      .limit(1);
+    if (!application) {
+      return { success: false, message: 'Application not found' };
+    }
+
+    await markStaffCommentNotificationsRead(session.user.id, applicationId);
+    revalidatePath(`/applications/visa/${applicationId}`);
+    revalidatePath('/dashboard');
+    return { success: true, message: 'Conversation marked read' };
+  } catch (error) {
+    console.error('Error marking conversation read:', error);
+    return { success: false, message: 'Failed to update conversation' };
+  }
 }
 
 export async function markNotificationsRead(): Promise<ActionResponse> {

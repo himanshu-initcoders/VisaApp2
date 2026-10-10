@@ -21,6 +21,7 @@ import type {
   ApplyFormConfig,
   TravellerDocumentUpload,
   TravellerTripDetails,
+  TripCopySource,
 } from '@/lib/apply/applicationForm';
 
 interface PassportCaptureFlowProps {
@@ -30,6 +31,7 @@ interface PassportCaptureFlowProps {
   initialFile?: File;
   formConfig: ApplyFormConfig;
   arrivalPrefill?: string;
+  tripSources?: TripCopySource[];
   resume?: {
     fields: IndianPassportFields;
     frontPreviewUrl: string;
@@ -136,6 +138,7 @@ export function PassportCaptureFlow({
   initialFile,
   formConfig,
   arrivalPrefill,
+  tripSources,
   resume,
   onClose,
   onProgress,
@@ -325,6 +328,7 @@ export function PassportCaptureFlow({
           savedTrip={resume?.tripDetails}
           savedDocuments={resume?.documents}
           arrivalPrefill={arrivalPrefill}
+          tripSources={tripSources}
           onBack={onClose}
           onClose={onClose}
           onEditFront={() => reuploadRef.current?.click()}

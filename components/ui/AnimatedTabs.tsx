@@ -9,6 +9,8 @@ export interface AnimatedTabItem {
   disabled?: boolean;
   /** Red dot beside the label. Used when this section still has requested changes. */
   dot?: boolean;
+  /** Accessible name for the red dot. Defaults to the correction-wizard wording. */
+  dotLabel?: string;
 }
 
 interface AnimatedTabsProps {
@@ -100,7 +102,7 @@ export function AnimatedTabs({
                 {item.dot ? (
                   <span
                     className="h-2 w-2 shrink-0 rounded-full bg-[#ff4940]"
-                    aria-label="Changes requested"
+                    aria-label={item.dotLabel ?? 'Changes requested'}
                   />
                 ) : null}
               </span>

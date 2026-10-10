@@ -228,7 +228,7 @@ export function ProcessBasicInfoForm({ processId, initialData }: ProcessBasicInf
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Checkbox
-              label="General Information"
+              label="Personal details"
               description="Passport biodata fields. When off, travellers use Fill Application instead of passport OCR upload."
               checked={form.watch('showGeneralInfo') ?? true}
               onChange={(checked) => form.setValue('showGeneralInfo', checked, { shouldDirty: true })}

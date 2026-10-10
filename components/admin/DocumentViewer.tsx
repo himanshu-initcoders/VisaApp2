@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { Eye, FileText, Image as ImageIcon, X } from 'lucide-react';
-import { Card, CardContent, Badge } from '@/components/ui';
-import { getDocumentPreviewUrl } from '@/app/(admin)/actions';
+import { Card, CardContent, Badge, Button } from '@/components/ui';
+import { getDocumentPreviewUrl, verifyDocument } from '@/app/(admin)/actions';
 import type { ActionResponse, DocumentWithVerification } from '@/types/admin';
 import { cn } from '@/lib/utils';
 
 /**
- * Document Viewer — list + inline preview + download.
- * Verify/Reject actions hidden for now.
+ * Document Viewer — list or grid, with a full-screen preview dialog.
+ * Staff can verify a file or request a reupload from that dialog.
  */
 
 type PreviewUrlFn = (
@@ -65,11 +65,11 @@ function DownloadIcon({ className }: { className?: string }) {
 function DocumentCard({
   doc,
   getPreviewUrl,
-  onRequestReupload,
+  onPreview,
 }: {
   doc: DocumentWithVerification;
   getPreviewUrl: PreviewUrlFn;
-  onRequestReupload?: (slotKey: string) => void;
+  onPreview: () => void;
 }) {
   const status = statusOf(doc);
   const [url, setUrl] = useState<string | null>(null);
@@ -111,8 +111,9 @@ function DocumentCard({
 
   return (
     <Card
+      onClick={onPreview}
       className={cn(
-        'transition-colors',
+        'cursor-pointer transition-colors',
         status === 'verified' && 'bg-mint-wash/30',
         status === 'rejected' && 'bg-red-50/30',
         status === 'unverified' && 'bg-peach-wash/30'
@@ -146,7 +147,25 @@ function DocumentCard({
             </Badge>
             <button
               type="button"
-              onClick={handleDownload}
+              onClick={(event) => {
+                event.stopPropagation();
+                onPreview();
+              }}
+              title="Preview"
+              aria-label={`Preview ${doc.filename}`}
+              className={cn(
+                'inline-flex h-8 w-8 items-center justify-center rounded-full',
+                'bg-sky-wash text-portrait-ink transition-colors hover:bg-sky-wash/70'
+              )}
+            >
+              <Eye className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleDownload();
+              }}
               disabled={!url}
               title="Download"
               aria-label={`Download ${doc.filename}`}
@@ -185,17 +204,8 @@ function DocumentCard({
             </p>
           </div>
         )}
-        {onRequestReupload && (
-          <button
-            type="button"
-            onClick={() => onRequestReupload(doc.documentType)}
-            className="font-switzer text-xs font-semibold text-nautical-teal hover:text-portrait-ink"
-          >
-            Request reupload
-          </button>
-        )}
 
-        {/* Preview under status — fixed preview height */}
+        {/* Preview under status — clicks pass through to open the dialog */}
         <div className="h-48 overflow-hidden rounded-2xl border border-ash bg-white">
           {loading && (
             <div className="flex h-full items-center justify-center font-switzer text-xs text-slate-helper">
@@ -212,14 +222,14 @@ function DocumentCard({
             <img
               src={url}
               alt={doc.filename}
-              className="h-full w-full object-contain bg-[#f8fafc]"
+              className="pointer-events-none h-full w-full object-contain bg-[#f8fafc]"
             />
           )}
           {!loading && url && isPdfMime(doc.mimeType, doc.filename) && (
             <iframe
               src={url}
               title={doc.filename}
-              className="h-full w-full bg-[#f8fafc]"
+              className="pointer-events-none h-full w-full bg-[#f8fafc]"
             />
           )}
           {!loading &&
@@ -234,6 +244,7 @@ function DocumentCard({
                   href={url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(event) => event.stopPropagation()}
                   className="font-switzer text-xs text-nautical-teal hover:text-portrait-ink"
                 >
                   Open file
@@ -262,12 +273,10 @@ function formatSize(fileSize: number | null) {
 function DocumentGridCard({
   doc,
   getPreviewUrl,
-  onRequestReupload,
   onPreview,
 }: {
   doc: DocumentWithVerification;
   getPreviewUrl: PreviewUrlFn;
-  onRequestReupload?: (slotKey: string) => void;
   onPreview: () => void;
 }) {
   const status = statusOf(doc);
@@ -290,7 +299,10 @@ function DocumentGridCard({
   };
 
   return (
-    <Card className="flex h-full flex-col">
+    <Card
+      onClick={onPreview}
+      className="flex h-full cursor-pointer flex-col"
+    >
       <CardContent className="flex h-full flex-col gap-3">
         <div
           className={cn(
@@ -343,22 +355,14 @@ function DocumentGridCard({
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-2">
-          {onRequestReupload ? (
-            <button
-              type="button"
-              onClick={() => onRequestReupload(doc.documentType)}
-              className="font-switzer text-xs font-semibold text-nautical-teal hover:text-portrait-ink"
-            >
-              Request reupload
-            </button>
-          ) : (
-            <span />
-          )}
+        <div className="flex items-center justify-end gap-2">
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={onPreview}
+              onClick={(event) => {
+                event.stopPropagation();
+                onPreview();
+              }}
               title="Preview"
               aria-label={`Preview ${doc.filename}`}
               className={cn(
@@ -370,7 +374,10 @@ function DocumentGridCard({
             </button>
             <button
               type="button"
-              onClick={() => void handleDownload()}
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleDownload();
+              }}
               disabled={downloading}
               title="Download"
               aria-label={`Download ${doc.filename}`}
@@ -389,18 +396,28 @@ function DocumentGridCard({
   );
 }
 
+type ReviewDecision = 'verified' | 'reupload';
+
 function DocumentPreviewDialog({
   doc,
   getPreviewUrl,
   onClose,
+  onDocumentVerified,
+  onRequestReupload,
 }: {
   doc: DocumentWithVerification | null;
   getPreviewUrl: PreviewUrlFn;
   onClose: () => void;
+  onDocumentVerified?: () => void;
+  onRequestReupload?: (slotKey: string) => void;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [decision, setDecision] = useState<ReviewDecision>('verified');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const canReview = Boolean(onDocumentVerified);
 
   useEffect(() => {
     if (!doc) return;
@@ -424,6 +441,35 @@ function DocumentPreviewDialog({
       cancelled = true;
     };
   }, [doc, getPreviewUrl]);
+
+  useEffect(() => {
+    setDecision('verified');
+    setSubmitError(null);
+    setSubmitting(false);
+  }, [doc?.id]);
+
+  const handleSubmit = async () => {
+    if (!doc || !canReview) return;
+    if (decision === 'reupload') {
+      onRequestReupload?.(doc.documentType);
+      onClose();
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitError(null);
+    const result = await verifyDocument({
+      documentId: doc.id,
+      verified: true,
+    });
+    setSubmitting(false);
+    if (!result.success) {
+      setSubmitError(result.message || 'Could not verify document');
+      return;
+    }
+    onDocumentVerified?.();
+    onClose();
+  };
 
   useEffect(() => {
     if (!doc) return;
@@ -458,7 +504,7 @@ function DocumentPreviewDialog({
         aria-label={doc.filename}
         className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-[24px] bg-white shadow-elevated"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-ash px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ash px-5 py-4">
           <div className="min-w-0">
             <p className="truncate font-switzer text-sm font-semibold text-portrait-ink">
               {doc.documentType}
@@ -467,15 +513,66 @@ function DocumentPreviewDialog({
               {doc.filename}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-helper transition-colors hover:bg-sky-wash hover:text-portrait-ink"
-            aria-label="Close preview"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {canReview && (
+              <>
+                <div
+                  className="flex rounded-full bg-sky-wash/70 p-1"
+                  role="radiogroup"
+                  aria-label="Document decision"
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={decision === 'verified'}
+                    onClick={() => setDecision('verified')}
+                    className={cn(
+                      'rounded-full px-3 py-1 font-switzer text-xs font-semibold text-portrait-ink',
+                      decision === 'verified' && 'bg-white shadow-card'
+                    )}
+                  >
+                    Verified
+                  </button>
+                  {onRequestReupload && (
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={decision === 'reupload'}
+                      onClick={() => setDecision('reupload')}
+                      className={cn(
+                        'rounded-full px-3 py-1 font-switzer text-xs font-semibold text-portrait-ink',
+                        decision === 'reupload' && 'bg-white shadow-card'
+                      )}
+                    >
+                      Request reupload
+                    </button>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void handleSubmit()}
+                  disabled={submitting}
+                >
+                  {submitting ? 'Submitting…' : 'Submit'}
+                </Button>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-slate-helper transition-colors hover:bg-sky-wash hover:text-portrait-ink"
+              aria-label="Close preview"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
+        {submitError && (
+          <p className="border-b border-ash px-5 py-2 font-switzer text-xs text-red-600">
+            {submitError}
+          </p>
+        )}
 
         <div className="flex min-h-[50vh] flex-1 items-center justify-center bg-[#f8fafc] p-4">
           {loading && (
@@ -526,6 +623,7 @@ function DocumentPreviewDialog({
 
 export function DocumentViewer({
   documents,
+  onDocumentVerified,
   getPreviewUrl = getDocumentPreviewUrl,
   onRequestReupload,
   layout = 'list',
@@ -573,7 +671,6 @@ export function DocumentViewer({
               key={doc.id}
               doc={doc}
               getPreviewUrl={getPreviewUrl}
-              onRequestReupload={onRequestReupload}
               onPreview={() => setPreviewDoc(doc)}
             />
           ))}
@@ -582,23 +679,34 @@ export function DocumentViewer({
           doc={previewDoc}
           getPreviewUrl={getPreviewUrl}
           onClose={() => setPreviewDoc(null)}
+          onDocumentVerified={onDocumentVerified}
+          onRequestReupload={onRequestReupload}
         />
       </>
     );
   }
 
   return (
-    <div className="h-[58rem] overflow-y-auto overscroll-contain pr-1 [scrollbar-width:thin]">
-      <div className="flex flex-col gap-4">
-        {documents.map((doc) => (
-          <DocumentCard
-            key={doc.id}
-            doc={doc}
-            getPreviewUrl={getPreviewUrl}
-            onRequestReupload={onRequestReupload}
-          />
-        ))}
+    <>
+      <div className="h-[58rem] overflow-y-auto overscroll-contain pr-1 [scrollbar-width:thin]">
+        <div className="flex flex-col gap-4">
+          {documents.map((doc) => (
+            <DocumentCard
+              key={doc.id}
+              doc={doc}
+              getPreviewUrl={getPreviewUrl}
+              onPreview={() => setPreviewDoc(doc)}
+            />
+          ))}
+        </div>
       </div>
-    </div>
+      <DocumentPreviewDialog
+        doc={previewDoc}
+        getPreviewUrl={getPreviewUrl}
+        onClose={() => setPreviewDoc(null)}
+        onDocumentVerified={onDocumentVerified}
+        onRequestReupload={onRequestReupload}
+      />
+    </>
   );
 }

@@ -13,18 +13,17 @@ import {
 import { TravellersSection } from '@/components/admin/TravellersSection';
 import { TravellerSelectionProvider } from '@/components/admin/TravellerSelectionContext';
 import { Timeline } from '@/components/admin/Timeline';
-import { PaymentHistory } from '@/components/applications/PaymentHistory';
 import { attachStatusToTravellers } from '@/lib/visa/caseStatus';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 import { ApplicationSidebar } from '@/components/dashboard/ApplicationSidebar';
+import { ApplicantActivityTabs } from '@/components/dashboard/ApplicantActivityTabs';
 import { ActionRequiredBanner } from '@/components/dashboard/ActionRequiredBanner';
-import { ConversationThread } from '@/components/visa/ConversationThread';
 import { postApplicantComment } from '@/app/(dashboard)/actions';
 import {
   listApplicantActionItems,
   listComments,
 } from '@/lib/visa/corrections';
-import { markApplicationNotificationsRead } from '@/lib/notifications';
+import { hasUnreadStaffComment } from '@/lib/notifications';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -104,11 +103,11 @@ export default async function UserVisaApplicationDetailPage({
       ? details.statusHistory.filter((item) => item.travellerId == null)
       : [];
   const applicantPhone = app.applicantPhone || details.user.phone;
-  const [comments, actionItems] = await Promise.all([
+  const [comments, actionItems, hasUnreadConversation] = await Promise.all([
     listComments(app.id),
     listApplicantActionItems(session.user.id),
+    hasUnreadStaffComment(session.user.id, app.id),
   ]);
-  await markApplicationNotificationsRead(session.user.id, app.id);
   const openForThis = actionItems.filter((item) => item.applicationId === app.id);
 
   return (
@@ -136,117 +135,111 @@ export default async function UserVisaApplicationDetailPage({
 
       <TravellerSelectionProvider travellers={travellers}>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Application information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <dl className="grid grid-cols-2 gap-4">
-                  <Field
-                    label="Status"
-                    value={
-                      <Badge variant={getStatusVariant(app.status)}>
-                        {app.status}
-                      </Badge>
-                    }
-                  />
-                  <Field label="Application ID" value={app.id} />
-                  <Field
-                    label="Applicant"
-                    value={app.applicantName || details.user.name}
-                  />
-                  <Field
-                    label="Phone"
-                    value={applicantPhone || 'Not provided'}
-                  />
-                  <Field
-                    label="Country"
-                    value={app.country || app.countryCode}
-                  />
-                  <Field
-                    label="Submitted"
-                    value={
-                      app.submittedAt
-                        ? new Date(app.submittedAt).toLocaleString('en-IN', {
-                            timeZone: 'Asia/Kolkata',
-                          })
-                        : 'Not submitted'
-                    }
-                  />
-                </dl>
-              </CardContent>
-            </Card>
-
-            <PaymentHistory payments={details.payments} />
-
-            {fileHistory.length > 0 && (
+          <div className="lg:col-span-2">
+            <ApplicantActivityTabs
+              applicationId={app.id}
+              hasUnreadConversation={hasUnreadConversation}
+              comments={comments}
+              payments={details.payments}
+              postComment={postApplicantComment}
+            >
               <Card>
                 <CardHeader>
-                  <CardTitle>File history</CardTitle>
+                  <CardTitle>Application information</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="mb-4 font-switzer text-sm text-slate-helper">
-                    These updates were recorded for the whole application,
-                    before each traveller had a separate visa status.
-                  </p>
-                  <Timeline history={fileHistory} />
+                  <dl className="grid grid-cols-2 gap-4">
+                    <Field
+                      label="Status"
+                      value={
+                        <Badge variant={getStatusVariant(app.status)}>
+                          {app.status}
+                        </Badge>
+                      }
+                    />
+                    <Field label="Application ID" value={app.id} />
+                    <Field
+                      label="Applicant"
+                      value={app.applicantName || details.user.name}
+                    />
+                    <Field
+                      label="Phone"
+                      value={applicantPhone || 'Not provided'}
+                    />
+                    <Field
+                      label="Country"
+                      value={app.country || app.countryCode}
+                    />
+                    <Field
+                      label="Submitted"
+                      value={
+                        app.submittedAt
+                          ? new Date(app.submittedAt).toLocaleString('en-IN', {
+                              timeZone: 'Asia/Kolkata',
+                            })
+                          : 'Not submitted'
+                      }
+                    />
+                  </dl>
                 </CardContent>
               </Card>
-            )}
 
-            {!isLegacy && (
-              <TravellersSection travellers={travellers} snapshot={snapshot} />
-            )}
-
-            {isLegacy && (
-              <>
+              {fileHistory.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Personal Information</CardTitle>
+                    <CardTitle>File history</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <Field label="Full Name" value={details.user.name} />
-                      <Field label="Email" value={details.user.email} />
-                      <Field
-                        label="Phone"
-                        value={details.user.phone || 'Not provided'}
-                      />
-                      <Field
-                        label="Passport Number"
-                        value={
-                          (app.personalInfo?.passportNumber as string) ||
-                          'Not provided'
-                        }
-                      />
-                    </dl>
+                    <p className="mb-4 font-switzer text-sm text-slate-helper">
+                      These updates were recorded for the whole application,
+                      before each traveller had a separate visa status.
+                    </p>
+                    <Timeline history={fileHistory} />
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Travel Information</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <pre className="whitespace-pre-wrap font-switzer text-xs text-portrait-ink">
-                      {JSON.stringify(app.travelInfo, null, 2) || '—'}
-                    </pre>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-            <Card>
-              <CardHeader>
-                <CardTitle>Conversation</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ConversationThread
-                  applicationId={app.id}
-                  comments={comments}
-                  postComment={postApplicantComment}
-                />
-              </CardContent>
-            </Card>
+              )}
+
+              {!isLegacy && (
+                <TravellersSection travellers={travellers} snapshot={snapshot} />
+              )}
+
+              {isLegacy && (
+                <>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Personal Information</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <Field label="Full Name" value={details.user.name} />
+                        <Field label="Email" value={details.user.email} />
+                        <Field
+                          label="Phone"
+                          value={details.user.phone || 'Not provided'}
+                        />
+                        <Field
+                          label="Passport Number"
+                          value={
+                            (app.personalInfo?.passportNumber as string) ||
+                            'Not provided'
+                          }
+                        />
+                      </dl>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Travel Information</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <pre className="whitespace-pre-wrap font-switzer text-xs text-portrait-ink">
+                        {JSON.stringify(app.travelInfo, null, 2) || '—'}
+                      </pre>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </ApplicantActivityTabs>
           </div>
 
           <ApplicationSidebar

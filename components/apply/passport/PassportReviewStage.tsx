@@ -27,6 +27,7 @@ import {
   type ApplyFormConfig,
   type TravellerDocumentUpload,
   type TravellerTripDetails,
+  type TripCopySource,
 } from '@/lib/apply/applicationForm';
 import { formatProfileName } from '@/lib/apply/travellerProfiles';
 import type { IndianPassportFields } from '@/lib/passport/types';
@@ -53,6 +54,7 @@ interface PassportReviewStageProps {
   savedTrip?: TravellerTripDetails;
   savedDocuments?: TravellerDocumentUpload[];
   arrivalPrefill?: string;
+  tripSources?: TripCopySource[];
   onBack: () => void;
   onClose: () => void;
   onEditFront: () => void;
@@ -70,6 +72,7 @@ export function PassportReviewStage({
   savedTrip,
   savedDocuments,
   arrivalPrefill,
+  tripSources,
   onBack,
   onClose,
   onEditFront,
@@ -317,6 +320,7 @@ export function PassportReviewStage({
           <TripDetailsTab
             trip={trip}
             countryName={formConfig.countryName}
+            tripSources={tripSources}
             onChange={setTrip}
           />
         )}
@@ -355,6 +359,7 @@ export function PassportReviewStage({
             }
             showGeneralInfo={formConfig.showGeneralInfo}
             showTripDetails={formConfig.showTripDetails}
+            onEditSection={setTab}
           />
         )}
 

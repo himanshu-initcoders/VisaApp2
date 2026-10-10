@@ -1,15 +1,12 @@
 'use client';
 
-import { Plus, Trash2 } from 'lucide-react';
-import { AnimatedTabs } from '@/components/ui';
 import { UnderlineField } from '@/components/apply/form/UnderlineField';
 import { CorrectionGate } from '@/components/apply/form/CorrectionGate';
 import {
   emptyTripDetails,
   toIsoDate,
-  type FlightLeg,
-  type FlightStopMode,
   type TravellerTripDetails,
+  type TripCopySource,
 } from '@/lib/apply/applicationForm';
 import {
   earliestFutureDateIso,
@@ -19,15 +16,11 @@ import {
 interface TripDetailsTabProps {
   trip: TravellerTripDetails;
   countryName: string;
+  tripSources?: TripCopySource[];
   onChange: (next: TravellerTripDetails) => void;
   editableKeys?: ReadonlySet<string>;
   comments?: Record<string, string>;
 }
-
-const FLIGHT_MODES = [
-  { id: 'direct', label: 'Direct flight' },
-  { id: 'multistop', label: 'Multi stop' },
-] as const;
 
 function updateTrip(
   trip: TravellerTripDetails,
@@ -39,10 +32,9 @@ function updateTrip(
 function FlightRouteSection({
   title,
   hint,
-  mode,
-  legs,
+  flightNumber,
+  date,
   dateLabel,
-  layoutId,
   numberKey,
   dateKey,
   editableKeys,
@@ -51,28 +43,18 @@ function FlightRouteSection({
 }: {
   title: string;
   hint: string;
-  mode: FlightStopMode;
-  legs: FlightLeg[];
+  flightNumber: string;
+  date: string;
   dateLabel: string;
-  layoutId: string;
   numberKey: string;
   dateKey: string;
   editableKeys?: ReadonlySet<string>;
   comments?: Record<string, string>;
-  onChange: (next: { mode: FlightStopMode; legs: FlightLeg[] }) => void;
+  onChange: (next: { flightNumber: string; date: string }) => void;
 }) {
   const futureMin = earliestFutureDateIso();
-  const shown = mode === 'direct' ? legs.slice(0, 1) : legs;
   const numberLocked = Boolean(editableKeys && !editableKeys.has(numberKey));
   const dateLocked = Boolean(editableKeys && !editableKeys.has(dateKey));
-  const structureLocked = Boolean(editableKeys && (numberLocked || dateLocked));
-
-  const setLeg = (index: number, patch: Partial<FlightLeg>) => {
-    const next = legs.map((leg, legIndex) =>
-      legIndex === index ? { ...leg, ...patch } : leg
-    );
-    onChange({ mode, legs: next });
-  };
 
   return (
     <section className="space-y-4">
@@ -83,105 +65,47 @@ function FlightRouteSection({
         <p className="mt-1 text-sm text-slate-helper">{hint}</p>
       </div>
 
-      <div className={structureLocked ? 'pointer-events-none opacity-60' : undefined}>
-        <AnimatedTabs
-          items={[...FLIGHT_MODES]}
-          value={mode}
-          onChange={(id) => {
-            if (structureLocked) return;
-            onChange({
-              mode: id as FlightStopMode,
-              legs,
-            });
-          }}
-          tone="light"
-          layoutId={layoutId}
-          ariaLabel={title}
-        />
-      </div>
-
-      <div className="space-y-4">
-        {shown.map((leg, index) => (
-          <div
-            key={`${mode}-${index}`}
-            className="grid gap-5 sm:grid-cols-2"
-          >
-            {mode === 'multistop' && (
-              <p className="sm:col-span-2 font-switzer text-xs font-semibold uppercase tracking-[0.12em] text-slate-helper">
-                Flight {index + 1}
-              </p>
-            )}
-            <CorrectionGate
-              targetKey={index === 0 ? numberKey : `${numberKey}-${index}`}
-              editableKeys={editableKeys}
-              comment={index === 0 ? comments?.[numberKey] : undefined}
-            >
-              <UnderlineField
-                label="Flight number"
-                required
-                value={leg.flightNumber}
-                onChange={(value) => {
-                  if (numberLocked || (editableKeys && index > 0)) return;
-                  setLeg(index, { flightNumber: value.toUpperCase() });
-                }}
-              />
-            </CorrectionGate>
-            <div className="flex items-end gap-2">
-              <div className="min-w-0 flex-1">
-                <CorrectionGate
-                  targetKey={index === 0 ? dateKey : `${dateKey}-${index}`}
-                  editableKeys={editableKeys}
-                  comment={index === 0 ? comments?.[dateKey] : undefined}
-                >
-                  <UnderlineField
-                    label={dateLabel}
-                    required
-                    type="date"
-                    min={futureMin}
-                    value={leg.date}
-                    error={futureDateError(leg.date || undefined)}
-                    onChange={(value) => {
-                      if (dateLocked || (editableKeys && index > 0)) return;
-                      setLeg(index, { date: toIsoDate(value) || value });
-                    }}
-                  />
-                </CorrectionGate>
-              </div>
-              {mode === 'multistop' && shown.length > 2 && !structureLocked && (
-                <button
-                  type="button"
-                  aria-label={`Remove flight ${index + 1}`}
-                  onClick={() =>
-                    onChange({
-                      mode,
-                      legs: legs.filter((_, legIndex) => legIndex !== index),
-                    })
-                  }
-                  className="mb-2 rounded-full p-2 text-slate-helper hover:bg-peach-wash hover:text-[#ff4940]"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {mode === 'multistop' && !structureLocked && (
-        <button
-          type="button"
-          onClick={() =>
-            onChange({
-              mode,
-              legs: [...legs, { flightNumber: '', date: '' }],
-            })
-          }
-          className="inline-flex items-center gap-1.5 rounded-full border border-ash bg-white px-3 py-1.5 text-sm text-nautical-teal hover:text-portrait-ink"
+      <div className="grid gap-5 sm:grid-cols-2">
+        <CorrectionGate
+          targetKey={numberKey}
+          editableKeys={editableKeys}
+          comment={comments?.[numberKey]}
         >
-          <Plus className="h-3.5 w-3.5" />
-          Add another flight
-        </button>
-      )}
+          <UnderlineField
+            label="Flight number"
+            required
+            value={flightNumber}
+            onChange={(value) => {
+              if (numberLocked) return;
+              onChange({
+                flightNumber: value.toUpperCase(),
+                date,
+              });
+            }}
+          />
+        </CorrectionGate>
+        <CorrectionGate
+          targetKey={dateKey}
+          editableKeys={editableKeys}
+          comment={comments?.[dateKey]}
+        >
+          <UnderlineField
+            label={dateLabel}
+            required
+            type="date"
+            min={futureMin}
+            value={date}
+            error={futureDateError(date || undefined)}
+            onChange={(value) => {
+              if (dateLocked) return;
+              onChange({
+                flightNumber,
+                date: toIsoDate(value) || value,
+              });
+            }}
+          />
+        </CorrectionGate>
+      </div>
     </section>
   );
 }
@@ -189,6 +113,7 @@ function FlightRouteSection({
 export function TripDetailsTab({
   trip,
   countryName,
+  tripSources = [],
   onChange,
   editableKeys,
   comments,
@@ -205,6 +130,27 @@ export function TripDetailsTab({
             Tell us when this traveller plans to enter and leave {countryName}.
             Visa type is already selected.
           </p>
+          {tripSources.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {tripSources.map((source) => (
+                <button
+                  key={source.id}
+                  type="button"
+                  onClick={() =>
+                    onChange(
+                      emptyTripDetails({
+                        ...source.tripDetails,
+                        extra: normalized.extra,
+                      })
+                    )
+                  }
+                  className="inline-flex items-center rounded-full border border-ash bg-white px-3 py-1.5 text-sm text-nautical-teal hover:text-portrait-ink"
+                >
+                  Same as {source.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="grid gap-5 sm:grid-cols-2">
           <CorrectionGate
@@ -261,20 +207,21 @@ export function TripDetailsTab({
 
       <FlightRouteSection
         title="Arrival flight details"
-        hint="The flight that arrives in the country."
-        mode={normalized.arrivalFlightMode}
-        legs={normalized.arrivalFlights}
+        hint="The flight number that arrives into the destination country."
+        flightNumber={normalized.flightNumber}
+        date={normalized.arrivalFlightDate}
         dateLabel="Arrival date"
-        layoutId="arrival-flight-mode"
         numberKey="trip.flightNumber"
         dateKey="trip.arrivalFlightDate"
         editableKeys={editableKeys}
         comments={comments}
-        onChange={({ mode, legs }) =>
+        onChange={({ flightNumber, date }) =>
           onChange(
             updateTrip(normalized, {
-              arrivalFlightMode: mode,
-              arrivalFlights: legs,
+              arrivalFlightMode: 'direct',
+              flightNumber,
+              arrivalFlightDate: date,
+              arrivalFlights: [{ flightNumber, date }],
             })
           )
         }
@@ -282,20 +229,21 @@ export function TripDetailsTab({
 
       <FlightRouteSection
         title="Return flight details"
-        hint="The flight that brings this traveller back."
-        mode={normalized.returnFlightMode}
-        legs={normalized.returnFlights}
+        hint="The flight number that departs from the destination country."
+        flightNumber={normalized.returnFlightNumber}
+        date={normalized.returnFlightDate}
         dateLabel="Departure date"
-        layoutId="return-flight-mode"
         numberKey="trip.returnFlightNumber"
         dateKey="trip.returnFlightDate"
         editableKeys={editableKeys}
         comments={comments}
-        onChange={({ mode, legs }) =>
+        onChange={({ flightNumber, date }) =>
           onChange(
             updateTrip(normalized, {
-              returnFlightMode: mode,
-              returnFlights: legs,
+              returnFlightMode: 'direct',
+              returnFlightNumber: flightNumber,
+              returnFlightDate: date,
+              returnFlights: [{ flightNumber, date }],
             })
           )
         }
