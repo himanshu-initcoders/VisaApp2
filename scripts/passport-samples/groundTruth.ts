@@ -54,6 +54,20 @@ export const GROUND_TRUTH: SampleExpectation[] = [
     placeOfIssue: 'HYDERABAD',
   },
   {
+    file: 'Dhiraj Laddha.jpg',
+    layout:
+      'Phone photo, open booklet on a wooden desk, hand in frame, data page sideways',
+    passportNumber: 'U3663655',
+    surname: 'LADDHA',
+    givenNames: 'DHIRAJ',
+    dateOfBirth: '1986-05-09',
+    sex: 'M',
+    dateOfIssue: '2021-01-07',
+    dateOfExpiry: '2031-01-06',
+    placeOfBirth: 'JODHPUR,RAJASTHAN',
+    placeOfIssue: 'JAIPUR',
+  },
+  {
     file: 'Muniraj Chinnaswamy Passport.pdf',
     layout:
       '10-page booklet PDF; data page on p1 (spread with stamps), particulars on p10',
