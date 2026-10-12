@@ -99,6 +99,13 @@
       "when": 1791786581491,
       "tag": "0013_staff_field_edits",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791802419055,
+      "tag": "0014_application_credentials",
+      "breakpoints": true
     }
   ]
 }

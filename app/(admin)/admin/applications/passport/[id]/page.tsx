@@ -5,6 +5,7 @@ import { getApplicationDetails } from '@/lib/admin-queries';
 import { Card, CardHeader, CardTitle, CardContent, Badge, getStatusVariant } from '@/components/ui';
 import { Timeline } from '@/components/admin/Timeline';
 import { PassportApplicationActions } from './PassportApplicationActions';
+import { PortalCredentialsPanel } from '@/components/admin/PortalCredentialsPanel';
 
 /**
  * Passport Application Detail Page
@@ -234,6 +235,13 @@ export default async function PassportApplicationDetailPage({ params }: PageProp
               </dl>
             </CardContent>
           </Card>
+
+          <PortalCredentialsPanel
+            applicationId={app.id}
+            applicationType="passport"
+            username={details.portalCredential.username}
+            hasCredential={details.portalCredential.hasCredential}
+          />
         </div>
 
         {/* Right column - Actions and Status */}

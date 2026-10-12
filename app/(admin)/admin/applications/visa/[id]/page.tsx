@@ -20,6 +20,7 @@ import { VisaApplicationActions } from './VisaApplicationActions';
 import { AssignReviewerCard } from '@/components/admin/AssignReviewerDialog';
 import { CallLogsPanel } from '@/components/admin/CallLogsPanel';
 import { NotesPanel } from '@/components/admin/NotesPanel';
+import { PortalCredentialsPanel } from '@/components/admin/PortalCredentialsPanel';
 import { CorrectionsCard } from '@/components/admin/CorrectionsCard';
 import { StaffEditsCard } from '@/components/admin/StaffEditsCard';
 import { ConversationThread } from '@/components/visa/ConversationThread';
@@ -191,17 +192,25 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
               : ''}
           </p>
         </div>
-        {applyFormUrl ? (
-          <a
-            href={applyFormUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex shrink-0 items-center gap-1.5 pt-2 font-switzer text-sm font-semibold text-nautical-teal hover:text-portrait-ink"
-          >
-            Apply form here
-            <ExternalLink className="h-4 w-4" aria-hidden />
-          </a>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-4 pt-2">
+          {applyFormUrl ? (
+            <a
+              href={applyFormUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 font-switzer text-sm font-semibold text-nautical-teal hover:text-portrait-ink"
+            >
+              Apply form here
+              <ExternalLink className="h-4 w-4" aria-hidden />
+            </a>
+          ) : null}
+          <PortalCredentialsPanel
+            applicationId={app.id}
+            applicationType="visa"
+            username={details.portalCredential.username}
+            hasCredential={details.portalCredential.hasCredential}
+          />
+        </div>
       </div>
 
       <TravellerSelectionProvider travellers={travellers}>

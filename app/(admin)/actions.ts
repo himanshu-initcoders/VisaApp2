@@ -13,6 +13,8 @@ import {
   applicationNotes,
   applicationCallLogs,
   applicationComments,
+  applicationCredentials,
+  applicationCredentialReveals,
   correctionItems,
   correctionRequests,
   staffFieldEdits,
@@ -53,6 +55,11 @@ import {
   reviewerOwnsDocument,
   reviewerOwnsVisa,
 } from '@/lib/reviewer-access';
+import { decryptPassword, encryptPassword } from '@/lib/credentials/crypto';
+import {
+  revealApplicationCredentialSchema,
+  saveApplicationCredentialSchema,
+} from '@/lib/credentials/schema';
 import type {
   ActionResponse,
   StatusUpdateRequest,
@@ -1509,4 +1516,175 @@ export async function postStaffComment(
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
+}
+
+async function applicationExists(
+  applicationId: string,
+  applicationType: 'visa' | 'passport'
+): Promise<boolean> {
+  if (applicationType === 'visa') {
+    const result = await db
+      .select({ id: visaApplications.id })
+      .from(visaApplications)
+      .where(eq(visaApplications.id, applicationId))
+      .limit(1);
+    return result.length > 0;
+  }
+  const result = await db
+    .select({ id: passportServices.id })
+    .from(passportServices)
+    .where(eq(passportServices.id, applicationId))
+    .limit(1);
+  return result.length > 0;
+}
+
+/**
+ * Save or replace the portal username and password for one application.
+ * The password is encrypted before it is stored.
+ */
+export async function saveApplicationCredential(
+  input: unknown
+): Promise<ActionResponse> {
+  try {
+    const session = await requireRole(['admin', 'reviewer']);
+    const parsed = saveApplicationCredentialSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        success: false,
+        message: 'Check the username and password',
+        error: parsed.error.issues[0]?.message ?? 'Invalid credential',
+      };
+    }
+
+    const { applicationId, applicationType, username, password } = parsed.data;
+    const denied = await denyReviewerUnlessAssigned(
+      session,
+      applicationId,
+      applicationType
+    );
+    if (denied) return denied;
+
+    if (!(await applicationExists(applicationId, applicationType))) {
+      return { success: false, message: 'Application not found' };
+    }
+
+    const encrypted = encryptPassword(password);
+    await db
+      .insert(applicationCredentials)
+      .values({
+        applicationId,
+        applicationType,
+        username,
+        passwordCiphertext: encrypted.ciphertext,
+        passwordIv: encrypted.iv,
+        keyVersion: encrypted.keyVersion,
+        createdBy: session.user.id,
+        updatedBy: session.user.id,
+      })
+      .onConflictDoUpdate({
+        target: [
+          applicationCredentials.applicationId,
+          applicationCredentials.applicationType,
+        ],
+        set: {
+          username,
+          passwordCiphertext: encrypted.ciphertext,
+          passwordIv: encrypted.iv,
+          keyVersion: encrypted.keyVersion,
+          updatedBy: session.user.id,
+          updatedAt: new Date(),
+        },
+      });
+
+    revalidatePath(`/admin/applications/${applicationType}/${applicationId}`);
+    return { success: true, message: 'Portal login saved' };
+  } catch (error) {
+    console.error('Error saving portal credential');
+    return {
+      success: false,
+      message: credentialFailureMessage(error, 'Failed to save portal login'),
+    };
+  }
+}
+
+/**
+ * Decrypt the portal password after a staff role and assignment check.
+ * Returns the password once so the browser can copy it. Writes an audit row.
+ */
+export async function revealApplicationCredential(
+  input: unknown
+): Promise<ActionResponse<{ password: string }>> {
+  try {
+    const session = await requireRole(['admin', 'reviewer']);
+    const parsed = revealApplicationCredentialSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        success: false,
+        message: 'Invalid request',
+      };
+    }
+
+    const { applicationId, applicationType } = parsed.data;
+    const denied = await denyReviewerUnlessAssigned(
+      session,
+      applicationId,
+      applicationType
+    );
+    if (denied) {
+      return { success: false, message: denied.message };
+    }
+
+    const [row] = await db
+      .select({
+        id: applicationCredentials.id,
+        passwordCiphertext: applicationCredentials.passwordCiphertext,
+        passwordIv: applicationCredentials.passwordIv,
+        keyVersion: applicationCredentials.keyVersion,
+      })
+      .from(applicationCredentials)
+      .where(
+        and(
+          eq(applicationCredentials.applicationId, applicationId),
+          eq(applicationCredentials.applicationType, applicationType)
+        )
+      )
+      .limit(1);
+
+    if (!row) {
+      return { success: false, message: 'No portal login saved' };
+    }
+
+    const password = decryptPassword(
+      row.passwordCiphertext,
+      row.passwordIv,
+      row.keyVersion
+    );
+
+    await db.insert(applicationCredentialReveals).values({
+      credentialId: row.id,
+      revealedBy: session.user.id,
+    });
+
+    return {
+      success: true,
+      message: 'Password ready',
+      data: { password },
+    };
+  } catch (error) {
+    console.error('Error revealing portal credential');
+    return {
+      success: false,
+      message: credentialFailureMessage(error, 'Failed to copy password'),
+    };
+  }
+}
+
+function credentialFailureMessage(error: unknown, fallback: string): string {
+  if (
+    error instanceof Error &&
+    error.message.startsWith('CREDENTIALS_ENCRYPTION_KEY')
+  ) {
+    return 'Portal encryption is not configured';
+  }
+  return fallback;
 }

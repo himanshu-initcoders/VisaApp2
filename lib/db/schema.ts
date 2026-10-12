@@ -327,6 +327,59 @@ export const applicationNotes = pgTable(
 );
 
 /**
+ * One portal login per visa or passport application.
+ * Username is plaintext for staff display. Password is AES-256-GCM ciphertext only.
+ */
+export const applicationCredentials = pgTable(
+  'application_credentials',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    applicationId: uuid('application_id').notNull(),
+    applicationType: varchar('application_type', { length: 50 }).notNull(),
+    username: varchar('username', { length: 255 }).notNull(),
+    passwordCiphertext: text('password_ciphertext').notNull(),
+    passwordIv: varchar('password_iv', { length: 32 }).notNull(),
+    keyVersion: integer('key_version').notNull().default(1),
+    createdBy: uuid('created_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    updatedBy: uuid('updated_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('application_credentials_application_unique').on(
+      table.applicationId,
+      table.applicationType
+    ),
+  ]
+);
+
+/**
+ * Append-only audit of each time staff copy a portal password.
+ */
+export const applicationCredentialReveals = pgTable(
+  'application_credential_reveals',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    credentialId: uuid('credential_id')
+      .references(() => applicationCredentials.id, { onDelete: 'cascade' })
+      .notNull(),
+    revealedBy: uuid('revealed_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('application_credential_reveals_credential_id_idx').on(
+      table.credentialId
+    ),
+  ]
+);
+
+/**
  * Public two-way thread between the applicant and staff.
  * Private staff notes stay in application_notes.
  */
@@ -485,6 +538,14 @@ export type NewApplicationCallLog = typeof applicationCallLogs.$inferInsert;
 
 export type ApplicationNote = typeof applicationNotes.$inferSelect;
 export type NewApplicationNote = typeof applicationNotes.$inferInsert;
+
+export type ApplicationCredential = typeof applicationCredentials.$inferSelect;
+export type NewApplicationCredential = typeof applicationCredentials.$inferInsert;
+
+export type ApplicationCredentialReveal =
+  typeof applicationCredentialReveals.$inferSelect;
+export type NewApplicationCredentialReveal =
+  typeof applicationCredentialReveals.$inferInsert;
 
 export type ApplicationComment = typeof applicationComments.$inferSelect;
 export type NewApplicationComment = typeof applicationComments.$inferInsert;

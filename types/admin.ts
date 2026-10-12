@@ -121,6 +121,11 @@ export interface ApplicationDetail {
   travellers: VisaTravellerStatus[];
   notes: NoteItem[];
   callLogs: CallLogItem[];
+  /** Staff portal login. Username only; the password is never loaded here. */
+  portalCredential: {
+    username: string | null;
+    hasCredential: boolean;
+  };
   payments: ApplicationPaymentItem[];
   formVersionNumber?: number | null;
   /** Visa applications only. Null when unassigned or for passport. */

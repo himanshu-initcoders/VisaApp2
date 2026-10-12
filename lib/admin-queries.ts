@@ -7,6 +7,7 @@ import {
   statusHistory,
   applicationNotes,
   applicationCallLogs,
+  applicationCredentials,
   formVersions,
   visaApplicationTravellers,
   payments,
@@ -565,6 +566,16 @@ export async function getApplicationDetails(
   const history = await getStatusHistoryByApplicationId(id, type);
   const notes = await getApplicationNotes(id);
   const callLogs = type === 'visa' ? await getApplicationCallLogs(id) : [];
+  const [credentialRow] = await db
+    .select({ username: applicationCredentials.username })
+    .from(applicationCredentials)
+    .where(
+      and(
+        eq(applicationCredentials.applicationId, id),
+        eq(applicationCredentials.applicationType, type)
+      )
+    )
+    .limit(1);
   const travellers =
     type === 'visa' ? await getVisaTravellers(id) : [];
   const paymentRows = await db
@@ -597,6 +608,10 @@ export async function getApplicationDetails(
     travellers,
     notes,
     callLogs,
+    portalCredential: {
+      username: credentialRow?.username ?? null,
+      hasCredential: Boolean(credentialRow),
+    },
     payments: paymentRows,
     formVersionNumber,
     assignedReviewer,
