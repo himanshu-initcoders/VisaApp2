@@ -32,11 +32,11 @@ import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 import { postStaffComment } from '@/app/(admin)/actions';
 import {
   buildCorrectableTargets,
+  buildStaffEditors,
   listComments,
   listCorrectionRounds,
   listStaffFieldEdits,
 } from '@/lib/visa/corrections';
-import { staffFieldControl } from '@/lib/visa/staffFields';
 import { markApplicationNotificationsRead } from '@/lib/notifications';
 
 interface PageProps {
@@ -144,11 +144,7 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
       ? details.statusHistory.filter((item) => item.travellerId == null)
       : [];
   const applicantPhone = app.applicantPhone || details.user.phone;
-  const editors = buildCorrectableTargets(snapshot).flatMap((target) => {
-    const control = staffFieldControl(snapshot, target.targetKey);
-    if (!control) return [];
-    return [{ ...target, control }];
-  });
+  const editors = buildStaffEditors(snapshot);
   const [comments, rounds, staffEdits, listingRows] = await Promise.all([
     listComments(app.id),
     listCorrectionRounds(app.id, snapshot),

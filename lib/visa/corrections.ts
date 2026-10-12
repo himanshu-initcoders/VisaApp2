@@ -21,7 +21,11 @@ import { PASSPORT_REVIEW_GROUPS } from '@/lib/apply/reviewFields';
 import { reviewerOwnsVisa } from '@/lib/reviewer-access';
 import { indianPassportFieldsSchema } from '@/lib/passport/schema';
 import { earliestFutureDateIso, isIsoDate } from '@/lib/passport/schema';
-import { STAFF_TRIP_DATE_FIELDS } from '@/lib/visa/staffFields';
+import {
+  STAFF_TRIP_DATE_FIELDS,
+  staffFieldControl,
+  type StaffEditableTarget,
+} from '@/lib/visa/staffFields';
 
 const PASSPORT_FRONT_SLOT = 'passport-front';
 const PASSPORT_BACK_SLOT = 'passport-back';
@@ -198,6 +202,16 @@ export function buildCorrectableTargets(
   }
 
   return targets;
+}
+
+export function buildStaffEditors(
+  config: ApplyFormConfig | null
+): StaffEditableTarget[] {
+  return buildCorrectableTargets(config).flatMap((target) => {
+    const control = staffFieldControl(config, target.targetKey);
+    if (!control) return [];
+    return [{ ...target, control }];
+  });
 }
 
 export function labelForTarget(

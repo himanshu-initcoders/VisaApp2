@@ -20,6 +20,7 @@ import { ApplicantActivityTabs } from '@/components/dashboard/ApplicantActivityT
 import { ActionRequiredBanner } from '@/components/dashboard/ActionRequiredBanner';
 import { postApplicantComment } from '@/app/(dashboard)/actions';
 import {
+  buildStaffEditors,
   listApplicantActionItems,
   listComments,
 } from '@/lib/visa/corrections';
@@ -90,6 +91,7 @@ export default async function UserVisaApplicationDetailPage({
   };
 
   const snapshot = (app.formSnapshot as ApplyFormConfig | null) ?? null;
+  const editors = buildStaffEditors(snapshot);
   const storedTravellers: StoredTraveller[] = Array.isArray(app.travellers)
     ? app.travellers
     : [];
@@ -200,7 +202,11 @@ export default async function UserVisaApplicationDetailPage({
               )}
 
               {!isLegacy && (
-                <TravellersSection travellers={travellers} snapshot={snapshot} />
+                <TravellersSection
+                  travellers={travellers}
+                  snapshot={snapshot}
+                  editors={editors}
+                />
               )}
 
               {isLegacy && (

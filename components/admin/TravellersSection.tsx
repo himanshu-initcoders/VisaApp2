@@ -16,7 +16,9 @@ import {
   formatExtraAnswer,
   formatReviewDate,
   formatReviewValue,
+  labelForPassportField,
   listSubmittedExtraAnswers,
+  PASSPORT_REVIEW_GROUPS,
 } from '@/lib/apply/reviewFields';
 import type { IndianPassportFields } from '@/lib/passport/types';
 import {
@@ -58,6 +60,15 @@ interface OpenEdit {
   currentRaw: string;
   currentDisplay: string;
 }
+
+const PASSPORT_KEY_ORDER = new Map<string, number>(
+  PASSPORT_REVIEW_GROUPS.flatMap((group, groupIndex) =>
+    group.fields.map(
+      (field, fieldIndex) =>
+        [field.key, groupIndex * 100 + fieldIndex] as const
+    )
+  )
+);
 
 function labelForDocSlot(
   snapshot: ApplyFormConfig | null,
@@ -280,9 +291,14 @@ export function TravellersSection({
     )
   );
   const knownSlots = new Set(documentEditors.map((editor) => editor.targetKey));
-  const leftoverPassport = Object.entries(passport).filter(
-    ([key]) => !knownPassport.has(key)
-  );
+  const leftoverPassport = Object.entries(passport)
+    .filter(([key]) => !knownPassport.has(key))
+    .sort(([a], [b]) => {
+      const ai = PASSPORT_KEY_ORDER.get(a) ?? 1000;
+      const bi = PASSPORT_KEY_ORDER.get(b) ?? 1000;
+      if (ai !== bi) return ai - bi;
+      return a.localeCompare(b);
+    });
   const leftoverExtra = extraRows.filter(
     (row) => !editedExtraRowKeys.has(row.key)
   );
@@ -360,13 +376,26 @@ export function TravellersSection({
                       />
                     );
                   })}
-                  {leftoverPassport.map(([key, value]) => (
-                    <Field
-                      key={key}
-                      label={key}
-                      value={value == null || value === '' ? '—' : String(value)}
-                    />
-                  ))}
+                  {leftoverPassport.map(([key, value]) => {
+                    const text =
+                      value == null || value === '' || typeof value === 'object'
+                        ? ''
+                        : String(value);
+                    return (
+                      <Field
+                        key={key}
+                        label={labelForPassportField(key)}
+                        value={
+                          text
+                            ? formatReviewValue(
+                                key as keyof IndianPassportFields,
+                                text
+                              ) || text
+                            : '—'
+                        }
+                      />
+                    );
+                  })}
                 </>
               )}
             </dl>

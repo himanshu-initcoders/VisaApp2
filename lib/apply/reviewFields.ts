@@ -60,6 +60,24 @@ export const PASSPORT_REVIEW_GROUPS: ReviewFieldGroup[] = [
   },
 ];
 
+const PASSPORT_FIELD_LABELS = new Map<string, string>(
+  PASSPORT_REVIEW_GROUPS.flatMap((group) =>
+    group.fields.map((field) => [field.key, field.label])
+  )
+);
+
+/** Form label for a stored passport key. Unknown keys become readable words. */
+export function labelForPassportField(key: string): string {
+  const known = PASSPORT_FIELD_LABELS.get(key);
+  if (known) return known;
+  const spaced = key
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+    .trim();
+  if (!spaced) return key;
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
+}
+
 const GENDER_LABEL: Record<string, string> = {
   M: 'Male',
   F: 'Female',
