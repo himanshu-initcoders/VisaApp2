@@ -15,6 +15,7 @@ import {
   applicationComments,
   correctionItems,
   correctionRequests,
+  staffFieldEdits,
 } from '@/lib/db/schema';
 import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
 import { signOut } from '@/lib/auth';
@@ -26,13 +27,18 @@ import {
 import { createReviewerSchema } from '@/lib/validations/auth';
 import { recomputeVisaCaseStatus } from '@/lib/visa/travellerStatus';
 import {
+  buildCorrectableTargets,
   commentBodySchema,
   getOpenCorrection,
   readTargetValue,
+  replaceTravellerDocument,
   requestCorrectionSchema,
   resolveCorrectionSchema,
   reviewerAccessDenied,
+  staffFieldEditSchema,
+  validateFieldValue,
   validateRequestedItems,
+  writeFieldValue,
   type StoredTraveller,
 } from '@/lib/visa/corrections';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
@@ -42,6 +48,7 @@ import {
   notifyStatusChangedEvent,
 } from '@/lib/notifications';
 import { uploadService } from '@/lib/upload';
+import { uploadApplicationDocuments } from '@/lib/upload/application-actions';
 import {
   reviewerOwnsDocument,
   reviewerOwnsVisa,
@@ -1082,6 +1089,273 @@ export async function requestCorrection(
     return {
       success: false,
       message: 'Failed to request correction',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+const ALLOWED_STAFF_EDIT_MIME = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+]);
+
+/**
+ * Staff correct one traveller field or document in place.
+ * Writes the new value and an audit row. Does not ask the applicant to resubmit.
+ */
+export async function applyStaffFieldEdit(
+  input: unknown
+): Promise<ActionResponse> {
+  try {
+    const session = await requireRole(['admin', 'reviewer']);
+    const parsed = staffFieldEditSchema.safeParse(input);
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message ?? 'Invalid update';
+      return { success: false, message, error: message };
+    }
+
+    const { applicationId, travellerId, targetKey, message, value, file } =
+      parsed.data;
+    if (
+      await reviewerAccessDenied(
+        session.user.id,
+        session.user.role,
+        applicationId
+      )
+    ) {
+      return { success: false, message: 'Application not found' };
+    }
+
+    const [application] = await db
+      .select()
+      .from(visaApplications)
+      .where(eq(visaApplications.id, applicationId))
+      .limit(1);
+    if (!application || application.status === 'draft') {
+      return { success: false, message: 'Application not found' };
+    }
+
+    const [traveller] = await db
+      .select()
+      .from(visaApplicationTravellers)
+      .where(
+        and(
+          eq(visaApplicationTravellers.id, travellerId),
+          eq(visaApplicationTravellers.applicationId, applicationId)
+        )
+      )
+      .limit(1);
+    if (!traveller) {
+      return { success: false, message: 'Traveller not found' };
+    }
+    if (traveller.status === 'approved' || traveller.status === 'rejected') {
+      return {
+        success: false,
+        message: 'This traveller is already finished',
+      };
+    }
+
+    const config = (application.formSnapshot as ApplyFormConfig | null) ?? null;
+    const target = buildCorrectableTargets(config).find(
+      (item) => item.targetKey === targetKey
+    );
+    if (!target) {
+      return { success: false, message: 'Unknown field' };
+    }
+    if (target.kind === 'field' && (file || value === undefined)) {
+      return { success: false, message: 'Send a new value for this field' };
+    }
+    if (target.kind === 'document' && (!file || value !== undefined)) {
+      return { success: false, message: 'Upload a replacement file' };
+    }
+
+    const storedTravellers = Array.isArray(application.travellers)
+      ? (application.travellers as StoredTraveller[])
+      : [];
+    const travellerIndex = storedTravellers.findIndex(
+      (item) => item.passengerId === traveller.passengerId
+    );
+    if (travellerIndex < 0) {
+      return { success: false, message: 'Traveller details were not found' };
+    }
+
+    let nextTraveller = storedTravellers[travellerIndex];
+    let previousValue: unknown;
+    let newValue: unknown;
+    let uploaded: {
+      key: string;
+      url: string;
+      slotKey: string;
+      passengerId: string;
+      filename: string;
+      mimeType: string;
+      size: number;
+    } | null = null;
+
+    if (target.kind === 'field') {
+      const issue = validateFieldValue(config, targetKey, value ?? '');
+      if (issue) return { success: false, message: issue };
+      previousValue = readTargetValue(nextTraveller, targetKey);
+      const nextText = (value ?? '').trim();
+      if (String(previousValue ?? '').trim() === nextText) {
+        return { success: false, message: 'Enter a different value' };
+      }
+      nextTraveller = writeFieldValue(nextTraveller, targetKey, nextText);
+      newValue = nextText;
+    } else {
+      const replacement = file!;
+      if (!ALLOWED_STAFF_EDIT_MIME.has(replacement.mimeType)) {
+        return { success: false, message: 'Upload a JPG, PNG, WEBP, or PDF' };
+      }
+      const bytes = Buffer.from(replacement.bufferBase64, 'base64');
+      const max =
+        replacement.mimeType === 'application/pdf'
+          ? 10 * 1024 * 1024
+          : 5 * 1024 * 1024;
+      if (bytes.length === 0 || bytes.length > max) {
+        return { success: false, message: 'File is empty or too large' };
+      }
+      if (!application.countryCode || !application.visaListingId) {
+        return {
+          success: false,
+          message: 'This application cannot accept new files',
+        };
+      }
+
+      const currentDoc = (nextTraveller.documents ?? []).find(
+        (item) => item.slotKey === targetKey
+      );
+      previousValue = currentDoc
+        ? {
+            filename: currentDoc.filename ?? null,
+            key: currentDoc.key ?? null,
+            url: currentDoc.url ?? null,
+            mimeType: currentDoc.mimeType ?? null,
+          }
+        : readTargetValue(nextTraveller, targetKey);
+
+      const uploadResult = await uploadApplicationDocuments({
+        countryCode: application.countryCode,
+        listingId: application.visaListingId,
+        applicationId,
+        documents: [
+          {
+            passengerId: traveller.passengerId,
+            slotKey: targetKey,
+            filename: replacement.filename,
+            mimeType: replacement.mimeType,
+            bufferBase64: replacement.bufferBase64,
+          },
+        ],
+      });
+      if (!uploadResult.success) {
+        return {
+          success: false,
+          message: uploadResult.error || 'Document upload failed',
+        };
+      }
+      const uploadedDoc = uploadResult.results[0];
+      if (!uploadedDoc) {
+        return { success: false, message: 'Document upload failed' };
+      }
+      nextTraveller = replaceTravellerDocument(nextTraveller, targetKey, {
+        slotKey: uploadedDoc.slotKey,
+        key: uploadedDoc.key,
+        url: uploadedDoc.url,
+        mimeType: uploadedDoc.mimeType,
+        filename: uploadedDoc.filename,
+        size: uploadedDoc.size,
+      });
+      newValue = {
+        filename: uploadedDoc.filename,
+        key: uploadedDoc.key,
+        url: uploadedDoc.url,
+        mimeType: uploadedDoc.mimeType,
+      };
+      uploaded = uploadedDoc;
+    }
+
+    const nextTravellers = storedTravellers.map((item, index) =>
+      index === travellerIndex ? nextTraveller : item
+    );
+    const summary = Array.isArray(application.documents)
+      ? [...(application.documents as Array<Record<string, unknown>>)]
+      : [];
+    if (uploaded) {
+      const entry = {
+        key: uploaded.key,
+        url: uploaded.url,
+        slotKey: uploaded.slotKey,
+        passengerId: uploaded.passengerId,
+      };
+      const existing = summary.findIndex(
+        (item) =>
+          item.slotKey === uploaded.slotKey &&
+          item.passengerId === uploaded.passengerId
+      );
+      if (existing >= 0) summary[existing] = entry;
+      else summary.push(entry);
+    }
+
+    const personal =
+      application.personalInfo &&
+      typeof application.personalInfo === 'object' &&
+      !Array.isArray(application.personalInfo)
+        ? { ...(application.personalInfo as Record<string, unknown>) }
+        : null;
+    if (personal && Array.isArray(personal.travellers)) {
+      personal.travellers = nextTravellers;
+    }
+
+    const now = new Date();
+    await db.transaction(async (tx) => {
+      await tx
+        .update(visaApplications)
+        .set({
+          travellers: nextTravellers,
+          ...(uploaded ? { documents: summary } : {}),
+          ...(personal ? { personalInfo: personal } : {}),
+          updatedAt: now,
+        })
+        .where(eq(visaApplications.id, applicationId));
+
+      if (uploaded) {
+        await tx.insert(documents).values({
+          applicationId,
+          applicationType: 'visa' as const,
+          documentType: uploaded.slotKey,
+          s3Key: uploaded.key,
+          filename: uploaded.filename,
+          fileSize: uploaded.size,
+          mimeType: uploaded.mimeType,
+          verified: null,
+          uploadedAt: now,
+        });
+      }
+
+      await tx.insert(staffFieldEdits).values({
+        applicationId,
+        travellerId,
+        actorId: session.user.id,
+        kind: target.kind,
+        targetKey,
+        message,
+        previousValue,
+        newValue,
+        createdAt: now,
+      });
+    });
+
+    revalidateVisaSurfaces(applicationId);
+    return { success: true, message: 'Correction saved' };
+  } catch (error) {
+    console.error('Error saving staff field edit:', error);
+    return {
+      success: false,
+      message: 'Failed to save correction',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }

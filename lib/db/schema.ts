@@ -381,6 +381,35 @@ export const correctionRequests = pgTable(
   ]
 );
 
+/**
+ * Append-only log of a staff member correcting a traveller field or document.
+ * Separate from correction_requests, which ask the applicant to make the change.
+ */
+export const staffFieldEdits = pgTable(
+  'staff_field_edits',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    applicationId: uuid('application_id')
+      .references(() => visaApplications.id, { onDelete: 'cascade' })
+      .notNull(),
+    travellerId: uuid('traveller_id')
+      .references(() => visaApplicationTravellers.id, { onDelete: 'cascade' })
+      .notNull(),
+    actorId: uuid('actor_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    kind: varchar('kind', { length: 20 }).notNull(),
+    targetKey: varchar('target_key', { length: 200 }).notNull(),
+    message: text('message').notNull(),
+    previousValue: jsonb('previous_value'),
+    newValue: jsonb('new_value'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('staff_field_edits_application_id_idx').on(table.applicationId),
+  ]
+);
+
 /** One document slot or form field the applicant must change. */
 export const correctionItems = pgTable(
   'correction_items',
@@ -465,6 +494,9 @@ export type NewCorrectionRequest = typeof correctionRequests.$inferInsert;
 
 export type CorrectionItem = typeof correctionItems.$inferSelect;
 export type NewCorrectionItem = typeof correctionItems.$inferInsert;
+
+export type StaffFieldEdit = typeof staffFieldEdits.$inferSelect;
+export type NewStaffFieldEdit = typeof staffFieldEdits.$inferInsert;
 
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;

@@ -8,6 +8,7 @@ import {
   correctionItems,
   correctionRequests,
   notifications,
+  staffFieldEdits,
   users,
   visaApplicationTravellers,
   visaApplications,
@@ -20,6 +21,7 @@ import { PASSPORT_REVIEW_GROUPS } from '@/lib/apply/reviewFields';
 import { reviewerOwnsVisa } from '@/lib/reviewer-access';
 import { indianPassportFieldsSchema } from '@/lib/passport/schema';
 import { earliestFutureDateIso, isIsoDate } from '@/lib/passport/schema';
+import { STAFF_TRIP_DATE_FIELDS } from '@/lib/visa/staffFields';
 
 const PASSPORT_FRONT_SLOT = 'passport-front';
 const PASSPORT_BACK_SLOT = 'passport-back';
@@ -36,12 +38,6 @@ const TRIP_FIELDS: Array<{ key: string; label: string }> = [
   { key: 'accommodationAddress', label: 'Stay address' },
 ];
 
-const FUTURE_TRIP_FIELDS = new Set([
-  'arrivalDate',
-  'returnDate',
-  'arrivalFlightDate',
-  'returnFlightDate',
-]);
 
 export interface CorrectableTarget {
   kind: 'document' | 'field';
@@ -71,6 +67,32 @@ export const commentBodySchema = z.object({
 export const resolveCorrectionSchema = z.object({
   requestId: z.string().uuid(),
 });
+
+export const staffFieldEditSchema = z
+  .object({
+    applicationId: z.string().uuid(),
+    travellerId: z.string().uuid(),
+    targetKey: z.string().trim().min(1).max(200),
+    message: z.string().trim().min(1).max(2000),
+    value: z.string().max(8000).optional(),
+    file: z
+      .object({
+        filename: z.string().trim().min(1).max(255),
+        mimeType: z.string().trim().min(1).max(100),
+        bufferBase64: z.string().min(1),
+      })
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    const hasValue = data.value !== undefined;
+    const hasFile = data.file !== undefined;
+    if (hasValue === hasFile) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Send a new value or a replacement file',
+      });
+    }
+  });
 
 export const submitCorrectionSchema = z.object({
   applicationId: z.string().uuid(),
@@ -336,7 +358,7 @@ export function validateFieldValue(
       return 'Unknown trip field';
     }
     if (!trimmed) return 'This field is required';
-    if (FUTURE_TRIP_FIELDS.has(field)) {
+    if (STAFF_TRIP_DATE_FIELDS.has(field)) {
       if (!isIsoDate(trimmed)) return 'Enter a valid date';
       if (trimmed < earliestFutureDateIso()) {
         return 'Date must be in the future';
@@ -469,6 +491,51 @@ export interface CorrectionRoundView {
     previousValue: unknown;
     newValue: unknown;
   }>;
+}
+
+export interface StaffFieldEditView {
+  id: string;
+  kind: string;
+  targetKey: string;
+  label: string;
+  message: string;
+  previousValue: unknown;
+  newValue: unknown;
+  createdAt: Date;
+  actorName: string;
+  travellerName: string;
+}
+
+export async function listStaffFieldEdits(
+  applicationId: string,
+  config: ApplyFormConfig | null
+): Promise<StaffFieldEditView[]> {
+  const rows = await db
+    .select({
+      id: staffFieldEdits.id,
+      kind: staffFieldEdits.kind,
+      targetKey: staffFieldEdits.targetKey,
+      message: staffFieldEdits.message,
+      previousValue: staffFieldEdits.previousValue,
+      newValue: staffFieldEdits.newValue,
+      createdAt: staffFieldEdits.createdAt,
+      actorName: users.name,
+      travellerName: visaApplicationTravellers.name,
+    })
+    .from(staffFieldEdits)
+    .innerJoin(
+      visaApplicationTravellers,
+      eq(staffFieldEdits.travellerId, visaApplicationTravellers.id)
+    )
+    .leftJoin(users, eq(staffFieldEdits.actorId, users.id))
+    .where(eq(staffFieldEdits.applicationId, applicationId))
+    .orderBy(desc(staffFieldEdits.createdAt));
+
+  return rows.map((row) => ({
+    ...row,
+    label: labelForTarget(config, row.targetKey),
+    actorName: row.actorName || 'Unknown',
+  }));
 }
 
 export async function listCorrectionRounds(

@@ -21,6 +21,7 @@ import { AssignReviewerCard } from '@/components/admin/AssignReviewerDialog';
 import { CallLogsPanel } from '@/components/admin/CallLogsPanel';
 import { NotesPanel } from '@/components/admin/NotesPanel';
 import { CorrectionsCard } from '@/components/admin/CorrectionsCard';
+import { StaffEditsCard } from '@/components/admin/StaffEditsCard';
 import { ConversationThread } from '@/components/visa/ConversationThread';
 import { TravellersSection } from '@/components/admin/TravellersSection';
 import { TravellerSelectionProvider } from '@/components/admin/TravellerSelectionContext';
@@ -33,7 +34,9 @@ import {
   buildCorrectableTargets,
   listComments,
   listCorrectionRounds,
+  listStaffFieldEdits,
 } from '@/lib/visa/corrections';
+import { staffFieldControl } from '@/lib/visa/staffFields';
 import { markApplicationNotificationsRead } from '@/lib/notifications';
 
 interface PageProps {
@@ -141,9 +144,15 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
       ? details.statusHistory.filter((item) => item.travellerId == null)
       : [];
   const applicantPhone = app.applicantPhone || details.user.phone;
-  const [comments, rounds, listingRows] = await Promise.all([
+  const editors = buildCorrectableTargets(snapshot).flatMap((target) => {
+    const control = staffFieldControl(snapshot, target.targetKey);
+    if (!control) return [];
+    return [{ ...target, control }];
+  });
+  const [comments, rounds, staffEdits, listingRows] = await Promise.all([
     listComments(app.id),
     listCorrectionRounds(app.id, snapshot),
+    listStaffFieldEdits(app.id, snapshot),
     app.visaListingId
       ? db
           .select({ sourceUrl: visaListings.sourceUrl })
@@ -274,8 +283,11 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
 
                 {!isLegacy && (
                   <TravellersSection
+                    applicationId={app.id}
                     travellers={travellers}
                     snapshot={snapshot}
+                    editors={editors}
+                    editingEnabled={app.status !== 'draft'}
                   />
                 )}
 
@@ -338,7 +350,7 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
                 />
               </TabsPanel>
               <TabsPanel id="corrections">
-                {rounds.length === 0 ? (
+                {rounds.length === 0 && staffEdits.length === 0 ? (
                   <Card>
                     <CardContent className="pt-6">
                       <p className="font-switzer text-sm text-slate-helper">
@@ -347,7 +359,10 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
                     </CardContent>
                   </Card>
                 ) : (
-                  <CorrectionsCard rounds={rounds} />
+                  <div className="space-y-6">
+                    <StaffEditsCard edits={staffEdits} />
+                    <CorrectionsCard rounds={rounds} />
+                  </div>
                 )}
               </TabsPanel>
               <TabsPanel id="conversation">
