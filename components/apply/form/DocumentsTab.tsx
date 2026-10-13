@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, Trash2, Upload } from 'lucide-react';
+import { Camera, Check, Trash2, Upload } from 'lucide-react';
+import { PassportPhotoCaptureDialog } from '@/components/apply/form/PassportPhotoCaptureDialog';
 import type {
   ApplyDocumentSlot,
   TravellerDocumentUpload,
@@ -58,7 +59,21 @@ function SlotCard({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [captureOpen, setCaptureOpen] = useState(false);
   const isImage = Boolean(upload?.mimeType.startsWith('image/'));
+
+  const acceptFile = (file: File) => {
+    if (!isAllowedPassportFile(file)) {
+      setError('Please upload a JPG, PNG, WEBP, or PDF file.');
+      return;
+    }
+    if (!isWithinUploadLimit(file)) {
+      setError('File is too large. Max 5MB for images, 10MB for PDFs.');
+      return;
+    }
+    setError(null);
+    onFile(file);
+  };
 
   return (
     <div
@@ -106,16 +121,7 @@ function SlotCard({
           const file = event.target.files?.[0];
           event.target.value = '';
           if (!file) return;
-          if (!isAllowedPassportFile(file)) {
-            setError('Please upload a JPG, PNG, WEBP, or PDF file.');
-            return;
-          }
-          if (!isWithinUploadLimit(file)) {
-            setError('File is too large. Max 5MB for images, 10MB for PDFs.');
-            return;
-          }
-          setError(null);
-          onFile(file);
+          acceptFile(file);
         }}
       />
       <div className="mt-4 flex flex-wrap items-center gap-2" inert={locked ? true : undefined}>
@@ -128,6 +134,17 @@ function SlotCard({
           <Upload className="h-4 w-4" />
           {upload ? 'Replace file' : 'Upload from device'}
         </button>
+        {slot.captureFace && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setCaptureOpen(true)}
+            className="inline-flex items-center gap-2 rounded-full border border-portrait-ink bg-white px-4 py-2 text-sm font-medium text-portrait-ink transition-colors hover:bg-sky-wash disabled:opacity-60"
+          >
+            <Camera className="h-4 w-4" />
+            {upload ? 'Capture again' : 'Capture photo'}
+          </button>
+        )}
         {upload && allowRemove && (
           <button
             type="button"
@@ -141,6 +158,15 @@ function SlotCard({
         )}
       </div>
       {error && <p className="mt-2 text-xs text-[#ff4940]">{error}</p>}
+      {captureOpen && slot.captureFace && (
+        <PassportPhotoCaptureDialog
+          onClose={() => setCaptureOpen(false)}
+          onCaptured={(file) => {
+            setCaptureOpen(false);
+            acceptFile(file);
+          }}
+        />
+      )}
       {!locked && note && (
         <p className="mt-2 text-xs leading-5 text-portrait-ink">{note}</p>
       )}

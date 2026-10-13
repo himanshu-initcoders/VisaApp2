@@ -88,3 +88,11 @@ export const PASSPORT_DOCUMENT_TYPES = new Set<string>([
   'passport_back',
   'passport_copy',
 ]);
+
+/** Passport-style face photo. Live capture is offered only for this document. */
+export function isPassportPhotoDocument(input: {
+  key?: string | null;
+  documentType?: string | null;
+}) {
+  return input.documentType === 'photo' || input.key === 'photo';
+}
