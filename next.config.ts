@@ -22,7 +22,13 @@ const nextConfig: NextConfig = {
     ],
   },
   // pdfjs / tesseract load workers and wasm from CDN at runtime
-  serverExternalPackages: ['tesseract.js', 'pdfjs-dist'],
+  serverExternalPackages: [
+    'tesseract.js',
+    'pdfjs-dist',
+    'onnxruntime-web',
+    'onnxruntime-node',
+    '@mediapipe/tasks-vision',
+  ],
   experimental: {
     // Default Server Action body limit is 1MB; country banner uploads allow up to 5MB
     serverActions: {

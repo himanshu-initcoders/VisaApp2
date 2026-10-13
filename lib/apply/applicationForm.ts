@@ -11,6 +11,7 @@ import {
   DOCUMENT_TYPES,
   PASSPORT_DOCUMENT_TYPES,
   documentTypeLabel,
+  isPassportPhotoDocument,
 } from '@/lib/document-types';
 import {
   getVisibleExtraQuestions,
@@ -137,6 +138,8 @@ export interface ApplyDocumentSlot {
   description: string;
   required: boolean;
   accept: string;
+  /** Camera face capture. Only passport photos use this. */
+  captureFace?: boolean;
 }
 
 export interface ApplyFormConfig {
@@ -386,6 +389,12 @@ export function stringifyCheckboxValues(values: string[]): string {
   return JSON.stringify(values);
 }
 
+function documentSlotDescription(captureFace: boolean) {
+  return captureFace
+    ? 'Face fully visible, no glasses. Upload a file or capture a photo with your camera.'
+    : 'Upload a clear JPG, PNG, or PDF.';
+}
+
 export function buildApplyFormConfig(input: {
   purpose: string;
   countryName: string;
@@ -441,31 +450,42 @@ export function buildApplyFormConfig(input: {
       }
       return !PASSPORT_COMPONENT_KEYS.has(item.key);
     })
-    .map((item) => ({
-      id: item.id,
-      key: item.key,
-      title: formatDocumentTitle(item.key, {
-        label: item.label,
+    .map((item) => {
+      const captureFace = isPassportPhotoDocument({
+        key: item.key,
         documentType: item.documentType,
-      }),
-      description: 'Upload a clear JPG, PNG, or PDF.',
-      required: true,
-      accept: DOCUMENT_FILE_ACCEPT,
-    }));
+      });
+      return {
+        id: item.id,
+        key: item.key,
+        title: formatDocumentTitle(item.key, {
+          label: item.label,
+          documentType: item.documentType,
+        }),
+        description: documentSlotDescription(captureFace),
+        required: true,
+        accept: DOCUMENT_FILE_ACCEPT,
+        captureFace,
+      };
+    });
 
   const fromQuestions = input.questions
     .filter((question) => isFileQuestionType(question.questionType))
-    .map((question) => ({
-      id: question.id,
-      key: question.key,
-      title: question.label,
-      description:
-        question.description ||
-        question.extraInfo ||
-        'Upload a clear JPG, PNG, or PDF.',
-      required: Boolean(question.required),
-      accept: DOCUMENT_FILE_ACCEPT,
-    }));
+    .map((question) => {
+      const captureFace = isPassportPhotoDocument({ key: question.key });
+      return {
+        id: question.id,
+        key: question.key,
+        title: question.label,
+        description:
+          question.description ||
+          question.extraInfo ||
+          documentSlotDescription(captureFace),
+        required: Boolean(question.required),
+        accept: DOCUMENT_FILE_ACCEPT,
+        captureFace,
+      };
+    });
 
   const merged = [...fromComponents];
   for (const slot of fromQuestions) {
@@ -480,9 +500,10 @@ export function buildApplyFormConfig(input: {
             id: 'default-photo',
             key: 'photo',
             title: 'Passport photo',
-            description: 'White background, face fully visible. ICAO-style photo recommended.',
+            description: documentSlotDescription(true),
             required: true,
             accept: DOCUMENT_FILE_ACCEPT,
+            captureFace: true,
           },
         ];
 
