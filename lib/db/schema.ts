@@ -504,6 +504,29 @@ export const notifications = pgTable(
   ]
 );
 
+/**
+ * CSS-selector mappings from a visa listing onto an embassy hostname.
+ * Shared by every applicant for that listing. Selectors only — no applicant data.
+ */
+export const formFieldMappings = pgTable(
+  'form_field_mappings',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    formId: uuid('form_id').notNull(),
+    formType: varchar('form_type', { length: 20 }).notNull(),
+    hostname: varchar('hostname', { length: 255 }).notNull(),
+    mapping: jsonb('mapping').notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('form_field_mappings_form_host_unique').on(
+      table.formId,
+      table.formType,
+      table.hostname
+    ),
+  ]
+);
+
 // Export types
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -561,5 +584,8 @@ export type NewStaffFieldEdit = typeof staffFieldEdits.$inferInsert;
 
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+
+export type FormFieldMapping = typeof formFieldMappings.$inferSelect;
+export type NewFormFieldMapping = typeof formFieldMappings.$inferInsert;
 
 export type { VisaListing, NewVisaListing } from './schema-extended';
