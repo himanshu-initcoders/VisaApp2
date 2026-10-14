@@ -148,14 +148,6 @@ export function HomeLandingClient({
             above.
           </p>
         )}
-
-        <Link
-          href="/destinations"
-          className="mt-5 inline-flex items-center text-sm font-medium text-portrait-ink"
-        >
-          View all destinations
-          <ArrowRight className="ml-1 h-4 w-4" />
-        </Link>
       </section>
     </>
   );
