@@ -179,7 +179,7 @@ export function PassportPhotoCaptureDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="passport-photo-capture-title"
-        className="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-[24px] bg-white shadow-elevated"
+        className="relative flex h-full w-full flex-col overflow-hidden rounded-[24px] bg-white shadow-elevated"
       >
         <div className="flex items-start justify-between gap-3 border-b border-ash px-5 py-4">
           <div>
@@ -205,7 +205,7 @@ export function PassportPhotoCaptureDialog({
         </div>
 
         <div className="space-y-4 overflow-y-auto px-5 py-5">
-          <div className="relative mx-auto aspect-[3/4] w-full max-w-sm overflow-hidden rounded-[28px] bg-[#111]">
+          <div className="relative mx-auto aspect-[1/1] w-full max-w-xs overflow-hidden rounded-[28px] bg-[#111]">
             <video
               ref={videoRef}
               playsInline
