@@ -162,7 +162,7 @@ export function AssignReviewerDialog({
             htmlFor="reviewer-search"
             className="mb-2 block shrink-0 font-switzer text-sm font-medium text-portrait-ink"
           >
-            Search reviewers
+            Search reviewers or admins
           </label>
           <input
             id="reviewer-search"
@@ -186,7 +186,7 @@ export function AssignReviewerDialog({
             )}
             {!isLoading && reviewers.length === 0 && !error && (
               <li className="font-switzer text-sm text-slate-helper">
-                No reviewers found
+                No reviewers or admins found
               </li>
             )}
             {reviewers.map((reviewer) => {
@@ -200,6 +200,9 @@ export function AssignReviewerDialog({
                   <div className="min-w-0">
                     <p className="truncate font-switzer text-sm font-medium text-portrait-ink">
                       {reviewer.name}
+                      <span className="ml-2 font-normal text-slate-helper">
+                        {reviewer.role === 'admin' ? 'Admin' : 'Reviewer'}
+                      </span>
                     </p>
                     <p className="truncate font-switzer text-xs text-slate-helper">
                       {reviewer.email}

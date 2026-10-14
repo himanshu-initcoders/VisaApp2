@@ -44,12 +44,13 @@ export interface ApplicationListItem {
 }
 
 /**
- * Reviewer option for the assign dialog (max 5).
+ * Staff option for the assign dialog (reviewers and admins).
  */
 export interface ReviewerOption {
   id: string;
   name: string;
   email: string;
+  role: 'admin' | 'reviewer';
   /** Assigned visa applications that are not draft, approved, or rejected. */
   openCount: number;
 }

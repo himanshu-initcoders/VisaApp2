@@ -19,7 +19,7 @@ import {
   correctionRequests,
   staffFieldEdits,
 } from '@/lib/db/schema';
-import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { signOut } from '@/lib/auth';
 import { requireRole, isValidStatusTransition, isAdmin } from '@/lib/auth-utils';
 import {
@@ -763,7 +763,8 @@ export async function createReviewer(input: unknown): Promise<ActionResponse> {
 const OPEN_VISA_COUNT = sql<number>`count(${visaApplications.id}) filter (where ${visaApplications.status} not in ('approved', 'rejected', 'partially_approved', 'draft'))`;
 
 /**
- * Search reviewers for assignment. Returns at most 5, lowest open workload first.
+ * Search reviewers and admins for assignment.
+ * Admins are listed first, then reviewers with the lowest open workload.
  */
 export async function searchReviewers(
   query?: string
@@ -779,7 +780,7 @@ export async function searchReviewers(
   }
 
   const trimmed = query?.trim() ?? '';
-  const filters = [eq(users.role, 'reviewer')];
+  const filters = [inArray(users.role, ['reviewer', 'admin'])];
 
   if (trimmed) {
     const pattern = `%${trimmed.replace(/[%_]/g, '')}%`;
@@ -792,6 +793,7 @@ export async function searchReviewers(
         id: users.id,
         name: users.name,
         email: users.email,
+        role: users.role,
         openCount: OPEN_VISA_COUNT,
       })
       .from(users)
@@ -800,9 +802,13 @@ export async function searchReviewers(
         eq(visaApplications.assignedReviewerId, users.id)
       )
       .where(and(...filters))
-      .groupBy(users.id, users.name, users.email)
-      .orderBy(asc(OPEN_VISA_COUNT), asc(users.name))
-      .limit(5);
+      .groupBy(users.id, users.name, users.email, users.role)
+      .orderBy(
+        sql`case when ${users.role} = 'admin' then 0 else 1 end`,
+        asc(OPEN_VISA_COUNT),
+        asc(users.name)
+      )
+      .limit(20);
 
     return {
       success: true,
@@ -811,6 +817,7 @@ export async function searchReviewers(
         id: row.id,
         name: row.name,
         email: row.email,
+        role: row.role === 'admin' ? 'admin' : 'reviewer',
         openCount: Number(row.openCount) || 0,
       })),
     };
@@ -881,11 +888,11 @@ export async function assignVisaReviewer(
       .where(eq(users.id, reviewerId))
       .limit(1);
 
-    if (!reviewer || reviewer.role !== 'reviewer') {
+    if (!reviewer || (reviewer.role !== 'reviewer' && reviewer.role !== 'admin')) {
       return {
         success: false,
-        message: 'Reviewer not found',
-        error: 'Selected user is not a reviewer',
+        message: 'Assignee not found',
+        error: 'Selected user is not a reviewer or admin',
       };
     }
 

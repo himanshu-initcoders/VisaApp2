@@ -162,7 +162,7 @@ export function ComponentsManager({ processId, initialComponents }: ComponentsMa
         <p className="text-sm text-slate-helper">
           {components.length} document{components.length !== 1 ? 's' : ''} required
         </p>
-        <Button onClick={() => setShowAddModal(true)} variant="primary" size="md">
+        <Button onClick={() => setShowAddModal(true)} variant="primary" size="md" className="flex items-center">
           <Plus className="h-4 w-4 mr-2" />
           Add Document
         </Button>

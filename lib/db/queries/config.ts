@@ -114,7 +114,8 @@ export async function getAllProcessesWithCountries() {
       country: {
         columns: {
           name: true,
-          iso2Code: true
+          iso2Code: true,
+          images: true,
         }
       },
       prices: {
@@ -215,7 +216,8 @@ export async function getFilteredProcesses(filters: {
       country: {
         columns: {
           name: true,
-          iso2Code: true
+          iso2Code: true,
+          images: true,
         }
       },
       prices: {
