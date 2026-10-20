@@ -11,30 +11,30 @@ export const dynamic = 'force-dynamic';
 const HOW_IT_WORKS_STEPS = [
   {
     id: 'destination',
-    title: 'Pick a destination',
+    title: 'Choose your destination',
     description:
-      'Search a country and open the visa that matches your trip — tourist, business, or study.',
+      'Pick the country you’re visiting and the visa that fits your trip: tourist, business or study.',
     stepNumber: 1,
   },
   {
     id: 'docs',
-    title: 'See documents and price',
+    title: 'Check documents and price',
     description:
-      'Know the fee breakdown, processing time, and exactly which papers to keep ready.',
+      'See the full cost, how long it takes, and the exact documents you’ll need, before you pay.',
     stepNumber: 2,
   },
   {
     id: 'apply',
-    title: 'Apply in one flow',
+    title: 'Apply in one go',
     description:
-      'Add travellers, upload files, and pay. We check the application before it is filed.',
+      'Add travellers, upload your documents and pay. Our experts review everything before it’s submitted.',
     stepNumber: 3,
   },
   {
     id: 'track',
-    title: 'Track until it is done',
+    title: 'Track your visa',
     description:
-      'Get status updates as the visa moves — no embassy queues, no guessing what happens next.',
+      'Get updates at every stage, so you always know where your application stands.',
     stepNumber: 4,
   },
 ];
