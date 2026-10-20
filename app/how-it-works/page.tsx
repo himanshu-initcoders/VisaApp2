@@ -6,30 +6,30 @@ import { ProcessTimeline } from '@/components/public/ProcessTimeline';
 const steps = [
   {
     id: 'traveller-info',
-    title: 'Choose a destination',
+    title: 'Choose your destination',
     description:
-      'Start from a country page that already explains the entry type, price context, and travel timeline.',
+      'Pick the country you’re visiting and the visa that fits your trip: tourist, business or study.',
     stepNumber: 1,
   },
   {
     id: 'docs',
-    title: 'Check your documents',
+    title: 'Check documents and price',
     description:
-      'See the required documents before you upload anything, with quick explanations built into each requirement card.',
+      'See the full cost, how long it takes, and the exact documents you’ll need, before you pay.',
     stepNumber: 2,
   },
   {
     id: 'review',
-    title: 'Review price and ETA',
+    title: 'Apply in one go',
     description:
-      'Understand what is government-related, what is service-related, and how long the process should take.',
+      'Add travellers, upload your documents and pay. Our experts review everything before it’s submitted.',
     stepNumber: 3,
   },
   {
     id: 'submit',
-    title: 'Start confidently',
+    title: 'Track your visa',
     description:
-      'Move into the application flow with fewer surprises because the marketing page already answered the big questions.',
+      'Get updates at every stage, so you always know where your application stands.',
     stepNumber: 4,
   },
 ];
@@ -45,12 +45,10 @@ export default function HowItWorksPage() {
               How it works
             </p>
             <h1 className="font-basier text-5xl leading-tight text-portrait-ink">
-              A calmer visa experience starts before the form.
+              Your visa in four simple steps
             </h1>
             <p className="text-base leading-8 text-slate-helper">
-              The public experience is designed to answer the first questions
-              quickly: what this product is, what it costs, what documents it
-              needs, and what happens next.
+              Clear guidance for first-time travellers, and no repeated paperwork for frequent ones.
             </p>
           </MotionReveal>
 

@@ -95,11 +95,10 @@ export default async function Home() {
               How it works
             </p>
             <h2 className="mt-2 font-basier text-2xl leading-tight tracking-[-0.03em] text-portrait-ink sm:text-4xl">
-              Four calm steps to a visa.
+               Your visa in four simple steps
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-helper sm:text-base sm:leading-7">
-              Built so first-timers are not guessing, and frequent travellers
-              are not repeating themselves.
+              Clear guidance for first-time travellers, and no repeated paperwork for frequent ones.
             </p>
           </MotionReveal>
           <ProcessTimeline steps={HOW_IT_WORKS_STEPS} />
