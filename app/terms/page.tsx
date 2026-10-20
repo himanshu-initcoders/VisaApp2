@@ -1,0 +1,801 @@
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import {
+  LegalPageShell,
+  LegalSection,
+  LegalTable,
+} from '@/components/legal/LegalPageShell';
+
+export const metadata: Metadata = {
+  title: 'Terms and Conditions — Viserv',
+  description:
+    'Terms and Conditions for using Viserv visa assistance services on www.viserv.in and related channels.',
+};
+
+export default function TermsAndConditionsPage() {
+  return (
+    <LegalPageShell
+      title="Terms and Conditions"
+      lastUpdated="October 2026"
+      relatedHref="/privacy"
+      relatedLabel="Privacy Policy"
+      intro={
+        <>
+          <p>
+            Viserv (&quot;Viserv&quot;, &quot;we&quot;, &quot;us&quot; or
+            &quot;our&quot;) is a visa assistance service owned and operated by
+            Viserv, with its registered office at No 5/1, 1st Cross, RRMR Extn, KH
+            Road, Bengaluru, Karnataka, India. We help travellers understand what
+            a destination requires, prepare and check their paperwork, and lodge
+            visa and travel-authorisation applications with the relevant
+            authorities on their behalf.
+          </p>
+          <p>
+            These Terms and Conditions (&quot;Terms&quot;) set out the rules that
+            apply when you visit{' '}
+            <a href="https://www.viserv.in">www.viserv.in</a>, use any Viserv
+            mobile application, or deal with us over WhatsApp, email, phone or in
+            person (together, the &quot;Platform&quot;). Please read them
+            alongside our Privacy Policy, which explains how we handle your
+            personal data. Together, these two documents form a binding agreement
+            between you and us.
+          </p>
+          <p>
+            In short: we prepare and submit your application carefully and keep
+            you informed, but the decision to grant or refuse a visa always rests
+            with the government concerned. Our fees are for our work, not for a
+            guaranteed outcome.
+          </p>
+        </>
+      }
+    >
+      <LegalSection id="definitions" title="1. Definitions">
+        <p>
+          In these Terms, the following words carry the meanings given below:
+        </p>
+        <ul>
+          <li>
+            <strong>Applicant</strong> means each person for whom a visa,
+            e-visa, permit or travel authorisation is being sought through
+            Viserv, including a minor or dependant added by you.
+          </li>
+          <li>
+            <strong>Authority</strong> means any government, ministry, embassy,
+            high commission, consulate, immigration department, or any visa
+            application centre or outsourced service provider appointed by such a
+            body.
+          </li>
+          <li>
+            <strong>Government Fee</strong> means any fee levied by an Authority
+            for processing an application, as notified by that Authority from
+            time to time.
+          </li>
+          <li>
+            <strong>Service Fee</strong> means the fee Viserv charges for its own
+            assistance, as displayed at the time of booking, exclusive of
+            applicable taxes.
+          </li>
+          <li>
+            <strong>Third-Party Charges</strong> means amounts payable to
+            persons other than Viserv and the Authority, such as visa centre
+            convenience charges, courier, translation, notarisation,
+            photographs, travel insurance or appointment charges.
+          </li>
+          <li>
+            <strong>Order</strong> means a request placed by you for one or more
+            Services, for one or more Applicants, once payment has been received.
+          </li>
+          <li>
+            <strong>Services</strong> means the visa information, document
+            review, form-filling, appointment booking, submission, tracking,
+            courier and related assistance offered by Viserv, together with any
+            optional add-ons you choose.
+          </li>
+          <li>
+            <strong>You</strong> or <strong>User</strong> means any person who
+            accesses the Platform or places an Order, and, where you act for a
+            company or another person, includes that company or person.
+          </li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection id="accepting" title="2. Accepting these Terms">
+        <p>
+          <strong>2.1</strong> By browsing the Platform, creating an account, or
+          placing an Order, you confirm that you have read, understood and
+          accepted these Terms. If you do not agree with them, please do not use
+          the Platform.
+        </p>
+        <p>
+          <strong>2.2</strong> These Terms are an electronic record within the
+          meaning of the Information Technology Act, 2000 and the rules made
+          under it. They are generated by a computer system and do not require a
+          physical or digital signature to be binding.
+        </p>
+        <p>
+          <strong>2.3</strong> Specific products, offers or campaigns may carry
+          their own conditions, which will be shown to you before you buy. Where
+          those conditions conflict with these Terms, the specific conditions
+          will prevail for that product or offer only.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="who-may-use" title="3. Who may use Viserv">
+        <p>
+          <strong>3.1</strong> You must be at least 18 years old and legally able
+          to enter into a contract under the Indian Contract Act, 1872 to place
+          an Order.
+        </p>
+        <p>
+          <strong>3.2</strong> You may place an Order for a minor or for another
+          adult (for example a family member or employee) only if you have their
+          consent, or the legal authority to act for them, and you accept these
+          Terms on their behalf. For a minor, the consent of a parent or lawful
+          guardian is required.
+        </p>
+        <p>
+          <strong>3.3</strong> Where you act for a business, you confirm that you
+          are authorised to bind that business to these Terms.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="what-we-do" title="4. What we do, and what we do not do">
+        <p>
+          <strong>4.1 We are a private facilitator.</strong> Viserv is an
+          independent company. We are not a government body, and we are not an
+          agent of, or affiliated with, any embassy, consulate or immigration
+          authority, unless we expressly say so for a particular service.
+        </p>
+        <p>
+          <strong>4.2 Our role.</strong> Depending on the service you choose, we
+          may: tell you which visa type appears to suit your purpose of travel;
+          share a document checklist; review your documents for completeness and
+          obvious errors; complete application forms using the information you
+          give us; book appointments; lodge the application; pay the Government
+          Fee on your behalf; track progress; and return your passport and
+          documents to you.
+        </p>
+        <p>
+          <strong>4.3 You can apply directly.</strong> Many visas and e-visas can
+          be obtained by applying directly on the official government website,
+          often for only the Government Fee. Our Service Fee pays for the
+          convenience, review and support we provide; it is not a fee required by
+          any Authority.
+        </p>
+        <p>
+          <strong>4.4 Information is guidance, not legal advice.</strong> Visa
+          rules change often and sometimes without notice. The requirements,
+          timelines and fees shown on the Platform reflect our best understanding
+          at the time they were published. They do not amount to legal or
+          immigration advice, and the Authority&apos;s published rules will
+          prevail over anything we display.
+        </p>
+        <p>
+          <strong>4.5 No influence on outcomes.</strong> We cannot speed up,
+          influence or guarantee the decision of any Authority, and no Viserv
+          employee is permitted to suggest otherwise.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="account" title="5. Your account">
+        <p>
+          <strong>5.1</strong> Some Services require you to create an account
+          using a working mobile number or email address. You agree to keep your
+          account details accurate and up to date.
+        </p>
+        <p>
+          <strong>5.2</strong> You are responsible for keeping your login
+          credentials and one-time passwords confidential and for all activity
+          that takes place under your account. Tell us promptly at{' '}
+          <a href="mailto:hello@viserv.in">hello@viserv.in</a> if you suspect
+          unauthorised access.
+        </p>
+        <p>
+          <strong>5.3</strong> Each account is personal to its holder and may not
+          be sold, transferred or shared.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="responsibilities" title="6. Your responsibilities as an applicant">
+        <p>
+          A visa application is only as strong as the information behind it. By
+          placing an Order, you agree that:
+        </p>
+        <ul>
+          <li>
+            every detail and document you provide, for yourself and for any other
+            Applicant, is true, complete, current and genuine, and that you will
+            tell us immediately if anything changes;
+          </li>
+          <li>
+            you will not ask us to submit forged, altered or misleading
+            documents, or to withhold information that an Authority has asked
+            for, and you understand that we will decline any such request;
+          </li>
+          <li>
+            you will reply to our requests for documents, clarifications or
+            approvals within 48 hours, or such other time as we reasonably
+            specify, so that deadlines and appointment slots are not missed;
+          </li>
+          <li>
+            you will review any draft application form or summary we send you and
+            confirm its accuracy before we submit it, because the application is
+            made in the Applicant&apos;s name and the Applicant remains
+            responsible for its contents;
+          </li>
+          <li>
+            each passport used has the validity and blank pages the destination
+            requires;
+          </li>
+          <li>
+            you will attend any appointment, biometrics session or interview in
+            person when the Authority requires it; and
+          </li>
+          <li>
+            once a visa is issued, you will check every detail on it (name,
+            passport number, dates, entries) and report any error to us within 24
+            hours of receiving it.
+          </li>
+        </ul>
+        <p>
+          Delays, refusals or extra costs that result from information you have
+          not supplied, supplied late, or supplied incorrectly are not Viserv&apos;s
+          responsibility.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="permission" title="7. Permission to act on your behalf">
+        <p>
+          <strong>7.1</strong> When you place an Order, you authorise Viserv, its
+          staff and its appointed service providers to: fill in and sign or
+          submit online forms using the information you provide; create and
+          manage applicant accounts on official portals where required; book,
+          reschedule or cancel appointments; pay Government Fees and Third-Party
+          Charges from the amounts you have paid us; correspond with Authorities
+          about your application; and receive the outcome on your behalf.
+        </p>
+        <p>
+          <strong>7.2</strong> This authority is limited to the Order you have
+          placed and ends when that Order is completed or cancelled.
+        </p>
+        <p>
+          <strong>7.3</strong> Where an Authority requires the Applicant&apos;s
+          own declaration, signature or consent, you agree to provide it
+          personally. We will never sign a declaration in your name without your
+          express instruction.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="timelines" title="8. Timelines and estimates">
+        <p>
+          <strong>8.1</strong> Any processing time, appointment date or expected
+          delivery date we show is an estimate based on recent experience and the
+          Authority&apos;s published guidance. Authorities can and do take longer,
+          ask for more documents, or call Applicants for interview.
+        </p>
+        <p>
+          <strong>8.2</strong> Unless we have offered you a specific written
+          commitment as part of a paid add-on (see Section 15), estimates are not
+          guarantees and are not binding on us.
+        </p>
+        <p>
+          <strong>8.3</strong> We strongly recommend that you do not buy
+          non-refundable tickets or accommodation until your visa has been
+          issued, unless the destination&apos;s rules require proof of booking,
+          in which case refundable or provisional reservations are the safer
+          choice.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="fees" title="9. Fees, taxes and payment">
+        <p>
+          <strong>9.1 What you pay.</strong> The price of an Order is made up of:
+          (a) the Government Fee; (b) Viserv&apos;s Service Fee; (c) any
+          applicable Third-Party Charges; and (d) Goods and Services Tax and any
+          other applicable taxes. The breakdown is shown before you pay.
+        </p>
+        <p>
+          <strong>9.2 Changes outside our control.</strong> Authorities and visa
+          centres may revise their fees, or the exchange rate used to convert
+          them, at short notice. If the Government Fee or a Third-Party Charge
+          rises after you have paid but before we have paid it on your behalf, we
+          will tell you the difference and ask you to pay it. If you prefer not
+          to, you may cancel and receive a refund under Section 12.
+        </p>
+        <p>
+          <strong>9.3 Pricing errors.</strong> If a price on the Platform is
+          clearly wrong because of a technical or typographical error, we may
+          cancel the affected Order and refund in full, or offer you the Service
+          at the correct price.
+        </p>
+        <p>
+          <strong>9.4 Payment.</strong> Payments are processed by authorised
+          payment gateways and banks using cards, UPI, net banking or other
+          methods we make available. Viserv does not store your full card
+          details. Your bank or card issuer may apply its own charges, including
+          for international transactions.
+        </p>
+        <p>
+          <strong>9.5 Invoices.</strong> A tax invoice will be issued to the
+          email address on your Order. If you need a GST invoice in a business
+          name, please give us the GSTIN before payment; invoices cannot
+          ordinarily be re-issued later.
+        </p>
+        <p>
+          <strong>9.6 When work begins.</strong> We start work on an Order only
+          after the full amount has been received.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="cancellations-you" title="10. Cancellations by you">
+        <p>
+          <strong>10.1</strong> You may cancel an Order by writing to{' '}
+          <a href="mailto:hello@viserv.in">hello@viserv.in</a> or through your
+          account. A cancellation takes effect when we acknowledge it.
+        </p>
+        <p>
+          <strong>10.2</strong> How much is refunded depends on how far your
+          application has progressed, as set out in Section 12. Once an
+          application has been lodged with an Authority, it usually cannot be
+          withdrawn, and the Government Fee is almost never returned by the
+          Authority.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="cancellations-us" title="11. Cancellations and refusals by us">
+        <p>We may decline or cancel an Order, at any stage, if:</p>
+        <ul>
+          <li>
+            we reasonably suspect that a document is forged or altered, that
+            information is false, or that the Order is connected with fraud,
+            money laundering, human trafficking or any other unlawful activity;
+          </li>
+          <li>
+            you do not supply required documents or responses within the time we
+            have asked for, and the delay puts the application at risk;
+          </li>
+          <li>
+            the visa you want is not one we are able to process, or the Authority
+            suspends the service;
+          </li>
+          <li>
+            payment is reversed, charged back or not received in full; or
+          </li>
+          <li>
+            you or anyone acting for you behaves abusively or threateningly
+            towards our staff.
+          </li>
+        </ul>
+        <p>
+          If an application remains incomplete because documents are outstanding
+          for 60 consecutive days from our first written request, we may close
+          the Order. Where we cancel for reasons (a), (b), (d) or (e), or close
+          an Order under this paragraph, the Service Fee is not refundable. Where
+          we cancel for reason (c), you will receive a full refund of all amounts
+          not already paid to an Authority or third party.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="refunds" title="12. Refunds">
+        <p>
+          The table below summarises what is refunded in common situations.
+          Amounts already paid to an Authority or a third party can be refunded
+          only if, and to the extent that, they are actually returned to us.
+        </p>
+        <LegalTable
+          headers={[
+            'Situation',
+            'Government Fee',
+            'Viserv Service Fee',
+            'Third-Party Charges',
+          ]}
+          rows={[
+            [
+              'You cancel before we begin reviewing your documents',
+              'Refunded in full',
+              'Refunded in full, less payment gateway charges',
+              'Refunded in full',
+            ],
+            [
+              'You cancel after document review has begun but before the application is lodged',
+              'Refunded, if not yet paid to the Authority',
+              '50% refunded',
+              'Refunded, if not yet incurred',
+            ],
+            [
+              'You cancel after the application is lodged',
+              'Not refunded',
+              'Not refunded',
+              'Not refunded',
+            ],
+            [
+              'Visa refused or issued for a shorter period or fewer entries than requested',
+              'Not refunded',
+              'Not refunded',
+              'Not refunded',
+            ],
+            [
+              'Application cannot proceed because of an error made by Viserv',
+              'Refunded, or re-applied at our cost',
+              'Refunded in full',
+              'Refunded in full',
+            ],
+            [
+              'Authority suspends the visa category before submission',
+              'Refunded, if recoverable',
+              'Refunded in full',
+              'Refunded, if recoverable',
+            ],
+            [
+              'Duplicate payment for the same Order',
+              'Refunded in full',
+              'Refunded in full',
+              'Refunded in full',
+            ],
+          ]}
+        />
+        <p>
+          <strong>12.1</strong> Approved refunds are made to the original payment
+          method within 7 to 10 working days of approval. Your bank may take
+          additional time to credit the amount.
+        </p>
+        <p>
+          <strong>12.2</strong> To request a refund, write to{' '}
+          <a href="mailto:hello@viserv.in">hello@viserv.in</a> with your Order
+          number. We will confirm our decision within 7 working days.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="authority-decisions" title="13. Decisions by authorities">
+        <p>
+          <strong>13.1</strong> Each Authority decides, entirely at its own
+          discretion, whether to grant a visa, what type and validity to grant,
+          how long to take, and whether to call an Applicant for interview or
+          further checks. Authorities often do not give reasons for refusal.
+        </p>
+        <p>
+          <strong>13.2</strong> A refusal, delay, administrative processing, or
+          the grant of a visa different from the one requested does not, by
+          itself, mean that Viserv has failed to perform its Services.
+        </p>
+        <p>
+          <strong>13.3</strong> Holding a visa does not guarantee entry. Border
+          officials at the destination decide whether to admit a traveller, and
+          may ask for evidence of funds, accommodation, return travel or other
+          matters.
+        </p>
+        <p>
+          <strong>13.4</strong> You are solely responsible for complying with the
+          conditions of any visa granted, including the permitted length of stay.
+          Overstaying or breaching visa conditions may lead to fines, detention,
+          deportation or future bans, and Viserv has no responsibility for those
+          consequences.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="passports" title="14. Passports, original documents and courier">
+        <p>
+          <strong>14.1</strong> Some visas require original passports or
+          documents to be handed to a visa centre or embassy. Where we collect,
+          carry or return them, we will take reasonable care to keep them safe
+          while they are in our custody.
+        </p>
+        <p>
+          <strong>14.2</strong> Documents in the custody of an Authority or visa
+          centre are outside our control. Where documents are sent by courier,
+          the courier company is responsible for them while in transit. If
+          documents are lost or damaged in transit, we will help you raise a
+          claim and obtain replacements, but our liability is limited as set out
+          in Section 22.
+        </p>
+        <p>
+          <strong>14.3</strong> Please keep photocopies or scans of all documents
+          you hand over, and inform us at once if you need your passport back
+          urgently for any reason, as an application in progress may have to be
+          withdrawn.
+        </p>
+        <p>
+          <strong>14.4</strong> Documents and passports not collected within 90
+          days of being ready for return may be sent by courier to your
+          registered address at your cost. Beyond that we will not be responsible
+          for your original passports and documents.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="add-ons" title="15. Optional add-ons and third-party services">
+        <p>
+          <strong>15.1</strong> We may offer optional services, such as travel
+          insurance, flight or hotel reservations for visa purposes, forex,
+          document translation, photographs, express appointment booking. Each
+          add-on will carry its own price and conditions, shown before you buy.
+        </p>
+        <p>
+          <strong>15.2</strong> Where an add-on is provided by a third party (for
+          example an insurer or forex provider), that third party is responsible
+          for delivering it under its own terms. Viserv acts only as a
+          facilitator for those services and is not liable for the third
+          party&apos;s acts or omissions.
+        </p>
+        <p>
+          <strong>15.3</strong> Any delivery-date commitment or refund-protection
+          benefit applies only if you purchased it for that Order, and only on
+          the conditions stated for it at the time of purchase.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="offers" title="16. Offers, coupons and referrals">
+        <p>
+          Discounts, coupon codes and referral rewards are subject to the
+          conditions published with them, cannot be exchanged for cash unless
+          stated, and may be withdrawn or changed at any time. We may cancel any
+          benefit obtained through misuse, duplicate accounts or other abuse.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="acceptable-use" title="17. Acceptable use of the Platform">
+        <p>You agree not to:</p>
+        <ul>
+          <li>
+            use the Platform for any unlawful purpose or to submit information
+            you know to be false;
+          </li>
+          <li>
+            impersonate another person or use another person&apos;s documents
+            without authority;
+          </li>
+          <li>
+            copy, scrape, reverse-engineer or resell any part of the Platform or
+            its content;
+          </li>
+          <li>
+            introduce viruses or malicious code, or attempt to gain unauthorised
+            access to our systems or other users&apos; data;
+          </li>
+          <li>
+            post or send content that is defamatory, obscene, hateful,
+            threatening, or that infringes anyone else&apos;s rights; or
+          </li>
+          <li>
+            interfere with the normal operation of the Platform, including
+            through automated requests.
+          </li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection id="ip" title="18. Intellectual property">
+        <p>
+          <strong>18.1</strong> The Viserv name, logo, tagline &quot;simplifying
+          visas&quot;, the design of the Platform, and all text, graphics, guides
+          and software on it belong to Viserv or its licensors and are protected
+          by Indian and international intellectual property laws.
+        </p>
+        <p>
+          <strong>18.2</strong> You may view and print content for your personal,
+          non-commercial use. Any other use requires our prior written
+          permission.
+        </p>
+        <p>
+          <strong>18.3</strong> Official forms, logos and trademarks of
+          Authorities and third parties shown on the Platform remain the property
+          of their respective owners and are used only for identification.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="reviews" title="19. Reviews and feedback">
+        <p>
+          If you post a review or send us feedback, you allow us to use,
+          reproduce and display it (with your first name and initial, unless you
+          ask us not to) for promoting our Services. We do not edit reviews
+          except to remove personal data, abusive language or content that breaks
+          the law. We may decline to publish reviews that are not genuine.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="links" title="20. Links to other websites">
+        <p>
+          The Platform may link to government portals and third-party websites
+          for your convenience. We do not control those websites and are not
+          responsible for their content, availability or privacy practices.
+          Please read their terms before using them.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="disclaimer" title="21. Disclaimer of warranties">
+        <p>
+          <strong>21.1</strong> We will perform our Services with reasonable
+          skill and care. Beyond that, and to the extent permitted by law, the
+          Platform and Services are provided on an &quot;as is&quot; and
+          &quot;as available&quot; basis.
+        </p>
+        <p>
+          <strong>21.2</strong> We do not promise that the Platform will be
+          uninterrupted, error-free or free from viruses, or that any visa will
+          be granted or delivered by any particular date.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="liability" title="22. Limitation of liability">
+        <p>
+          <strong>22.1</strong> To the fullest extent permitted by law,
+          Viserv&apos;s total liability to you for all claims arising out of or
+          in connection with an Order, whether in contract, tort (including
+          negligence) or otherwise, will not exceed the Service Fee you paid to
+          Viserv for that Order.
+        </p>
+        <p>
+          <strong>22.2</strong> We will not be liable for any indirect or
+          consequential loss, including loss of travel bookings, missed flights,
+          hotel or event costs, loss of business, earnings or opportunity, or
+          emotional distress, arising from a refusal, delay or loss of documents,
+          except where such loss is caused by our wilful misconduct or gross
+          negligence.
+        </p>
+        <p>
+          <strong>22.3</strong> Nothing in these Terms limits any liability that
+          cannot lawfully be limited, or any right you have as a consumer under
+          the Consumer Protection Act, 2019.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="indemnity" title="23. Indemnity">
+        <p>
+          You agree to indemnify and hold harmless Viserv, and their directors,
+          employees and agents against any claim, penalty, loss or reasonable
+          legal cost arising from: (a) false, incomplete or forged information or
+          documents supplied by you or any Applicant; (b) your breach of these
+          Terms; or (c) your breach of any law or the rights of any third party.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="suspension" title="24. Suspension and termination">
+        <p>
+          <strong>24.1</strong> We may suspend or close your account, or refuse
+          further Orders, if you breach these Terms or if we are required to do
+          so by law or by an Authority.
+        </p>
+        <p>
+          <strong>24.2</strong> You may close your account at any time by writing
+          to us. Closing an account does not cancel Orders already in progress
+          unless you also ask for those to be cancelled under Section 10.
+        </p>
+        <p>
+          <strong>24.3</strong> Sections dealing with fees, refunds, intellectual
+          property, liability, indemnity, governing law and disputes will
+          continue to apply after termination.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="force-majeure" title="25. Events beyond our control">
+        <p>
+          We are not responsible for any failure or delay caused by events
+          outside our reasonable control, including natural disasters, epidemics,
+          war, civil unrest, strikes, government orders, closure or suspension of
+          embassies, consulates or visa centres, changes in visa policy, failure
+          of government or payment systems, or internet outages. We will keep you
+          informed and resume work as soon as reasonably possible.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="governing-law" title="26. Governing law and jurisdiction">
+        <p>
+          These Terms are governed by the laws of India. Subject to Section 27,
+          the courts at Bengaluru, Karnataka will have exclusive jurisdiction
+          over any dispute arising out of or in connection with these Terms or
+          your use of the Platform.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="disputes" title="27. Resolving disputes">
+        <p>
+          <strong>27.1</strong> If you are unhappy with our Services, please
+          contact us first at{' '}
+          <a href="mailto:hello@viserv.in">hello@viserv.in</a> or our Grievance
+          Officer (Section 28). Most concerns can be settled quickly this way.
+        </p>
+        <p>
+          <strong>27.2</strong> If a dispute is not resolved within 30 days of
+          being raised in writing, either party may refer it to arbitration by a
+          sole arbitrator appointed by mutual agreement, under the Arbitration
+          and Conciliation Act, 1996. The seat and venue of arbitration will be
+          Bengaluru, the language will be English, and the award will be final
+          and binding.
+        </p>
+        <p>
+          <strong>27.3</strong> Nothing in this Section prevents you, as a
+          consumer, from approaching the appropriate Consumer Disputes Redressal
+          Commission or the National Consumer Helpline (1915) under the Consumer
+          Protection Act, 2019.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="grievance" title="28. Grievance Officer">
+        <p>
+          In line with the Information Technology Act, 2000 and the Consumer
+          Protection (E-Commerce) Rules, 2020, we have appointed a Grievance
+          Officer to handle complaints about the Platform or our Services:
+        </p>
+        <LegalTable
+          headers={['Detail', 'Information']}
+          rows={[
+            ['Name', 'Harsh Darak'],
+            ['Designation', 'Operations Head'],
+            [
+              'Address',
+              'No 5/1, 1st Cross, RRMR Extn, KH Road, Bengaluru, India',
+            ],
+            [
+              'Email',
+              <a key="email" href="mailto:harsh@viserv.in">
+                harsh@viserv.in
+              </a>,
+            ],
+            ['Phone', '7019902821 (10am to 8pm, Monday to Saturday)'],
+          ]}
+        />
+        <p>
+          We will acknowledge your complaint within 48 hours of receiving it and
+          aim to resolve it within one month. Please include your Order number
+          and a short description of the issue so that we can help you faster.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="general" title="29. General">
+        <p>
+          <strong>29.1 Entire agreement.</strong> These Terms, the Privacy
+          Policy, and any conditions shown with a specific product or offer form
+          the entire agreement between you and Viserv about your use of the
+          Platform.
+        </p>
+        <p>
+          <strong>29.2 Severability.</strong> If any part of these Terms is found
+          invalid or unenforceable, it will be applied to the greatest extent
+          permitted and the rest will remain in force.
+        </p>
+        <p>
+          <strong>29.3 No waiver.</strong> If we do not enforce a right
+          immediately, we have not given it up and may enforce it later.
+        </p>
+        <p>
+          <strong>29.4 Transfer.</strong> We may transfer our rights and
+          obligations under these Terms to another entity as part of a
+          reorganisation or sale of our business, provided your rights are not
+          reduced. You may not transfer your rights without our written consent.
+        </p>
+        <p>
+          <strong>29.5 Notices.</strong> We will send notices to the email
+          address or mobile number on your account. You may send notices to the
+          addresses in Section 28.
+        </p>
+        <p>
+          <strong>29.6 Language.</strong> If these Terms are translated, the
+          English version will prevail in case of any difference.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="changes" title="30. Changes to these Terms">
+        <p>
+          We may update these Terms from time to time to reflect changes in our
+          Services, visa rules or the law. The revised version will be posted on
+          this page with a new &quot;Last updated&quot; date. For significant
+          changes, we will also notify registered users by email or through the
+          Platform at least 15 days before the change takes effect. Orders
+          already placed will continue to be governed by the Terms in force when
+          the Order was placed.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="contact" title="31. Contact us">
+        <p>
+          For questions about these Terms or your Order, please reach us at{' '}
+          <a href="mailto:hello@viserv.in">hello@viserv.in</a> or 7019902821, or
+          write to us at Viserv, No 5/1, 1st Cross, RRMR Extn, KH Road,
+          Bengaluru, Karnataka, India.
+        </p>
+        <p>
+          How we handle personal data is explained in our{' '}
+          <Link href="/privacy">Privacy Policy</Link>.
+        </p>
+      </LegalSection>
+    </LegalPageShell>
+  );
+}

@@ -65,11 +65,29 @@ export function Footer() {
             >
               Legal
             </h3>
-            <div className="space-y-3 text-sm text-white/70">
-              <p>Privacy policy coming soon</p>
-              <p>Terms of service coming soon</p>
-              <p>Compliance guidance for Indian travelers</p>
-            </div>
+            <ul className="space-y-3">
+              <li>
+                <Link
+                  href="/privacy"
+                  className="text-sm text-white/70 hover:text-nautical-teal transition-colors"
+                >
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/terms"
+                  className="text-sm text-white/70 hover:text-nautical-teal transition-colors"
+                >
+                  Terms and Conditions
+                </Link>
+              </li>
+              <li>
+                <span className="text-sm text-white/70">
+                  Compliance guidance for Indian travelers
+                </span>
+              </li>
+            </ul>
           </div>
         </div>
 
