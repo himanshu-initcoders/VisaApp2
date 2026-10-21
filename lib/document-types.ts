@@ -1,7 +1,10 @@
 /**
- * Hardcoded document types for Form Builder document requirements.
- * `value` is the stable documentType slug; `label` is shown to admins and applicants.
+ * Document type catalog helpers.
+ *
+ * Seed / fallback list lives here for migrations and offline label fallback.
+ * Runtime source of truth is the `document_types` table (admin-managed).
  */
+
 export const DOCUMENT_TYPES = [
   // Identity & travel document
   { value: 'passport', label: 'Passport (biodata page)' },
@@ -66,18 +69,38 @@ export const DOCUMENT_TYPES = [
   { value: 'covid_vaccine', label: 'COVID vaccine certificate' },
 ] as const;
 
+/** @deprecated Prefer DB catalog; kept for seed + sync fallback labels. */
 export type DocumentTypeValue = (typeof DOCUMENT_TYPES)[number]['value'];
 
+/** @deprecated Prefer DB catalog existence checks. */
 export const DOCUMENT_TYPE_VALUES = DOCUMENT_TYPES.map((t) => t.value) as [
   DocumentTypeValue,
   ...DocumentTypeValue[],
 ];
 
-export function documentTypeLabel(value: string): string {
-  const match = DOCUMENT_TYPES.find((t) => t.value === value);
-  return match?.label ?? value;
+const FALLBACK_LABELS: Record<string, string> = Object.fromEntries(
+  DOCUMENT_TYPES.map((type) => [type.value, type.label])
+);
+
+/**
+ * Sync label lookup. Prefer catalog labels from the DB when available
+ * (pass `labelByValue` from listDocumentTypes). Falls back to seed labels.
+ */
+export function documentTypeLabel(
+  value: string,
+  labelByValue?: ReadonlyMap<string, string> | Record<string, string>
+): string {
+  if (labelByValue instanceof Map) {
+    const fromMap = labelByValue.get(value);
+    if (fromMap) return fromMap;
+  } else if (labelByValue && typeof labelByValue === 'object') {
+    const fromRecord = (labelByValue as Record<string, string>)[value];
+    if (fromRecord) return fromRecord;
+  }
+  return FALLBACK_LABELS[value] ?? value;
 }
 
+/** @deprecated Prefer server-side documentTypeExists from DB. */
 export function isDocumentTypeValue(value: string): value is DocumentTypeValue {
   return DOCUMENT_TYPE_VALUES.includes(value as DocumentTypeValue);
 }
@@ -96,3 +119,8 @@ export function isPassportPhotoDocument(input: {
 }) {
   return input.documentType === 'photo' || input.key === 'photo';
 }
+
+export type DocumentTypeCatalogItem = {
+  value: string;
+  label: string;
+};

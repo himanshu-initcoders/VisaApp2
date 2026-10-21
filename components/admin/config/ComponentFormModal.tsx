@@ -10,10 +10,8 @@ import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Input } from '@/components/ui/Input';
 import {
-  DOCUMENT_TYPES,
   documentTypeLabel,
-  isDocumentTypeValue,
-  type DocumentTypeValue,
+  type DocumentTypeCatalogItem,
 } from '@/lib/document-types';
 import { Search, X } from 'lucide-react';
 
@@ -37,21 +35,29 @@ interface Component {
 interface ComponentFormModalProps {
   processId: string;
   initialData: Component | null;
+  /** Global catalog from document_types */
+  catalog: DocumentTypeCatalogItem[];
   /** Document types already on this listing (skip in add mode) */
   existingDocumentTypes?: string[];
   onClose: () => void;
   onSuccess: (components: Component | Component[]) => void;
 }
 
-function resolveDocumentType(component: Component | null): DocumentTypeValue {
-  if (!component) return 'passport';
-  if (component.documentType && isDocumentTypeValue(component.documentType)) {
+function resolveDocumentType(
+  component: Component | null,
+  catalog: DocumentTypeCatalogItem[]
+): string {
+  if (!component) return catalog[0]?.value ?? '';
+  if (
+    component.documentType &&
+    catalog.some((item) => item.value === component.documentType)
+  ) {
     return component.documentType;
   }
-  if (isDocumentTypeValue(component.key)) {
+  if (catalog.some((item) => item.value === component.key)) {
     return component.key;
   }
-  return 'passport';
+  return catalog[0]?.value ?? component.documentType ?? component.key ?? '';
 }
 
 function mapCreated(component: {
@@ -94,6 +100,7 @@ function mapCreated(component: {
 export function ComponentFormModal({
   processId,
   initialData,
+  catalog,
   existingDocumentTypes = [],
   onClose,
   onSuccess,
@@ -102,10 +109,15 @@ export function ComponentFormModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<DocumentTypeValue[]>(() =>
-    isEditMode ? [resolveDocumentType(initialData)] : []
+  const [selected, setSelected] = useState<string[]>(() =>
+    isEditMode ? [resolveDocumentType(initialData, catalog)].filter(Boolean) : []
   );
   const [error, setError] = useState<string | null>(null);
+
+  const labelByValue = useMemo(
+    () => new Map(catalog.map((item) => [item.value, item.label])),
+    [catalog]
+  );
 
   const alreadyAdded = useMemo(
     () => new Set(existingDocumentTypes.filter(Boolean)),
@@ -131,15 +143,15 @@ export function ComponentFormModal({
 
   const filteredTypes = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return DOCUMENT_TYPES;
-    return DOCUMENT_TYPES.filter(
+    if (!query) return catalog;
+    return catalog.filter(
       (type) =>
         type.label.toLowerCase().includes(query) ||
         type.value.toLowerCase().includes(query)
     );
-  }, [search]);
+  }, [search, catalog]);
 
-  const toggleType = (value: DocumentTypeValue) => {
+  const toggleType = (value: string) => {
     setError(null);
     if (isEditMode) {
       setSelected([value]);
@@ -151,7 +163,11 @@ export function ComponentFormModal({
   };
 
   const clearSelection = () => {
-    setSelected(isEditMode ? [resolveDocumentType(initialData)] : []);
+    setSelected(
+      isEditMode
+        ? [resolveDocumentType(initialData, catalog)].filter(Boolean)
+        : []
+    );
     setError(null);
   };
 
@@ -170,7 +186,7 @@ export function ComponentFormModal({
         const documentType = selected[0];
         const result = await updateComponent(initialData!.id, {
           documentType,
-          label: documentTypeLabel(documentType),
+          label: documentTypeLabel(documentType, labelByValue),
         });
 
         if (result.success && result.component) {
@@ -271,7 +287,7 @@ export function ComponentFormModal({
                     className="inline-flex max-w-full items-start gap-1.5 rounded-2xl bg-sky-wash px-3 py-1.5 text-left text-xs font-medium text-portrait-ink hover:bg-mint-wash transition-colors"
                   >
                     <span className="min-w-0 break-words whitespace-normal">
-                      {documentTypeLabel(value)}
+                      {documentTypeLabel(value, labelByValue)}
                     </span>
                     <X className="h-3 w-3 shrink-0 mt-0.5" />
                   </button>

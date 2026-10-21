@@ -6,6 +6,7 @@ import { countries, visaListings } from '@/lib/db/schema-extended';
 import {
   getComponentsRequired,
   getListingPrices,
+  listDocumentTypes,
 } from '@/lib/db/queries/config';
 import { CreateVisaListingWizard } from '@/components/admin/config/CreateVisaListingWizard';
 
@@ -87,6 +88,12 @@ export default async function NewVisaListingPage({
     listingId && listingName ? listingId : undefined;
   const resolvedStep: WizardStep = resolvedListingId ? step : 'basic';
 
+  const catalogRows = await listDocumentTypes();
+  const catalog = catalogRows.map((row) => ({
+    value: row.value,
+    label: row.label,
+  }));
+
   const backHref = defaultCountry
     ? `/admin/config/visa-listings?country=${defaultCountry}`
     : '/admin/config/visa-listings';
@@ -133,6 +140,7 @@ export default async function NewVisaListingPage({
           initialPrices={initialPrices}
           initialComponents={initialComponents}
           listingName={listingName}
+          catalog={catalog}
         />
       )}
     </div>

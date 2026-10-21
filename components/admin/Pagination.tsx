@@ -116,6 +116,7 @@ export function Pagination({
           size="sm"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
+          className="flex items-center gap-2"
         >
           <svg
             className="w-4 h-4"
@@ -166,6 +167,7 @@ export function Pagination({
           size="sm"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
+          className="flex items-center gap-2"
         >
           Next
           <svg

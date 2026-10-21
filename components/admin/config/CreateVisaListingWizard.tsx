@@ -19,6 +19,7 @@ import {
   type ListingPrice,
 } from '@/components/admin/config/PriceOptionsManager';
 import { ComponentsManager } from '@/components/admin/config/ComponentsManager';
+import type { DocumentTypeCatalogItem } from '@/lib/document-types';
 
 type WizardStep = 'basic' | 'pricing' | 'documents';
 
@@ -50,6 +51,7 @@ interface CreateVisaListingWizardProps {
   initialPrices?: ListingPrice[];
   initialComponents?: DocumentComponent[];
   listingName?: string;
+  catalog: DocumentTypeCatalogItem[];
 }
 
 const STEPS: { id: WizardStep; label: string; description: string }[] = [
@@ -105,6 +107,7 @@ export function CreateVisaListingWizard({
   initialPrices = [],
   initialComponents = [],
   listingName,
+  catalog,
 }: CreateVisaListingWizardProps) {
   const router = useRouter();
   const [listingId, setListingId] = useState(initialListingId);
@@ -539,7 +542,11 @@ export function CreateVisaListingWizard({
             </p>
           </div>
 
-          <ComponentsManager processId={listingId} initialComponents={initialComponents} />
+          <ComponentsManager
+            processId={listingId}
+            initialComponents={initialComponents}
+            catalog={catalog}
+          />
 
           <div className="flex flex-wrap gap-3 pt-2">
             <Button type="button" variant="primary" size="md" onClick={finishWizard}>

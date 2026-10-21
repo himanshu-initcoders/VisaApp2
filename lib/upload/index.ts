@@ -230,6 +230,14 @@ export {
   extensionFromMime,
   APPLICATION_UPLOAD_FOLDER,
 } from './applicationKey';
+export {
+  buildDocumentSampleObjectKey,
+  documentSamplePublicId,
+  sampleExtensionFromUpload,
+  maxSampleSizeMb,
+  DOCUMENT_SAMPLE_UPLOAD_FOLDER,
+  DOCUMENT_SAMPLE_ALLOWED_TYPES,
+} from './documentSampleKey';
 
 // Export providers for direct access if needed
 export { S3UploadProvider } from './providers/s3';

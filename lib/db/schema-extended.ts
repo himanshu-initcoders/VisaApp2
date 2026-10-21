@@ -265,7 +265,7 @@ export const componentsRequired = pgTable('components_required', {
   id: uuid('id').primaryKey().defaultRandom(),
   visaListingId: uuid('visa_listing_id').references(() => visaListings.id, { onDelete: 'cascade' }).notNull(),
   key: varchar('key', { length: 50 }).notNull(), // UUID storage key for uploads
-  /** Stable slug from DOCUMENT_TYPES (e.g. passport, bank_statements) */
+  /** Stable slug from document_types catalog (e.g. passport, bank_statements) */
   documentType: varchar('document_type', { length: 80 }),
   /** Applicant-facing title */
   label: text('label'),
@@ -297,6 +297,29 @@ export const occupationTypes = pgTable('occupation_types', {
   active: boolean('active').default(true),
   createdAt: timestamp('created_at').defaultNow().notNull()
 });
+
+/**
+ * Document Types - Global catalog for listing document requirements.
+ * Slug (`value`) is immutable after create; label and sample file are editable.
+ */
+export const documentTypes = pgTable(
+  'document_types',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    value: varchar('value', { length: 80 }).notNull().unique(),
+    label: varchar('label', { length: 200 }).notNull(),
+    sampleDocumentKey: text('sample_document_key'),
+    sampleDocumentUrl: text('sample_document_url'),
+    sampleDocumentFilename: varchar('sample_document_filename', { length: 255 }),
+    sampleDocumentMimeType: varchar('sample_document_mime_type', { length: 100 }),
+    sortOrder: integer('sort_order').default(0).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    valueIdx: index('document_types_value_idx').on(table.value),
+  })
+);
 
 /**
  * FAQs - Country-specific help content
@@ -497,6 +520,9 @@ export type NewComponentRequired = typeof componentsRequired.$inferInsert;
 
 export type OccupationType = typeof occupationTypes.$inferSelect;
 export type NewOccupationType = typeof occupationTypes.$inferInsert;
+
+export type DocumentType = typeof documentTypes.$inferSelect;
+export type NewDocumentType = typeof documentTypes.$inferInsert;
 
 export type Faq = typeof faqs.$inferSelect;
 export type NewFaq = typeof faqs.$inferInsert;

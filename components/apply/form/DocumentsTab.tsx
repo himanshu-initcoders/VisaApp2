@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Camera, Check, Trash2, Upload } from 'lucide-react';
+import { Camera, Check, Download, Trash2, Upload } from 'lucide-react';
 import { PassportPhotoCaptureDialog } from '@/components/apply/form/PassportPhotoCaptureDialog';
 import type {
   ApplyDocumentSlot,
@@ -92,6 +92,19 @@ function SlotCard({
           <p className="mt-1 text-xs leading-5 text-slate-helper">
             {slot.description}
           </p>
+          {slot.sampleUrl && (
+            <a
+              href={slot.sampleUrl}
+              target="_blank"
+              rel="noreferrer"
+              download={slot.sampleFilename || undefined}
+              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-[#3b82f6] underline-offset-2 hover:underline"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download sample
+              {slot.sampleFilename ? ` (${slot.sampleFilename})` : ''}
+            </a>
+          )}
         </div>
         {upload && (
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-mint-wash text-[#00a32a]">

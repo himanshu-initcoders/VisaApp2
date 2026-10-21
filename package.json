@@ -15,7 +15,8 @@
     "db:studio": "drizzle-kit studio",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx lib/db/seed.ts",
-    "db:seed:occupations": "tsx lib/db/seeds/seedOccupations.ts"
+    "db:seed:occupations": "tsx lib/db/seeds/seedOccupations.ts",
+    "db:seed:document-types": "tsx lib/db/seeds/seedDocumentTypes.ts"
   },
   "keywords": [
     "visa",

@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FileCheck, Plus } from 'lucide-react';
 import { deleteComponent, reorderComponents } from '@/app/(admin)/admin/config/visa-listings/actions';
+import type { DocumentTypeCatalogItem } from '@/lib/document-types';
 
 interface Component {
   id: string;
@@ -45,6 +46,7 @@ interface Component {
 interface ComponentsManagerProps {
   processId: string;
   initialComponents: Component[];
+  catalog: DocumentTypeCatalogItem[];
 }
 
 /**
@@ -52,7 +54,11 @@ interface ComponentsManagerProps {
  *
  * Main component for managing document requirements with drag-and-drop reordering.
  */
-export function ComponentsManager({ processId, initialComponents }: ComponentsManagerProps) {
+export function ComponentsManager({
+  processId,
+  initialComponents,
+  catalog,
+}: ComponentsManagerProps) {
   const router = useRouter();
   const [components, setComponents] = useState(initialComponents);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -147,6 +153,7 @@ export function ComponentsManager({ processId, initialComponents }: ComponentsMa
           <ComponentFormModal
             processId={processId}
             initialData={null}
+            catalog={catalog}
             existingDocumentTypes={existingDocumentTypes}
             onClose={() => setShowAddModal(false)}
             onSuccess={handleModalSuccess}
@@ -214,6 +221,7 @@ export function ComponentsManager({ processId, initialComponents }: ComponentsMa
         <ComponentFormModal
           processId={processId}
           initialData={null}
+          catalog={catalog}
           existingDocumentTypes={existingDocumentTypes}
           onClose={() => setShowAddModal(false)}
           onSuccess={handleModalSuccess}
@@ -224,6 +232,7 @@ export function ComponentsManager({ processId, initialComponents }: ComponentsMa
         <ComponentFormModal
           processId={processId}
           initialData={editingComponent}
+          catalog={catalog}
           existingDocumentTypes={existingDocumentTypes.filter(
             (type) =>
               type !== editingComponent.documentType && type !== editingComponent.key

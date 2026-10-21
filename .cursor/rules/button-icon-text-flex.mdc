@@ -1,0 +1,51 @@
+---
+description: Buttons with both an icon and text must use flex layout for alignment
+globs: "**/*.{tsx,jsx}"
+alwaysApply: false
+---
+
+# Button icon + text layout
+
+Whenever a button (or button-like control) contains **both an icon and text**, wrap or style the contents so they lay out with flex. Do not leave icon and label as unstyled siblings.
+
+## Required
+
+Use flex alignment and a small gap:
+
+- `inline-flex items-center gap-2` (or `gap-1.5` for compact buttons)
+- Keep icon size consistent (`h-4 w-4` typical; `shrink-0` on the icon)
+
+## Examples
+
+```tsx
+// ❌ BAD — icon and text not flexed
+<button type="button">
+  <Plus className="h-4 w-4" />
+  Add document type
+</button>
+
+// ✅ GOOD
+<button
+  type="button"
+  className="inline-flex items-center gap-2"
+>
+  <Plus className="h-4 w-4 shrink-0" />
+  Add document type
+</button>
+```
+
+```tsx
+// ✅ GOOD — when using the shared Button component, flex the children
+<Button variant="primary" size="md">
+  <span className="inline-flex items-center gap-2">
+    <Upload className="h-4 w-4 shrink-0" />
+    Upload sample
+  </span>
+</Button>
+```
+
+## Also applies to
+
+- Links styled as buttons
+- Pill / chip action controls that mix icon + label
+- Icon-after-text (e.g. “Next” + chevron): same `inline-flex items-center gap-2`

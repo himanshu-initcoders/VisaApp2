@@ -1,7 +1,11 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth-utils';
-import { getProcessWithAllRelations, getComponentsRequired } from '@/lib/db/queries/config';
+import {
+  getProcessWithAllRelations,
+  getComponentsRequired,
+  listDocumentTypes,
+} from '@/lib/db/queries/config';
 import { ComponentsManager } from '@/components/admin/config/ComponentsManager';
 import { ChevronLeft } from 'lucide-react';
 
@@ -11,7 +15,7 @@ import { ChevronLeft } from 'lucide-react';
  * Allows admins to manage required documents for an entry process.
  * Features:
  * - Drag-and-drop reordering
- * - Add/edit/delete from a fixed document-type catalog
+ * - Add/edit/delete from the admin document-type catalog
  * - Storage keys are UUIDs (not shown in the UI)
  */
 export default async function DocumentsPage({
@@ -32,8 +36,15 @@ export default async function DocumentsPage({
     notFound();
   }
 
-  // Fetch components ordered by sortOrder
-  const components = await getComponentsRequired(id);
+  // Fetch components ordered by sortOrder + global catalog
+  const [components, catalogRows] = await Promise.all([
+    getComponentsRequired(id),
+    listDocumentTypes(),
+  ]);
+  const catalog = catalogRows.map((row) => ({
+    value: row.value,
+    label: row.label,
+  }));
 
   // Get flag emoji
   const getFlag = (iso2Code: string) => {
@@ -73,7 +84,11 @@ export default async function DocumentsPage({
         </div>
 
         {/* Components Manager */}
-        <ComponentsManager processId={id} initialComponents={components} />
+        <ComponentsManager
+          processId={id}
+          initialComponents={components}
+          catalog={catalog}
+        />
       </div>
     </div>
   );

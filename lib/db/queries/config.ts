@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { eq, desc, and, or, like, ilike, ne, sql } from 'drizzle-orm';
+import { eq, desc, and, or, like, ilike, ne, sql, asc, inArray } from 'drizzle-orm';
 import {
   countries,
   visaListings,
@@ -11,7 +11,8 @@ import {
   postCheckoutSteps,
   passportOcrSettings,
   photoValidationSettings,
-  visaRisks
+  visaRisks,
+  documentTypes,
 } from '@/lib/db/schema-extended';
 
 /**
@@ -497,6 +498,73 @@ export async function getMaxStepSortOrder(processId: string) {
     .where(eq(postCheckoutSteps.visaListingId, processId));
 
   return result[0]?.maxSort ?? -1;
+}
+
+// ============================================================================
+// DOCUMENT TYPE CATALOG QUERIES
+// ============================================================================
+
+/**
+ * List all document types (global catalog), ordered for admin pickers.
+ */
+export async function listDocumentTypes() {
+  return await db
+    .select()
+    .from(documentTypes)
+    .orderBy(asc(documentTypes.sortOrder), asc(documentTypes.label));
+}
+
+/**
+ * Get a single document type by stable slug.
+ */
+export async function getDocumentTypeByValue(value: string) {
+  const [row] = await db
+    .select()
+    .from(documentTypes)
+    .where(eq(documentTypes.value, value))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Whether a document type slug exists in the catalog.
+ */
+export async function documentTypeExists(value: string): Promise<boolean> {
+  const row = await getDocumentTypeByValue(value);
+  return Boolean(row);
+}
+
+/**
+ * Map of document type slug → sample URL / filename / label for apply slots.
+ */
+export async function getDocumentTypeSamplesByValues(values: string[]) {
+  const unique = [...new Set(values.filter(Boolean))];
+  if (unique.length === 0) return new Map<string, {
+    label: string;
+    sampleDocumentUrl: string | null;
+    sampleDocumentFilename: string | null;
+  }>();
+
+  const rows = await db
+    .select({
+      value: documentTypes.value,
+      label: documentTypes.label,
+      sampleDocumentUrl: documentTypes.sampleDocumentUrl,
+      sampleDocumentFilename: documentTypes.sampleDocumentFilename,
+    })
+    .from(documentTypes)
+    .where(inArray(documentTypes.value, unique));
+
+  return new Map(
+    rows.map((row) => [
+      row.value,
+      {
+        label: row.label,
+        sampleDocumentUrl: row.sampleDocumentUrl,
+        sampleDocumentFilename: row.sampleDocumentFilename,
+      },
+    ])
+  );
 }
 
 // ============================================================================

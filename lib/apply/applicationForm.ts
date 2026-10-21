@@ -140,6 +140,9 @@ export interface ApplyDocumentSlot {
   accept: string;
   /** Camera face capture. Only passport photos use this. */
   captureFace?: boolean;
+  /** Sample file URL from document type catalog (optional). */
+  sampleUrl?: string | null;
+  sampleFilename?: string | null;
 }
 
 export interface ApplyFormConfig {
@@ -395,6 +398,15 @@ function documentSlotDescription(captureFace: boolean) {
     : 'Upload a clear JPG, PNG, or PDF.';
 }
 
+export type DocumentTypeSampleLookup = ReadonlyMap<
+  string,
+  {
+    label: string;
+    sampleDocumentUrl: string | null;
+    sampleDocumentFilename: string | null;
+  }
+>;
+
 export function buildApplyFormConfig(input: {
   purpose: string;
   countryName: string;
@@ -421,6 +433,8 @@ export function buildApplyFormConfig(input: {
     options?: Array<{ label: string; value: string }> | null;
     visibility?: QuestionVisibility;
   }>;
+  /** Catalog samples keyed by document type slug (and optionally component key). */
+  documentTypeSamples?: DocumentTypeSampleLookup;
 }): ApplyFormConfig {
   const extraQuestions = input.questions
     .filter(
@@ -455,17 +469,24 @@ export function buildApplyFormConfig(input: {
         key: item.key,
         documentType: item.documentType,
       });
+      const sample =
+        (item.documentType &&
+          input.documentTypeSamples?.get(item.documentType)) ||
+        input.documentTypeSamples?.get(item.key);
+      const catalogLabel = sample?.label;
       return {
         id: item.id,
         key: item.key,
         title: formatDocumentTitle(item.key, {
-          label: item.label,
+          label: item.label || catalogLabel,
           documentType: item.documentType,
         }),
         description: documentSlotDescription(captureFace),
         required: true,
         accept: DOCUMENT_FILE_ACCEPT,
         captureFace,
+        sampleUrl: sample?.sampleDocumentUrl ?? null,
+        sampleFilename: sample?.sampleDocumentFilename ?? null,
       };
     });
 
@@ -473,6 +494,7 @@ export function buildApplyFormConfig(input: {
     .filter((question) => isFileQuestionType(question.questionType))
     .map((question) => {
       const captureFace = isPassportPhotoDocument({ key: question.key });
+      const sample = input.documentTypeSamples?.get(question.key);
       return {
         id: question.id,
         key: question.key,
@@ -484,6 +506,8 @@ export function buildApplyFormConfig(input: {
         required: Boolean(question.required),
         accept: DOCUMENT_FILE_ACCEPT,
         captureFace,
+        sampleUrl: sample?.sampleDocumentUrl ?? null,
+        sampleFilename: sample?.sampleDocumentFilename ?? null,
       };
     });
 
@@ -492,6 +516,7 @@ export function buildApplyFormConfig(input: {
     if (!merged.some((item) => item.key === slot.key)) merged.push(slot);
   }
 
+  const defaultPhotoSample = input.documentTypeSamples?.get('photo');
   const documentSlots =
     merged.length > 0
       ? merged
@@ -504,6 +529,8 @@ export function buildApplyFormConfig(input: {
             required: true,
             accept: DOCUMENT_FILE_ACCEPT,
             captureFace: true,
+            sampleUrl: defaultPhotoSample?.sampleDocumentUrl ?? null,
+            sampleFilename: defaultPhotoSample?.sampleDocumentFilename ?? null,
           },
         ];
 

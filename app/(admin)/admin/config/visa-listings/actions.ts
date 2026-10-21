@@ -6,7 +6,7 @@ import { countries, visaListings, visaListingPrices, additionalQuestions, compon
 import { eq, and, sql } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth-utils';
 import { processBasicInfoSchema, type ProcessBasicInfo, createVisaListingSchema, visaListingPriceSchema, type VisaListingPriceInput, additionalQuestionSchema, type AdditionalQuestion, componentRequiredSchema, type ComponentRequired, createComponentsBulkSchema, type CreateComponentsBulk, faqSchema, type FAQ, postCheckoutStepSchema, type PostCheckoutStep, multiCountrySchema, type MultiCountry } from '@/lib/validations/config';
-import { getQuestionById, getMaxQuestionSortOrder, getAdditionalQuestions, searchAdditionalQuestionsByLabel, getComponentById, getMaxComponentSortOrder, getComponentsRequired, getFaqById, getMaxFaqSortOrder, getPostCheckoutStepById, getMaxStepSortOrder, getProcessWithAllRelations } from '@/lib/db/queries/config';
+import { getQuestionById, getMaxQuestionSortOrder, getAdditionalQuestions, searchAdditionalQuestionsByLabel, getComponentById, getMaxComponentSortOrder, getComponentsRequired, getFaqById, getMaxFaqSortOrder, getPostCheckoutStepById, getMaxStepSortOrder, getProcessWithAllRelations, getDocumentTypeByValue, getDocumentTypeSamplesByValues } from '@/lib/db/queries/config';
 import { revalidatePublicVisaCatalog } from '@/lib/revalidate-public-catalog';
 import { documentTypeLabel } from '@/lib/document-types';
 import { validateVisibilityAgainstSiblings } from '@/lib/question-visibility';
@@ -569,6 +569,11 @@ export async function createComponent(processId: string, data: ComponentRequired
       return { error: 'Visa listing not found' };
     }
 
+    const catalogType = await getDocumentTypeByValue(validated.documentType);
+    if (!catalogType) {
+      return { error: `Unknown document type "${validated.documentType}"` };
+    }
+
     // Get max sortOrder and increment
     const maxOrder = await getMaxComponentSortOrder(processId);
 
@@ -579,7 +584,7 @@ export async function createComponent(processId: string, data: ComponentRequired
         visaListingId: processId,
         key: crypto.randomUUID(),
         documentType: validated.documentType,
-        label: validated.label?.trim() || documentTypeLabel(validated.documentType),
+        label: validated.label?.trim() || catalogType.label,
         amount: '0',
         chargeable: false,
         familyEnabled: false,
@@ -645,12 +650,18 @@ export async function createComponents(processId: string, data: CreateComponents
       return { error: 'Those document types are already added' };
     }
 
+    const catalogMap = await getDocumentTypeSamplesByValues(uniqueTypes);
+    const unknown = uniqueTypes.filter((type) => !catalogMap.has(type));
+    if (unknown.length > 0) {
+      return { error: `Unknown document type(s): ${unknown.join(', ')}` };
+    }
+
     let nextOrder = (await getMaxComponentSortOrder(processId)) + 1;
     const rows = uniqueTypes.map((documentType) => ({
       visaListingId: processId,
       key: crypto.randomUUID(),
       documentType,
-      label: documentTypeLabel(documentType),
+      label: catalogMap.get(documentType)?.label || documentTypeLabel(documentType),
       amount: '0' as const,
       chargeable: false,
       familyEnabled: false,
@@ -701,12 +712,17 @@ export async function updateComponent(componentId: string, data: ComponentRequir
       return { error: 'Document requirement not found' };
     }
 
+    const catalogType = await getDocumentTypeByValue(validated.documentType);
+    if (!catalogType) {
+      return { error: `Unknown document type "${validated.documentType}"` };
+    }
+
     // Update component (key stays UUID; type/label are editable)
     const [updated] = await db
       .update(componentsRequired)
       .set({
         documentType: validated.documentType,
-        label: validated.label?.trim() || documentTypeLabel(validated.documentType),
+        label: validated.label?.trim() || catalogType.label,
         amount: '0',
         chargeable: false,
         familyEnabled: false,
@@ -1161,6 +1177,12 @@ export async function publishFormVersion(listingId: string) {
     } = await import('@/lib/db/queries/formVersions');
     const { formVersions } = await import('@/lib/db/schema');
 
+    const documentTypeSamples = await getDocumentTypeSamplesByValues(
+      process.componentsRequired.flatMap((item) =>
+        [item.documentType, item.key].filter(Boolean) as string[]
+      )
+    );
+
     const config = buildApplyFormConfig({
       purpose: process.purpose,
       countryName: process.country.name,
@@ -1169,6 +1191,7 @@ export async function publishFormVersion(listingId: string) {
       showTripDetails: process.showTripDetails,
       components: process.componentsRequired,
       questions: process.additionalQuestions,
+      documentTypeSamples,
     });
 
     const version = await getNextFormVersionNumber(listingId);

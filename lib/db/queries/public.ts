@@ -26,6 +26,7 @@ import {
   getDemoRequirements,
 } from '@/lib/public-demo';
 import { buildApplyFormConfig, formatDocumentTitle } from '@/lib/apply/applicationForm';
+import { getDocumentTypeSamplesByValues } from '@/lib/db/queries/config';
 
 /**
  * Public-facing database queries for landing pages
@@ -450,6 +451,11 @@ export async function getPublicProcessPageData(
         showTripDetails: process.showTripDetails,
         components: process.componentsRequired,
         questions: process.additionalQuestions,
+        documentTypeSamples: await getDocumentTypeSamplesByValues(
+          process.componentsRequired.flatMap((item) =>
+            [item.documentType, item.key].filter(Boolean) as string[]
+          )
+        ),
       }),
     },
   };

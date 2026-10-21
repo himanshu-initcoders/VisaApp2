@@ -336,3 +336,13 @@ Need help? Check:
 - [SETUP.md](./SETUP.md)
 - [CLAUDE.md](./CLAUDE.md)
 - [Obsidian vault](./obsidian-vault/)
+
+
+
+
+With free insurence
+Document Type Management
+Travel Insurence Checkbox
+remove Compliance guidance for Indian travelers
+gst in pricing
+draft application

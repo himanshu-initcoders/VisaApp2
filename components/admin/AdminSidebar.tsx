@@ -82,6 +82,7 @@ export function AdminSidebar({
   const configSubItems = [
     { name: 'Countries', href: '/admin/config/countries' },
     { name: 'Visa Listings', href: '/admin/config/visa-listings' },
+    { name: 'Document Types', href: '/admin/config/document-types' },
   ];
 
   const isActive = (href: string) => {

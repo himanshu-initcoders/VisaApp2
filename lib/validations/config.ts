@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { QUESTION_CATEGORY_VALUES } from '@/lib/question-categories';
-import { DOCUMENT_TYPE_VALUES } from '@/lib/document-types';
 import {
   normalizeQuestionVisibility,
   questionVisibilityDraftSchema,
@@ -208,11 +207,36 @@ export type AdditionalQuestion = z.infer<typeof additionalQuestionSchema>;
 export type QuestionOption = z.infer<typeof questionOptionSchema>;
 
 // ============================================================================
+// DOCUMENT TYPE CATALOG SCHEMAS
+// ============================================================================
+
+export const documentTypeSlugSchema = z
+  .string()
+  .trim()
+  .min(2, 'Slug must be at least 2 characters')
+  .max(80, 'Slug too long')
+  .regex(/^[a-z0-9_]+$/, 'Slug must be lowercase letters, numbers, or underscores');
+
+export const createDocumentTypeSchema = z.object({
+  label: z.string().trim().min(2, 'Name must be at least 2 characters').max(200, 'Name too long'),
+  value: documentTypeSlugSchema,
+});
+
+export type CreateDocumentTypeInput = z.infer<typeof createDocumentTypeSchema>;
+
+export const updateDocumentTypeLabelSchema = z.object({
+  id: z.string().uuid('Invalid document type id'),
+  label: z.string().trim().min(2, 'Name must be at least 2 characters').max(200, 'Name too long'),
+});
+
+export type UpdateDocumentTypeLabelInput = z.infer<typeof updateDocumentTypeLabelSchema>;
+
+// ============================================================================
 // DOCUMENT REQUIREMENT SCHEMAS
 // ============================================================================
 
 export const componentRequiredSchema = z.object({
-  documentType: z.enum(DOCUMENT_TYPE_VALUES, 'Select a document type'),
+  documentType: z.string().trim().min(1, 'Select a document type').max(80),
   label: z.string().min(2, 'Label required').max(200).optional(),
 });
 
@@ -220,7 +244,7 @@ export type ComponentRequired = z.infer<typeof componentRequiredSchema>;
 
 export const createComponentsBulkSchema = z.object({
   documentTypes: z
-    .array(z.enum(DOCUMENT_TYPE_VALUES))
+    .array(z.string().trim().min(1).max(80))
     .min(1, 'Select at least one document type'),
 });
 

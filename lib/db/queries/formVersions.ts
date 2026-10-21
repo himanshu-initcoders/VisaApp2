@@ -1,7 +1,10 @@
 import { db } from '@/lib/db';
 import { formVersions } from '@/lib/db/schema';
 import { eq, desc, max } from 'drizzle-orm';
-import { getProcessWithAllRelations } from '@/lib/db/queries/config';
+import {
+  getProcessWithAllRelations,
+  getDocumentTypeSamplesByValues,
+} from '@/lib/db/queries/config';
 import { buildApplyFormConfig } from '@/lib/apply/applicationForm';
 
 export async function getLatestPublishedFormVersion(listingId: string) {
@@ -41,6 +44,12 @@ export async function ensureFormVersionForSubmit(
     return null;
   }
 
+  const documentTypeSamples = await getDocumentTypeSamplesByValues(
+    process.componentsRequired.flatMap((item) =>
+      [item.documentType, item.key].filter(Boolean) as string[]
+    )
+  );
+
   const config = buildApplyFormConfig({
     purpose: process.purpose,
     countryName: process.country.name,
@@ -49,6 +58,7 @@ export async function ensureFormVersionForSubmit(
     showTripDetails: process.showTripDetails,
     components: process.componentsRequired,
     questions: process.additionalQuestions,
+    documentTypeSamples,
   });
 
   const version = await getNextFormVersionNumber(listingId);

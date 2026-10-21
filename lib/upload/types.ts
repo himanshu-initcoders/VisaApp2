@@ -14,6 +14,7 @@ export type UploadFolder =
   | 'country-heroes'
   | 'country-flags'
   | 'documents'
+  | 'document-samples'
   | 'passports'
   | 'photos'
   | 'applications';
