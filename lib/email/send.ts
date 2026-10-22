@@ -10,7 +10,7 @@ export async function sendEmail(input: {
   html: string;
 }): Promise<boolean> {
   if (!isEmailConfigured()) {
-    console.warn('[email] Gmail is not configured; skipping:', input.subject);
+    console.warn('[email] Zoho CPaaS is not configured; skipping:', input.subject);
     return false;
   }
 

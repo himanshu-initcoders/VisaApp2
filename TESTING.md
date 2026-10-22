@@ -346,7 +346,7 @@ Travel Insurence Checkbox:- Done
 remove Compliance guidance for Indian travelers:- Done
 gst in pricing:- Done
 draft application:- Done
-Zoho cpass email:-
+Zoho cpass email:- Done (Nodemailer → smtp.zeptomail.com; set ZOHO_CPAAS_SMTP_PASSWORD + EMAIL_FROM)
 
 ## Save as draft (manual)
 
