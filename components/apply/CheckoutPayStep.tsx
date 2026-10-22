@@ -6,11 +6,8 @@ import { useRouter } from 'next/navigation';
 import { MobileOtpSignIn } from '@/components/auth/MobileOtpSignIn';
 import { readApplyDraftAsync } from '@/lib/apply/draftStorage';
 import type { DraftScopeInput } from '@/lib/apply/draftScope';
-import {
-  clearLocalDraftAfterSubmit,
-  collectDraftStorageKeysForSubmit,
-  collectIdbFilesForSubmit,
-} from '@/lib/apply/collectSubmitFiles';
+import { clearLocalDraftAfterSubmit } from '@/lib/apply/collectSubmitFiles';
+import { prepareDraftFilesForSubmit } from '@/lib/apply/syncDraftFiles';
 import { deleteApplicationDraft } from '@/lib/apply/serverDraft';
 import { submitApplication } from '@/lib/apply/submitApplication';
 import {
@@ -123,6 +120,7 @@ export function CheckoutPayStep({
   const [quoting, setQuoting] = useState(false);
   const [quote, setQuote] = useState<CheckoutQuote | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
   const submitIdRef = useRef<string | null>(null);
@@ -209,6 +207,7 @@ export function CheckoutPayStep({
   const handlePay = async () => {
     if (!isAuthed || submitting || successId) return;
     setError(null);
+    setUploadStatus('Uploading documents…');
     setSubmitting(true);
     onSubmitting?.();
 
@@ -221,12 +220,33 @@ export function CheckoutPayStep({
       const draft = await readApplyDraftAsync(draftScope);
       if (!draft || !draft.travellers?.length) {
         setError('No application draft found. Go back and complete the form.');
+        setUploadStatus(null);
         setSubmitting(false);
         releaseSubmit();
         return;
       }
 
-      const travellers = draft.travellers.map((t) => ({
+      // FormData sync first — Server Actions receive storage keys only (no base64).
+      const prepared = await prepareDraftFilesForSubmit({
+        draft,
+        draftScope,
+        countryCode,
+      });
+      if (!prepared.success) {
+        setError(prepared.error);
+        setUploadStatus(null);
+        setSubmitting(false);
+        releaseSubmit();
+        return;
+      }
+
+      setUploadStatus(
+        prepared.uploadedCount > 0
+          ? `Uploaded ${prepared.uploadedCount} file${prepared.uploadedCount === 1 ? '' : 's'}…`
+          : null
+      );
+
+      const travellers = prepared.travellers.map((t) => ({
         id: t.id,
         name: t.name,
         passportData: (t.passportData as unknown as Record<string, unknown>) ?? null,
@@ -242,8 +262,7 @@ export function CheckoutPayStep({
         applicationComplete: t.applicationComplete,
       }));
 
-      const draftStorageKeys = collectDraftStorageKeysForSubmit(draft.travellers);
-      const files = await collectIdbFilesForSubmit(draftScope, draft.travellers);
+      const draftStorageKeys = prepared.draftStorageKeys;
       const priceOptionId = draft.departure?.priceOption ?? null;
 
       const created = await createVisaCheckoutOrder({
@@ -257,59 +276,66 @@ export function CheckoutPayStep({
 
       if (!created.success) {
         setError(created.error);
+        setUploadStatus(null);
         setSubmitting(false);
         releaseSubmit();
         return;
       }
 
       if (created.kind === 'already_submitted') {
+        setUploadStatus(null);
         await finishSubmitted(created.applicationId);
         return;
       }
 
       if (created.kind === 'free') {
+        setUploadStatus('Submitting…');
         const result = await submitApplication({
           submitId,
           listingId,
           countryCode,
           priceOptionId,
           travellers,
-          files,
           draftStorageKeys,
           interestedInInsurance: insuranceInterest,
         });
         if (!result.success) {
           setError(result.error);
+          setUploadStatus(null);
           setSubmitting(false);
           releaseSubmit();
           return;
         }
+        setUploadStatus(null);
         await finishSubmitted(result.applicationId);
         return;
       }
 
       if (created.kind === 'resume') {
+        setUploadStatus('Confirming payment…');
         const result = await verifyVisaCheckout({
           submitId,
           listingId,
           countryCode,
           priceOptionId,
           travellers,
-          files,
           draftStorageKeys,
           interestedInInsurance: insuranceInterest,
           razorpayOrderId: created.orderId,
         });
         if (!result.success) {
           setError(result.error);
+          setUploadStatus(null);
           setSubmitting(false);
           releaseSubmit();
           return;
         }
+        setUploadStatus(null);
         await finishSubmitted(result.applicationId);
         return;
       }
 
+      setUploadStatus(null);
       const scriptReady = await loadRazorpayScript();
       if (!scriptReady || !window.Razorpay) {
         setError('Could not load Razorpay. Check your connection and try again.');
@@ -333,13 +359,13 @@ export function CheckoutPayStep({
         handler: (response: RazorpaySuccess) => {
           checkoutFinished = true;
           void (async () => {
+            setUploadStatus('Confirming payment…');
             const result = await verifyVisaCheckout({
               submitId,
               listingId,
               countryCode,
               priceOptionId,
               travellers,
-              files,
               draftStorageKeys,
               interestedInInsurance: insuranceInterest,
               razorpayOrderId: response.razorpay_order_id,
@@ -351,16 +377,19 @@ export function CheckoutPayStep({
                 result.error ||
                   'Payment received, but the application was not submitted. Try again.'
               );
+              setUploadStatus(null);
               setSubmitting(false);
               releaseSubmit();
               return;
             }
+            setUploadStatus(null);
             await finishSubmitted(result.applicationId);
           })();
         },
         modal: {
           ondismiss: () => {
             if (!checkoutFinished) {
+              setUploadStatus(null);
               setSubmitting(false);
               releaseSubmit();
             }
@@ -375,12 +404,14 @@ export function CheckoutPayStep({
           response.error?.description ||
             'Payment failed. You have not been charged, or the charge did not complete.'
         );
+        setUploadStatus(null);
         setSubmitting(false);
       });
 
       razorpay.open();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Payment failed');
+      setUploadStatus(null);
       setSubmitting(false);
       releaseSubmit();
     }
@@ -390,9 +421,7 @@ export function CheckoutPayStep({
   const payLabel = !isAuthed
     ? 'Login required to pay'
     : submitting
-      ? quote?.free
-        ? 'Submitting…'
-        : 'Processing…'
+      ? uploadStatus || (quote?.free ? 'Submitting…' : 'Processing…')
       : successId
         ? 'Submitted'
         : quoting
@@ -464,6 +493,11 @@ export function CheckoutPayStep({
             Govt {formatInrFromPaise(quote.governmentFeePaise)} · Service{' '}
             {formatInrFromPaise(quote.serviceFeePaise)} · GST{' '}
             {formatInrFromPaise(quote.gstFeePaise)}
+          </p>
+        )}
+        {uploadStatus && !error && (
+          <p className="mt-4 text-sm text-slate-helper" aria-live="polite">
+            {uploadStatus}
           </p>
         )}
         {error && (

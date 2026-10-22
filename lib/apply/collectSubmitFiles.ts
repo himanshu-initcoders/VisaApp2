@@ -1,10 +1,9 @@
 /**
- * Client helper: gather IndexedDB blobs / draft storage keys for submit.
+ * Client helper: gather draft storage keys for submit (no file bytes).
  */
 
 import type { ApplyTraveller } from '@/lib/apply/types';
 import type { DraftScopeInput } from '@/lib/apply/draftScope';
-import type { ApplicationDocumentUploadItem } from '@/lib/upload/application-actions';
 import {
   PASSPORT_BACK_SLOT,
   PASSPORT_FRONT_SLOT,
@@ -22,17 +21,6 @@ export interface DraftStorageKeyItem {
   size?: number;
 }
 
-async function blobToBase64(blob: Blob): Promise<string> {
-  const buffer = await blob.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
-}
-
 function normalizeScope(
   listingIdOrScope: string | DraftScopeInput,
   maybeScope?: Omit<DraftScopeInput, 'listingId'>
@@ -47,7 +35,7 @@ function normalizeScope(
   return listingIdOrScope;
 }
 
-/** Prefer server draft keys when present (promote path). */
+/** Server draft object keys to promote on submit (keys only — never file bytes). */
 export function collectDraftStorageKeysForSubmit(
   travellers: ApplyTraveller[]
 ): DraftStorageKeyItem[] {
@@ -94,51 +82,50 @@ export function collectDraftStorageKeysForSubmit(
 }
 
 /**
- * Collect IndexedDB files that do not already have a server draft key.
- * Used as fallback when promote keys are incomplete.
+ * After FormData draft sync, every local IDB slot must have a server key.
+ * Returns a user-facing error string when any slot is still unsynced.
  */
-export async function collectIdbFilesForSubmit(
+export async function findUnsyncedIdbSlotsError(
   listingIdOrScope: string | DraftScopeInput,
   travellers: ApplyTraveller[],
   maybeScope?: Omit<DraftScopeInput, 'listingId'>
-): Promise<ApplicationDocumentUploadItem[]> {
-  if (!isIdbAvailable()) return [];
+): Promise<string | null> {
+  if (!isIdbAvailable()) return null;
   const scope = normalizeScope(listingIdOrScope, maybeScope);
-  const promoted = new Set(
+  const keyed = new Set(
     collectDraftStorageKeysForSubmit(travellers).map(
       (r) => `${r.passengerId}:${r.slotKey}`
     )
   );
 
-  const items: ApplicationDocumentUploadItem[] = [];
-  const seen = new Set<string>();
+  const missing: string[] = [];
 
-  async function pushSlot(passengerId: string, slotKey: string) {
+  async function check(passengerId: string, slotKey: string, label: string) {
     const dedupe = `${passengerId}:${slotKey}`;
-    if (seen.has(dedupe) || promoted.has(dedupe)) return;
+    if (keyed.has(dedupe)) return;
     const record = await getFile(scope, passengerId, slotKey);
-    if (!record?.blob) return;
-    seen.add(dedupe);
-    items.push({
-      passengerId,
-      slotKey,
-      filename: record.filename || `${slotKey}.bin`,
-      mimeType: record.mimeType || 'application/octet-stream',
-      bufferBase64: await blobToBase64(record.blob),
-    });
+    if (record?.blob) missing.push(label);
   }
 
   for (const traveller of travellers) {
-    await pushSlot(traveller.id, PASSPORT_FRONT_SLOT);
-    await pushSlot(traveller.id, PASSPORT_BACK_SLOT);
+    const who = traveller.name?.trim() || 'Traveller';
+    await check(traveller.id, PASSPORT_FRONT_SLOT, `${who}: passport front`);
+    await check(traveller.id, PASSPORT_BACK_SLOT, `${who}: passport back`);
     for (const doc of traveller.documents ?? []) {
-      if (doc.key) {
-        await pushSlot(traveller.id, doc.key);
-      }
+      if (!doc.key) continue;
+      await check(
+        traveller.id,
+        doc.key,
+        `${who}: ${doc.name || doc.key}`
+      );
     }
   }
 
-  return items;
+  if (missing.length === 0) return null;
+  const preview = missing.slice(0, 3).join(', ');
+  const more =
+    missing.length > 3 ? ` (+${missing.length - 3} more)` : '';
+  return `Could not upload all documents (${preview}${more}). Check your connection and try again.`;
 }
 
 /** Clear scoped local draft + IDB files after successful submit. */

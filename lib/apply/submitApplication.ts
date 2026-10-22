@@ -26,10 +26,6 @@ import {
   notifyVisaSubmittedToAdmin,
   notifyVisaSubmittedToApplicant,
 } from '@/lib/email/notify';
-import {
-  uploadApplicationDocuments,
-  type ApplicationDocumentUploadItem,
-} from '@/lib/upload/application-actions';
 import { promoteDraftFileToApplication } from '@/lib/upload/promoteDraftFile';
 import { deleteDraftStorageFiles } from '@/lib/apply/deleteDraftStorageFiles';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
@@ -74,9 +70,10 @@ export interface SubmitApplicationInput {
   listingId: string;
   countryCode: string;
   travellers: SubmitTravellerPayload[];
-  /** IndexedDB files encoded as base64 — used when draft keys are missing. */
-  files?: ApplicationDocumentUploadItem[];
-  /** Prefer promote/copy when draft objects already exist server-side. */
+  /**
+   * Draft object keys already uploaded via FormData (/api/apply/draft-files).
+   * Submit never accepts file bytes — promote these keys into the application path.
+   */
   draftStorageKeys?: DraftStorageKeySubmitItem[];
   priceOptionId?: string | null;
   /** Captured payments.id. Required when the listing fee is above zero. */
@@ -179,7 +176,6 @@ async function resolveDocumentUploads(input: {
   listingId: string;
   applicationId: string;
   draftStorageKeys: DraftStorageKeySubmitItem[];
-  files: ApplicationDocumentUploadItem[];
 }): Promise<
   | { success: true; results: UploadResultRow[] }
   | { success: false; error: string }
@@ -213,31 +209,13 @@ async function resolveDocumentUploads(input: {
         size: promoted.size,
       });
     } catch (error) {
-      console.warn(
-        '[Submit] Promote failed, will try base64 fallback:',
-        item.storageKey,
-        error
-      );
-    }
-  }
-
-  const remainingFiles = input.files.filter(
-    (f) => !covered.has(`${f.passengerId}:${f.slotKey}`)
-  );
-  if (remainingFiles.length > 0) {
-    const uploadResult = await uploadApplicationDocuments({
-      countryCode: input.countryCode,
-      listingId: input.listingId,
-      applicationId: input.applicationId,
-      documents: remainingFiles,
-    });
-    if (!uploadResult.success) {
+      console.error('[Submit] Promote failed:', item.storageKey, error);
+      const label = item.filename || item.slotKey;
       return {
         success: false,
-        error: uploadResult.error || 'Document upload failed.',
+        error: `Could not attach "${label}". Go back, re-upload that document, and try again.`,
       };
     }
-    results.push(...uploadResult.results);
   }
 
   return { success: true, results };
@@ -401,7 +379,6 @@ export async function submitApplication(
       listingId: input.listingId,
       applicationId,
       draftStorageKeys: input.draftStorageKeys ?? [],
-      files: input.files ?? [],
     });
 
     if (!uploadResult.success) {

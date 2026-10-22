@@ -30,10 +30,11 @@ const nextConfig: NextConfig = {
     '@mediapipe/tasks-vision',
   ],
   experimental: {
-    // Apply checkout POSTs passport/docs as base64 in Server Actions and can exceed 10MB.
-    // proxy.ts clones the body; default proxy buffer is 10MB and truncates → JSON.parse 500.
+    // Checkout/submit send traveller JSON + draft storage keys only (file bytes go via
+    // FormData to /api/apply/draft-files). Keep proxy + Server Action limits aligned;
+    // default proxy buffer is 10MB and truncates → JSON.parse 500.
     proxyClientMaxBodySize: '20mb',
-    // Default Server Action body limit is 1MB; keep aligned with proxy buffer above.
+    // Default Server Action body limit is 1MB; headroom for large multi-traveller JSON.
     serverActions: {
       bodySizeLimit: '20mb',
     },

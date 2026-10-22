@@ -635,7 +635,6 @@ export async function verifyVisaCheckout(
       priceOptionId: prepared.quote.priceOptionId,
       paymentId: recorded.payment.id,
       travellers,
-      files: parsed.data.files ?? [],
       draftStorageKeys: parsed.data.draftStorageKeys ?? [],
       interestedInInsurance: parsed.data.interestedInInsurance,
     });

@@ -54,20 +54,12 @@ export const createVisaCheckoutOrderSchema = z.object({
   interestedInInsurance: z.boolean().optional().default(false),
 });
 
-const uploadFileSchema = z.object({
-  passengerId: z.string().min(1).max(100),
-  slotKey: z.string().min(1).max(100),
-  filename: z.string().min(1).max(255),
-  mimeType: z.string().min(1).max(100),
-  bufferBase64: z.string().min(1),
-});
-
 export const verifyVisaCheckoutSchema = createVisaCheckoutOrderSchema.extend({
   razorpayOrderId: z.string().min(1).max(255).optional(),
   razorpayPaymentId: z.string().min(1).max(255).optional(),
   razorpaySignature: z.string().min(1).max(255).optional(),
-  files: z.array(uploadFileSchema).max(40).optional(),
-  draftStorageKeys: z.array(draftStorageKeySchema).max(40).optional(),
+  /** Draft object keys only — file bytes are uploaded via FormData before pay. */
+  draftStorageKeys: z.array(draftStorageKeySchema).max(200).optional(),
 });
 
 export const quoteVisaCheckoutSchema = z.object({

@@ -7,12 +7,37 @@
 import type { ApplyTraveller, DraftFileRef } from '@/lib/apply/types';
 import type { DraftScopeInput } from '@/lib/apply/draftScope';
 import {
+  collectDraftStorageKeysForSubmit,
+  findUnsyncedIdbSlotsError,
+  type DraftStorageKeyItem,
+} from '@/lib/apply/collectSubmitFiles';
+import {
+  type ApplyDraft,
+  writeApplyDraftAsync,
+} from '@/lib/apply/draftStorage';
+import {
   PASSPORT_BACK_SLOT,
   PASSPORT_FRONT_SLOT,
   getFile,
   isIdbAvailable,
   putFile,
 } from '@/lib/apply/idbDraftStorage';
+
+/** Slot already has a server key and the local document was not replaced. */
+function slotAlreadySynced(traveller: ApplyTraveller, slotKey: string): boolean {
+  const ref = traveller.draftFileRefs?.find((r) => r.slotKey === slotKey);
+  const doc = traveller.documents?.find((d) => d.key === slotKey);
+
+  // Local replace clears storageKey on the document — must re-upload.
+  if (doc && !doc.storageKey) return false;
+
+  if (doc?.storageKey) {
+    return !ref?.storageKey || ref.storageKey === doc.storageKey;
+  }
+
+  // Passport (and similar) slots tracked only via draftFileRefs.
+  return Boolean(ref?.storageKey);
+}
 
 function mergeDraftFileRefs(
   travellers: ApplyTraveller[],
@@ -91,14 +116,15 @@ async function listIdbSlots(
   }> = [];
   const seen = new Set<string>();
 
-  async function push(passengerId: string, slotKey: string) {
-    const dedupe = `${passengerId}:${slotKey}`;
+  async function push(traveller: ApplyTraveller, slotKey: string) {
+    const dedupe = `${traveller.id}:${slotKey}`;
     if (seen.has(dedupe)) return;
-    const record = await getFile(scope, passengerId, slotKey);
+    if (slotAlreadySynced(traveller, slotKey)) return;
+    const record = await getFile(scope, traveller.id, slotKey);
     if (!record?.blob) return;
     seen.add(dedupe);
     items.push({
-      passengerId,
+      passengerId: traveller.id,
       slotKey,
       blob: record.blob,
       mimeType: record.mimeType || 'application/octet-stream',
@@ -107,10 +133,10 @@ async function listIdbSlots(
   }
 
   for (const traveller of travellers) {
-    await push(traveller.id, PASSPORT_FRONT_SLOT);
-    await push(traveller.id, PASSPORT_BACK_SLOT);
+    await push(traveller, PASSPORT_FRONT_SLOT);
+    await push(traveller, PASSPORT_BACK_SLOT);
     for (const doc of traveller.documents ?? []) {
-      if (doc.key) await push(traveller.id, doc.key);
+      if (doc.key) await push(traveller, doc.key);
     }
   }
   return items;
@@ -190,6 +216,67 @@ export async function syncDraftFilesToServer(input: {
     success: true,
     travellers: mergeDraftFileRefs(input.travellers, results),
     uploadedCount: results.length,
+  };
+}
+
+/**
+ * Before checkout/submit: upload any unsynced IDB files via FormData,
+ * persist draft keys locally, and return key-only payload for Server Actions.
+ */
+export async function prepareDraftFilesForSubmit(input: {
+  draft: ApplyDraft;
+  draftScope: DraftScopeInput;
+  countryCode: string;
+}): Promise<
+  | {
+      success: true;
+      travellers: ApplyTraveller[];
+      draftStorageKeys: DraftStorageKeyItem[];
+      uploadedCount: number;
+    }
+  | { success: false; error: string }
+> {
+  const ownerUserId = input.draftScope.onBehalfOfUserId ?? undefined;
+  const sync = await syncDraftFilesToServer({
+    listingId: input.draft.listingId,
+    countryCode: input.countryCode,
+    travellers: input.draft.travellers,
+    ownerUserId,
+    sessionUserId: input.draftScope.sessionUserId,
+  });
+
+  if (!sync.success) {
+    return {
+      success: false,
+      error: sync.error || 'Could not upload documents. Try again.',
+    };
+  }
+
+  const travellers = sync.travellers;
+  const unsynced = await findUnsyncedIdbSlotsError(
+    input.draftScope,
+    travellers
+  );
+  if (unsynced) {
+    return { success: false, error: unsynced };
+  }
+
+  await writeApplyDraftAsync(
+    {
+      ...input.draft,
+      travellers,
+    },
+    {
+      sessionUserId: input.draftScope.sessionUserId,
+      onBehalfOfUserId: input.draftScope.onBehalfOfUserId,
+    }
+  );
+
+  return {
+    success: true,
+    travellers,
+    draftStorageKeys: collectDraftStorageKeysForSubmit(travellers),
+    uploadedCount: sync.uploadedCount,
   };
 }
 
