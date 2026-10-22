@@ -56,6 +56,8 @@ export async function ensureFormVersionForSubmit(
     processName: process.processName,
     showGeneralInfo: process.showGeneralInfo,
     showTripDetails: process.showTripDetails,
+    showInsuranceInterest:
+      process.showInsuranceInterest && !process.withFreeInsurance,
     components: process.componentsRequired,
     questions: process.additionalQuestions,
     documentTypeSamples,

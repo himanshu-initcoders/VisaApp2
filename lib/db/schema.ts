@@ -48,9 +48,15 @@ export const applicationDrafts = pgTable(
     userId: uuid('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
-    listingId: uuid('listing_id').notNull(),
+    listingId: uuid('listing_id')
+      .references(() => visaListings.id, { onDelete: 'cascade' })
+      .notNull(),
     countryCode: char('country_code', { length: 2 }),
     payload: jsonb('payload').notNull(),
+    /** Applicant or staff who last saved this draft. */
+    savedByUserId: uuid('saved_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -124,6 +130,10 @@ export const visaApplications = pgTable(
     passengerNames: text('passenger_names'),
     /** Client idempotency key for mock-pay submit */
     submitId: uuid('submit_id'),
+    /** Applicant opted in to visa insurance interest at checkout (optional). */
+    interestedInInsurance: boolean('interested_in_insurance')
+      .default(false)
+      .notNull(),
 
     paymentId: uuid('payment_id'),
     /** Staff reviewer assigned to this visa application. */

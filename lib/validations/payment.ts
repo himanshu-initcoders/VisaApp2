@@ -22,6 +22,15 @@ const travellerDocumentSchema = z.object({
   size: z.number().int().nonnegative().optional(),
 });
 
+const draftStorageKeySchema = z.object({
+  passengerId: z.string().min(1).max(100),
+  slotKey: z.string().min(1).max(100),
+  storageKey: z.string().min(1).max(500),
+  filename: z.string().max(255).optional(),
+  mimeType: z.string().max(100).optional(),
+  size: z.number().int().nonnegative().optional(),
+});
+
 export const checkoutTravellerSchema = z.object({
   id: z.string().min(1).max(100),
   name: z.string().min(1).max(255),
@@ -42,6 +51,7 @@ export const createVisaCheckoutOrderSchema = z.object({
     .regex(/^[a-zA-Z]{2}$/, 'Invalid country code'),
   priceOptionId: priceOptionIdSchema,
   travellers: z.array(checkoutTravellerSchema).min(1).max(100),
+  interestedInInsurance: z.boolean().optional().default(false),
 });
 
 const uploadFileSchema = z.object({
@@ -57,6 +67,7 @@ export const verifyVisaCheckoutSchema = createVisaCheckoutOrderSchema.extend({
   razorpayPaymentId: z.string().min(1).max(255).optional(),
   razorpaySignature: z.string().min(1).max(255).optional(),
   files: z.array(uploadFileSchema).max(40).optional(),
+  draftStorageKeys: z.array(draftStorageKeySchema).max(40).optional(),
 });
 
 export const quoteVisaCheckoutSchema = z.object({

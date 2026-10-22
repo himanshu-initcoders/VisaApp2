@@ -3,6 +3,7 @@ import { ApplyVisaWizard } from '@/components/apply/ApplyVisaWizard';
 import { auth } from '@/lib/auth';
 import { getPublicProcessPageData } from '@/lib/db/queries/public';
 import { getApplyPreviousProfiles } from '@/lib/apply/previousProfilesAutofill';
+import { getApplicantSummaryForDraft } from '@/lib/apply/serverDraft';
 import { formatFullVisaLabel } from '@/lib/public';
 import type { TravellerProfile } from '@/lib/apply/travellerProfiles';
 
@@ -20,6 +21,7 @@ interface PageProps {
     mode?: string;
     priceOption?: string;
     resume?: string;
+    onBehalfOf?: string;
   }>;
 }
 
@@ -88,11 +90,9 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
   }
 
   const session = await auth();
-  const isAuthenticated = Boolean(
-    session?.user?.id &&
-      session.user.role !== 'admin' &&
-      session.user.role !== 'reviewer'
-  );
+  const isStaff =
+    session?.user?.role === 'admin' || session?.user?.role === 'reviewer';
+  const isAuthenticated = Boolean(session?.user?.id && !isStaff);
 
   let previousProfiles: TravellerProfile[] = [];
   if (isAuthenticated && session?.user?.id) {
@@ -107,6 +107,18 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
       isServerProfile: true,
       applicationCount: p.applicationCount,
     }));
+  }
+
+  let onBehalfOfUserId: string | null = null;
+  let onBehalfOfLabel: string | null = null;
+  if (isStaff && query.onBehalfOf) {
+    const summary = await getApplicantSummaryForDraft(query.onBehalfOf);
+    if (summary.success) {
+      onBehalfOfUserId = summary.user.id;
+      onBehalfOfLabel =
+        summary.user.name ||
+        (summary.user.phone ? `+91 ${summary.user.phone}` : summary.user.email);
+    }
   }
 
   const parsedCount = Number.parseInt(query.travellers || '1', 10);
@@ -155,6 +167,8 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
       resume={resume}
       isAuthenticated={isAuthenticated}
       previousProfiles={previousProfiles}
+      onBehalfOfUserId={onBehalfOfUserId}
+      onBehalfOfLabel={onBehalfOfLabel}
     />
   );
 }

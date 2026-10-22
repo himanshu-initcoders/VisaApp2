@@ -51,8 +51,12 @@ export async function createVisaListing(data: unknown) {
         unsupported: validated.unsupported,
         visaOnArrival: validated.visaOnArrival,
         visaFree: validated.visaFree,
+        withFreeInsurance: validated.withFreeInsurance,
         showGeneralInfo: validated.showGeneralInfo,
         showTripDetails: validated.showTripDetails,
+        showInsuranceInterest: validated.withFreeInsurance
+          ? false
+          : validated.showInsuranceInterest,
         sourceUrl: validated.sourceUrl || null,
       })
       .returning({ id: visaListings.id });
@@ -124,8 +128,12 @@ export async function updateProcessBasicInfo(processId: string, data: ProcessBas
         unsupported: validated.unsupported,
         visaOnArrival: validated.visaOnArrival,
         visaFree: validated.visaFree,
+        withFreeInsurance: validated.withFreeInsurance,
         showGeneralInfo: validated.showGeneralInfo,
         showTripDetails: validated.showTripDetails,
+        showInsuranceInterest: validated.withFreeInsurance
+          ? false
+          : validated.showInsuranceInterest,
         sourceUrl: validated.sourceUrl || null,
         updatedAt: new Date(),
       })
@@ -1189,6 +1197,8 @@ export async function publishFormVersion(listingId: string) {
       processName: process.processName,
       showGeneralInfo: process.showGeneralInfo,
       showTripDetails: process.showTripDetails,
+      showInsuranceInterest:
+        process.showInsuranceInterest && !process.withFreeInsurance,
       components: process.componentsRequired,
       questions: process.additionalQuestions,
       documentTypeSamples,

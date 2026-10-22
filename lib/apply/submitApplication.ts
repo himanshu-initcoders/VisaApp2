@@ -30,6 +30,8 @@ import {
   uploadApplicationDocuments,
   type ApplicationDocumentUploadItem,
 } from '@/lib/upload/application-actions';
+import { promoteDraftFileToApplication } from '@/lib/upload/promoteDraftFile';
+import { deleteDraftStorageFiles } from '@/lib/apply/deleteDraftStorageFiles';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 import {
   validateSubmitTravellers,
@@ -40,16 +42,47 @@ import { attachPaymentsToApplication } from '@/lib/payments/record';
 
 export type { SubmitTravellerPayload } from '@/lib/apply/validateSubmitTravellers';
 
+export interface DraftStorageKeySubmitItem {
+  passengerId: string;
+  slotKey: string;
+  storageKey: string;
+  filename?: string;
+  mimeType?: string;
+  size?: number;
+}
+
+async function loadAndClearDraft(userId: string, listingId: string) {
+  const [row] = await db
+    .select({
+      id: applicationDrafts.id,
+      payload: applicationDrafts.payload,
+    })
+    .from(applicationDrafts)
+    .where(
+      and(
+        eq(applicationDrafts.userId, userId),
+        eq(applicationDrafts.listingId, listingId)
+      )
+    )
+    .limit(1);
+
+  return row ?? null;
+}
+
 export interface SubmitApplicationInput {
   submitId: string;
   listingId: string;
   countryCode: string;
   travellers: SubmitTravellerPayload[];
-  /** IndexDB files encoded as base64 (no data: prefix). */
-  files: ApplicationDocumentUploadItem[];
+  /** IndexedDB files encoded as base64 — used when draft keys are missing. */
+  files?: ApplicationDocumentUploadItem[];
+  /** Prefer promote/copy when draft objects already exist server-side. */
+  draftStorageKeys?: DraftStorageKeySubmitItem[];
   priceOptionId?: string | null;
   /** Captured payments.id. Required when the listing fee is above zero. */
   paymentId?: string | null;
+  /** Applicant optional insurance interest from checkout. */
+  interestedInInsurance?: boolean;
 }
 
 export type SubmitApplicationResult =
@@ -130,6 +163,86 @@ async function requireCapturedPayment(input: {
   return { ok: true, paymentId: payment.id };
 }
 
+type UploadResultRow = {
+  passengerId: string;
+  slotKey: string;
+  key: string;
+  url: string;
+  mimeType: string;
+  filename: string;
+  size: number;
+};
+
+async function resolveDocumentUploads(input: {
+  userId: string;
+  countryCode: string;
+  listingId: string;
+  applicationId: string;
+  draftStorageKeys: DraftStorageKeySubmitItem[];
+  files: ApplicationDocumentUploadItem[];
+}): Promise<
+  | { success: true; results: UploadResultRow[] }
+  | { success: false; error: string }
+> {
+  const results: UploadResultRow[] = [];
+  const covered = new Set<string>();
+
+  for (const item of input.draftStorageKeys) {
+    const dedupe = `${item.passengerId}:${item.slotKey}`;
+    if (covered.has(dedupe)) continue;
+    try {
+      const promoted = await promoteDraftFileToApplication({
+        draftStorageKey: item.storageKey,
+        countryCode: input.countryCode,
+        listingId: input.listingId,
+        userId: input.userId,
+        applicationId: input.applicationId,
+        passengerId: item.passengerId,
+        slotKey: item.slotKey,
+        filename: item.filename,
+        mimeType: item.mimeType,
+      });
+      covered.add(dedupe);
+      results.push({
+        passengerId: item.passengerId,
+        slotKey: item.slotKey,
+        key: promoted.key,
+        url: promoted.url,
+        mimeType: promoted.mimeType,
+        filename: promoted.filename,
+        size: promoted.size,
+      });
+    } catch (error) {
+      console.warn(
+        '[Submit] Promote failed, will try base64 fallback:',
+        item.storageKey,
+        error
+      );
+    }
+  }
+
+  const remainingFiles = input.files.filter(
+    (f) => !covered.has(`${f.passengerId}:${f.slotKey}`)
+  );
+  if (remainingFiles.length > 0) {
+    const uploadResult = await uploadApplicationDocuments({
+      countryCode: input.countryCode,
+      listingId: input.listingId,
+      applicationId: input.applicationId,
+      documents: remainingFiles,
+    });
+    if (!uploadResult.success) {
+      return {
+        success: false,
+        error: uploadResult.error || 'Document upload failed.',
+      };
+    }
+    results.push(...uploadResult.results);
+  }
+
+  return { success: true, results };
+}
+
 export async function submitApplication(
   input: SubmitApplicationInput
 ): Promise<SubmitApplicationResult> {
@@ -175,6 +288,13 @@ export async function submitApplication(
         submitId: input.submitId,
         paymentId: input.paymentId,
       });
+      const draft = await loadAndClearDraft(userId, input.listingId);
+      if (draft) {
+        await deleteDraftStorageFiles(draft.payload);
+        await db
+          .delete(applicationDrafts)
+          .where(eq(applicationDrafts.id, draft.id));
+      }
       return {
         success: true,
         applicationId: existing.id,
@@ -231,6 +351,8 @@ export async function submitApplication(
         processTypeLabel: visaListings.processTypeLabel,
         purpose: visaListings.purpose,
         destinationCountry: visaListings.destinationCountry,
+        withFreeInsurance: visaListings.withFreeInsurance,
+        showInsuranceInterest: visaListings.showInsuranceInterest,
       })
       .from(visaListings)
       .where(eq(visaListings.id, input.listingId))
@@ -239,6 +361,11 @@ export async function submitApplication(
     if (!listing) {
       return { success: false, error: 'Visa listing not found.' };
     }
+
+    const interestedInInsurance =
+      !listing.withFreeInsurance &&
+      listing.showInsuranceInterest &&
+      input.interestedInInsurance === true;
 
     const countryCode = (
       input.countryCode || listing.destinationCountry
@@ -266,12 +393,15 @@ export async function submitApplication(
     }
 
     const applicationId = randomUUID();
+    const draftRow = await loadAndClearDraft(userId, input.listingId);
 
-    const uploadResult = await uploadApplicationDocuments({
+    const uploadResult = await resolveDocumentUploads({
+      userId,
       countryCode,
       listingId: input.listingId,
       applicationId,
-      documents: input.files ?? [],
+      draftStorageKeys: input.draftStorageKeys ?? [],
+      files: input.files ?? [],
     });
 
     if (!uploadResult.success) {
@@ -281,28 +411,10 @@ export async function submitApplication(
       };
     }
 
-    const uploadsByPassenger = new Map<
-      string,
-      Array<{
-        slotKey: string;
-        key: string;
-        url: string;
-        mimeType: string;
-        filename: string;
-        size: number;
-      }>
-    >();
-
+    const uploadsByPassenger = new Map<string, UploadResultRow[]>();
     for (const result of uploadResult.results) {
       const list = uploadsByPassenger.get(result.passengerId) ?? [];
-      list.push({
-        slotKey: result.slotKey,
-        key: result.key,
-        url: result.url,
-        mimeType: result.mimeType,
-        filename: result.filename,
-        size: result.size,
-      });
+      list.push(result);
       uploadsByPassenger.set(result.passengerId, list);
     }
 
@@ -339,35 +451,102 @@ export async function submitApplication(
     const now = new Date();
 
     try {
-      await db.insert(visaApplications).values({
-        id: applicationId,
-        userId,
-        countryCode,
-        visaListingId: input.listingId,
-        country: country?.name ?? countryCode,
-        visaType: String(resolvedVisaType).slice(0, 100),
-        status: 'submitted',
-        formVersionId: formVersion.id,
-        formSnapshot: formVersion.config,
-        travellers: travellersJson,
-        applicantName: primaryName.slice(0, 255),
-        applicantPhone: userRow.phone,
-        passengerNames,
-        submitId: input.submitId,
-        paymentId: resolvedPaymentId,
-        submittedAt: now,
-        updatedAt: now,
-        personalInfo: {
+      await db.transaction(async (tx) => {
+        await tx.insert(visaApplications).values({
+          id: applicationId,
+          userId,
+          countryCode,
+          visaListingId: input.listingId,
+          country: country?.name ?? countryCode,
+          visaType: String(resolvedVisaType).slice(0, 100),
+          status: 'submitted',
+          formVersionId: formVersion.id,
+          formSnapshot: formVersion.config,
           travellers: travellersJson,
-          primaryName,
-        },
-        travelInfo: travellersJson[0]?.tripDetails ?? null,
-        documents: uploadResult.results.map((r) => ({
-          key: r.key,
-          url: r.url,
-          slotKey: r.slotKey,
-          passengerId: r.passengerId,
-        })),
+          applicantName: primaryName.slice(0, 255),
+          applicantPhone: userRow.phone,
+          passengerNames,
+          submitId: input.submitId,
+          paymentId: resolvedPaymentId,
+          interestedInInsurance,
+          submittedAt: now,
+          updatedAt: now,
+          personalInfo: {
+            travellers: travellersJson,
+            primaryName,
+            interestedInInsurance,
+          },
+          travelInfo: travellersJson[0]?.tripDetails ?? null,
+          documents: uploadResult.results.map((r) => ({
+            key: r.key,
+            url: r.url,
+            slotKey: r.slotKey,
+            passengerId: r.passengerId,
+          })),
+        });
+
+        if (uploadResult.results.length > 0) {
+          await tx.insert(documents).values(
+            uploadResult.results.map((r) => ({
+              applicationId,
+              applicationType: 'visa',
+              documentType: r.slotKey,
+              s3Key: r.key,
+              filename: r.filename,
+              fileSize: r.size,
+              mimeType: r.mimeType,
+              verified: null,
+              uploadedAt: now,
+            }))
+          );
+        }
+
+        const insertedTravellers = await tx
+          .insert(visaApplicationTravellers)
+          .values(
+            travellersJson.map((traveller) => ({
+              applicationId,
+              passengerId: traveller.passengerId.slice(0, 100),
+              name: (traveller.name || 'Traveller').slice(0, 255),
+              status: 'submitted',
+              updatedAt: now,
+            }))
+          )
+          .returning({
+            id: visaApplicationTravellers.id,
+          });
+
+        if (insertedTravellers.length > 0) {
+          await tx.insert(statusHistory).values(
+            insertedTravellers.map((traveller) => ({
+              applicationId,
+              applicationType: 'visa' as const,
+              travellerId: traveller.id,
+              oldStatus: null,
+              newStatus: 'submitted',
+              changedBy: userId,
+              notes: resolvedPaymentId
+                ? 'Submitted after Razorpay payment'
+                : 'Submitted with no fee',
+              createdAt: now,
+            }))
+          );
+        }
+
+        if (draftRow) {
+          await tx
+            .delete(applicationDrafts)
+            .where(eq(applicationDrafts.id, draftRow.id));
+        } else {
+          await tx
+            .delete(applicationDrafts)
+            .where(
+              and(
+                eq(applicationDrafts.userId, userId),
+                eq(applicationDrafts.listingId, input.listingId)
+              )
+            );
+        }
       });
     } catch (insertError) {
       const [raced] = await db
@@ -390,68 +569,16 @@ export async function submitApplication(
       throw insertError;
     }
 
-    if (uploadResult.results.length > 0) {
-      await db.insert(documents).values(
-        uploadResult.results.map((r) => ({
-          applicationId,
-          applicationType: 'visa',
-          documentType: r.slotKey,
-          s3Key: r.key,
-          filename: r.filename,
-          fileSize: r.size,
-          mimeType: r.mimeType,
-          verified: null,
-          uploadedAt: now,
-        }))
-      );
-    }
-
-    const insertedTravellers = await db
-      .insert(visaApplicationTravellers)
-      .values(
-        travellersJson.map((traveller) => ({
-          applicationId,
-          passengerId: traveller.passengerId.slice(0, 100),
-          name: (traveller.name || 'Traveller').slice(0, 255),
-          status: 'submitted',
-          updatedAt: now,
-        }))
-      )
-      .returning({
-        id: visaApplicationTravellers.id,
-      });
-
-    if (insertedTravellers.length > 0) {
-      await db.insert(statusHistory).values(
-        insertedTravellers.map((traveller) => ({
-          applicationId,
-          applicationType: 'visa' as const,
-          travellerId: traveller.id,
-          oldStatus: null,
-          newStatus: 'submitted',
-          changedBy: userId,
-          notes: resolvedPaymentId
-            ? 'Submitted after Razorpay payment'
-            : 'Submitted with no fee',
-          createdAt: now,
-        }))
-      );
-    }
-
     await attachPaymentsToApplication({
       applicationId,
       submitId: input.submitId,
       paymentId: resolvedPaymentId,
     });
 
-    await db
-      .delete(applicationDrafts)
-      .where(
-        and(
-          eq(applicationDrafts.userId, userId),
-          eq(applicationDrafts.listingId, input.listingId)
-        )
-      );
+    // Remaining draft files (if any keys not promoted) — best effort after TX
+    if (draftRow?.payload) {
+      await deleteDraftStorageFiles(draftRow.payload);
+    }
 
     const passportData = travellersJson[0]?.passportData;
     const passportEmail =

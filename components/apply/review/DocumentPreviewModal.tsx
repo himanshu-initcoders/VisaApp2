@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 
 export interface DocumentPreviewItem {
@@ -21,6 +21,12 @@ export function DocumentPreviewModal({
   item,
   onClose,
 }: DocumentPreviewModalProps) {
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    setLoadError(false);
+  }, [item?.previewUrl, open]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -82,12 +88,18 @@ export function DocumentPreviewModal({
         </div>
 
         <div className="flex min-h-0 flex-1 items-center justify-center bg-[#f8fafc] p-4">
-          {isImage ? (
+          {!item.previewUrl || loadError ? (
+            <p className="text-sm text-slate-helper">
+              Could not load this file. Re-save the draft or re-upload the
+              document, then try View again.
+            </p>
+          ) : isImage ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={item.previewUrl}
               alt={item.title}
               className="max-h-[75vh] max-w-full object-contain"
+              onError={() => setLoadError(true)}
             />
           ) : isPdf ? (
             <iframe

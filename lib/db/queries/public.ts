@@ -89,6 +89,7 @@ function mapProcess(process: {
   unsupported: boolean | null;
   visaOnArrival: boolean | null;
   visaFree: boolean | null;
+  withFreeInsurance: boolean;
   standardEtaDuration: number | null;
   standardEtaUnit: string | null;
   prices: Array<typeof visaListingPrices.$inferSelect>;
@@ -364,6 +365,7 @@ export async function getPublicProcessPageData(
         ? 'free and instant'
         : mappedProcess.standardEta || 'processed on time',
       isFree,
+      withFreeInsurance: mappedProcess.withFreeInsurance,
       weeklyApplications,
       highlights: getDemoHighlights(mappedProcess, process.country.name),
       stats: [
@@ -449,6 +451,8 @@ export async function getPublicProcessPageData(
         processName: process.processName,
         showGeneralInfo: process.showGeneralInfo,
         showTripDetails: process.showTripDetails,
+        showInsuranceInterest:
+          process.showInsuranceInterest && !process.withFreeInsurance,
         components: process.componentsRequired,
         questions: process.additionalQuestions,
         documentTypeSamples: await getDocumentTypeSamplesByValues(

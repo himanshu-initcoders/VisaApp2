@@ -28,6 +28,9 @@ interface ReviewStepProps {
   showTripDetails?: boolean;
   extraQuestions?: ApplyTripQuestion[];
   documentSlots?: ApplyDocumentSlot[];
+  listingId?: string;
+  /** Staff restoring an applicant draft. */
+  draftOwnerUserId?: string | null;
   onAddTraveller: (name: string) => void;
   onSelectProfile?: (profile: TravellerProfile) => void;
   onRemoveTraveller: (id: string) => void;
@@ -48,6 +51,8 @@ export function ReviewStep({
   showGeneralInfo = true,
   showTripDetails = true,
   extraQuestions = [],
+  listingId,
+  draftOwnerUserId = null,
   documentSlots = [],
   onAddTraveller,
   onSelectProfile,
@@ -112,6 +117,8 @@ export function ReviewStep({
             showTripDetails={showTripDetails}
             extraQuestions={extraQuestions}
             documentSlots={documentSlots}
+            listingId={listingId}
+            draftOwnerUserId={draftOwnerUserId}
             onUploadPassport={(file) => onUploadPassport(selected.id, file)}
             onFillApplication={() => onFillApplication(selected.id)}
             onEdit={() => onEditTraveller(selected.id)}

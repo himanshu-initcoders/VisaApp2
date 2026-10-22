@@ -37,6 +37,8 @@ export async function restoreAutofillDocumentsToIdb(input: {
   listingId: string;
   travellerId: string;
   refs: AutofillDocumentRef[];
+  sessionUserId?: string | null;
+  ownerUserId?: string | null;
 }): Promise<RestoredAutofillDocs> {
   const result: RestoredAutofillDocs = {
     passportUploaded: false,
@@ -65,11 +67,20 @@ export async function restoreAutofillDocumentsToIdb(input: {
       const filename = fetched.data.filename || ref.filename || `${ref.slotKey}.bin`;
       const blob = base64ToBlob(fetched.data.base64, mimeType);
 
-      await putFile(input.listingId, input.travellerId, ref.slotKey, {
-        blob,
-        mimeType,
-        filename,
-      });
+      await putFile(
+        {
+          listingId: input.listingId,
+          sessionUserId: input.sessionUserId ?? null,
+          onBehalfOfUserId: input.ownerUserId ?? null,
+        },
+        input.travellerId,
+        ref.slotKey,
+        {
+          blob,
+          mimeType,
+          filename,
+        }
+      );
 
       const previewUrl = URL.createObjectURL(blob);
 

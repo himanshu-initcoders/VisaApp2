@@ -1,7 +1,13 @@
 /**
- * IndexedDB storage for apply-flow document binaries.
- * Draft JSON meta stays in localStorage; files live here until Phase 3 submit.
+ * IndexedDB storage for apply-flow document binaries + draft meta.
+ * Keys are scoped as `{scopeUserId}:{listingId}` (and file keys under that).
  */
+
+import {
+  draftStorageCompositeKey,
+  resolveDraftScopeUserId,
+  type DraftScopeInput,
+} from '@/lib/apply/draftScope';
 
 export const IDB_NAME = 'visa-apply-idb-v1';
 export const IDB_VERSION = 1;
@@ -41,11 +47,11 @@ export interface IdbFileRecord {
 export type IdbDraftMeta = Record<string, unknown>;
 
 export function fileStorageKey(
-  listingId: string,
+  scopeKey: string,
   passengerId: string,
   slotKey: string
 ) {
-  return `${listingId}:${passengerId}:${slotKey}`;
+  return `${scopeKey}:${passengerId}:${slotKey}`;
 }
 
 export function isIdbAvailable(): boolean {
@@ -57,21 +63,28 @@ export function isIdbAvailable(): boolean {
   }
 }
 
+let sharedDb: IDBDatabase | null = null;
+let openPromise: Promise<IDBDatabase> | null = null;
+
 function openDb(): Promise<IDBDatabase> {
   if (!isIdbAvailable()) {
     return Promise.reject(new IdbUnavailableError());
   }
+  if (sharedDb) return Promise.resolve(sharedDb);
+  if (openPromise) return openPromise;
 
-  return new Promise((resolve, reject) => {
+  openPromise = new Promise((resolve, reject) => {
     let request: IDBOpenDBRequest;
     try {
       request = indexedDB.open(IDB_NAME, IDB_VERSION);
     } catch {
+      openPromise = null;
       reject(new IdbUnavailableError());
       return;
     }
 
     request.onerror = () => {
+      openPromise = null;
       reject(new IdbUnavailableError(request.error?.message));
     };
     request.onupgradeneeded = () => {
@@ -83,8 +96,22 @@ function openDb(): Promise<IDBDatabase> {
         db.createObjectStore(IDB_STORE_FILES);
       }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      sharedDb = request.result;
+      sharedDb.onclose = () => {
+        sharedDb = null;
+        openPromise = null;
+      };
+      sharedDb.onversionchange = () => {
+        sharedDb?.close();
+        sharedDb = null;
+        openPromise = null;
+      };
+      resolve(sharedDb);
+    };
   });
+
+  return openPromise;
 }
 
 function mapIdbError(error: unknown): Error {
@@ -111,8 +138,19 @@ function idbRequest<T>(request: IDBRequest<T>): Promise<T> {
   });
 }
 
+function resolveScopeKey(input: DraftScopeInput | string): string {
+  if (typeof input === 'string') {
+    // Legacy callers passed listingId only — treat as anon scope
+    return draftStorageCompositeKey('anon', input);
+  }
+  return draftStorageCompositeKey(
+    resolveDraftScopeUserId(input),
+    input.listingId
+  );
+}
+
 export async function putFile(
-  listingId: string,
+  scope: DraftScopeInput | string,
   passengerId: string,
   slotKey: string,
   input: {
@@ -129,7 +167,7 @@ export async function putFile(
     updatedAt: new Date().toISOString(),
     size: input.blob.size,
   };
-  const key = fileStorageKey(listingId, passengerId, slotKey);
+  const key = fileStorageKey(resolveScopeKey(scope), passengerId, slotKey);
 
   try {
     await new Promise<void>((resolve, reject) => {
@@ -142,19 +180,17 @@ export async function putFile(
     return record;
   } catch (error) {
     throw mapIdbError(error);
-  } finally {
-    db.close();
   }
 }
 
 export async function getFile(
-  listingId: string,
+  scope: DraftScopeInput | string,
   passengerId: string,
   slotKey: string
 ): Promise<IdbFileRecord | null> {
   const db = await openDb();
   try {
-    const key = fileStorageKey(listingId, passengerId, slotKey);
+    const key = fileStorageKey(resolveScopeKey(scope), passengerId, slotKey);
     const tx = db.transaction(IDB_STORE_FILES, 'readonly');
     const result = await idbRequest(
       tx.objectStore(IDB_STORE_FILES).get(key)
@@ -162,19 +198,17 @@ export async function getFile(
     return (result as IdbFileRecord | undefined) ?? null;
   } catch (error) {
     throw mapIdbError(error);
-  } finally {
-    db.close();
   }
 }
 
 export async function deleteFile(
-  listingId: string,
+  scope: DraftScopeInput | string,
   passengerId: string,
   slotKey: string
 ): Promise<void> {
   const db = await openDb();
   try {
-    const key = fileStorageKey(listingId, passengerId, slotKey);
+    const key = fileStorageKey(resolveScopeKey(scope), passengerId, slotKey);
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(IDB_STORE_FILES, 'readwrite');
       tx.oncomplete = () => resolve();
@@ -183,16 +217,14 @@ export async function deleteFile(
     });
   } catch (error) {
     throw mapIdbError(error);
-  } finally {
-    db.close();
   }
 }
 
 export async function deletePassengerFiles(
-  listingId: string,
+  scope: DraftScopeInput | string,
   passengerId: string
 ): Promise<void> {
-  const prefix = `${listingId}:${passengerId}:`;
+  const prefix = `${resolveScopeKey(scope)}:${passengerId}:`;
   const db = await openDb();
   try {
     await new Promise<void>((resolve, reject) => {
@@ -213,13 +245,13 @@ export async function deletePassengerFiles(
     });
   } catch (error) {
     throw mapIdbError(error);
-  } finally {
-    db.close();
   }
 }
 
-export async function clearListingFiles(listingId: string): Promise<void> {
-  const prefix = `${listingId}:`;
+export async function clearListingFiles(
+  scope: DraftScopeInput | string
+): Promise<void> {
+  const prefix = `${resolveScopeKey(scope)}:`;
   const db = await openDb();
   try {
     await new Promise<void>((resolve, reject) => {
@@ -240,70 +272,137 @@ export async function clearListingFiles(listingId: string): Promise<void> {
     });
   } catch (error) {
     throw mapIdbError(error);
-  } finally {
-    db.close();
   }
 }
 
 export async function putDraftMeta(
-  listingId: string,
+  scope: DraftScopeInput | string,
   draft: IdbDraftMeta
 ): Promise<void> {
   const db = await openDb();
+  const key = resolveScopeKey(scope);
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(IDB_STORE_DRAFTS, 'readwrite');
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(mapIdbError(tx.error));
       tx.onabort = () => reject(mapIdbError(tx.error));
-      tx.objectStore(IDB_STORE_DRAFTS).put(draft, listingId);
+      tx.objectStore(IDB_STORE_DRAFTS).put(draft, key);
     });
   } catch (error) {
     throw mapIdbError(error);
-  } finally {
-    db.close();
   }
 }
 
 export async function getDraftMeta(
-  listingId: string
+  scope: DraftScopeInput | string
 ): Promise<IdbDraftMeta | null> {
   const db = await openDb();
   try {
+    const key = resolveScopeKey(scope);
     const tx = db.transaction(IDB_STORE_DRAFTS, 'readonly');
-    const result = await idbRequest(
-      tx.objectStore(IDB_STORE_DRAFTS).get(listingId)
-    );
+    const store = tx.objectStore(IDB_STORE_DRAFTS);
+    let result = await idbRequest(store.get(key));
+    // Pre-login Continue UX: also check legacy listing-only key
+    if (!result && typeof scope === 'string') {
+      result = await idbRequest(store.get(scope));
+    } else if (
+      !result &&
+      typeof scope !== 'string' &&
+      resolveDraftScopeUserId(scope) === 'anon' &&
+      !scope.onBehalfOfUserId
+    ) {
+      result = await idbRequest(store.get(scope.listingId));
+    }
     return (result as IdbDraftMeta | undefined) ?? null;
   } catch (error) {
     throw mapIdbError(error);
-  } finally {
-    db.close();
   }
 }
 
-export async function deleteDraftMeta(listingId: string): Promise<void> {
+export async function deleteDraftMeta(
+  scope: DraftScopeInput | string
+): Promise<void> {
   const db = await openDb();
   try {
+    const key = resolveScopeKey(scope);
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(IDB_STORE_DRAFTS, 'readwrite');
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(mapIdbError(tx.error));
-      tx.objectStore(IDB_STORE_DRAFTS).delete(listingId);
+      tx.objectStore(IDB_STORE_DRAFTS).delete(key);
     });
   } catch (error) {
     throw mapIdbError(error);
-  } finally {
-    db.close();
+  }
+}
+
+/**
+ * One-time migrate legacy listing-only IDB keys → scoped keys for current applicant.
+ * Staff on-behalf never migrates anonymous keys.
+ */
+export async function migrateLegacyIdbKeys(input: DraftScopeInput): Promise<void> {
+  const scopeUserId = resolveDraftScopeUserId(input);
+  if (scopeUserId === 'anon' || input.onBehalfOfUserId) return;
+  if (!input.listingId || !isIdbAvailable()) return;
+
+  const legacyListingId = input.listingId;
+  const scopedKey = draftStorageCompositeKey(scopeUserId, legacyListingId);
+  const db = await openDb();
+
+  try {
+    // Meta
+    const metaTx = db.transaction(IDB_STORE_DRAFTS, 'readwrite');
+    const metaStore = metaTx.objectStore(IDB_STORE_DRAFTS);
+    const legacyMeta = await idbRequest(metaStore.get(legacyListingId));
+    const scopedMeta = await idbRequest(metaStore.get(scopedKey));
+    if (legacyMeta && !scopedMeta) {
+      metaStore.put(legacyMeta, scopedKey);
+      metaStore.delete(legacyListingId);
+    }
+    await new Promise<void>((resolve, reject) => {
+      metaTx.oncomplete = () => resolve();
+      metaTx.onerror = () => reject(mapIdbError(metaTx.error));
+    });
+
+    // Files: `{listingId}:{passenger}:{slot}` → `{scope}:{listingId}:{passenger}:{slot}`
+    const filesTx = db.transaction(IDB_STORE_FILES, 'readwrite');
+    const filesStore = filesTx.objectStore(IDB_STORE_FILES);
+    const legacyPrefix = `${legacyListingId}:`;
+    await new Promise<void>((resolve, reject) => {
+      const request = filesStore.openCursor();
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return;
+        const key = String(cursor.key);
+        if (key.startsWith(legacyPrefix) && !key.startsWith(`${scopedKey}:`)) {
+          const rest = key.slice(legacyPrefix.length);
+          const nextKey = `${scopedKey}:${rest}`;
+          const existingReq = filesStore.get(nextKey);
+          existingReq.onsuccess = () => {
+            if (!existingReq.result) {
+              filesStore.put(cursor.value, nextKey);
+            }
+            filesStore.delete(key);
+          };
+        }
+        cursor.continue();
+      };
+      request.onerror = () => reject(mapIdbError(request.error));
+      filesTx.oncomplete = () => resolve();
+      filesTx.onerror = () => reject(mapIdbError(filesTx.error));
+    });
+  } catch (error) {
+    console.warn('IDB draft key migration failed', error);
   }
 }
 
 export function createPreviewUrlFromIdb(
-  listingId: string,
+  scope: DraftScopeInput | string,
   passengerId: string,
   slotKey: string
 ): Promise<string | undefined> {
-  return getFile(listingId, passengerId, slotKey).then((record) => {
+  return getFile(scope, passengerId, slotKey).then((record) => {
     if (!record) return undefined;
     return URL.createObjectURL(record.blob);
   });

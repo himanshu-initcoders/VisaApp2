@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireRole } from '@/lib/auth-utils';
 import { getApplicationsWithFilters } from '@/lib/admin-queries';
 import { getCountryFilterOptions } from '@/lib/db/queries/config';
+import { getCountryFlagMap } from '@/lib/countries/flags';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { FilterBar } from '@/components/admin/FilterBar';
 import { ApplicationsTable } from '@/components/admin/ApplicationsTable';
@@ -65,6 +66,9 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
     getApplicationsWithFilters(filters),
     getCountryFilterOptions(),
   ]);
+  const flagUrls = await getCountryFlagMap(
+    result.applications.map((app) => app.countryCode)
+  );
   const countryItems = countryOptions.map((country) => ({
     id: country.iso2Code,
     label: `${country.name} (${country.iso2Code})`,
@@ -94,6 +98,14 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
           isReviewer
             ? 'Visa applications assigned to you'
             : 'View and manage all visa and passport applications'
+        }
+        action={
+          <Link
+            href="/admin/applications/drafts"
+            className="inline-flex items-center rounded-button border-[1.5px] border-portrait-ink px-4 py-2.5 font-switzer text-base font-medium text-portrait-ink hover:bg-portrait-ink hover:text-white"
+          >
+            Apply drafts
+          </Link>
         }
       />
 
@@ -126,6 +138,7 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
       <ApplicationsTable
         applications={result.applications}
         canAssign={session.user.role === 'admin'}
+        flagUrls={flagUrls}
       />
 
       {result.totalPages > 1 && (

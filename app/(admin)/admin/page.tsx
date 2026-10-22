@@ -1,9 +1,11 @@
 import { StatsCard } from '@/components/admin/StatsCard';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
 import { ApplicationStatusCell } from '@/components/shared/ApplicationStatusCell';
+import { FlagLogo } from '@/components/shared/FlagLogo';
 import { requireRole } from '@/lib/auth-utils';
 import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
 import { listStaffAttention } from '@/lib/visa/corrections';
+import { flagUrlFor, getCountryFlagMap } from '@/lib/countries/flags';
 import { db } from '@/lib/db';
 import { visaApplications, passportServices, documents } from '@/lib/db/schema';
 import { eq, and, sql, desc, isNull, inArray } from 'drizzle-orm';
@@ -92,6 +94,7 @@ export default async function AdminDashboardPage() {
         .select({
           id: visaApplications.id,
           country: visaApplications.country,
+          countryCode: visaApplications.countryCode,
           visaType: visaApplications.visaType,
           status: visaApplications.status,
           submittedAt: visaApplications.submittedAt,
@@ -120,6 +123,7 @@ export default async function AdminDashboardPage() {
         ...visa.map((v) => ({
           id: v.id,
           displayName: `${v.country} - ${v.visaType}`,
+          countryCode: v.countryCode as string | null,
           status: v.status,
           submittedAt: v.submittedAt,
           type: 'visa' as const,
@@ -127,6 +131,7 @@ export default async function AdminDashboardPage() {
         ...passport.map((p) => ({
           id: p.id,
           displayName: p.serviceType || 'Passport Service',
+          countryCode: null as string | null,
           status: p.status,
           submittedAt: p.submittedAt,
           type: 'passport' as const,
@@ -142,9 +147,14 @@ export default async function AdminDashboardPage() {
     }),
   ]);
 
-  const travellerSummaries = await loadTravellerSummaries(
-    recentApplications.filter((app) => app.type === 'visa').map((app) => app.id)
-  );
+  const [travellerSummaries, flagUrls] = await Promise.all([
+    loadTravellerSummaries(
+      recentApplications
+        .filter((app) => app.type === 'visa')
+        .map((app) => app.id)
+    ),
+    getCountryFlagMap(recentApplications.map((app) => app.countryCode)),
+  ]);
   const recentWithSummary = recentApplications.map((app) => {
     const summary =
       app.type === 'visa' ? travellerSummaries.get(app.id) : undefined;
@@ -303,19 +313,33 @@ export default async function AdminDashboardPage() {
                   href={`/admin/applications/${app.type}/${app.id}`}
                   className="flex items-center justify-between p-4 rounded-lg border border-ash hover:bg-sky-wash/20 transition-colors"
                 >
-                  <div className="space-y-1">
-                    <p className="font-switzer text-sm font-medium text-portrait-ink">
-                      {app.displayName}
-                    </p>
-                    <p className="font-switzer text-xs text-slate-helper">
-                      {app.submittedAt
-                        ? new Date(app.submittedAt).toLocaleDateString('en-IN', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                          })
-                        : 'Not submitted'}
-                    </p>
+                  <div className="flex min-w-0 items-start gap-3">
+                    {app.type === 'visa' ? (
+                      <FlagLogo
+                        countryCode={app.countryCode}
+                        flagUrl={flagUrlFor(flagUrls, app.countryCode)}
+                        alt={app.displayName}
+                        size="md"
+                        className="mt-0.5"
+                      />
+                    ) : null}
+                    <div className="min-w-0 space-y-1">
+                      <p className="font-switzer text-sm font-medium text-portrait-ink">
+                        {app.displayName}
+                      </p>
+                      <p className="font-switzer text-xs text-slate-helper">
+                        {app.submittedAt
+                          ? new Date(app.submittedAt).toLocaleDateString(
+                              'en-IN',
+                              {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                              }
+                            )
+                          : 'Not submitted'}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <ApplicationStatusCell

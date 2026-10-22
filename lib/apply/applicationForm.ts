@@ -85,6 +85,9 @@ export interface TravellerDocumentUpload {
   size?: number;
   /** True when the binary lives in IndexedDB for this listing/passenger/slot. */
   storedInIdb?: boolean;
+  /** Server draft storage key after Save as draft sync. */
+  storageKey?: string;
+  storageUrl?: string;
   /** In-memory file for a correction reupload. Never written to a draft. */
   file?: File;
 }
@@ -151,6 +154,8 @@ export interface ApplyFormConfig {
   processName: string;
   showGeneralInfo: boolean;
   showTripDetails: boolean;
+  /** When true, checkout shows optional insurance-interest checkbox. */
+  showInsuranceInterest: boolean;
   extraQuestions: ApplyTripQuestion[];
   documentSlots: ApplyDocumentSlot[];
 }
@@ -413,6 +418,7 @@ export function buildApplyFormConfig(input: {
   processName: string;
   showGeneralInfo?: boolean | null;
   showTripDetails?: boolean | null;
+  showInsuranceInterest?: boolean | null;
   components: Array<{
     id: string;
     key: string;
@@ -540,6 +546,7 @@ export function buildApplyFormConfig(input: {
     processName: input.processName,
     showGeneralInfo: input.showGeneralInfo !== false,
     showTripDetails: input.showTripDetails !== false,
+    showInsuranceInterest: input.showInsuranceInterest === true,
     extraQuestions,
     documentSlots,
   };
@@ -666,6 +673,7 @@ export function isDocumentSlotFilled(upload: TravellerDocumentUpload | undefined
   return Boolean(
     upload.storedInIdb ||
       upload.previewUrl ||
+      upload.storageKey ||
       (upload.name && upload.mimeType)
   );
 }

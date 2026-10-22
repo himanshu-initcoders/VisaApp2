@@ -636,6 +636,8 @@ export async function verifyVisaCheckout(
       paymentId: recorded.payment.id,
       travellers,
       files: parsed.data.files ?? [],
+      draftStorageKeys: parsed.data.draftStorageKeys ?? [],
+      interestedInInsurance: parsed.data.interestedInInsurance,
     });
 
     if (!submitted.success) {

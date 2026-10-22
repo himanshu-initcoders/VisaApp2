@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
+import { Badge } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { formatPrice, getCountryCardImage, getFlagEmoji } from '@/lib/public';
 
@@ -12,6 +13,7 @@ export interface HomeCountryListing {
   processName: string;
   startingPrice: number;
   purpose?: string;
+  withFreeInsurance?: boolean;
 }
 
 export interface HomeCountryCardData {
@@ -38,6 +40,9 @@ export function PublicCountryCard({ country, className }: PublicCountryCardProps
   const visibleNames = listingNames.slice(0, 2);
   const listingLine =
     visibleNames.join(' · ') + (extraCount > 0 ? ` · +${extraCount}` : '');
+  const hasFreeInsurance = country.listings.some(
+    (listing) => listing.withFreeInsurance
+  );
 
   return (
     <article
@@ -65,6 +70,14 @@ export function PublicCountryCard({ country, className }: PublicCountryCardProps
         )}
 
         <div className="absolute inset-0 bg-gradient-to-t from-[#062445]/90 via-[#062445]/35 to-transparent" />
+
+        {hasFreeInsurance && (
+          <div className="absolute left-3 top-3 sm:left-4 sm:top-4">
+            <Badge className="border-0 bg-mint-wash text-portrait-ink">
+              Free Insurance
+            </Badge>
+          </div>
+        )}
 
         <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 sm:p-5">
           <div className="min-w-0">

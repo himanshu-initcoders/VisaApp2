@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { FlagLogo } from '@/components/shared/FlagLogo';
 import { cn } from '@/lib/utils';
 import { ProcessTypeBadge } from './ProcessTypeBadge';
 import { ArrowRight } from 'lucide-react';
@@ -60,14 +61,6 @@ function firstPackageLabel(prices: ProcessWithCountry['prices']) {
 }
 
 export function ProcessesTable({ processes }: ProcessesTableProps) {
-  const getFlag = (iso2Code: string) => {
-    const codePoints = iso2Code
-      .toUpperCase()
-      .split('')
-      .map((char) => 127397 + char.charCodeAt(0));
-    return String.fromCodePoint(...codePoints);
-  };
-
   const formatETA = (duration: number | null, unit: string | null) => {
     if (!duration || !unit) return '—';
     return `${duration} ${unit}`;
@@ -118,15 +111,13 @@ export function ProcessesTable({ processes }: ProcessesTableProps) {
               <tr key={process.id} className="hover:bg-mint-wash/20 transition-colors">
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
-                    {process.country.images?.flag?.url ? (
-                      <img
-                        src={process.country.images.flag.url}
-                        alt=""
-                        className="h-5 w-7 rounded-sm object-cover"
-                      />
-                    ) : (
-                      <span className="text-xl">{getFlag(process.country.iso2Code)}</span>
-                    )}
+                    <FlagLogo
+                      countryCode={process.country.iso2Code}
+                      flagUrl={process.country.images?.flag?.url}
+                      alt={process.country.name}
+                      size="md"
+                      shape="rect"
+                    />
                     <span className="text-sm font-medium text-portrait-ink">
                       {process.country.name}
                     </span>

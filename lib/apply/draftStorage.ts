@@ -1,12 +1,18 @@
 import type { ApplyStep, ApplyTraveller } from '@/lib/apply/types';
 import type { TravellerDocumentUpload } from '@/lib/apply/applicationForm';
 import {
+  resolveDraftScopeUserId,
+  type DraftScopeInput,
+} from '@/lib/apply/draftScope';
+import {
   PASSPORT_BACK_SLOT,
   PASSPORT_FRONT_SLOT,
+  clearListingFiles,
   createPreviewUrlFromIdb,
   deleteDraftMeta,
   getDraftMeta,
   isIdbAvailable,
+  migrateLegacyIdbKeys,
   putDraftMeta,
   putFile,
   urlToBlob,
@@ -37,9 +43,18 @@ export interface ApplyDraft {
   travellers: ApplyTraveller[];
   departure: ApplyDraftDeparture;
   travellersCount: number;
+  /** Applicant optional insurance interest at checkout. */
+  interestedInInsurance?: boolean;
 }
 
-function storageKey(listingId: string) {
+export type DraftStorageScope = DraftScopeInput;
+
+function localStorageKey(scope: DraftScopeInput): string {
+  const scopeUserId = resolveDraftScopeUserId(scope);
+  return `${APPLY_DRAFT_PREFIX}${scopeUserId}:${scope.listingId}`;
+}
+
+function legacyLocalStorageKey(listingId: string): string {
   return `${APPLY_DRAFT_PREFIX}${listingId}`;
 }
 
@@ -63,7 +78,21 @@ function isValidDraft(parsed: unknown, listingId: string): parsed is ApplyDraft 
   return true;
 }
 
-/** How much filled content a draft has — used to avoid empty overwrites. */
+function normalizeScope(
+  listingIdOrScope: string | DraftScopeInput,
+  maybeScope?: Omit<DraftScopeInput, 'listingId'>
+): DraftScopeInput {
+  if (typeof listingIdOrScope === 'string') {
+    return {
+      listingId: listingIdOrScope,
+      sessionUserId: maybeScope?.sessionUserId ?? null,
+      onBehalfOfUserId: maybeScope?.onBehalfOfUserId ?? null,
+    };
+  }
+  return listingIdOrScope;
+}
+
+/** How much filled content a draft has — used during migrate / merge only. */
 export function draftSubstanceScore(
   draft: Pick<ApplyDraft, 'travellers' | 'primaryName' | 'step'>
 ): number {
@@ -90,47 +119,97 @@ export function serializeTravellersForDraft(
     editing: false,
     passportFrontUrl: undefined,
     passportBackUrl: undefined,
+    draftFileRefs: traveller.draftFileRefs?.map((ref) => ({
+      slotKey: ref.slotKey,
+      storageKey: ref.storageKey,
+      url: ref.url,
+      mimeType: ref.mimeType,
+      filename: ref.filename,
+      size: ref.size,
+    })),
     documents: traveller.documents?.map((doc) => ({
       key: doc.key,
       name: doc.name,
       mimeType: doc.mimeType,
       size: doc.size,
       storedInIdb: doc.storedInIdb ?? Boolean(doc.name),
+      storageKey: doc.storageKey,
+      storageUrl: doc.storageUrl,
     })),
   }));
 }
 
-function readLocalStorageDraft(listingId: string): ApplyDraft | null {
-  if (!canUseStorage() || !listingId) return null;
+function migrateLegacyLocalStorage(scope: DraftScopeInput): void {
+  if (!canUseStorage() || !scope.listingId) return;
+  const scopeUserId = resolveDraftScopeUserId(scope);
+  // Staff on-behalf never reads anonymous listing-only keys
+  if (scopeUserId === 'anon' || scope.onBehalfOfUserId) return;
+
+  const scoped = localStorageKey(scope);
+  if (localStorage.getItem(scoped)) return;
+
+  const legacy = legacyLocalStorageKey(scope.listingId);
+  const raw = localStorage.getItem(legacy);
+  if (!raw) return;
   try {
-    const raw = localStorage.getItem(storageKey(listingId));
+    localStorage.setItem(scoped, raw);
+    localStorage.removeItem(legacy);
+  } catch {
+    // ignore
+  }
+}
+
+function readLocalStorageDraft(scope: DraftScopeInput): ApplyDraft | null {
+  if (!canUseStorage() || !scope.listingId) return null;
+  migrateLegacyLocalStorage(scope);
+  try {
+    let raw = localStorage.getItem(localStorageKey(scope));
+    // Pre-login / anon: still detect legacy listing-only keys for Continue UX
+    if (!raw && resolveDraftScopeUserId(scope) === 'anon' && !scope.onBehalfOfUserId) {
+      raw = localStorage.getItem(legacyLocalStorageKey(scope.listingId));
+    }
     if (!raw) return null;
     const parsed = JSON.parse(raw) as ApplyDraft;
-    return isValidDraft(parsed, listingId) ? parsed : null;
+    return isValidDraft(parsed, scope.listingId) ? parsed : null;
   } catch {
     return null;
   }
 }
 
-/** Sync read (localStorage only) — prefer {@link readApplyDraftAsync} on hydrate. */
-export function readApplyDraft(listingId: string): ApplyDraft | null {
-  return readLocalStorageDraft(listingId);
+/**
+ * @deprecated Prefer {@link readApplyDraftAsync}. Sync localStorage-only read.
+ */
+export function readApplyDraft(
+  listingIdOrScope: string | DraftScopeInput,
+  maybeScope?: Omit<DraftScopeInput, 'listingId'>
+): ApplyDraft | null {
+  return readLocalStorageDraft(normalizeScope(listingIdOrScope, maybeScope));
 }
 
 /**
- * Prefer IndexedDB draft meta, fall back to localStorage.
- * Picks the richer draft if both exist (guards against empty overwrite races).
+ * Prefer IndexedDB draft meta, fall back to localStorage cache.
  */
 export async function readApplyDraftAsync(
-  listingId: string
+  listingIdOrScope: string | DraftScopeInput,
+  maybeScope?: Omit<DraftScopeInput, 'listingId'>
 ): Promise<ApplyDraft | null> {
-  const local = readLocalStorageDraft(listingId);
+  const scope = normalizeScope(listingIdOrScope, maybeScope);
+  migrateLegacyLocalStorage(scope);
+  if (isIdbAvailable()) {
+    try {
+      await migrateLegacyIdbKeys(scope);
+    } catch {
+      // ignore
+    }
+  }
+
+  const local = readLocalStorageDraft(scope);
   let idbDraft: ApplyDraft | null = null;
 
   if (isIdbAvailable()) {
     try {
-      const meta = await getDraftMeta(listingId);
-      if (meta && isValidDraft(meta, listingId)) {
+      const meta = await getDraftMeta(scope);
+      if (meta && isValidDraft(meta, scope.listingId)) {
         idbDraft = meta as unknown as ApplyDraft;
       }
     } catch (error) {
@@ -146,17 +225,32 @@ export async function readApplyDraftAsync(
   return idbDraft ?? local;
 }
 
-export function hasApplyDraft(listingId: string): boolean {
-  return Boolean(readApplyDraft(listingId));
+export function hasApplyDraft(
+  listingIdOrScope: string | DraftScopeInput,
+  maybeScope?: Omit<DraftScopeInput, 'listingId'>
+): boolean {
+  return Boolean(readApplyDraft(listingIdOrScope, maybeScope));
 }
 
-export function writeApplyDraft(draft: ApplyDraft): void {
-  void writeApplyDraftAsync(draft);
+export function writeApplyDraft(
+  draft: ApplyDraft,
+  scopeExtras?: Omit<DraftScopeInput, 'listingId'>
+): void {
+  void writeApplyDraftAsync(draft, scopeExtras);
 }
 
-/** Awaitable draft write (localStorage + IndexedDB meta). */
-export async function writeApplyDraftAsync(draft: ApplyDraft): Promise<void> {
+/** Awaitable draft write (IndexedDB source of truth + localStorage cache). */
+export async function writeApplyDraftAsync(
+  draft: ApplyDraft,
+  scopeExtras?: Omit<DraftScopeInput, 'listingId'>
+): Promise<void> {
   if (!draft.listingId) return;
+
+  const scope: DraftScopeInput = {
+    listingId: draft.listingId,
+    sessionUserId: scopeExtras?.sessionUserId ?? null,
+    onBehalfOfUserId: scopeExtras?.onBehalfOfUserId ?? null,
+  };
 
   const payload: ApplyDraft = {
     ...draft,
@@ -166,20 +260,9 @@ export async function writeApplyDraftAsync(draft: ApplyDraft): Promise<void> {
     travellersCount: Math.max(1, draft.travellers.length),
   };
 
-  // Never clobber a richer saved draft with an empty shell (reload race).
-  const existingLocal = readLocalStorageDraft(draft.listingId);
-  if (
-    existingLocal &&
-    draftSubstanceScore(payload) < draftSubstanceScore(existingLocal) &&
-    draftSubstanceScore(payload) <= 2
-  ) {
-    console.warn('Skipped empty draft overwrite');
-    return;
-  }
-
   if (canUseStorage()) {
     try {
-      localStorage.setItem(storageKey(draft.listingId), JSON.stringify(payload));
+      localStorage.setItem(localStorageKey(scope), JSON.stringify(payload));
     } catch (error) {
       console.warn('Could not save application draft to localStorage', error);
     }
@@ -188,7 +271,7 @@ export async function writeApplyDraftAsync(draft: ApplyDraft): Promise<void> {
   if (isIdbAvailable()) {
     try {
       await putDraftMeta(
-        draft.listingId,
+        scope,
         payload as unknown as Record<string, unknown>
       );
     } catch (error) {
@@ -197,19 +280,39 @@ export async function writeApplyDraftAsync(draft: ApplyDraft): Promise<void> {
   }
 }
 
-export function clearApplyDraft(listingId: string): void {
-  if (!listingId) return;
+export function clearApplyDraft(
+  listingIdOrScope: string | DraftScopeInput,
+  maybeScope?: Omit<DraftScopeInput, 'listingId'>
+): void {
+  void clearApplyDraftAsync(listingIdOrScope, maybeScope);
+}
+
+/** Clear scoped localStorage, IDB meta, and IDB files. */
+export async function clearApplyDraftAsync(
+  listingIdOrScope: string | DraftScopeInput,
+  maybeScope?: Omit<DraftScopeInput, 'listingId'>
+): Promise<void> {
+  const scope = normalizeScope(listingIdOrScope, maybeScope);
+  if (!scope.listingId) return;
+
   if (canUseStorage()) {
     try {
-      localStorage.removeItem(storageKey(listingId));
+      localStorage.removeItem(localStorageKey(scope));
+      // Also clear legacy listing-only key when this is the applicant session
+      if (!scope.onBehalfOfUserId) {
+        localStorage.removeItem(legacyLocalStorageKey(scope.listingId));
+      }
     } catch {
       // ignore
     }
   }
   if (isIdbAvailable()) {
-    void deleteDraftMeta(listingId).catch(() => {
+    try {
+      await deleteDraftMeta(scope);
+      await clearListingFiles(scope);
+    } catch {
       // ignore
-    });
+    }
   }
 }
 
@@ -249,7 +352,7 @@ export async function persistPreviewUrl(
 }
 
 async function migrateUrlToIdb(input: {
-  listingId: string;
+  scope: DraftScopeInput;
   passengerId: string;
   slotKey: string;
   url?: string;
@@ -259,7 +362,7 @@ async function migrateUrlToIdb(input: {
   if (!input.url || !isBinaryUrl(input.url)) return false;
   const blob = await urlToBlob(input.url);
   if (!blob) return false;
-  await putFile(input.listingId, input.passengerId, input.slotKey, {
+  await putFile(input.scope, input.passengerId, input.slotKey, {
     blob,
     mimeType: input.mimeType || blob.type || 'application/octet-stream',
     filename: input.filename,
@@ -272,8 +375,15 @@ async function migrateUrlToIdb(input: {
  * storage without binaries. Returns travellers ready for UI hydration.
  */
 export async function migrateLegacyDraftBinaries(
-  draft: ApplyDraft
+  draft: ApplyDraft,
+  scopeExtras?: Omit<DraftScopeInput, 'listingId'>
 ): Promise<ApplyTraveller[]> {
+  const scope: DraftScopeInput = {
+    listingId: draft.listingId,
+    sessionUserId: scopeExtras?.sessionUserId ?? null,
+    onBehalfOfUserId: scopeExtras?.onBehalfOfUserId ?? null,
+  };
+
   if (!isIdbAvailable()) {
     return draft.travellers.map((t) => ({ ...t, editing: false }));
   }
@@ -286,7 +396,7 @@ export async function migrateLegacyDraftBinaries(
 
     if (
       await migrateUrlToIdb({
-        listingId: draft.listingId,
+        scope,
         passengerId: traveller.id,
         slotKey: PASSPORT_FRONT_SLOT,
         url: traveller.passportFrontUrl,
@@ -299,7 +409,7 @@ export async function migrateLegacyDraftBinaries(
 
     if (
       await migrateUrlToIdb({
-        listingId: draft.listingId,
+        scope,
         passengerId: traveller.id,
         slotKey: PASSPORT_BACK_SLOT,
         url: traveller.passportBackUrl,
@@ -314,7 +424,7 @@ export async function migrateLegacyDraftBinaries(
       const hadBinary = isBinaryUrl(doc.previewUrl);
       if (hadBinary) {
         const ok = await migrateUrlToIdb({
-          listingId: draft.listingId,
+          scope,
           passengerId: traveller.id,
           slotKey: doc.key,
           url: doc.previewUrl,
@@ -342,10 +452,7 @@ export async function migrateLegacyDraftBinaries(
   }
 
   if (migrated) {
-    writeApplyDraft({
-      ...draft,
-      travellers,
-    });
+    await writeApplyDraftAsync({ ...draft, travellers }, scopeExtras);
   }
 
   return travellers;
@@ -353,20 +460,22 @@ export async function migrateLegacyDraftBinaries(
 
 /** Rehydrate ephemeral object URLs from IndexedDB for a listing draft. */
 export async function rehydrateTravellerPreviews(
-  listingId: string,
-  travellers: ApplyTraveller[]
+  listingIdOrScope: string | DraftScopeInput,
+  travellers: ApplyTraveller[],
+  maybeScope?: Omit<DraftScopeInput, 'listingId'>
 ): Promise<ApplyTraveller[]> {
+  const scope = normalizeScope(listingIdOrScope, maybeScope);
   if (!isIdbAvailable()) return travellers;
 
   const next: ApplyTraveller[] = [];
   for (const traveller of travellers) {
     const frontUrl = await createPreviewUrlFromIdb(
-      listingId,
+      scope,
       traveller.id,
       PASSPORT_FRONT_SLOT
     );
     const backUrl = await createPreviewUrlFromIdb(
-      listingId,
+      scope,
       traveller.id,
       PASSPORT_BACK_SLOT
     );
@@ -374,7 +483,7 @@ export async function rehydrateTravellerPreviews(
     const documents: TravellerDocumentUpload[] = [];
     for (const doc of traveller.documents ?? []) {
       const previewUrl = await createPreviewUrlFromIdb(
-        listingId,
+        scope,
         traveller.id,
         doc.key
       );

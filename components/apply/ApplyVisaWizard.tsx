@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { ArrowLeft } from 'lucide-react';
 import { ApplyStepper } from '@/components/apply/ApplyStepper';
@@ -9,6 +10,7 @@ import { BasicInformationStep } from '@/components/apply/BasicInformationStep';
 import { ReviewStep } from '@/components/apply/review/ReviewStep';
 import { PassportCaptureFlow } from '@/components/apply/passport/PassportCaptureFlow';
 import { CheckoutPayStep } from '@/components/apply/CheckoutPayStep';
+import { SaveDraftLoginModal } from '@/components/apply/SaveDraftLoginModal';
 import type { PassportApplicationPayload } from '@/components/apply/passport/PassportReviewStage';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 import {
@@ -22,14 +24,30 @@ import { isReviewComplete } from '@/lib/passport/schema';
 import type { ApplyStep, ApplyTraveller } from '@/lib/apply/types';
 import { isTravellerFilled, travellerDisplayName } from '@/lib/apply/reviewFields';
 import {
-  draftSubstanceScore,
+  clearApplyDraftAsync,
   migrateLegacyDraftBinaries,
   readApplyDraftAsync,
   rehydrateTravellerPreviews,
+  serializeTravellersForDraft,
   writeApplyDraft,
   writeApplyDraftAsync,
+  type ApplyDraft,
   type ApplyDraftDeparture,
 } from '@/lib/apply/draftStorage';
+import type { DraftScopeInput } from '@/lib/apply/draftScope';
+import {
+  deleteApplicationDraft,
+  getApplicationDraft,
+  getApplicationDraftForUser,
+  upsertApplicationDraft,
+  upsertApplicationDraftForUser,
+  type ServerDraftPayload,
+} from '@/lib/apply/serverDraft';
+import {
+  restoreDraftFilesToIdb,
+  syncDraftFilesToServer,
+} from '@/lib/apply/syncDraftFiles';
+import { ResumeOrNewModal } from '@/components/apply/ResumeOrNewModal';
 import {
   PASSPORT_BACK_SLOT,
   PASSPORT_FRONT_SLOT,
@@ -68,9 +86,19 @@ interface ApplyVisaWizardProps {
   resume?: boolean;
   isAuthenticated?: boolean;
   previousProfiles?: TravellerProfile[];
+  /** Staff saving a draft for this applicant user id. */
+  onBehalfOfUserId?: string | null;
+  onBehalfOfLabel?: string | null;
 }
 
 const MAX_TRAVELLERS = 100;
+
+type WizardLifecycle =
+  | 'initializing'
+  | 'ready'
+  | 'syncing'
+  | 'submitting'
+  | 'submitted';
 
 function createTraveller(index: number, name = ''): ApplyTraveller {
   return {
@@ -130,12 +158,14 @@ export function ApplyVisaWizard({
   departureLabel,
   departureMeta,
   formConfig = defaultApplyFormConfig(countryName, processName),
-  resume: _resume = false,
+  resume = false,
   isAuthenticated = false,
   previousProfiles = [],
+  onBehalfOfUserId = null,
+  onBehalfOfLabel = null,
 }: ApplyVisaWizardProps) {
-  void _resume;
   const router = useRouter();
+  const { data: session, status: sessionStatus } = useSession();
   const visaLabel = visaFullName?.trim() || processName;
   const [step, setStep] = useState<ApplyStep>('travellers');
   const [primaryName, setPrimaryName] = useState('');
@@ -156,11 +186,29 @@ export function ApplyVisaWizard({
     ...departureMeta,
     label: departureLabel,
   });
-  const [hydrating, setHydrating] = useState(true);
-  const skipFirstPersist = useRef(true);
-  const hydratedResume = useRef(false);
-  /** Only true after hydrate finishes — blocks empty overwrite races. */
-  const persistEnabled = useRef(false);
+  const [interestedInInsurance, setInterestedInInsurance] = useState(false);
+  const [lifecycle, setLifecycle] = useState<WizardLifecycle>('initializing');
+  const [resumeChoiceDraft, setResumeChoiceDraft] = useState<ApplyDraft | null>(
+    null
+  );
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [saveDraftMessage, setSaveDraftMessage] = useState<string | null>(null);
+  const [saveDraftError, setSaveDraftError] = useState<string | null>(null);
+  const [loginForDraftOpen, setLoginForDraftOpen] = useState(false);
+  const saveAfterLoginRef = useRef(false);
+
+  const sessionRole = session?.user?.role;
+  const isStaffSession =
+    sessionRole === 'admin' || sessionRole === 'reviewer';
+  const isApplicantSession = Boolean(
+    session?.user?.id && sessionStatus === 'authenticated' && !isStaffSession
+  );
+  const sessionUserId = session?.user?.id ?? null;
+  const draftScope = (): DraftScopeInput => ({
+    listingId,
+    sessionUserId,
+    onBehalfOfUserId: onBehalfOfUserId ?? null,
+  });
   const travellersRef = useRef(travellers);
   travellersRef.current = travellers;
   const stepRef = useRef(step);
@@ -169,6 +217,151 @@ export function ApplyVisaWizard({
   primaryNameRef.current = primaryName;
   const departureRef = useRef(departure);
   departureRef.current = departure;
+  const interestedInInsuranceRef = useRef(interestedInInsurance);
+  interestedInInsuranceRef.current = interestedInInsurance;
+
+  const buildServerPayload = (): ServerDraftPayload => {
+    const updatedAt = new Date().toISOString();
+    return {
+      version: 1,
+      updatedAt,
+      countryCode,
+      countryName,
+      listingId,
+      processName,
+      step: stepRef.current,
+      primaryName: primaryNameRef.current,
+      travellers: serializeTravellersForDraft(travellersRef.current),
+      departure: departureRef.current,
+      travellersCount: Math.max(1, travellersRef.current.length),
+      interestedInInsurance: interestedInInsuranceRef.current,
+    };
+  };
+
+  const persistLocalDraft = async () => {
+    const payload = buildServerPayload();
+    await writeApplyDraftAsync(
+      {
+        version: 1,
+        updatedAt: payload.updatedAt,
+        countryCode: payload.countryCode,
+        countryName: payload.countryName,
+        listingId: payload.listingId,
+        processName: payload.processName,
+        step: payload.step as ApplyStep,
+        primaryName: payload.primaryName,
+        travellers: payload.travellers as ApplyTraveller[],
+        departure: payload.departure as ApplyDraftDeparture,
+        travellersCount: payload.travellersCount,
+        interestedInInsurance: payload.interestedInInsurance,
+      },
+      {
+        sessionUserId,
+        onBehalfOfUserId,
+      }
+    );
+    return payload;
+  };
+
+  const pushDraftToServer = async (): Promise<boolean> => {
+    if (lifecycle === 'submitted' || lifecycle === 'submitting') {
+      setSaveDraftError(
+        'This application was already submitted. Start a new application to save a draft.'
+      );
+      return false;
+    }
+    setSavingDraft(true);
+    setLifecycle((current) => (current === 'ready' ? 'syncing' : current));
+    setSaveDraftError(null);
+    setSaveDraftMessage(null);
+    try {
+      if (sessionStatus === 'loading') {
+        setSaveDraftError('Checking sign-in…');
+        return false;
+      }
+
+      const savingOnBehalf = Boolean(onBehalfOfUserId && isStaffSession);
+
+      if (!savingOnBehalf && sessionStatus !== 'authenticated') {
+        await persistLocalDraft();
+        setLoginForDraftOpen(true);
+        return false;
+      }
+
+      setSaveDraftMessage('Uploading documents…');
+      const fileSync = await syncDraftFilesToServer({
+        listingId,
+        countryCode,
+        travellers: travellersRef.current,
+        ownerUserId: savingOnBehalf ? onBehalfOfUserId! : undefined,
+        sessionUserId,
+      });
+
+      if (!fileSync.success) {
+        setSaveDraftError(fileSync.error);
+        return false;
+      }
+
+      if (fileSync.travellers !== travellersRef.current) {
+        setTravellers(fileSync.travellers);
+        travellersRef.current = fileSync.travellers;
+      }
+
+      const payload = await persistLocalDraft();
+
+      if (savingOnBehalf) {
+        const result = await upsertApplicationDraftForUser({
+          listingId,
+          targetUserId: onBehalfOfUserId!,
+          countryCode,
+          payload,
+        });
+        if (!result.success) {
+          setSaveDraftError(result.error);
+          return false;
+        }
+        setSaveDraftMessage(
+          fileSync.uploadedCount > 0
+            ? `Draft saved for applicant (${fileSync.uploadedCount} file${fileSync.uploadedCount === 1 ? '' : 's'})`
+            : 'Draft saved for applicant'
+        );
+        return true;
+      }
+
+      const result = await upsertApplicationDraft({
+        listingId,
+        countryCode,
+        payload,
+      });
+      if (!result.success) {
+        setSaveDraftError(result.error);
+        return false;
+      }
+      const base = isStaffSession
+        ? 'Draft saved to your staff account'
+        : 'Draft saved to your account';
+      setSaveDraftMessage(
+        fileSync.uploadedCount > 0
+          ? `${base} (${fileSync.uploadedCount} file${fileSync.uploadedCount === 1 ? '' : 's'})`
+          : base
+      );
+      return true;
+    } catch (error) {
+      setSaveDraftError(
+        error instanceof Error ? error.message : 'Could not save draft'
+      );
+      return false;
+    } finally {
+      setSavingDraft(false);
+      setLifecycle((current) =>
+        current === 'submitted' || current === 'submitting' ? current : 'ready'
+      );
+    }
+  };
+
+  const handleSaveAsDraft = () => {
+    void pushDraftToServer();
+  };
 
   const backHref = `/visa/${countryCode.toLowerCase()}/${listingId}`;
   const namedTraveller = travellers.some((t) => t.name.trim());
@@ -187,62 +380,112 @@ export function ApplyVisaWizard({
     (item) => item.id === passportTravellerId
   );
 
-  // Restore draft for this listing (resume CTA, or page refresh mid-flow)
+  const applyDraftToUi = async (draft: ApplyDraft) => {
+    const scope = draftScope();
+    const migrated = await migrateLegacyDraftBinaries(draft, {
+      sessionUserId: scope.sessionUserId,
+      onBehalfOfUserId: scope.onBehalfOfUserId,
+    });
+    let hydrated = await rehydrateTravellerPreviews(scope, migrated);
+    if (sessionStatus === 'authenticated') {
+      hydrated = await restoreDraftFilesToIdb({
+        listingId,
+        travellers: hydrated,
+        ownerUserId:
+          onBehalfOfUserId && isStaffSession ? onBehalfOfUserId : undefined,
+        sessionUserId,
+      });
+    }
+    setStep(draft.step);
+    setPrimaryName(
+      formatProfileName(draft.primaryName || draft.travellers[0]?.name || '')
+    );
+    setTravellers(hydrated.map((t) => ({ ...t, editing: false })));
+    travellersRef.current = hydrated;
+    setDeparture(draft.departure ?? {});
+    setInterestedInInsurance(Boolean(draft.interestedInInsurance));
+  };
+
+  // Single hydrate pipeline: local scoped IDB → server draft → restore files → ready
   useEffect(() => {
+    if (sessionStatus === 'loading') return;
     let cancelled = false;
-    persistEnabled.current = false;
-    skipFirstPersist.current = true;
-    hydratedResume.current = false;
-    setHydrating(true);
+    setLifecycle('initializing');
+    setResumeChoiceDraft(null);
 
     async function hydrate() {
       try {
-        const draft = await readApplyDraftAsync(listingId);
+        const scope = draftScope();
+        let local = await readApplyDraftAsync(scope);
+
+        if (
+          sessionStatus === 'authenticated' &&
+          !(onBehalfOfUserId && !isStaffSession)
+        ) {
+          const remote =
+            onBehalfOfUserId && isStaffSession
+              ? await getApplicationDraftForUser(listingId, onBehalfOfUserId)
+              : await getApplicationDraft(listingId);
+
+          if (
+            !cancelled &&
+            remote.success &&
+            remote.draft &&
+            (!local ||
+              (Date.parse(remote.draft.updatedAt) || 0) >=
+                (Date.parse(local.updatedAt) || 0))
+          ) {
+            const payload = remote.draft.payload;
+            local = {
+              version: 1,
+              updatedAt: remote.draft.updatedAt,
+              countryCode: payload.countryCode,
+              countryName: payload.countryName,
+              listingId: payload.listingId,
+              processName: payload.processName,
+              step: (payload.step as ApplyStep) || 'travellers',
+              primaryName: payload.primaryName || '',
+              travellers: (payload.travellers || []) as ApplyTraveller[],
+              departure: (payload.departure as ApplyDraftDeparture) || {},
+              travellersCount: payload.travellersCount || 1,
+              interestedInInsurance: payload.interestedInInsurance,
+            };
+            await writeApplyDraftAsync(local, {
+              sessionUserId,
+              onBehalfOfUserId,
+            });
+          }
+        }
+
         if (cancelled) return;
 
-        if (draft) {
-          hydratedResume.current = true;
-          try {
-            const migrated = await migrateLegacyDraftBinaries(draft);
-            const hydrated = await rehydrateTravellerPreviews(
-              listingId,
-              migrated
-            );
-            if (cancelled) return;
-            setStep(draft.step);
-            setPrimaryName(
-              formatProfileName(
-                draft.primaryName || draft.travellers[0]?.name || ''
-              )
-            );
-            setTravellers(hydrated.map((t) => ({ ...t, editing: false })));
-            setDeparture(draft.departure ?? {});
-          } catch (error) {
-            console.warn('Draft hydrate failed', error);
-            if (cancelled) return;
-            setStep(draft.step);
-            setPrimaryName(
-              formatProfileName(
-                draft.primaryName || draft.travellers[0]?.name || ''
-              )
-            );
-            setTravellers(
-              draft.travellers.map((t) => ({ ...t, editing: false }))
-            );
-            setDeparture(draft.departure ?? {});
+        if (local && !resume && !onBehalfOfUserId) {
+          setResumeChoiceDraft(local);
+          setLifecycle('ready');
+          if (!isAuthenticated) {
+            setProfiles(listTravellerProfiles({ includeSamples: false }));
           }
-        } else {
-          hydratedResume.current = false;
+          return;
+        }
+
+        if (local && (resume || onBehalfOfUserId)) {
+          await applyDraftToUi(local);
+        } else if (!local) {
+          setDeparture({
+            ...departureMeta,
+            label: departureLabel,
+          });
         }
 
         if (cancelled) return;
         if (!isAuthenticated) {
           setProfiles(listTravellerProfiles({ includeSamples: false }));
         }
+      } catch (error) {
+        console.warn('Draft hydrate failed', error);
       } finally {
         if (!cancelled) {
-          persistEnabled.current = true;
-          setHydrating(false);
+          setLifecycle('ready');
         }
       }
     }
@@ -251,7 +494,17 @@ export function ApplyVisaWizard({
     return () => {
       cancelled = true;
     };
-  }, [listingId, isAuthenticated]);
+    // Intentionally keyed on identity + listing; resume handled inside
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    listingId,
+    sessionStatus,
+    sessionUserId,
+    onBehalfOfUserId,
+    isStaffSession,
+    resume,
+    isAuthenticated,
+  ]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -259,60 +512,50 @@ export function ApplyVisaWizard({
     }
   }, [isAuthenticated, previousProfiles]);
 
-  // Keep departure label in sync if page props change on a fresh start
+  // After OTP login from Save as draft modal, push to server
   useEffect(() => {
-    if (hydratedResume.current) return;
-    setDeparture((current) => ({
-      ...current,
-      ...departureMeta,
-      label: departureLabel ?? current.label,
-    }));
-  }, [departureLabel, departureMeta]);
+    if (!saveAfterLoginRef.current || !isApplicantSession) return;
+    saveAfterLoginRef.current = false;
+    void pushDraftToServer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: run once after login
+  }, [isApplicantSession]);
 
-  // Realtime persist — travellers add/edit/remove, step, passport, names
+  // Autosave only when lifecycle is ready (and not choosing Continue vs Start new)
   useEffect(() => {
-    if (hydrating || !persistEnabled.current) return;
+    if (lifecycle !== 'ready' || resumeChoiceDraft) return;
 
-    if (skipFirstPersist.current) {
-      skipFirstPersist.current = false;
-      if (!hydratedResume.current) {
-        const hasContent =
-          primaryName.trim().length > 0 ||
-          travellers.some(
-            (t) =>
-              t.name.trim() ||
-              t.photoUploaded ||
-              t.passportUploaded ||
-              Boolean(t.passportData)
-          ) ||
-          step !== 'travellers';
-        if (!hasContent) return;
-      } else {
-        // After resume hydrate: skip one write only if state is still an empty shell
-        const score = draftSubstanceScore({
-          primaryName,
-          step,
-          travellers,
-        });
-        if (score <= 2) return;
-      }
-    }
+    const hasContent =
+      primaryName.trim().length > 0 ||
+      travellers.some(
+        (t) =>
+          t.name.trim() ||
+          t.photoUploaded ||
+          t.passportUploaded ||
+          Boolean(t.passportData)
+      ) ||
+      step !== 'travellers';
+    if (!hasContent) return;
 
-    writeApplyDraft({
-      version: 1,
-      updatedAt: new Date().toISOString(),
-      countryCode,
-      countryName,
-      listingId,
-      processName,
-      step,
-      primaryName,
-      travellers,
-      departure,
-      travellersCount: travellers.length,
-    });
+    writeApplyDraft(
+      {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        countryCode,
+        countryName,
+        listingId,
+        processName,
+        step,
+        primaryName,
+        travellers,
+        departure,
+        travellersCount: travellers.length,
+        interestedInInsurance,
+      },
+      { sessionUserId, onBehalfOfUserId }
+    );
   }, [
-    hydrating,
+    lifecycle,
+    resumeChoiceDraft,
     countryCode,
     countryName,
     listingId,
@@ -321,6 +564,9 @@ export function ApplyVisaWizard({
     primaryName,
     travellers,
     departure,
+    interestedInInsurance,
+    sessionUserId,
+    onBehalfOfUserId,
   ]);
 
   const persistNamedProfile = (traveller: ApplyTraveller, visaType = processName) => {
@@ -384,6 +630,8 @@ export function ApplyVisaWizard({
           listingId,
           travellerId: nextTraveller.id,
           refs: payload.documents,
+          sessionUserId,
+          ownerUserId: onBehalfOfUserId,
         });
 
         const draftTraveller: ApplyTraveller = {
@@ -532,6 +780,8 @@ export function ApplyVisaWizard({
           listingId,
           travellerId: newbie.id,
           refs: payload.documents,
+          sessionUserId,
+          ownerUserId: onBehalfOfUserId,
         });
 
         const draftTraveller: ApplyTraveller = {
@@ -600,7 +850,7 @@ export function ApplyVisaWizard({
       return current.filter((item) => item.id !== id);
     });
     if (isIdbAvailable()) {
-      void deletePassengerFiles(listingId, id).catch((error) => {
+      void deletePassengerFiles(draftScope(), id).catch((error) => {
         console.warn('Could not clear traveller files', error);
       });
     }
@@ -636,7 +886,7 @@ export function ApplyVisaWizard({
 
       const frontBlob = await urlToBlob(payload.frontPreviewUrl);
       if (frontBlob) {
-        await putFile(listingId, id, PASSPORT_FRONT_SLOT, {
+        await putFile(draftScope(), id, PASSPORT_FRONT_SLOT, {
           blob: frontBlob,
           mimeType: frontBlob.type || 'image/jpeg',
           filename: 'passport-front.jpg',
@@ -649,7 +899,7 @@ export function ApplyVisaWizard({
       if (payload.backPreviewUrl) {
         const backBlob = await urlToBlob(payload.backPreviewUrl);
         if (backBlob) {
-          await putFile(listingId, id, PASSPORT_BACK_SLOT, {
+          await putFile(draftScope(), id, PASSPORT_BACK_SLOT, {
             blob: backBlob,
             mimeType: backBlob.type || 'image/jpeg',
             filename: 'passport-back.jpg',
@@ -666,7 +916,7 @@ export function ApplyVisaWizard({
         if (!item.previewUrl) continue;
         const blob = await urlToBlob(item.previewUrl);
         if (!blob) continue;
-        await putFile(listingId, id, item.key, {
+        await putFile(draftScope(), id, item.key, {
           blob,
           mimeType: item.mimeType || blob.type,
           filename: item.name || `${item.key}.bin`,
@@ -725,19 +975,23 @@ export function ApplyVisaWizard({
       stepRef.current = nextStep;
     }
 
-    await writeApplyDraftAsync({
-      version: 1,
-      updatedAt: new Date().toISOString(),
-      countryCode,
-      countryName,
-      listingId,
-      processName,
-      step: nextStep,
-      primaryName: primaryNameRef.current,
-      travellers: nextTravellers,
-      departure: departureRef.current,
-      travellersCount: nextTravellers.length,
-    });
+    await writeApplyDraftAsync(
+      {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        countryCode,
+        countryName,
+        listingId,
+        processName,
+        step: nextStep,
+        primaryName: primaryNameRef.current,
+        travellers: nextTravellers,
+        departure: departureRef.current,
+        travellersCount: nextTravellers.length,
+        interestedInInsurance: interestedInInsuranceRef.current,
+      },
+      { sessionUserId, onBehalfOfUserId }
+    );
 
     if (options.complete) {
       persistNamedProfile({
@@ -785,7 +1039,7 @@ export function ApplyVisaWizard({
     });
   };
 
-  if (hydrating) {
+  if (lifecycle === 'initializing') {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-[#f4f7fb]">
         <p className="text-sm text-slate-helper">Loading application…</p>
@@ -818,31 +1072,56 @@ export function ApplyVisaWizard({
             <ArrowLeft className="h-3.5 w-3.5" />
             Back
           </button>
-          <p className="min-w-0 flex-1 text-right text-sm font-medium leading-snug text-portrait-ink sm:text-base">
-            <span className="inline-flex max-w-full items-center justify-end gap-2">
-              <span className="relative flex h-5 w-5 shrink-0 overflow-hidden rounded-full bg-sky-wash sm:h-6 sm:w-6">
-                {flagUrl ? (
-                  <Image
-                    src={flagUrl}
-                    alt=""
-                    fill
-                    sizes="24px"
-                    className="object-cover"
-                  />
-                ) : (
-                  <span
-                    className="flex size-full items-center justify-center text-sm leading-none sm:text-base"
-                    aria-hidden
-                  >
-                    {getFlagEmoji(countryCode)}
-                  </span>
-                )}
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={handleSaveAsDraft}
+              disabled={
+                savingDraft ||
+                lifecycle === 'submitting' ||
+                lifecycle === 'submitted'
+              }
+              className="inline-flex shrink-0 items-center rounded-full border border-portrait-ink/20 bg-white px-3 py-1.5 font-switzer text-xs font-medium text-portrait-ink transition-colors hover:border-portrait-ink hover:bg-sky-wash/40 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+            >
+              {savingDraft ? 'Saving…' : 'Save as draft'}
+            </button>
+            <p className="min-w-0 text-right text-sm font-medium leading-snug text-portrait-ink sm:text-base">
+              <span className="inline-flex max-w-full items-center justify-end gap-2">
+                <span className="relative flex h-5 w-5 shrink-0 overflow-hidden rounded-full bg-sky-wash sm:h-6 sm:w-6">
+                  {flagUrl ? (
+                    <Image
+                      src={flagUrl}
+                      alt=""
+                      fill
+                      sizes="24px"
+                      className="object-cover"
+                    />
+                  ) : (
+                    <span
+                      className="flex size-full items-center justify-center text-sm leading-none sm:text-base"
+                      aria-hidden
+                    >
+                      {getFlagEmoji(countryCode)}
+                    </span>
+                  )}
+                </span>
+                <span className="min-w-0 truncate">{visaLabel}</span>
               </span>
-              <span className="min-w-0 truncate">{visaLabel}</span>
-            </span>
-            <span className="sr-only">{countryName}</span>
-          </p>
+              <span className="sr-only">{countryName}</span>
+            </p>
+          </div>
         </div>
+
+        {(saveDraftMessage || saveDraftError) && (
+          <p
+            className={`mx-auto mt-2 max-w-5xl text-center font-switzer text-xs ${
+              saveDraftError ? 'text-red-600' : 'text-nautical-teal'
+            }`}
+            role="status"
+          >
+            {saveDraftError || saveDraftMessage}
+          </p>
+        )}
 
         <div className="mt-3 sm:mt-4">
           <ApplyStepper
@@ -855,6 +1134,15 @@ export function ApplyVisaWizard({
       </header>
 
       <main className="relative z-10 mx-auto max-w-5xl px-4 pb-16 pt-8 sm:px-8">
+        {onBehalfOfUserId && onBehalfOfLabel && (
+          <div className="mb-4 rounded-[20px] border border-nautical-teal/30 bg-sky-wash/50 px-4 py-3 text-center">
+            <p className="font-switzer text-sm text-portrait-ink">
+              Saving draft for{' '}
+              <span className="font-medium">{onBehalfOfLabel}</span>
+            </p>
+          </div>
+        )}
+
         {(departure.label || departureLabel) && step !== 'travellers' && (
           <p className="mb-4 text-center text-xs text-slate-helper">
             Departure · {departure.label || departureLabel} · {visaLabel}
@@ -912,6 +1200,8 @@ export function ApplyVisaWizard({
               documentSlots={formConfig.documentSlots}
               showGeneralInfo={formConfig.showGeneralInfo}
               showTripDetails={formConfig.showTripDetails}
+              listingId={listingId}
+              draftOwnerUserId={onBehalfOfUserId}
               onAddTraveller={addTraveller}
               onSelectProfile={(profile) => {
                 void addTravellerFromProfile(profile);
@@ -934,39 +1224,67 @@ export function ApplyVisaWizard({
             countryCode={countryCode}
             listingId={listingId}
             filledCount={filledTravellers.length}
+            showInsuranceInterest={Boolean(formConfig.showInsuranceInterest)}
+            interestedInInsurance={interestedInInsurance}
+            onInterestedInInsuranceChange={setInterestedInInsurance}
+            draftScope={draftScope()}
             onBack={() => setStep('documents')}
-            onDraftRestored={() => {
-              // Re-run hydrate path by toggling hydrating
-              setHydrating(true);
-              void (async () => {
-                const draft = await readApplyDraftAsync(listingId);
-                if (draft) {
-                  const migrated = await migrateLegacyDraftBinaries(draft);
-                  const hydrated = await rehydrateTravellerPreviews(
-                    listingId,
-                    migrated
-                  );
-                  setStep(draft.step);
-                  setPrimaryName(
-                    formatProfileName(
-                      draft.primaryName || draft.travellers[0]?.name || ''
-                    )
-                  );
-                  setTravellers(hydrated.map((t) => ({ ...t, editing: false })));
-                  setDeparture(draft.departure ?? {});
-                }
-                setHydrating(false);
-              })();
+            onSubmitSuccess={() => {
+              setLifecycle('submitted');
+            }}
+            onSubmitFailed={() => {
+              setLifecycle('ready');
+            }}
+            onSubmitting={() => {
+              setLifecycle('submitting');
             }}
           />
         )}
       </main>
+
+      {resumeChoiceDraft && (
+        <ResumeOrNewModal
+          open
+          draft={resumeChoiceDraft}
+          onClose={() => {
+            setResumeChoiceDraft(null);
+          }}
+          onResume={() => {
+            const draft = resumeChoiceDraft;
+            setResumeChoiceDraft(null);
+            void applyDraftToUi(draft);
+          }}
+          onStartNew={() => {
+            void (async () => {
+              await clearApplyDraftAsync(draftScope());
+              if (sessionStatus === 'authenticated' && !onBehalfOfUserId) {
+                try {
+                  await deleteApplicationDraft(listingId);
+                } catch {
+                  // local clear already done
+                }
+              }
+              setResumeChoiceDraft(null);
+              setStep('travellers');
+              setPrimaryName('');
+              setTravellers(createInitialTravellers(initialTravellerCount));
+              setDeparture({
+                ...departureMeta,
+                label: departureLabel,
+              });
+              setInterestedInInsurance(false);
+            })();
+          }}
+        />
+      )}
 
       {passportTravellerId && (passportFile || passportResume) && (
         <PassportCaptureFlow
           travellerName={activePassportTraveller?.name}
           travellerId={passportTravellerId}
           listingId={listingId}
+          sessionUserId={sessionUserId}
+          ownerUserId={onBehalfOfUserId}
           initialFile={passportFile ?? undefined}
           formConfig={formConfig}
           arrivalPrefill={departure.departure}
@@ -1023,6 +1341,16 @@ export function ApplyVisaWizard({
           }}
         />
       )}
+
+      <SaveDraftLoginModal
+        open={loginForDraftOpen}
+        onClose={() => setLoginForDraftOpen(false)}
+        onVerified={() => {
+          saveAfterLoginRef.current = true;
+          setLoginForDraftOpen(false);
+          setSaveDraftMessage('Signed in — saving draft…');
+        }}
+      />
     </div>
   );
 }

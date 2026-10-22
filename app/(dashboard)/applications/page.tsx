@@ -5,14 +5,18 @@ import { visaApplications, passportServices } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { Button } from '@/components/ui';
 import { ApplicationStatusCell } from '@/components/shared/ApplicationStatusCell';
+import { FlagLogo } from '@/components/shared/FlagLogo';
+import { DraftApplicationsList } from '@/components/dashboard/DraftApplicationsList';
 import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
+import { listMyApplicationDrafts } from '@/lib/apply/serverDraft';
+import { flagUrlFor, getCountryFlagMap } from '@/lib/countries/flags';
 import Link from 'next/link';
 
 export default async function ApplicationsPage() {
   const session = await auth();
   if (!session) redirect('/signin');
 
-  const [visaApps, passportApps] = await Promise.all([
+  const [visaApps, passportApps, draftsResult] = await Promise.all([
     db
       .select()
       .from(visaApplications)
@@ -23,9 +27,18 @@ export default async function ApplicationsPage() {
       .from(passportServices)
       .where(eq(passportServices.userId, session.user.id))
       .orderBy(desc(passportServices.createdAt)),
+    listMyApplicationDrafts(),
   ]);
 
-  const summaries = await loadTravellerSummaries(visaApps.map((app) => app.id));
+  const drafts = draftsResult.success ? draftsResult.drafts : [];
+
+  const [summaries, flagUrls] = await Promise.all([
+    loadTravellerSummaries(visaApps.map((app) => app.id)),
+    getCountryFlagMap([
+      ...drafts.map((d) => d.countryCode || d.payload.countryCode),
+      ...visaApps.map((app) => app.countryCode),
+    ]),
+  ]);
 
   const rows = [
     ...visaApps.map((app) => {
@@ -33,6 +46,7 @@ export default async function ApplicationsPage() {
       return {
         id: app.id,
         title: `${app.country || app.countryCode || 'Visa'} · ${app.visaType}`,
+        countryCode: app.countryCode,
         status: app.status,
         travellerCount: summary?.travellerCount ?? 0,
         approvedTravellerCount: summary?.approvedCount ?? 0,
@@ -44,6 +58,7 @@ export default async function ApplicationsPage() {
     ...passportApps.map((app) => ({
       id: app.id,
       title: `Passport · ${app.serviceType}`,
+      countryCode: null as string | null,
       status: app.status,
       travellerCount: 0,
       approvedTravellerCount: 0,
@@ -71,11 +86,19 @@ export default async function ApplicationsPage() {
         </Link>
       </div>
 
+      <DraftApplicationsList drafts={drafts} flagUrls={flagUrls} />
+
       {rows.length === 0 ? (
         <div className="rounded-[24px] border border-ash bg-white px-6 py-14 text-center">
-          <p className="font-switzer text-portrait-ink">No applications yet</p>
+          <p className="font-switzer text-portrait-ink">
+            {drafts.length > 0
+              ? 'No submitted applications yet'
+              : 'No applications yet'}
+          </p>
           <p className="mt-2 font-switzer text-sm text-slate-helper">
-            Browse destinations to start your first visa.
+            {drafts.length > 0
+              ? 'Continue a draft above, or browse destinations for a new visa.'
+              : 'Browse destinations to start your first visa.'}
           </p>
         </div>
       ) : (
@@ -86,21 +109,32 @@ export default async function ApplicationsPage() {
                 href={row.href}
                 className="flex items-center justify-between gap-4 rounded-[20px] border border-ash bg-white px-5 py-4 transition-colors hover:border-nautical-teal/40 hover:bg-sky-wash/20"
               >
-                <div className="min-w-0">
-                  <p className="font-switzer text-xs uppercase tracking-wide text-slate-helper">
-                    {row.kind === 'visa' ? 'Visa' : 'Passport'}
-                  </p>
-                  <p className="mt-1 truncate font-switzer text-sm font-medium text-portrait-ink">
-                    {row.title}
-                  </p>
-                  <p className="mt-1 font-switzer text-xs text-slate-helper">
-                    {new Date(row.date).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                      timeZone: 'Asia/Kolkata',
-                    })}
-                  </p>
+                <div className="flex min-w-0 items-start gap-3">
+                  {row.kind === 'visa' ? (
+                    <FlagLogo
+                      countryCode={row.countryCode}
+                      flagUrl={flagUrlFor(flagUrls, row.countryCode)}
+                      alt={row.title}
+                      size="md"
+                      className="mt-0.5"
+                    />
+                  ) : null}
+                  <div className="min-w-0">
+                    <p className="font-switzer text-xs uppercase tracking-wide text-slate-helper">
+                      {row.kind === 'visa' ? 'Visa' : 'Passport'}
+                    </p>
+                    <p className="mt-1 truncate font-switzer text-sm font-medium text-portrait-ink">
+                      {row.title}
+                    </p>
+                    <p className="mt-1 font-switzer text-xs text-slate-helper">
+                      {new Date(row.date).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                        timeZone: 'Asia/Kolkata',
+                      })}
+                    </p>
+                  </div>
                 </div>
                 <ApplicationStatusCell
                   status={row.status}

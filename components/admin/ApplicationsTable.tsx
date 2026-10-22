@@ -2,7 +2,9 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Card } from '@/components/ui';
 import { ApplicationStatusCell } from '@/components/shared/ApplicationStatusCell';
+import { FlagLogo } from '@/components/shared/FlagLogo';
 import { AssignReviewerButton } from '@/components/admin/AssignReviewerDialog';
+import { flagUrlFor } from '@/lib/countries/flags';
 import type { ApplicationListItem } from '@/types/admin';
 
 /**
@@ -19,11 +21,14 @@ export interface ApplicationsTableProps {
   applications: ApplicationListItem[];
   /** Admins can assign a reviewer from visa rows. */
   canAssign?: boolean;
+  /** ISO2 → flag image URL */
+  flagUrls?: Record<string, string | null>;
 }
 
 export function ApplicationsTable({
   applications,
   canAssign = false,
+  flagUrls,
 }: ApplicationsTableProps) {
   if (applications.length === 0) {
     return (
@@ -114,13 +119,23 @@ export function ApplicationsTable({
                 {/* Details (country/visa type or passport service type) */}
                 <td className="px-6 py-4">
                   {app.type === 'visa' ? (
-                    <div>
-                      <p className="font-switzer text-sm text-portrait-ink">
-                        {app.country}
-                      </p>
-                      <p className="font-switzer text-xs text-slate-helper">
-                        {app.visaType}
-                      </p>
+                    <div className="flex items-start gap-2.5">
+                      <FlagLogo
+                        countryCode={app.countryCode}
+                        flagUrl={flagUrlFor(flagUrls, app.countryCode)}
+                        alt={app.country || app.countryCode || 'Country'}
+                        size="sm"
+                        shape="rect"
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <p className="font-switzer text-sm text-portrait-ink">
+                          {app.country}
+                        </p>
+                        <p className="font-switzer text-xs text-slate-helper">
+                          {app.visaType}
+                        </p>
+                      </div>
                     </div>
                   ) : (
                     <p className="font-switzer text-sm text-portrait-ink">

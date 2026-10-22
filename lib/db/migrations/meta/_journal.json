@@ -113,6 +113,34 @@
       "when": 1792000000000,
       "tag": "0015_document_types",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792586756919,
+      "tag": "0016_long_tinkerer",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792588781439,
+      "tag": "0017_elite_puck",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792800000000,
+      "tag": "0018_application_drafts_saved_by",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792900000000,
+      "tag": "0019_application_drafts_listing_fk",
+      "breakpoints": true
     }
   ]
 }

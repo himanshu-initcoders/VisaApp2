@@ -24,6 +24,7 @@ interface ListingOverviewSectionProps {
   processingEta: string | null;
   fallbackStay: string | null;
   isFree: boolean;
+  withFreeInsurance?: boolean;
   countryCode: string;
   listingId: string;
   priceOptions: PriceOptionView[];
@@ -56,6 +57,7 @@ export function ListingOverviewSection({
   processingEta,
   fallbackStay,
   isFree,
+  withFreeInsurance = false,
   countryCode,
   listingId,
   priceOptions,
@@ -107,6 +109,7 @@ export function ListingOverviewSection({
           countryCode={countryCode}
           listingId={listingId}
           isFree={isFree}
+          withFreeInsurance={withFreeInsurance}
           priceOptions={priceOptions}
           headline={headline}
           visaKinds={visaKinds}

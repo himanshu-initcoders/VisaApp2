@@ -36,6 +36,8 @@ interface TravellerDetailPaneProps {
   showTripDetails?: boolean;
   extraQuestions?: ApplyTripQuestion[];
   documentSlots?: ApplyDocumentSlot[];
+  listingId?: string;
+  draftOwnerUserId?: string | null;
   onUploadPassport: (file: File) => void;
   onFillApplication: () => void;
   onEdit: () => void;
@@ -50,6 +52,8 @@ export function TravellerDetailPane({
   showTripDetails = true,
   extraQuestions = [],
   documentSlots = [],
+  listingId,
+  draftOwnerUserId = null,
   onUploadPassport,
   onFillApplication,
   onEdit,
@@ -157,6 +161,10 @@ export function TravellerDetailPane({
               <DocumentsReviewSection
                 slots={documentSlots}
                 uploads={uploads}
+                listingId={listingId}
+                travellerId={traveller.id}
+                draftFileRefs={traveller.draftFileRefs}
+                ownerUserId={draftOwnerUserId ?? undefined}
                 passportPreviewUrl={
                   showGeneralInfo ? traveller.passportFrontUrl : undefined
                 }

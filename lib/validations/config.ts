@@ -78,10 +78,19 @@ export const processBasicInfoSchema = z.object({
   unsupported: z.boolean(),
   visaOnArrival: z.boolean(),
   visaFree: z.boolean(),
+  withFreeInsurance: z.boolean(),
   showGeneralInfo: z.boolean(),
   showTripDetails: z.boolean(),
+  showInsuranceInterest: z.boolean(),
   sourceUrl: z.union([z.string().url('Must be a valid URL'), z.literal('')]).nullable().optional()
 }).superRefine((data, ctx) => {
+  if (data.withFreeInsurance && data.showInsuranceInterest) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Insurance interest cannot be offered when free insurance is included',
+      path: ['showInsuranceInterest'],
+    });
+  }
   const hasAmount = data.standardEtaDuration !== null && data.standardEtaDuration !== undefined;
   const hasUnit = data.standardEtaUnit !== null && data.standardEtaUnit !== undefined;
 

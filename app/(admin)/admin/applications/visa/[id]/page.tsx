@@ -124,6 +124,7 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
     createdAt: Date;
     applicantName?: string | null;
     applicantPhone?: string | null;
+    interestedInInsurance?: boolean | null;
     travellers?: StoredTraveller[] | null;
     formSnapshot?: ApplyFormConfig | null;
     personalInfo?: Record<string, unknown> | null;
@@ -266,6 +267,10 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
                               )
                             : 'Not submitted'
                         }
+                      />
+                      <Field
+                        label="Interested in insurance"
+                        value={app.interestedInInsurance ? 'Yes' : 'No'}
                       />
                     </dl>
                   </CardContent>

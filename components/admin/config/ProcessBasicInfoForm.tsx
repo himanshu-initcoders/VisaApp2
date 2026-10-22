@@ -35,8 +35,10 @@ interface ProcessBasicInfoFormProps {
     unsupported: boolean | null;
     visaOnArrival: boolean | null;
     visaFree: boolean | null;
+    withFreeInsurance?: boolean | null;
     showGeneralInfo?: boolean | null;
     showTripDetails?: boolean | null;
+    showInsuranceInterest?: boolean | null;
     sourceUrl: string | null;
   };
 }
@@ -90,8 +92,10 @@ export function ProcessBasicInfoForm({ processId, initialData }: ProcessBasicInf
       unsupported: initialData.unsupported ?? false,
       visaOnArrival: initialData.visaOnArrival ?? false,
       visaFree: initialData.visaFree ?? false,
+      withFreeInsurance: initialData.withFreeInsurance ?? false,
       showGeneralInfo: initialData.showGeneralInfo ?? true,
       showTripDetails: initialData.showTripDetails ?? true,
+      showInsuranceInterest: initialData.showInsuranceInterest ?? false,
       sourceUrl: initialData.sourceUrl || '',
     },
   });
@@ -182,6 +186,18 @@ export function ProcessBasicInfoForm({ processId, initialData }: ProcessBasicInf
               {...form.register('sourceUrl')}
             />
           </div>
+
+          <Checkbox
+            label="With Free Insurance"
+            description="Turn on when this visa package also includes travel insurance cover for the traveler."
+            checked={form.watch('withFreeInsurance')}
+            onChange={(checked) => {
+              form.setValue('withFreeInsurance', checked, { shouldDirty: true });
+              if (checked) {
+                form.setValue('showInsuranceInterest', false, { shouldDirty: true });
+              }
+            }}
+          />
         </section>
 
         <section className="border-t border-ash-divider pt-8 space-y-6">
@@ -238,6 +254,15 @@ export function ProcessBasicInfoForm({ processId, initialData }: ProcessBasicInf
               description="Purpose, dates, accommodation, and flight fields on the apply form."
               checked={form.watch('showTripDetails') ?? true}
               onChange={(checked) => form.setValue('showTripDetails', checked, { shouldDirty: true })}
+            />
+            <Checkbox
+              label="Are you looking for visa insurance also? (optional)"
+              description="Shows an optional insurance-interest question on the applicant checkout page. Disabled when With Free Insurance is already on."
+              checked={form.watch('showInsuranceInterest')}
+              disabled={form.watch('withFreeInsurance')}
+              onChange={(checked) =>
+                form.setValue('showInsuranceInterest', checked, { shouldDirty: true })
+              }
             />
           </div>
         </section>

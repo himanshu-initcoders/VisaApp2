@@ -30,7 +30,10 @@ const nextConfig: NextConfig = {
     '@mediapipe/tasks-vision',
   ],
   experimental: {
-    // Default Server Action body limit is 1MB; country banner uploads allow up to 5MB
+    // Apply checkout POSTs passport/docs as base64 in Server Actions and can exceed 10MB.
+    // proxy.ts clones the body; default proxy buffer is 10MB and truncates → JSON.parse 500.
+    proxyClientMaxBodySize: '20mb',
+    // Default Server Action body limit is 1MB; keep aligned with proxy buffer above.
     serverActions: {
       bodySizeLimit: '20mb',
     },

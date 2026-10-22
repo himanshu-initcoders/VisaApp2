@@ -57,6 +57,7 @@ export default async function Home() {
       standardEta: process.standardEta,
       standardEtaDuration: process.standardEtaDuration,
       standardEtaUnit: process.standardEtaUnit,
+      withFreeInsurance: process.withFreeInsurance,
     }));
 
     const cheapest = listings.reduce((lowest, listing) =>

@@ -340,9 +340,24 @@ Need help? Check:
 
 
 
-With free insurence
-Document Type Management
-Travel Insurence Checkbox
-remove Compliance guidance for Indian travelers
-gst in pricing
-draft application
+With free insurence:- Done 
+Document Type Management:- Done
+Travel Insurence Checkbox:- Done
+remove Compliance guidance for Indian travelers:- Done
+gst in pricing:- Done
+draft application:- Done
+Zoho cpass email:-
+
+## Save as draft (manual)
+
+1. **Logged out** — Start apply, fill a name, click **Save as draft** → OTP modal → after verify, draft appears in `application_drafts` and on `/dashboard` + `/applications` with **Continue**.
+2. **Logged in applicant** — Save as draft without checkout → toast/status “Draft saved to your account”; row updates `updated_at` / `saved_by_user_id`.
+2b. **Admin/reviewer (own draft)** — Open apply (no `onBehalfOf`) → Save as draft → row owned by that staff user in `application_drafts`; shows under Apply drafts as “(staff)”.
+2c. **Draft files (multipart)** — Save as draft uploads IDB blobs via `POST /api/apply/draft-files` (FormData, no Base64) to `applications/{CC}/{listingId}/{userId}/drafts/…`. Continue on another browser restores form **and** documents into IndexedDB via GET.
+2d. **After pay/submit** — Transaction inserts application + deletes `application_drafts` row; draft storage files are deleted/promoted; scoped localStorage + IDB cleared; draft disappears from dashboards. Checkout must not re-create the draft after submit.
+3. **Continue vs Start new** — Landing on apply without `resume=1` when a scoped draft exists shows **Continue where you left off?**; Continue loads draft, Start new clears scoped local + server files/row path as Discard. Dashboard Continue uses `?resume=1` and skips the modal.
+4. **Discard** — Applicant/admin Discard removes DB row **and** storage files listed in `draftFileRefs` **and** scoped local/IDB cache.
+5. **Admin list** — `/admin/applications/drafts` shows apply drafts (not submitted apps). Continue uses `onBehalfOf`.
+6. **Admin start** — `/admin/applications/drafts/new` pick user + listing → apply form banner “Saving draft for …” → Save as draft → visible under that user’s dashboard and admin drafts list.
+7. **Staff on-behalf isolation** — Staff filling `?onBehalfOf=` must not read/write anonymous or other users’ local draft keys; local keys are `{scopeUserId}:{listingId}`.
+8. **Promote on submit** — When travellers have `draftFileRefs[].storageKey`, submit promotes/copies those objects to application keys (no full Base64 re-upload for those slots).

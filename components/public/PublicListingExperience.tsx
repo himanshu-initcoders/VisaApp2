@@ -151,6 +151,7 @@ export function PublicListingExperience({
           processName={data.process.processName}
           overview={data.page.overview}
           processingEta={data.process.standardEta}
+          withFreeInsurance={data.page.withFreeInsurance}
         />
 
         <StickySectionNav
@@ -164,6 +165,7 @@ export function PublicListingExperience({
             processingEta={data.process.standardEta}
             fallbackStay={data.process.stayDuration}
             isFree={data.page.isFree}
+            withFreeInsurance={data.page.withFreeInsurance}
             countryCode={data.country.iso2Code}
             listingId={data.process.id}
             priceOptions={data.page.pricing.priceOptions}

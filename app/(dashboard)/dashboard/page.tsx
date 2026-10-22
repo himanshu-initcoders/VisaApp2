@@ -16,6 +16,10 @@ import { PaymentHistory } from '@/components/applications/PaymentHistory';
 import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
 import { listApplicantActionItems } from '@/lib/visa/corrections';
 import { ActionRequiredBanner } from '@/components/dashboard/ActionRequiredBanner';
+import { DraftApplicationsList } from '@/components/dashboard/DraftApplicationsList';
+import { FlagLogo } from '@/components/shared/FlagLogo';
+import { listMyApplicationDrafts } from '@/lib/apply/serverDraft';
+import { flagUrlFor, getCountryFlagMap } from '@/lib/countries/flags';
 import Link from 'next/link';
 
 /**
@@ -36,7 +40,7 @@ export default async function DashboardPage({
   const submittedId = params.submitted;
   const firstName = session.user.name?.split(' ')[0] || 'traveler';
 
-  const [visaApps, passportApps] = await Promise.all([
+  const [visaApps, passportApps, draftsResult] = await Promise.all([
     db
       .select()
       .from(visaApplications)
@@ -49,7 +53,10 @@ export default async function DashboardPage({
       .where(eq(passportServices.userId, session.user.id))
       .orderBy(desc(passportServices.createdAt))
       .limit(8),
+    listMyApplicationDrafts(),
   ]);
+
+  const drafts = draftsResult.success ? draftsResult.drafts : [];
 
   const totalApplications = visaApps.length + passportApps.length;
   const inProgress =
@@ -58,7 +65,8 @@ export default async function DashboardPage({
     ).length +
     passportApps.filter((a) =>
       ['submitted', 'under_review', 'draft', 'in_progress'].includes(a.status)
-    ).length;
+    ).length +
+    drafts.length;
   const approved =
     visaApps.filter((a) => a.status === 'approved').length +
     passportApps.filter((a) =>
@@ -98,6 +106,12 @@ export default async function DashboardPage({
     listApplicantActionItems(session.user.id),
   ]);
 
+  const draftSlice = drafts.slice(0, 4);
+  const flagUrls = await getCountryFlagMap([
+    ...draftSlice.map((d) => d.countryCode || d.payload.countryCode),
+    ...visaApps.map((app) => app.countryCode),
+  ]);
+
   const recent = [
     ...visaApps.map((app) => {
       const summary = summaries.get(app.id);
@@ -105,6 +119,7 @@ export default async function DashboardPage({
         id: app.id,
         kind: 'visa' as const,
         title: `${app.country || app.countryCode || 'Visa'} · ${app.visaType}`,
+        countryCode: app.countryCode,
         status: app.status,
         travellerCount: summary?.travellerCount ?? 0,
         approvedTravellerCount: summary?.approvedCount ?? 0,
@@ -116,6 +131,7 @@ export default async function DashboardPage({
       id: app.id,
       kind: 'passport' as const,
       title: `Passport · ${app.serviceType}`,
+      countryCode: null as string | null,
       status: app.status,
       travellerCount: 0,
       approvedTravellerCount: 0,
@@ -198,7 +214,7 @@ export default async function DashboardPage({
           </CardHeader>
           <CardContent>
             <p className="font-switzer text-xs text-slate-helper">
-              Awaiting review or action
+              Drafts, review, or action needed
             </p>
           </CardContent>
         </Card>
@@ -216,6 +232,13 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
       </section>
+
+      <DraftApplicationsList
+        drafts={draftSlice}
+        flagUrls={flagUrls}
+        title="Continue a draft"
+        description="Applications you saved — pick up where you left off."
+      />
 
       <section>
         <div className="mb-4 flex items-end justify-between gap-4">
@@ -263,18 +286,29 @@ export default async function DashboardPage({
                   href={item.href}
                   className="flex items-center justify-between gap-4 rounded-[20px] border border-ash bg-white px-5 py-4 transition-colors hover:bg-sky-wash/30"
                 >
-                  <div className="min-w-0">
-                    <p className="truncate font-switzer text-sm font-medium text-portrait-ink">
-                      {item.title}
-                    </p>
-                    <p className="mt-1 font-switzer text-xs text-slate-helper">
-                      {new Date(item.date).toLocaleDateString('en-IN', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                        timeZone: 'Asia/Kolkata',
-                      })}
-                    </p>
+                  <div className="flex min-w-0 items-start gap-3">
+                    {item.kind === 'visa' ? (
+                      <FlagLogo
+                        countryCode={item.countryCode}
+                        flagUrl={flagUrlFor(flagUrls, item.countryCode)}
+                        alt={item.title}
+                        size="md"
+                        className="mt-0.5"
+                      />
+                    ) : null}
+                    <div className="min-w-0">
+                      <p className="truncate font-switzer text-sm font-medium text-portrait-ink">
+                        {item.title}
+                      </p>
+                      <p className="mt-1 font-switzer text-xs text-slate-helper">
+                        {new Date(item.date).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          timeZone: 'Asia/Kolkata',
+                        })}
+                      </p>
+                    </div>
                   </div>
                   <ApplicationStatusCell
                     status={item.status}

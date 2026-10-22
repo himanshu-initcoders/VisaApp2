@@ -11,6 +11,7 @@ import {
   isAllowedPassportFile,
   isWithinUploadLimit,
 } from '@/lib/apply/applicationForm';
+import type { DraftScopeInput } from '@/lib/apply/draftScope';
 import {
   IdbUnavailableError,
   deleteFile,
@@ -30,6 +31,8 @@ interface DocumentsTabProps {
   comments?: Record<string, string>;
   /** Correction reuploads stay in memory until send. Apply flow uses IndexedDB. */
   storage?: 'idb' | 'memory';
+  sessionUserId?: string | null;
+  ownerUserId?: string | null;
 }
 
 function revokeIfObjectUrl(url?: string) {
@@ -197,10 +200,17 @@ export function DocumentsTab({
   editableKeys,
   comments,
   storage = 'idb',
+  sessionUserId = null,
+  ownerUserId = null,
 }: DocumentsTabProps) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
   const byKey = new Map(uploads.map((item) => [item.key, item]));
+  const scope: DraftScopeInput = {
+    listingId,
+    sessionUserId,
+    onBehalfOfUserId: ownerUserId,
+  };
 
   useEffect(() => {
     if (storage === 'memory') return;
@@ -238,7 +248,7 @@ export function DocumentsTab({
     const previous = byKey.get(slot.key);
 
     try {
-      await putFile(listingId, passengerId, slot.key, {
+      await putFile(scope, passengerId, slot.key, {
         blob: file,
         mimeType: file.type || 'application/octet-stream',
         filename: file.name,
@@ -267,7 +277,7 @@ export function DocumentsTab({
     setStorageError(null);
     try {
       if (isIdbAvailable()) {
-        await deleteFile(listingId, passengerId, slot.key);
+        await deleteFile(scope, passengerId, slot.key);
       }
       revokeIfObjectUrl(previous?.previewUrl);
       onChange(uploads.filter((item) => item.key !== slot.key));

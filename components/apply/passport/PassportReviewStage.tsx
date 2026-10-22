@@ -45,6 +45,8 @@ interface PassportReviewStageProps {
   travellerName?: string;
   travellerId: string;
   listingId: string;
+  sessionUserId?: string | null;
+  ownerUserId?: string | null;
   initial: IndianPassportFields & {
     frontPreviewUrl: string;
     backPreviewUrl?: string;
@@ -67,6 +69,8 @@ export function PassportReviewStage({
   travellerName,
   travellerId,
   listingId,
+  sessionUserId = null,
+  ownerUserId = null,
   initial,
   formConfig: formConfigProp,
   savedTrip,
@@ -335,6 +339,8 @@ export function PassportReviewStage({
           <DocumentsTab
             listingId={listingId}
             passengerId={travellerId}
+            sessionUserId={sessionUserId}
+            ownerUserId={ownerUserId}
             slots={formConfig.documentSlots}
             uploads={documents}
             passportPreviewUrl={

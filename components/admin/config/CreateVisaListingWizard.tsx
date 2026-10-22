@@ -141,8 +141,10 @@ export function CreateVisaListingWizard({
       unsupported: false,
       visaOnArrival: false,
       visaFree: false,
+      withFreeInsurance: false,
       showGeneralInfo: true,
       showTripDetails: true,
+      showInsuranceInterest: false,
       sourceUrl: '',
     },
   });
@@ -339,6 +341,20 @@ export function CreateVisaListingWizard({
                   {...form.register('sourceUrl')}
                 />
               </div>
+
+              <Checkbox
+                label="With Free Insurance"
+                description="Turn on when this visa package also includes travel insurance cover for the traveler."
+                checked={form.watch('withFreeInsurance')}
+                onChange={(checked) => {
+                  form.setValue('withFreeInsurance', checked, { shouldDirty: true });
+                  if (checked) {
+                    form.setValue('showInsuranceInterest', false, {
+                      shouldDirty: true,
+                    });
+                  }
+                }}
+              />
             </section>
 
             <section className="border-t border-ash-divider pt-8 space-y-6">
@@ -452,6 +468,17 @@ export function CreateVisaListingWizard({
                   checked={form.watch('showTripDetails') ?? true}
                   onChange={(checked) =>
                     form.setValue('showTripDetails', checked, { shouldDirty: true })
+                  }
+                />
+                <Checkbox
+                  label="Are you looking for visa insurance also? (optional)"
+                  description="Shows an optional insurance-interest question on checkout. Disabled when With Free Insurance is on."
+                  checked={form.watch('showInsuranceInterest')}
+                  disabled={form.watch('withFreeInsurance')}
+                  onChange={(checked) =>
+                    form.setValue('showInsuranceInterest', checked, {
+                      shouldDirty: true,
+                    })
                   }
                 />
               </div>

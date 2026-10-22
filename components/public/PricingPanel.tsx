@@ -37,6 +37,7 @@ export interface VisaKindOption {
 
 interface PricingPanelProps {
   isFree: boolean;
+  withFreeInsurance?: boolean;
   countryCode: string;
   listingId: string;
   compact?: boolean;
@@ -221,6 +222,7 @@ function TravellersCounter({
 
 export function PricingPanel({
   isFree,
+  withFreeInsurance = false,
   countryCode,
   listingId,
   compact: _compact = false,
@@ -337,7 +339,14 @@ export function PricingPanel({
       <>
         <div className="rounded-2xl border border-mint-wash bg-white p-5 shadow-elevated sm:rounded-[32px] sm:p-7">
           {typeAndTravellers('light')}
-          <Badge className="border-0 bg-mint-wash text-portrait-ink">100% free</Badge>
+          <div className="flex flex-wrap gap-2">
+            <Badge className="border-0 bg-mint-wash text-portrait-ink">100% free</Badge>
+            {withFreeInsurance && (
+              <Badge className="border-0 bg-mint-wash text-portrait-ink">
+                Free Insurance
+              </Badge>
+            )}
+          </div>
           <h3 className="mt-4 font-basier text-2xl text-portrait-ink sm:mt-5 sm:text-3xl">
             No payment needed.
           </h3>
@@ -402,9 +411,16 @@ export function PricingPanel({
               />
             </p>
           </div>
-          <Badge className="border-0 bg-white text-portrait-ink text-[10px] sm:text-xs">
-            Transparent fees
-          </Badge>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <Badge className="border-0 bg-white text-portrait-ink text-[10px] sm:text-xs">
+              Transparent fees
+            </Badge>
+            {withFreeInsurance && (
+              <Badge className="border-0 bg-mint-wash text-portrait-ink text-[10px] sm:text-xs">
+                Free Insurance
+              </Badge>
+            )}
+          </div>
         </div>
 
         <div className="mt-5 space-y-3 rounded-xl bg-white/8 p-4 sm:mt-6 sm:space-y-4 sm:rounded-[24px] sm:p-5">
@@ -424,14 +440,14 @@ export function PricingPanel({
               />
             </span>
           </div>
-          <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
+          {selected.governmentGstFeeAmount > 0 && <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
             <span>Government GST</span>
             <span>
               <AnimatedStatValue
                 value={formatPrice(scaleAmount(selected.governmentGstFeeAmount), INR)}
               />
             </span>
-          </div>
+          </div>}
         </div>
 
         <div className="mt-5 hidden sm:mt-6 sm:block">

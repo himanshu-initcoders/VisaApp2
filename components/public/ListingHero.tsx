@@ -73,6 +73,7 @@ function InfoPills({
   flagUrl,
   pillVisaLabel,
   processingEta,
+  withFreeInsurance = false,
   compact = false,
 }: {
   countryName: string;
@@ -80,6 +81,7 @@ function InfoPills({
   flagUrl?: string | null;
   pillVisaLabel: string;
   processingEta?: string | null;
+  withFreeInsurance?: boolean;
   compact?: boolean;
 }) {
   return (
@@ -87,7 +89,7 @@ function InfoPills({
       className={
         compact
           ? 'flex flex-wrap gap-2'
-          : 'flex flex-col gap-2 sm:flex-row sm:items-center'
+          : 'flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap'
       }
     >
       <div className="flex min-w-0 shrink-0 items-center gap-2.5 rounded-full bg-white px-3 py-2 text-portrait-ink shadow-[0_10px_30px_rgba(8,48,76,0.18)] sm:gap-3 sm:px-4 sm:py-3">
@@ -129,6 +131,22 @@ function InfoPills({
           </span>
         </span>
       </div>
+
+      {withFreeInsurance && (
+        <div className="flex shrink-0 items-center gap-2.5 rounded-full bg-mint-wash px-3 py-2 text-portrait-ink shadow-[0_10px_30px_rgba(8,48,76,0.18)] sm:gap-3 sm:px-4 sm:py-3">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white sm:h-10 sm:w-10">
+            <ShieldCheck className="h-3.5 w-3.5 text-nautical-teal sm:h-4 sm:w-4" aria-hidden />
+          </span>
+          <span>
+            <span className="block text-[11px] text-slate-helper sm:text-xs">
+              Included with visa
+            </span>
+            <span className="block text-[13px] font-semibold leading-tight sm:text-sm">
+              Free Insurance
+            </span>
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -144,6 +162,7 @@ export interface ListingHeroProps {
   processName: string;
   overview: string;
   processingEta?: string | null;
+  withFreeInsurance?: boolean;
 }
 
 export function ListingHero({
@@ -157,6 +176,7 @@ export function ListingHero({
   processName,
   overview,
   processingEta,
+  withFreeInsurance = false,
 }: ListingHeroProps) {
   const kind = visaKindLabel(purpose);
   const visaTitle = headlineVisaLabel(kind);
@@ -173,6 +193,7 @@ export function ListingHero({
       flagUrl={flagUrl}
       pillVisaLabel={pillVisaLabel}
       processingEta={processingEta}
+      withFreeInsurance={withFreeInsurance}
     />
   );
 
@@ -221,6 +242,7 @@ export function ListingHero({
               flagUrl={flagUrl}
               pillVisaLabel={pillVisaLabel}
               processingEta={processingEta}
+              withFreeInsurance={withFreeInsurance}
               compact
             />
           </div>

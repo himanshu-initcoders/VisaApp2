@@ -28,6 +28,8 @@ interface PassportCaptureFlowProps {
   travellerName?: string;
   travellerId: string;
   listingId: string;
+  sessionUserId?: string | null;
+  ownerUserId?: string | null;
   initialFile?: File;
   formConfig: ApplyFormConfig;
   arrivalPrefill?: string;
@@ -135,6 +137,8 @@ export function PassportCaptureFlow({
   travellerName,
   travellerId,
   listingId,
+  sessionUserId = null,
+  ownerUserId = null,
   initialFile,
   formConfig,
   arrivalPrefill,
@@ -323,6 +327,8 @@ export function PassportCaptureFlow({
           travellerName={travellerName}
           travellerId={travellerId}
           listingId={listingId}
+          sessionUserId={sessionUserId}
+          ownerUserId={ownerUserId}
           initial={extraction}
           formConfig={formConfig}
           savedTrip={resume?.tripDetails}

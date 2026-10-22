@@ -15,6 +15,7 @@ interface PublicProcessCardProps {
     formattedStartingPrice: string;
     standardEta?: string | null;
     startingPrice: number;
+    withFreeInsurance?: boolean;
     country: {
       name: string;
       iso2Code: string;
@@ -38,6 +39,7 @@ export function PublicProcessCard({
   className,
 }: PublicProcessCardProps) {
   const isFree = process.startingPrice === 0;
+  const withFreeInsurance = Boolean(process.withFreeInsurance);
   const cardImage = getCountryCardImage(process.country.images);
 
   return (
@@ -72,6 +74,11 @@ export function PublicProcessCard({
             {isFree && (
               <Badge className="border-0 bg-mint-wash text-portrait-ink">
                 Free
+              </Badge>
+            )}
+            {withFreeInsurance && (
+              <Badge className="border-0 bg-mint-wash text-portrait-ink">
+                Free Insurance
               </Badge>
             )}
           </div>
@@ -131,9 +138,18 @@ export function PublicProcessCard({
               {getFlagEmoji(process.country.iso2Code)}
             </div>
           )}
-          {isFree && (
-            <div className="absolute left-1 top-1 rounded-md bg-mint-wash px-1.5 py-0.5 text-[10px] font-medium text-portrait-ink">
-              Free
+          {(isFree || withFreeInsurance) && (
+            <div className="absolute left-1 top-1 flex flex-col gap-0.5">
+              {isFree && (
+                <div className="rounded-md bg-mint-wash px-1.5 py-0.5 text-[10px] font-medium text-portrait-ink">
+                  Free
+                </div>
+              )}
+              {withFreeInsurance && (
+                <div className="rounded-md bg-mint-wash px-1.5 py-0.5 text-[10px] font-medium text-portrait-ink">
+                  Free Insurance
+                </div>
+              )}
             </div>
           )}
         </div>

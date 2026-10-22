@@ -9,6 +9,7 @@ import {
   writeApplyDraftAsync,
   type ApplyDraft,
 } from '@/lib/apply/draftStorage';
+import type { DraftScopeInput } from '@/lib/apply/draftScope';
 import {
   getApplicationDraft,
   upsertApplicationDraft,
@@ -34,6 +35,7 @@ function toServerPayload(draft: ApplyDraft): ServerDraftPayload {
     travellers: draft.travellers,
     departure: draft.departure,
     travellersCount: draft.travellersCount,
+    interestedInInsurance: draft.interestedInInsurance,
   };
 }
 
@@ -50,20 +52,31 @@ function fromServerPayload(payload: ServerDraftPayload): ApplyDraft {
     travellers: payload.travellers as ApplyDraft['travellers'],
     departure: payload.departure as ApplyDraft['departure'],
     travellersCount: payload.travellersCount,
+    interestedInInsurance: payload.interestedInInsurance,
   };
 }
 
 /**
  * Sync local apply draft with server for the signed-in user.
- * Files stay in IndexedDB; only JSON meta is exchanged.
+ * Prefer the wizard hydrate pipeline; kept for optional post-login helpers.
  */
 export async function syncDraftAfterLogin(
-  listingId: string,
-  countryCode?: string
+  listingIdOrScope: string | DraftScopeInput,
+  countryCode?: string,
+  maybeScope?: Omit<DraftScopeInput, 'listingId'>
 ): Promise<DraftSyncResult> {
   try {
-    const local = await readApplyDraftAsync(listingId);
-    const remote = await getApplicationDraft(listingId);
+    const scope: DraftScopeInput =
+      typeof listingIdOrScope === 'string'
+        ? {
+            listingId: listingIdOrScope,
+            sessionUserId: maybeScope?.sessionUserId ?? null,
+            onBehalfOfUserId: maybeScope?.onBehalfOfUserId ?? null,
+          }
+        : listingIdOrScope;
+
+    const local = await readApplyDraftAsync(scope);
+    const remote = await getApplicationDraft(scope.listingId);
     if (!remote.success) {
       return { status: 'error', message: remote.error };
     }
@@ -78,7 +91,7 @@ export async function syncDraftAfterLogin(
 
     if (local && (!server || localTs >= serverTs)) {
       const result = await upsertApplicationDraft({
-        listingId,
+        listingId: scope.listingId,
         countryCode: countryCode ?? local.countryCode,
         payload: toServerPayload(local),
       });
@@ -89,7 +102,10 @@ export async function syncDraftAfterLogin(
     }
 
     if (server && (!local || serverTs > localTs)) {
-      await writeApplyDraftAsync(fromServerPayload(server.payload));
+      await writeApplyDraftAsync(fromServerPayload(server.payload), {
+        sessionUserId: scope.sessionUserId,
+        onBehalfOfUserId: scope.onBehalfOfUserId,
+      });
       return {
         status: 'pulled',
         message: 'Restored draft from your account',

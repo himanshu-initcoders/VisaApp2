@@ -82,11 +82,6 @@ export function Footer() {
                   Terms and Conditions
                 </Link>
               </li>
-              <li>
-                <span className="text-sm text-white/70">
-                  Compliance guidance for Indian travelers
-                </span>
-              </li>
             </ul>
           </div>
         </div>
