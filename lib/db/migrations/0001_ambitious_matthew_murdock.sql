@@ -1,0 +1,1 @@
+ALTER TABLE "additional_questions" ADD COLUMN "category" varchar(50) DEFAULT 'other' NOT NULL;

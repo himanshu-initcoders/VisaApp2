@@ -1,0 +1,2 @@
+ALTER TABLE "visa_applications" ADD COLUMN "interested_in_insurance" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "visa_listings" ADD COLUMN "show_insurance_interest" boolean DEFAULT false NOT NULL;

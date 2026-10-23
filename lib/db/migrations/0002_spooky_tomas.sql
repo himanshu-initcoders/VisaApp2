@@ -1,0 +1,1 @@
+ALTER TABLE "additional_questions" ADD COLUMN "visibility" jsonb DEFAULT 'null'::jsonb;

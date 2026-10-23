@@ -48,9 +48,8 @@ scripts/passport-samples/debug/
 *.tsbuildinfo
 next-env.d.ts
 
-# drizzle
-/lib/db/migrations/*.sql
-!/lib/db/migrations/0012_correction_loop.sql
+# drizzle — keep SQL migrations in git (required by `npm run db:migrate`)
+# Do not ignore lib/db/migrations/*.sql
 
 # obsidian
 .obsidian/workspace
