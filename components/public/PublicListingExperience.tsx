@@ -165,6 +165,8 @@ export function PublicListingExperience({
             processingEta={data.process.standardEta}
             fallbackStay={data.process.stayDuration}
             isFree={data.page.isFree}
+            visaFree={data.page.visaFree}
+            officialPortalUrl={data.page.officialPortalUrl}
             withFreeInsurance={data.page.withFreeInsurance}
             countryCode={data.country.iso2Code}
             listingId={data.process.id}

@@ -99,9 +99,12 @@ function mapProcess(process: {
     .map(mapPriceOption);
 
   const first = priceOptions[0];
+  const governmentFeeAmount = first?.governmentFeeAmount ?? 0;
   const startingPrice = first?.totalAmount ?? 0;
   const entryValidity = first?.entryValidity ?? null;
   const stayDuration = first?.stayDuration ?? null;
+  // Card / listing price: government fee ₹0 counts as free (service fee is separate).
+  const isFree = governmentFeeAmount === 0;
 
   return {
     ...process,
@@ -115,12 +118,15 @@ function mapProcess(process: {
     ),
     entryValidity,
     stayDuration,
-    governmentFeeAmount: first?.governmentFeeAmount ?? 0,
+    governmentFeeAmount,
     serviceFeeAmount: first?.serviceFeeAmount ?? 0,
     governmentGstFeeAmount: first?.governmentGstFeeAmount ?? 0,
     priceOptions,
     startingPrice,
-    formattedStartingPrice: first?.formattedLabel ?? 'FREE',
+    isFree,
+    formattedStartingPrice: isFree
+      ? 'FREE'
+      : (first?.formattedLabel ?? 'FREE'),
   };
 }
 
@@ -295,7 +301,7 @@ export async function getPublicProcessPageData(
       }))
     )
     .filter((visaListing) => visaListing.id !== process.id)
-    .slice(0, 8);
+    .slice(0, 4);
 
   const visaKindsRaw = siblingListings
     .filter((listing) => !listing.unsupported)
@@ -342,9 +348,10 @@ export async function getPublicProcessPageData(
       ? mappedProcess.priceOptions
       : getDemoPriceOptions(mappedProcess);
 
-  const isFree = mappedProcess.startingPrice === 0 && priceOptions.every(
-    (option) => option.totalAmount === 0
-  );
+  // Fully free product (no government or Viserv fees) — distinct from card "FREE".
+  const isFullyFree =
+    mappedProcess.startingPrice === 0 &&
+    priceOptions.every((option) => option.totalAmount === 0);
 
   return {
     id: process.id,
@@ -361,10 +368,12 @@ export async function getPublicProcessPageData(
         (process.processType === 'electronic_travel_authorisation'
           ? `Official ${process.country.name} digital arrival card`
           : `Official support for ${process.country.name} travellers`),
-      accentLabel: isFree
+      accentLabel: isFullyFree
         ? 'free and instant'
         : mappedProcess.standardEta || 'processed on time',
-      isFree,
+      isFree: isFullyFree,
+      visaFree: Boolean(process.visaFree),
+      officialPortalUrl: process.sourceUrl?.trim() || null,
       withFreeInsurance: mappedProcess.withFreeInsurance,
       weeklyApplications,
       highlights: getDemoHighlights(mappedProcess, process.country.name),
@@ -395,7 +404,7 @@ export async function getPublicProcessPageData(
       pricing: {
         priceOptions,
         usingDemoPrices: mappedProcess.priceOptions.length === 0,
-        headline: priceOptions[0]?.formattedLabel ?? 'FREE',
+        headline: mappedProcess.formattedStartingPrice,
         governmentFeeAmount: priceOptions[0]?.governmentFeeAmount ?? 0,
         serviceFeeAmount: priceOptions[0]?.serviceFeeAmount ?? 0,
         governmentGstFeeAmount: priceOptions[0]?.governmentGstFeeAmount ?? 0,

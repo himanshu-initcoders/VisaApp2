@@ -54,6 +54,7 @@ export default async function Home() {
       purpose: process.purpose,
       formattedStartingPrice: process.formattedStartingPrice,
       startingPrice: process.startingPrice,
+      isFree: process.isFree,
       standardEta: process.standardEta,
       standardEtaDuration: process.standardEtaDuration,
       standardEtaUnit: process.standardEtaUnit,
@@ -70,6 +71,7 @@ export default async function Home() {
       images: country.images,
       href: cheapest.href,
       startingPrice: cheapest.startingPrice,
+      isFree: cheapest.isFree,
       listings,
     };
   });

@@ -20,6 +20,8 @@ export interface SearchableProcess {
   processType: string;
   processTypeLabel?: string | null;
   startingPrice: number;
+  isFree?: boolean;
+  formattedStartingPrice?: string;
   standardEtaDuration?: number | null;
   standardEtaUnit?: string | null;
   country: {
@@ -30,6 +32,13 @@ export interface SearchableProcess {
       flag?: { url?: string };
     } | null;
   };
+}
+
+function processFeeLabel(process: SearchableProcess) {
+  if (process.isFree || process.startingPrice === 0) {
+    return process.formattedStartingPrice || 'FREE';
+  }
+  return formatPrice(process.startingPrice);
 }
 
 interface CountrySearchResult {
@@ -69,7 +78,7 @@ function groupCountries(processes: SearchableProcess[]): CountrySearchResult[] {
         href: process.href,
         processTypeLabel,
         startingPrice: process.startingPrice,
-        formattedFee: formatPrice(process.startingPrice),
+        formattedFee: processFeeLabel(process),
         guaranteedOn: formatGuaranteedOnDate(
           process.standardEtaDuration,
           process.standardEtaUnit
@@ -88,7 +97,7 @@ function groupCountries(processes: SearchableProcess[]): CountrySearchResult[] {
       existing.href = process.href;
       existing.processTypeLabel = processTypeLabel;
       existing.startingPrice = process.startingPrice;
-      existing.formattedFee = formatPrice(process.startingPrice);
+      existing.formattedFee = processFeeLabel(process);
       existing.guaranteedOn = formatGuaranteedOnDate(
         process.standardEtaDuration,
         process.standardEtaUnit

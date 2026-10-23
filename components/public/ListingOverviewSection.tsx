@@ -5,9 +5,12 @@ import { AnimatedStatValue } from '@/components/ui/AnimatedStatValue';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import {
   PricingPanel,
+  isFreeVisaWithServiceFee,
+  type ApplyPath,
   type PriceOptionView,
   type VisaKindOption,
 } from '@/components/public/PricingPanel';
+import { formatPrice } from '@/lib/public';
 
 function stayValue(option?: PriceOptionView, fallback?: string | null) {
   return (
@@ -24,6 +27,8 @@ interface ListingOverviewSectionProps {
   processingEta: string | null;
   fallbackStay: string | null;
   isFree: boolean;
+  visaFree?: boolean;
+  officialPortalUrl?: string | null;
   withFreeInsurance?: boolean;
   countryCode: string;
   listingId: string;
@@ -57,6 +62,8 @@ export function ListingOverviewSection({
   processingEta,
   fallbackStay,
   isFree,
+  visaFree = false,
+  officialPortalUrl = null,
   withFreeInsurance = false,
   countryCode,
   listingId,
@@ -66,14 +73,28 @@ export function ListingOverviewSection({
   onVisaKindSelect,
 }: ListingOverviewSectionProps) {
   const [selectedId, setSelectedId] = useState(priceOptions[0]?.id);
+  const [applyPath, setApplyPath] = useState<ApplyPath>('portal');
   const selected = useMemo(
     () => priceOptions.find((option) => option.id === selectedId) || priceOptions[0],
     [priceOptions, selectedId]
   );
+  const freeWithServiceFee = isFreeVisaWithServiceFee(selected);
 
-  const startingPrice = isFree
-    ? 'FREE'
-    : selected?.formattedTotal || 'On request';
+  // Portal path / fully free → FREE; Apply with Viserv → show Viserv charges.
+  const startingPrice = useMemo(() => {
+    if (freeWithServiceFee) {
+      if (applyPath === 'viserv' && selected) {
+        const total =
+          selected.governmentFeeAmount +
+          selected.serviceFeeAmount +
+          selected.governmentGstFeeAmount;
+        return formatPrice(total, 'INR');
+      }
+      return 'FREE';
+    }
+    if (isFree || (selected?.governmentFeeAmount ?? 0) === 0) return 'FREE';
+    return selected?.formattedTotal || 'On request';
+  }, [applyPath, freeWithServiceFee, isFree, selected]);
 
   return (
     <section
@@ -109,6 +130,8 @@ export function ListingOverviewSection({
           countryCode={countryCode}
           listingId={listingId}
           isFree={isFree}
+          visaFree={visaFree}
+          officialPortalUrl={officialPortalUrl}
           withFreeInsurance={withFreeInsurance}
           priceOptions={priceOptions}
           headline={headline}
@@ -116,6 +139,8 @@ export function ListingOverviewSection({
           currentListingId={listingId}
           selectedId={selected?.id}
           onSelectedIdChange={setSelectedId}
+          applyPath={applyPath}
+          onApplyPathChange={setApplyPath}
           onVisaKindSelect={onVisaKindSelect}
         />
       </div>

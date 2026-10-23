@@ -24,6 +24,7 @@ interface HomeProcess {
   standardEtaDuration?: number | null;
   standardEtaUnit?: string | null;
   startingPrice: number;
+  isFree?: boolean;
   withFreeInsurance?: boolean;
   country: {
     name: string;

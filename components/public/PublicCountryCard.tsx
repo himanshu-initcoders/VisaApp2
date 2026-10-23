@@ -12,6 +12,7 @@ export interface HomeCountryListing {
   href: string;
   processName: string;
   startingPrice: number;
+  isFree?: boolean;
   purpose?: string;
   withFreeInsurance?: boolean;
 }
@@ -21,6 +22,7 @@ export interface HomeCountryCardData {
   iso2Code: string;
   href: string;
   startingPrice: number;
+  isFree?: boolean;
   listings: HomeCountryListing[];
   images?: {
     banner?: { url?: string; alt?: string };
@@ -88,7 +90,10 @@ export function PublicCountryCard({ country, className }: PublicCountryCardProps
               {country.name}
             </h3>
             <p className="mt-2 text-sm font-medium text-white/90">
-              From {formatPrice(country.startingPrice)}
+              From{' '}
+              {country.isFree || country.startingPrice === 0
+                ? 'FREE'
+                : formatPrice(country.startingPrice)}
             </p>
           </div>
 

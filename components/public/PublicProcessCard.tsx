@@ -15,6 +15,8 @@ interface PublicProcessCardProps {
     formattedStartingPrice: string;
     standardEta?: string | null;
     startingPrice: number;
+    /** Government fee is ₹0 — show Free even if a service fee exists. */
+    isFree?: boolean;
     withFreeInsurance?: boolean;
     country: {
       name: string;
@@ -38,7 +40,7 @@ export function PublicProcessCard({
   process,
   className,
 }: PublicProcessCardProps) {
-  const isFree = process.startingPrice === 0;
+  const isFree = process.isFree ?? process.startingPrice === 0;
   const withFreeInsurance = Boolean(process.withFreeInsurance);
   const cardImage = getCountryCardImage(process.country.images);
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Minus, Plus, Users } from 'lucide-react';
+import { ArrowRight, ExternalLink, Minus, Plus, Users } from 'lucide-react';
 import { AnimatedStatValue, AnimatedTabs, Badge, Button } from '@/components/ui';
 import { beginVisaKindNavigation } from '@/components/public/PreserveListingView';
 import { useApplyStartFlow } from '@/components/apply/useApplyStartFlow';
@@ -12,6 +12,41 @@ import { readApplyDraft } from '@/lib/apply/draftStorage';
 const INR = 'INR';
 const MIN_TRAVELLERS = 1;
 const MAX_TRAVELLERS = 100;
+
+export type ApplyPath = 'portal' | 'viserv';
+
+const APPLY_PATH_TABS = [
+  { id: 'portal' as const, label: 'Visa portal' },
+  { id: 'viserv' as const, label: 'Apply with Viserv' },
+];
+
+function safeHttpUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** Government visa fee is ₹0; Viserv still charges a service fee. */
+export function isFreeVisaWithServiceFee(option: PriceOptionView | undefined) {
+  if (!option) return false;
+  return option.governmentFeeAmount === 0 && option.serviceFeeAmount > 0;
+}
+
+/** All fees are ₹0 — DIY portal only (no How to apply tabs). */
+export function isFullyFreeVisa(option: PriceOptionView | undefined) {
+  if (!option) return false;
+  return (
+    option.governmentFeeAmount === 0 &&
+    option.serviceFeeAmount === 0 &&
+    option.governmentGstFeeAmount === 0
+  );
+}
 
 export interface PriceOptionView {
   id: string;
@@ -37,6 +72,10 @@ export interface VisaKindOption {
 
 interface PricingPanelProps {
   isFree: boolean;
+  /** Listing marked visa-free (government entry product has no fee). */
+  visaFree?: boolean;
+  /** Official government / visa portal URL for DIY apply. */
+  officialPortalUrl?: string | null;
   withFreeInsurance?: boolean;
   countryCode: string;
   listingId: string;
@@ -48,6 +87,8 @@ interface PricingPanelProps {
   currentListingId?: string;
   selectedId?: string;
   onSelectedIdChange?: (id: string) => void;
+  applyPath?: ApplyPath;
+  onApplyPathChange?: (path: ApplyPath) => void;
   onVisaKindSelect?: (kind: VisaKindOption) => Promise<boolean> | boolean;
 }
 
@@ -222,6 +263,8 @@ function TravellersCounter({
 
 export function PricingPanel({
   isFree,
+  visaFree = false,
+  officialPortalUrl = null,
   withFreeInsurance = false,
   countryCode,
   listingId,
@@ -232,18 +275,33 @@ export function PricingPanel({
   currentListingId,
   selectedId: selectedIdProp,
   onSelectedIdChange,
+  applyPath: applyPathProp,
+  onApplyPathChange,
   onVisaKindSelect,
 }: PricingPanelProps) {
   const stayTabsId = useId();
+  const applyPathTabsId = useId();
   const [internalSelectedId, setInternalSelectedId] = useState(priceOptions[0]?.id);
   const [travellers, setTravellers] = useState(MIN_TRAVELLERS);
+  const [internalApplyPath, setInternalApplyPath] = useState<ApplyPath>('portal');
   const selectedId = selectedIdProp ?? internalSelectedId;
+  const applyPath = applyPathProp ?? internalApplyPath;
   const selected =
     priceOptions.find((option) => option.id === selectedId) || priceOptions[0];
+  const portalUrl = safeHttpUrl(officialPortalUrl);
+  const freeWithServiceFee = isFreeVisaWithServiceFee(selected);
+  const portalOnlyFree = isFullyFreeVisa(selected) || (isFree && !freeWithServiceFee);
+  const darkCta =
+    'w-full border-white bg-white text-portrait-ink hover:bg-white/90 hover:text-portrait-ink group flex items-center justify-center';
 
   const setSelectedId = (id: string) => {
     if (selectedIdProp === undefined) setInternalSelectedId(id);
     onSelectedIdChange?.(id);
+  };
+
+  const setApplyPath = (path: ApplyPath) => {
+    if (applyPathProp === undefined) setInternalApplyPath(path);
+    onApplyPathChange?.(path);
   };
 
   const { requestStart, modals } = useApplyStartFlow({
@@ -294,6 +352,71 @@ export function PricingPanel({
     </Button>
   );
 
+  const portalButton = (className?: string) => (
+    <Button
+      type="button"
+      disabled={!portalUrl}
+      onClick={() => {
+        if (!portalUrl) return;
+        window.open(portalUrl, '_blank', 'noopener,noreferrer');
+      }}
+      className={
+        className ||
+        'w-full group inline-flex items-center justify-center'
+      }
+      size="lg"
+    >
+      {portalUrl ? 'Open visa portal' : 'Portal link unavailable'}
+      {portalUrl ? (
+        <ExternalLink className="ml-2 h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
+      ) : null}
+    </Button>
+  );
+
+  const portalPathContent = (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 sm:text-xs">
+            Official portal
+          </p>
+          <h3 className="mt-2 font-basier text-2xl text-white sm:mt-3 sm:text-3xl">
+            Free on the visa portal
+          </h3>
+          <p className="mt-1 text-xs text-white/65 sm:text-sm">
+            Visa fee is ₹0. Apply yourself on the official site.
+          </p>
+        </div>
+        <Badge className="shrink-0 border-0 bg-mint-wash text-portrait-ink text-[10px] sm:text-xs">
+          {visaFree ? 'Visa free · DIY' : 'DIY · Free'}
+        </Badge>
+      </div>
+
+      <div className="mt-5 space-y-3 rounded-xl bg-white/8 p-4 sm:mt-6 sm:space-y-4 sm:rounded-[24px] sm:p-5">
+        <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
+          <span>Visa fee</span>
+          <span>FREE</span>
+        </div>
+        <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
+          <span>Viserv service fee</span>
+          <span>Not charged</span>
+        </div>
+        {withFreeInsurance && (
+          <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
+            <span>Insurance</span>
+            <span>Free</span>
+          </div>
+        )}
+        <p className="text-xs leading-5 text-white/55 sm:text-sm sm:leading-6">
+          You fill and submit the form on the official visa portal. Viserv does
+          not process this path or charge a fee.
+        </p>
+      </div>
+
+      <div className="mt-5 sm:mt-6">{portalButton(darkCta)}</div>
+    </>
+  );
+
   const typeAndTravellers = (tone: 'dark' | 'light') => (
     <div className="mb-5 space-y-3 sm:mb-6 sm:space-y-4">
       {visaKinds.length > 1 && (
@@ -331,32 +454,35 @@ export function PricingPanel({
           />
         </div>
       )}
+      {freeWithServiceFee && (
+        <div>
+          <p
+            className={`mb-2 text-[10px] uppercase tracking-[0.2em] sm:text-xs ${
+              tone === 'dark' ? 'text-white/50' : 'text-slate-helper'
+            }`}
+          >
+            How to apply
+          </p>
+          <AnimatedTabs
+            items={APPLY_PATH_TABS}
+            value={applyPath}
+            onChange={(id) => setApplyPath(id as ApplyPath)}
+            tone={tone}
+            ariaLabel="How to apply"
+            layoutId={`apply-path${applyPathTabsId}`}
+          />
+        </div>
+      )}
     </div>
   );
 
-  if (isFree) {
+  // Fully free (visa + service + GST): portal UI only, no How to apply tabs
+  if (portalOnlyFree) {
     return (
       <>
-        <div className="rounded-2xl border border-mint-wash bg-white p-5 shadow-elevated sm:rounded-[32px] sm:p-7">
-          {typeAndTravellers('light')}
-          <div className="flex flex-wrap gap-2">
-            <Badge className="border-0 bg-mint-wash text-portrait-ink">100% free</Badge>
-            {withFreeInsurance && (
-              <Badge className="border-0 bg-mint-wash text-portrait-ink">
-                Free Insurance
-              </Badge>
-            )}
-          </div>
-          <h3 className="mt-4 font-basier text-2xl text-portrait-ink sm:mt-5 sm:text-3xl">
-            No payment needed.
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-slate-helper sm:mt-3">
-            Complete this entry product online without a platform fee. Documents
-            and timeline stay visible before you submit.
-          </p>
-          <div className="mt-5 hidden sm:mt-6 sm:block">
-            {startButton()}
-          </div>
+        <div className="sticky top-32 rounded-2xl border border-ash-divider bg-[#0b1220] p-5 text-white shadow-elevated sm:rounded-[32px] sm:p-7">
+          {typeAndTravellers('dark')}
+          {portalPathContent}
         </div>
         {modals}
       </>
@@ -378,10 +504,93 @@ export function PricingPanel({
             Packages will appear once price options are configured.
           </p>
           <div className="mt-5 hidden sm:mt-6 sm:block">
-            {startButton(
-              'w-full border-white bg-white text-portrait-ink hover:bg-white/90 hover:text-portrait-ink group flex items-center justify-center'
-            )}
+            {startButton(darkCta)}
           </div>
+        </div>
+        {modals}
+      </>
+    );
+  }
+
+  // Free visa + Viserv service fee: portal DIY vs assisted apply tabs
+  if (freeWithServiceFee) {
+    return (
+      <>
+        <div className="sticky top-32 rounded-2xl border border-ash-divider bg-[#0b1220] p-5 text-white shadow-elevated sm:rounded-[32px] sm:p-7">
+          {typeAndTravellers('dark')}
+
+          {applyPath === 'portal' ? (
+            portalPathContent
+          ) : (
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 sm:text-xs">
+                    Our charges
+                  </p>
+                  <h3 className="mt-2 font-basier text-2xl text-white sm:mt-3 sm:text-3xl">
+                    <AnimatedStatValue value={displayHeadline} />
+                  </h3>
+                  <p className="mt-1 text-xs text-white/65 sm:text-sm">
+                    <AnimatedStatValue
+                      value={`We fill and process your application${
+                        travellers > 1 ? ` · ${travellers} travellers` : ''
+                      }`}
+                    />
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <Badge className="border-0 bg-white text-portrait-ink text-[10px] sm:text-xs">
+                    Handled by Viserv
+                  </Badge>
+                  {withFreeInsurance && (
+                    <Badge className="border-0 bg-mint-wash text-portrait-ink text-[10px] sm:text-xs">
+                      Free Insurance
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-3 rounded-xl bg-white/8 p-4 sm:mt-6 sm:space-y-4 sm:rounded-[24px] sm:p-5">
+                <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
+                  <span>Visa fee</span>
+                  <span>FREE</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
+                  <span>Service fee</span>
+                  <span>
+                    <AnimatedStatValue
+                      value={formatPrice(
+                        scaleAmount(selected.serviceFeeAmount),
+                        INR
+                      )}
+                    />
+                  </span>
+                </div>
+                {selected.governmentGstFeeAmount > 0 && (
+                  <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
+                    <span>Government GST</span>
+                    <span>
+                      <AnimatedStatValue
+                        value={formatPrice(
+                          scaleAmount(selected.governmentGstFeeAmount),
+                          INR
+                        )}
+                      />
+                    </span>
+                  </div>
+                )}
+                <p className="text-xs leading-5 text-white/55 sm:text-sm sm:leading-6">
+                  Visa itself is free. You pay Viserv to complete the form, check
+                  documents, and process the application for you.
+                </p>
+              </div>
+
+              <div className="mt-5 hidden sm:mt-6 sm:block">
+                {startButton(darkCta)}
+              </div>
+            </>
+          )}
         </div>
         {modals}
       </>
@@ -425,7 +634,7 @@ export function PricingPanel({
 
         <div className="mt-5 space-y-3 rounded-xl bg-white/8 p-4 sm:mt-6 sm:space-y-4 sm:rounded-[24px] sm:p-5">
           <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
-            <span>Government fee</span>
+            <span>Visa fee</span>
             <span>
               <AnimatedStatValue
                 value={formatPrice(scaleAmount(selected.governmentFeeAmount), INR)}

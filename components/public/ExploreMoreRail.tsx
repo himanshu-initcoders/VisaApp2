@@ -3,11 +3,15 @@
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { PublicProcessCard } from '@/components/public/PublicProcessCard';
 
+const MAX_ITEMS = 4;
+
 export function ExploreMoreRail({
   items,
 }: {
   items: Array<any>;
 }) {
+  const visible = items.slice(0, MAX_ITEMS);
+
   return (
     <div className="space-y-4">
       <MotionReveal>
@@ -19,24 +23,22 @@ export function ExploreMoreRail({
         </h2>
       </MotionReveal>
 
-      {/* Mobile: vertical stack (cards are already compact on mobile) */}
+      {/* Mobile: vertical stack */}
       <div className="space-y-3 sm:hidden">
-        {items.slice(0, 4).map((item, index) => (
+        {visible.map((item, index) => (
           <MotionReveal key={item.id} delayMs={index * 40}>
             <PublicProcessCard process={item} />
           </MotionReveal>
         ))}
       </div>
 
-      {/* Desktop: horizontal scroll */}
-      <div className="hidden overflow-x-auto pb-2 sm:block">
-        <div className="grid min-w-max grid-flow-col gap-5">
-          {items.map((item, index) => (
-            <MotionReveal key={item.id} delayMs={index * 40} className="w-[310px]">
-              <PublicProcessCard process={item} />
-            </MotionReveal>
-          ))}
-        </div>
+      {/* Desktop: fixed 4-up grid — no scroll rail */}
+      <div className="hidden gap-5 sm:grid sm:grid-cols-2 lg:grid-cols-4">
+        {visible.map((item, index) => (
+          <MotionReveal key={item.id} delayMs={index * 40}>
+            <PublicProcessCard process={item} />
+          </MotionReveal>
+        ))}
       </div>
     </div>
   );
