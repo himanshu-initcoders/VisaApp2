@@ -104,6 +104,7 @@ export async function createVisaListing(data: unknown) {
           ? false
           : validated.showInsuranceInterest,
         sourceUrl: validated.sourceUrl || null,
+        description: validated.description?.trim() || null,
       })
       .returning({ id: visaListings.id });
 
@@ -181,6 +182,7 @@ export async function updateProcessBasicInfo(processId: string, data: ProcessBas
           ? false
           : validated.showInsuranceInterest,
         sourceUrl: validated.sourceUrl || null,
+        description: validated.description?.trim() || null,
         updatedAt: new Date(),
       })
       .where(eq(visaListings.id, processId));

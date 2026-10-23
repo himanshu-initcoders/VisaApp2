@@ -86,7 +86,11 @@ export const processBasicInfoSchema = z.object({
   showGeneralInfo: z.boolean(),
   showTripDetails: z.boolean(),
   showInsuranceInterest: z.boolean(),
-  sourceUrl: z.union([z.string().url('Must be a valid URL'), z.literal('')]).nullable().optional()
+  sourceUrl: z.union([z.string().url('Must be a valid URL'), z.literal('')]).nullable().optional(),
+  description: z
+    .union([z.string().max(2000, 'Description must be at most 2000 characters'), z.literal('')])
+    .nullable()
+    .optional(),
 }).superRefine((data, ctx) => {
   if (data.withFreeInsurance && data.showInsuranceInterest) {
     ctx.addIssue({

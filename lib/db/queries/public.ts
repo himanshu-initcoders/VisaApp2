@@ -392,6 +392,7 @@ export async function getPublicProcessPageData(
         },
       ],
       overview:
+        process.description?.trim() ||
         process.country.seo?.headline ||
         process.country.seo?.metaDescription ||
         (process.processType === 'electronic_travel_authorisation'

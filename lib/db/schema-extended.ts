@@ -160,6 +160,8 @@ export const visaListings = pgTable('visa_listings', {
 
   lastEditedBy: varchar('last_edited_by', { length: 100 }),
   sourceUrl: text('source_url'), // Official government URL
+  /** Traveler-facing product overview copy shown on the public listing page. */
+  description: text('description'),
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()

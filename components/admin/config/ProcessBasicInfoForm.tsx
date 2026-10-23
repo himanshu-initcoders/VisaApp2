@@ -40,6 +40,7 @@ interface ProcessBasicInfoFormProps {
     showTripDetails?: boolean | null;
     showInsuranceInterest?: boolean | null;
     sourceUrl: string | null;
+    description?: string | null;
   };
 }
 
@@ -97,6 +98,7 @@ export function ProcessBasicInfoForm({ processId, initialData }: ProcessBasicInf
       showTripDetails: initialData.showTripDetails ?? true,
       showInsuranceInterest: initialData.showInsuranceInterest ?? false,
       sourceUrl: initialData.sourceUrl || '',
+      description: initialData.description || '',
     },
   });
 
@@ -185,6 +187,30 @@ export function ProcessBasicInfoForm({ processId, initialData }: ProcessBasicInf
               error={form.formState.errors.sourceUrl?.message}
               {...form.register('sourceUrl')}
             />
+          </div>
+
+          <div>
+            <label
+              htmlFor="description"
+              className="block text-sm font-medium text-portrait-ink mb-2"
+            >
+              Description
+            </label>
+            <textarea
+              id="description"
+              rows={4}
+              placeholder="Short product overview shown on the public visa listing page…"
+              className="w-full px-4 py-3 border border-ash-divider rounded-2xl focus:outline-none focus:ring-2 focus:ring-portrait-ink/20 transition-shadow resize-y min-h-[112px]"
+              {...form.register('description')}
+            />
+            {form.formState.errors.description && (
+              <p className="mt-1 text-sm text-red-600">
+                {form.formState.errors.description.message}
+              </p>
+            )}
+            <p className="mt-1.5 text-xs text-slate-helper">
+              Appears in the Product overview section on the public listing page.
+            </p>
           </div>
 
           <Checkbox
