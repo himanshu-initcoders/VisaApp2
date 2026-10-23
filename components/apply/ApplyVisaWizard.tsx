@@ -20,6 +20,7 @@ import {
   isDocumentsComplete,
   isMultiStopComplete,
 } from '@/lib/apply/applicationForm';
+import { getVisibleDocumentSlots } from '@/lib/document-conditions';
 import { isReviewComplete } from '@/lib/passport/schema';
 import type { ApplyStep, ApplyTraveller } from '@/lib/apply/types';
 import { isTravellerFilled, travellerDisplayName } from '@/lib/apply/reviewFields';
@@ -130,9 +131,14 @@ function isListingApplicationComplete(
           traveller.tripDetails,
           formConfig.extraQuestions
         );
+  const visibleDocumentSlots = getVisibleDocumentSlots(
+    formConfig.documentSlots,
+    formConfig.extraQuestions,
+    traveller.tripDetails?.extra ?? {}
+  );
   const documentsComplete = isDocumentsComplete(
     traveller.documents,
-    formConfig.documentSlots
+    visibleDocumentSlots
   );
 
   return (

@@ -16,6 +16,10 @@ import {
   type TravellerDocumentUpload,
   type TravellerTripDetails,
 } from '@/lib/apply/applicationForm';
+import {
+  clearHiddenDocumentUploads,
+  getVisibleDocumentSlots,
+} from '@/lib/document-conditions';
 import type { IndianPassportFields } from '@/lib/passport/types';
 
 export interface CorrectionItemView {
@@ -132,6 +136,26 @@ export function CorrectionWizard({
     ...item,
     dot: tabsWithChanges.has(item.id),
   }));
+
+  const visibleDocumentSlots = useMemo(
+    () =>
+      getVisibleDocumentSlots(
+        formConfig.documentSlots,
+        formConfig.extraQuestions,
+        trip.extra
+      ),
+    [formConfig.documentSlots, formConfig.extraQuestions, trip.extra]
+  );
+
+  const handleTripChange = (next: TravellerTripDetails) => {
+    setTrip(next);
+    const nextSlots = getVisibleDocumentSlots(
+      formConfig.documentSlots,
+      formConfig.extraQuestions,
+      next.extra
+    );
+    setUploads((prev) => clearHiddenDocumentUploads(prev, nextSlots));
+  };
 
   const documentFile = (slotKey: string): File | null => {
     if (slotKey === 'passport-front') return frontFile;
@@ -306,7 +330,7 @@ export function CorrectionWizard({
             <AdditionalQuestionsTab
               trip={trip}
               extraQuestions={formConfig.extraQuestions}
-              onChange={setTrip}
+              onChange={handleTripChange}
               editableKeys={editableKeys}
               comments={comments}
             />
@@ -317,7 +341,7 @@ export function CorrectionWizard({
             <DocumentsTab
               listingId={listingId}
               passengerId={travellerId}
-              slots={formConfig.documentSlots}
+              slots={visibleDocumentSlots}
               uploads={uploads}
               onChange={setUploads}
               editableKeys={editableKeys}
@@ -333,7 +357,7 @@ export function CorrectionWizard({
               fields={passport}
               trip={trip}
               extraQuestions={formConfig.extraQuestions}
-              slots={formConfig.documentSlots}
+              slots={visibleDocumentSlots}
               uploads={uploads}
               countryName={countryName}
               passportPreviewUrl={frontUrl || undefined}

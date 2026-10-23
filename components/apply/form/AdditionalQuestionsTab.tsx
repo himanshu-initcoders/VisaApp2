@@ -38,25 +38,37 @@ function ExtraQuestionField({
 }) {
   if (question.type === 'boolean') {
     return (
-      <label className="flex items-start gap-3 sm:col-span-2">
-        <input
-          type="checkbox"
-          checked={value === 'true'}
-          onChange={(event) => onUpdate(event.target.checked ? 'true' : 'false')}
-          className="mt-1 h-4 w-4 rounded border-ash"
-        />
-        <span>
-          <span className="block text-sm font-medium text-portrait-ink">
-            {question.label}
-            {question.required && <span className="text-[#ff4940]"> *</span>}
-          </span>
-          {question.description && (
-            <span className="mt-0.5 block text-xs text-slate-helper">
-              {question.description}
-            </span>
-          )}
-        </span>
-      </label>
+      <fieldset className="sm:col-span-2 space-y-3">
+        <legend className="text-sm font-medium text-portrait-ink">
+          {question.label}
+          {question.required && <span className="text-[#ff4940]"> *</span>}
+        </legend>
+        {question.description && (
+          <p className="text-xs text-slate-helper">{question.description}</p>
+        )}
+        <div className="flex flex-wrap gap-3">
+          {(
+            [
+              { value: 'true', label: 'Yes' },
+              { value: 'false', label: 'No' },
+            ] as const
+          ).map((option) => (
+            <label
+              key={option.value}
+              className="inline-flex items-center gap-2 rounded-2xl border border-ash px-4 py-3 cursor-pointer hover:bg-sky-wash/40"
+            >
+              <input
+                type="radio"
+                name={`boolean-${question.key}`}
+                className="h-4 w-4 accent-portrait-ink"
+                checked={value === option.value}
+                onChange={() => onUpdate(option.value)}
+              />
+              <span className="text-sm text-portrait-ink">{option.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
     );
   }
 

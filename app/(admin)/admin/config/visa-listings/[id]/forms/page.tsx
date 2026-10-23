@@ -1,10 +1,16 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth-utils';
-import { getProcessWithAllRelations, getAdditionalQuestions } from '@/lib/db/queries/config';
+import {
+  getProcessWithAllRelations,
+  getAdditionalQuestions,
+  getComponentsRequired,
+  listDocumentTypes,
+} from '@/lib/db/queries/config';
 import { getLatestPublishedFormVersion } from '@/lib/db/queries/formVersions';
 import { QuestionsManager } from '@/components/admin/config/QuestionsManager';
 import { PublishFormVersionButton } from '@/components/admin/config/PublishFormVersionButton';
+import { PASSPORT_DOCUMENT_TYPES } from '@/lib/document-types';
 import { ChevronLeft } from 'lucide-react';
 
 /**
@@ -38,9 +44,21 @@ export default async function FormsPage({
     notFound();
   }
 
-  // Fetch questions ordered by sortOrder
-  const questions = await getAdditionalQuestions(id);
+  // Fetch questions ordered by sortOrder + document catalog for conditional docs
+  const [questions, components, catalogRows] = await Promise.all([
+    getAdditionalQuestions(id),
+    getComponentsRequired(id),
+    listDocumentTypes(),
+  ]);
   const latestVersion = await getLatestPublishedFormVersion(id);
+
+  const documentCatalog = catalogRows
+    .filter((row) => !PASSPORT_DOCUMENT_TYPES.has(row.value))
+    .map((row) => ({ value: row.value, label: row.label }));
+
+  const attachedDocumentTypes = components
+    .map((item) => item.documentType || item.key)
+    .filter((value): value is string => Boolean(value));
 
   // Get flag emoji
   const getFlag = (iso2Code: string) => {
@@ -92,7 +110,12 @@ export default async function FormsPage({
         </div>
 
         {/* Questions Manager */}
-        <QuestionsManager processId={id} initialQuestions={questions} />
+        <QuestionsManager
+          processId={id}
+          initialQuestions={questions}
+          documentCatalog={documentCatalog}
+          attachedDocumentTypes={attachedDocumentTypes}
+        />
       </div>
     </div>
   );

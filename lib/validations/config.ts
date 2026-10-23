@@ -4,6 +4,10 @@ import {
   normalizeQuestionVisibility,
   questionVisibilityDraftSchema,
 } from '@/lib/question-visibility';
+import {
+  documentConditionsDraftSchema,
+  normalizeDocumentConditions,
+} from '@/lib/document-conditions';
 
 /**
  * Validation schemas for admin configuration forms
@@ -176,6 +180,7 @@ export const additionalQuestionSchema = z.object({
   sourceUrl: z.union([z.string().url('Must be a valid URL'), z.literal('')]).nullable().optional(),
   options: z.array(questionOptionSchema).optional().default([]),
   visibility: questionVisibilityDraftSchema,
+  documentConditions: documentConditionsDraftSchema,
 }).superRefine((data, ctx) => {
   if (
     (data.questionType === 'dropdown' ||
@@ -207,9 +212,30 @@ export const additionalQuestionSchema = z.object({
       });
     }
   }
+
+  if (data.documentConditions && data.documentConditions.enabled === true) {
+    const operator = data.documentConditions.operator ?? 'equals';
+    if (operator === 'equals' && !data.documentConditions.value.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Enter a value to match',
+        path: ['documentConditions', 'value'],
+      });
+    }
+    const docs = data.documentConditions.documents ?? [];
+    const validDocs = docs.filter((d) => d.documentType.trim());
+    if (validDocs.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Select at least one document type',
+        path: ['documentConditions', 'documents'],
+      });
+    }
+  }
 }).transform((data) => ({
   ...data,
   visibility: normalizeQuestionVisibility(data.visibility),
+  documentConditions: normalizeDocumentConditions(data.documentConditions),
 }));
 
 export type AdditionalQuestion = z.infer<typeof additionalQuestionSchema>;

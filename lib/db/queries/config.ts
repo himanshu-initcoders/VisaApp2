@@ -321,6 +321,12 @@ export type QuestionLabelSuggestion = {
     operator: 'equals' | 'is_empty' | 'is_filled';
     value: string;
   } | null;
+  documentConditions: {
+    enabled: true;
+    operator: 'equals' | 'is_empty' | 'is_filled';
+    value: string;
+    documents: Array<{ documentType: string; required: boolean }>;
+  } | null;
 };
 
 /**
@@ -361,6 +367,7 @@ export async function searchAdditionalQuestionsByLabel(
       required: true,
       options: true,
       visibility: true,
+      documentConditions: true,
     },
   });
 

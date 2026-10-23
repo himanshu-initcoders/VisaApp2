@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FileQuestion, Plus } from 'lucide-react';
 import { deleteQuestion, reorderQuestions } from '@/app/(admin)/admin/config/visa-listings/actions';
+import type { DocumentConditions } from '@/lib/document-conditions';
 
 interface Question {
   id: string;
@@ -55,6 +56,7 @@ interface Question {
     operator: 'equals' | 'is_empty' | 'is_filled';
     value: string;
   } | null;
+  documentConditions?: DocumentConditions;
   sortOrder: number | null;
   createdAt: Date;
 }
@@ -62,6 +64,8 @@ interface Question {
 interface QuestionsManagerProps {
   processId: string;
   initialQuestions: Question[];
+  documentCatalog: Array<{ value: string; label: string }>;
+  attachedDocumentTypes: string[];
 }
 
 /**
@@ -75,7 +79,12 @@ interface QuestionsManagerProps {
  * - Delete confirmation dialog
  * - Empty state
  */
-export function QuestionsManager({ processId, initialQuestions }: QuestionsManagerProps) {
+export function QuestionsManager({
+  processId,
+  initialQuestions,
+  documentCatalog,
+  attachedDocumentTypes,
+}: QuestionsManagerProps) {
   const router = useRouter();
   const [questions, setQuestions] = useState(initialQuestions);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -162,6 +171,8 @@ export function QuestionsManager({ processId, initialQuestions }: QuestionsManag
             processId={processId}
             initialData={null}
             siblingQuestions={questions}
+            documentCatalog={documentCatalog}
+            attachedDocumentTypes={attachedDocumentTypes}
             onClose={() => setShowAddModal(false)}
             onSuccess={handleModalSuccess}
           />
@@ -232,6 +243,8 @@ export function QuestionsManager({ processId, initialQuestions }: QuestionsManag
           processId={processId}
           initialData={null}
           siblingQuestions={questions}
+          documentCatalog={documentCatalog}
+          attachedDocumentTypes={attachedDocumentTypes}
           onClose={() => setShowAddModal(false)}
           onSuccess={handleModalSuccess}
         />
@@ -243,6 +256,8 @@ export function QuestionsManager({ processId, initialQuestions }: QuestionsManag
           processId={processId}
           initialData={editingQuestion}
           siblingQuestions={questions}
+          documentCatalog={documentCatalog}
+          attachedDocumentTypes={attachedDocumentTypes}
           onClose={() => setEditingQuestion(null)}
           onSuccess={handleModalSuccess}
         />

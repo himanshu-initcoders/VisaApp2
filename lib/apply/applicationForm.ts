@@ -18,6 +18,12 @@ import {
   normalizeQuestionVisibility,
   type QuestionVisibility,
 } from '@/lib/question-visibility';
+import {
+  buildDocumentTypeGatingMap,
+  normalizeDocumentConditions,
+  type DocumentConditions,
+  type DocumentSlotVisibility,
+} from '@/lib/document-conditions';
 
 export const APPLICATION_FORM_TABS = [
   { id: 'general', label: 'Personal details' },
@@ -102,6 +108,8 @@ export interface ApplyTripQuestion {
   required: boolean;
   options?: Array<{ label: string; value: string }>;
   visibility?: QuestionVisibility;
+  /** When answer matches, show/require listed document types. */
+  documentConditions?: DocumentConditions;
 }
 
 export type ApplyTripQuestionGroup = {
@@ -141,6 +149,13 @@ export interface ApplyDocumentSlot {
   description: string;
   required: boolean;
   accept: string;
+  /** Catalog slug when slot comes from components_required. */
+  documentType?: string | null;
+  /**
+   * When set, slot is answer-gated (show only when a matching question
+   * documentConditions rule is active). null/undefined = always visible.
+   */
+  visibility?: DocumentSlotVisibility | null;
   /** Camera face capture. Only passport photos use this. */
   captureFace?: boolean;
   /** Sample file URL from document type catalog (optional). */
@@ -438,6 +453,7 @@ export function buildApplyFormConfig(input: {
     extraInfo?: string | null;
     options?: Array<{ label: string; value: string }> | null;
     visibility?: QuestionVisibility;
+    documentConditions?: DocumentConditions;
   }>;
   /** Catalog samples keyed by document type slug (and optionally component key). */
   documentTypeSamples?: DocumentTypeSampleLookup;
@@ -460,8 +476,11 @@ export function buildApplyFormConfig(input: {
         required: Boolean(question.required),
         options: question.options ?? undefined,
         visibility: normalizeQuestionVisibility(question.visibility),
+        documentConditions: normalizeDocumentConditions(question.documentConditions),
       };
     });
+
+  const gatingByType = buildDocumentTypeGatingMap(extraQuestions);
 
   const fromComponents = input.components
     .filter((item) => {
@@ -480,15 +499,27 @@ export function buildApplyFormConfig(input: {
           input.documentTypeSamples?.get(item.documentType)) ||
         input.documentTypeSamples?.get(item.key);
       const catalogLabel = sample?.label;
+      const docType = item.documentType || null;
+      const gateRules = docType ? gatingByType.get(docType) : undefined;
+      const primaryGate = gateRules?.[0];
       return {
         id: item.id,
         key: item.key,
+        documentType: docType,
         title: formatDocumentTitle(item.key, {
           label: item.label || catalogLabel,
           documentType: item.documentType,
         }),
         description: documentSlotDescription(captureFace),
+        // Gated docs always required when shown (optional-when-shown disabled for now).
         required: true,
+        visibility: primaryGate
+          ? {
+              sourceQuestionKey: primaryGate.sourceQuestionKey,
+              operator: primaryGate.operator,
+              value: primaryGate.value,
+            }
+          : null,
         accept: DOCUMENT_FILE_ACCEPT,
         captureFace,
         sampleUrl: sample?.sampleDocumentUrl ?? null,
@@ -504,12 +535,14 @@ export function buildApplyFormConfig(input: {
       return {
         id: question.id,
         key: question.key,
+        documentType: null as string | null,
         title: question.label,
         description:
           question.description ||
           question.extraInfo ||
           documentSlotDescription(captureFace),
         required: Boolean(question.required),
+        visibility: null as DocumentSlotVisibility | null,
         accept: DOCUMENT_FILE_ACCEPT,
         captureFace,
         sampleUrl: sample?.sampleDocumentUrl ?? null,
@@ -530,9 +563,11 @@ export function buildApplyFormConfig(input: {
           {
             id: 'default-photo',
             key: 'photo',
+            documentType: 'photo',
             title: 'Passport photo',
             description: documentSlotDescription(true),
             required: true,
+            visibility: null,
             accept: DOCUMENT_FILE_ACCEPT,
             captureFace: true,
             sampleUrl: defaultPhotoSample?.sampleDocumentUrl ?? null,
@@ -623,8 +658,16 @@ export function getAdditionalQuestionIssues(
     if (!question.required) continue;
     const value = normalized.extra[question.key]?.trim() ?? '';
     if (question.type === 'boolean') {
-      if (value !== 'true' && value !== 'yes') {
-        issues.push(`Confirm: ${question.label}`);
+      // Both Yes and No are valid answers — empty means unanswered.
+      // (Previously only true/yes counted, which blocked document conditions on "No".)
+      const boolValue = value.toLowerCase();
+      if (
+        boolValue !== 'true' &&
+        boolValue !== 'false' &&
+        boolValue !== 'yes' &&
+        boolValue !== 'no'
+      ) {
+        issues.push(`Answer: ${question.label}`);
       }
       continue;
     }

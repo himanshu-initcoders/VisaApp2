@@ -26,6 +26,13 @@ import {
   type QuestionVisibility,
   type QuestionVisibilityOperator,
 } from '@/lib/question-visibility';
+import {
+  adaptDocumentConditionsForListing,
+  isDocumentConditionsDraftEnabled,
+  normalizeDocumentConditions,
+  type DocumentConditionOperator,
+  type DocumentConditions,
+} from '@/lib/document-conditions';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { z } from 'zod';
 
@@ -49,6 +56,7 @@ type QuestionLabelSuggestion = {
   required: boolean | null;
   options: Array<{ label: string; value: string }> | null;
   visibility?: QuestionVisibility;
+  documentConditions?: DocumentConditions;
 };
 
 type AdminQuestionType = 'text' | 'date' | 'dropdown' | 'boolean' | 'checkbox' | 'radio';
@@ -104,6 +112,18 @@ function defaultEqualsValueForSibling(sibling: SiblingQuestion | undefined): str
   return '';
 }
 
+/** Default equals-value for this question's own type (document conditions). */
+function defaultEqualsValueForSelf(
+  questionType: AdminQuestionType,
+  options: Array<{ label: string; value: string }> | undefined
+): string {
+  if (questionType === 'boolean') return 'true';
+  if (questionType === 'dropdown' || questionType === 'radio' || questionType === 'checkbox') {
+    return options?.[0]?.value ?? '';
+  }
+  return '';
+}
+
 interface Question {
   id: string;
   visaListingId: string;
@@ -129,6 +149,7 @@ interface Question {
   sourceUrl: string | null;
   options: Array<{ label: string; value: string }> | null;
   visibility?: QuestionVisibility;
+  documentConditions?: DocumentConditions;
   sortOrder: number | null;
   createdAt: Date;
 }
@@ -137,6 +158,8 @@ interface QuestionFormModalProps {
   processId: string;
   initialData: Question | null;
   siblingQuestions: SiblingQuestion[];
+  documentCatalog: Array<{ value: string; label: string }>;
+  attachedDocumentTypes: string[];
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -150,6 +173,8 @@ export function QuestionFormModal({
   processId,
   initialData,
   siblingQuestions,
+  documentCatalog,
+  attachedDocumentTypes,
   onClose,
   onSuccess,
 }: QuestionFormModalProps) {
@@ -171,7 +196,15 @@ export function QuestionFormModal({
     [availableSiblings]
   );
 
+  const attachedSet = useMemo(
+    () => new Set(attachedDocumentTypes),
+    [attachedDocumentTypes]
+  );
+
   const initialVisibility = normalizeQuestionVisibility(initialData?.visibility);
+  const initialDocumentConditions = normalizeDocumentConditions(
+    initialData?.documentConditions
+  );
 
   const form = useForm<QuestionFormValues, unknown, AdditionalQuestion>({
     resolver: zodResolver(additionalQuestionSchema),
@@ -185,6 +218,7 @@ export function QuestionFormModal({
           requiredDoc: initialData.requiredDoc || '',
           options: initialData.options || [],
           visibility: initialVisibility,
+          documentConditions: initialDocumentConditions,
         }
       : {
           label: '',
@@ -195,13 +229,17 @@ export function QuestionFormModal({
           requiredDoc: '',
           options: [],
           visibility: null,
+          documentConditions: null,
         },
   });
 
   const questionType = form.watch('questionType');
   const labelValue = form.watch('label');
   const visibility = form.watch('visibility');
+  const documentConditions = form.watch('documentConditions');
+  const watchedOptions = form.watch('options');
   const visibilityEnabled = isVisibilityDraftEnabled(visibility);
+  const documentConditionsEnabled = isDocumentConditionsDraftEnabled(documentConditions);
   const showOptions =
     questionType === 'dropdown' ||
     questionType === 'checkbox' ||
@@ -390,6 +428,189 @@ export function QuestionFormModal({
     sourceSibling,
   ]);
 
+  const documentConditionsOperator: DocumentConditionOperator = (() => {
+    if (
+      documentConditions &&
+      typeof documentConditions === 'object' &&
+      documentConditions !== null &&
+      'operator' in documentConditions &&
+      typeof (documentConditions as { operator?: unknown }).operator === 'string'
+    ) {
+      const op = (documentConditions as { operator: string }).operator;
+      if (op === 'is_empty' || op === 'is_filled' || op === 'equals') return op;
+    }
+    return 'equals';
+  })();
+
+  const documentConditionsValue = String(
+    documentConditions &&
+      typeof documentConditions === 'object' &&
+      documentConditions !== null &&
+      'value' in documentConditions
+      ? ((documentConditions as { value?: unknown }).value ?? '')
+      : ''
+  );
+
+  const selectedDocumentItems: Array<{ documentType: string; required: boolean }> = (() => {
+    if (
+      !documentConditions ||
+      typeof documentConditions !== 'object' ||
+      !('documents' in documentConditions) ||
+      !Array.isArray((documentConditions as { documents?: unknown }).documents)
+    ) {
+      return [];
+    }
+    return (
+      documentConditions as {
+        documents: Array<{ documentType?: string; required?: boolean }>;
+      }
+    ).documents
+      .filter((d) => typeof d.documentType === 'string' && d.documentType.trim())
+      .map((d) => ({
+        documentType: String(d.documentType),
+        required: d.required !== false,
+      }));
+  })();
+
+  const selectedDocumentTypeSet = useMemo(
+    () => new Set(selectedDocumentItems.map((d) => d.documentType)),
+    [selectedDocumentItems]
+  );
+
+  const setDocumentConditionsEnabled = (enabled: boolean) => {
+    if (!enabled) {
+      form.setValue('documentConditions', null, { shouldDirty: true, shouldValidate: false });
+      return;
+    }
+
+    const type = toAdminQuestionType(questionType);
+    const options = (watchedOptions || []).map((o) => ({
+      label: o.label,
+      value: o.value || '',
+    }));
+
+    form.setValue(
+      'documentConditions',
+      {
+        enabled: true,
+        operator: 'equals',
+        value: defaultEqualsValueForSelf(type, options),
+        documents: [],
+      },
+      { shouldDirty: true, shouldValidate: false }
+    );
+  };
+
+  const patchDocumentConditions = (
+    patch: Partial<{
+      operator: DocumentConditionOperator;
+      value: string;
+      documents: Array<{ documentType: string; required: boolean }>;
+    }>
+  ) => {
+    const raw = form.getValues('documentConditions');
+    const current =
+      raw && typeof raw === 'object' && 'enabled' in raw && raw.enabled === true
+        ? {
+            enabled: true as const,
+            operator: ((): DocumentConditionOperator => {
+              if ('operator' in raw && typeof raw.operator === 'string') {
+                if (
+                  raw.operator === 'is_empty' ||
+                  raw.operator === 'is_filled' ||
+                  raw.operator === 'equals'
+                ) {
+                  return raw.operator;
+                }
+              }
+              return 'equals';
+            })(),
+            value: 'value' in raw && typeof raw.value === 'string' ? raw.value : '',
+            documents: Array.isArray(
+              (raw as { documents?: Array<{ documentType: string; required?: boolean }> })
+                .documents
+            )
+              ? (
+                  raw as {
+                    documents: Array<{ documentType: string; required?: boolean }>;
+                  }
+                ).documents.map((d) => ({
+                  documentType: d.documentType,
+                  required: d.required !== false,
+                }))
+              : [],
+          }
+        : null;
+
+    if (!current) return;
+
+    const nextOperator = patch.operator ?? current.operator;
+    let nextValue = patch.value !== undefined ? patch.value : current.value;
+
+    if (nextOperator !== 'equals') {
+      nextValue = '';
+    } else if (patch.operator === 'equals' && !nextValue.trim()) {
+      nextValue = defaultEqualsValueForSelf(
+        toAdminQuestionType(questionType),
+        (watchedOptions || []).map((o) => ({ label: o.label, value: o.value || '' }))
+      );
+    }
+
+    form.setValue(
+      'documentConditions',
+      {
+        enabled: true,
+        operator: nextOperator,
+        value: nextValue,
+        documents: patch.documents ?? current.documents,
+      },
+      { shouldDirty: true, shouldValidate: false }
+    );
+  };
+
+  const toggleDocumentType = (documentType: string, checked: boolean) => {
+    const current = selectedDocumentItems;
+    if (checked) {
+      if (current.some((d) => d.documentType === documentType)) return;
+      // Always required when shown (optional-when-shown toggle is disabled for now).
+      patchDocumentConditions({
+        documents: [...current, { documentType, required: true }],
+      });
+      return;
+    }
+    patchDocumentConditions({
+      documents: current.filter((d) => d.documentType !== documentType),
+    });
+  };
+
+  // Optional-when-shown toggle disabled for now — always required.
+  // const setDocumentTypeRequired = (documentType: string, required: boolean) => {
+  //   patchDocumentConditions({
+  //     documents: selectedDocumentItems.map((d) =>
+  //       d.documentType === documentType ? { ...d, required } : d
+  //     ),
+  //   });
+  // };
+
+  // Keep equals value filled when this question's type/options change.
+  useEffect(() => {
+    if (!documentConditionsEnabled || documentConditionsOperator !== 'equals') return;
+    if (documentConditionsValue.trim()) return;
+    const fallback = defaultEqualsValueForSelf(
+      toAdminQuestionType(questionType),
+      (watchedOptions || []).map((o) => ({ label: o.label, value: o.value || '' }))
+    );
+    if (!fallback) return;
+    patchDocumentConditions({ value: fallback });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync empty equals values
+  }, [
+    documentConditionsEnabled,
+    documentConditionsOperator,
+    documentConditionsValue,
+    questionType,
+    watchedOptions,
+  ]);
+
   const applySuggestion = (suggestion: QuestionLabelSuggestion) => {
     skipNextSearchRef.current = true;
     form.setValue('label', suggestion.label, { shouldDirty: true, shouldValidate: true });
@@ -402,6 +623,11 @@ export function QuestionFormModal({
     form.setValue(
       'visibility',
       adaptVisibilityForListing(suggestion.visibility, listingKeys),
+      { shouldDirty: true }
+    );
+    form.setValue(
+      'documentConditions',
+      adaptDocumentConditionsForListing(suggestion.documentConditions),
       { shouldDirty: true }
     );
     replace(
@@ -462,6 +688,32 @@ export function QuestionFormModal({
         message = String(visibilityError.sourceQuestionKey.message || message);
       } else {
         message = 'Complete the visibility rule (question + match mode), or turn it off.';
+      }
+    } else if (errors.documentConditions) {
+      const docErr = errors.documentConditions;
+      if (typeof docErr.message === 'string' && docErr.message) {
+        message = docErr.message;
+      } else if (
+        typeof docErr === 'object' &&
+        docErr &&
+        'documents' in docErr &&
+        docErr.documents &&
+        typeof docErr.documents === 'object' &&
+        'message' in docErr.documents
+      ) {
+        message = String(docErr.documents.message || message);
+      } else if (
+        typeof docErr === 'object' &&
+        docErr &&
+        'value' in docErr &&
+        docErr.value &&
+        typeof docErr.value === 'object' &&
+        'message' in docErr.value
+      ) {
+        message = String(docErr.value.message || message);
+      } else {
+        message =
+          'Complete the document condition (match value + at least one document), or turn it off.';
       }
     } else if (errors.label?.message) {
       message = errors.label.message;
@@ -782,6 +1034,227 @@ export function QuestionFormModal({
                       )}
                     </>
                   )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-peach-wash/30 rounded-2xl space-y-4">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-portrait-ink">
+                      Documents when…
+                    </p>
+                    <p className="text-xs text-slate-helper mt-0.5">
+                      Show or require catalog documents when this question&apos;s answer
+                      matches. Unattached types are added to the listing on save.
+                    </p>
+                  </div>
+                  <Toggle
+                    enabled={documentConditionsEnabled}
+                    onChange={setDocumentConditionsEnabled}
+                    disabled={documentCatalog.length === 0}
+                    className="shrink-0"
+                  />
+                </div>
+                {documentCatalog.length === 0 && (
+                  <p className="text-xs text-slate-helper">
+                    Add document types in the catalog first to use this option.
+                  </p>
+                )}
+              </div>
+
+              {documentConditionsEnabled && (
+                <div className="space-y-4 pt-1">
+                  <fieldset className="space-y-2">
+                    <legend className="text-sm font-medium text-portrait-ink">
+                      When this answer
+                    </legend>
+                    <div className="space-y-2">
+                      {(
+                        [
+                          {
+                            value: 'equals' as const,
+                            label: 'Equals',
+                            description: 'Answer matches a specific value',
+                          },
+                          {
+                            value: 'is_empty' as const,
+                            label: 'Not filled / null',
+                            description: 'Answer is missing, blank, or empty',
+                          },
+                          {
+                            value: 'is_filled' as const,
+                            label: 'Any value',
+                            description: 'Answer has any filled value',
+                          },
+                        ] as const
+                      ).map((option) => (
+                        <label
+                          key={option.value}
+                          className="flex items-start gap-3 cursor-pointer rounded-2xl border border-fog-edge bg-white px-3 py-2.5"
+                        >
+                          <input
+                            type="radio"
+                            name="document-conditions-operator"
+                            className="mt-1 h-4 w-4 accent-portrait-ink"
+                            checked={documentConditionsOperator === option.value}
+                            onChange={() =>
+                              patchDocumentConditions({ operator: option.value })
+                            }
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium text-portrait-ink">
+                              {option.label}
+                            </span>
+                            <span className="block text-xs text-slate-helper mt-0.5">
+                              {option.description}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+
+                  {documentConditionsOperator === 'equals' && (
+                    <>
+                      {questionType === 'dropdown' ||
+                      questionType === 'radio' ||
+                      questionType === 'checkbox' ? (
+                        <Select
+                          label="Value"
+                          helperText={
+                            questionType === 'checkbox'
+                              ? 'Documents show when this option is among the selected checkboxes'
+                              : undefined
+                          }
+                          options={(watchedOptions || [])
+                            .filter((option) => option.label?.trim())
+                            .map((option) => ({
+                              value: option.value || option.label,
+                              label: option.label,
+                            }))}
+                          value={documentConditionsValue}
+                          onChange={(event) =>
+                            patchDocumentConditions({ value: event.target.value })
+                          }
+                        />
+                      ) : null}
+
+                      {questionType === 'boolean' && (
+                        <Select
+                          label="Value"
+                          options={[
+                            { value: 'true', label: 'Yes' },
+                            { value: 'false', label: 'No' },
+                          ]}
+                          value={documentConditionsValue}
+                          onChange={(event) =>
+                            patchDocumentConditions({ value: event.target.value })
+                          }
+                        />
+                      )}
+
+                      {questionType === 'date' && (
+                        <Input
+                          label="Value"
+                          type="date"
+                          value={documentConditionsValue}
+                          onChange={(event) =>
+                            patchDocumentConditions({ value: event.target.value })
+                          }
+                        />
+                      )}
+
+                      {questionType === 'text' && (
+                        <Input
+                          label="Value"
+                          placeholder="Exact answer to match"
+                          value={documentConditionsValue}
+                          onChange={(event) =>
+                            patchDocumentConditions({ value: event.target.value })
+                          }
+                        />
+                      )}
+                    </>
+                  )}
+
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-portrait-ink">Document types</p>
+                    <p className="text-xs text-slate-helper">
+                      Select catalog types. Already on this listing stay attached; new ones
+                      are attached on save.
+                    </p>
+                    <div className="max-h-56 overflow-y-auto space-y-2 rounded-2xl border border-fog-edge bg-white p-3">
+                      {documentCatalog.map((doc) => {
+                        const checked = selectedDocumentTypeSet.has(doc.value);
+                        const alreadyAttached = attachedSet.has(doc.value);
+                        return (
+                          <div
+                            key={doc.value}
+                            className="flex flex-col gap-2 rounded-xl border border-fog-edge/60 px-3 py-2.5"
+                          >
+                            <label className="flex items-start gap-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                className="mt-1 h-4 w-4 accent-portrait-ink"
+                                checked={checked}
+                                onChange={(event) =>
+                                  toggleDocumentType(doc.value, event.target.checked)
+                                }
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-medium text-portrait-ink">
+                                  {doc.label}
+                                </span>
+                                <span className="block text-xs text-slate-helper mt-0.5">
+                                  {doc.value}
+                                  {alreadyAttached
+                                    ? ' · already on listing'
+                                    : ' · will attach on save'}
+                                  {checked ? ' · required when shown' : ''}
+                                </span>
+                              </span>
+                            </label>
+                            {/* Optional-when-shown toggle disabled for now — always required.
+                            {checked && (
+                              <label className="ml-7 flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  className="h-3.5 w-3.5 accent-portrait-ink"
+                                  checked={
+                                    selectedDocumentItems.find(
+                                      (d) => d.documentType === doc.value
+                                    )?.required ?? true
+                                  }
+                                  onChange={(event) =>
+                                    setDocumentTypeRequired(doc.value, event.target.checked)
+                                  }
+                                />
+                                <span className="text-xs text-portrait-ink">
+                                  Required when shown
+                                </span>
+                              </label>
+                            )}
+                            */}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {form.formState.errors.documentConditions &&
+                      typeof form.formState.errors.documentConditions === 'object' &&
+                      'documents' in form.formState.errors.documentConditions && (
+                        <p className="text-sm text-red-600">
+                          {String(
+                            (
+                              form.formState.errors.documentConditions as {
+                                documents?: { message?: string };
+                              }
+                            ).documents?.message || 'Select at least one document type'
+                          )}
+                        </p>
+                      )}
+                  </div>
                 </div>
               )}
             </div>

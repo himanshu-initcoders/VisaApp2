@@ -13,6 +13,7 @@ import type {
   TravellerDocumentUpload,
   TravellerTripDetails,
 } from '@/lib/apply/applicationForm';
+import { getVisibleDocumentSlots } from '@/lib/document-conditions';
 import type { IndianPassportFields } from '@/lib/passport/types';
 
 interface ReviewSubmitTabProps {
@@ -76,6 +77,11 @@ export function ReviewSubmitTab({
   onEditSection,
 }: ReviewSubmitTabProps) {
   const hasAdditional = extraQuestions.length > 0;
+  const visibleSlots = getVisibleDocumentSlots(
+    slots,
+    extraQuestions,
+    trip.extra
+  );
   const edit = (tab: ApplicationFormTabId) =>
     onEditSection ? () => onEditSection(tab) : undefined;
 
@@ -127,7 +133,7 @@ export function ReviewSubmitTab({
 
       <ReviewSection title="Documents" onEdit={edit('documents')}>
         <DocumentsReviewSection
-          slots={slots}
+          slots={visibleSlots}
           uploads={uploads}
           passportPreviewUrl={passportPreviewUrl}
           passportBackPreviewUrl={passportBackPreviewUrl}

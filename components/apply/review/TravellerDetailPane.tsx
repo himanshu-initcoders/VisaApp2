@@ -13,6 +13,7 @@ import {
   type ApplyDocumentSlot,
   type ApplyTripQuestion,
 } from '@/lib/apply/applicationForm';
+import { getVisibleDocumentSlots } from '@/lib/document-conditions';
 import type { ApplyTraveller } from '@/lib/apply/types';
 
 const PASSPORT_ACCEPT =
@@ -76,6 +77,11 @@ export function TravellerDetailPane({
   };
 
   const uploads = traveller.documents ?? [];
+  const visibleDocumentSlots = getVisibleDocumentSlots(
+    documentSlots,
+    extraQuestions,
+    traveller.tripDetails?.extra ?? {}
+  );
 
   return (
     <div className="min-h-[360px] flex-1 rounded-[24px] border border-white bg-white p-5 shadow-card sm:p-8">
@@ -159,7 +165,7 @@ export function TravellerDetailPane({
             </h3>
             <div className="mt-3">
               <DocumentsReviewSection
-                slots={documentSlots}
+                slots={visibleDocumentSlots}
                 uploads={uploads}
                 listingId={listingId}
                 travellerId={traveller.id}

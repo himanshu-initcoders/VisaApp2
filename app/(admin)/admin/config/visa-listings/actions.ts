@@ -10,6 +10,52 @@ import { getQuestionById, getMaxQuestionSortOrder, getAdditionalQuestions, searc
 import { revalidatePublicVisaCatalog } from '@/lib/revalidate-public-catalog';
 import { documentTypeLabel } from '@/lib/document-types';
 import { validateVisibilityAgainstSiblings } from '@/lib/question-visibility';
+import { normalizeDocumentConditions } from '@/lib/document-conditions';
+
+/**
+ * Ensure catalog document types exist on the listing's components_required.
+ * Skips types already attached. Returns how many were newly attached.
+ */
+async function ensureDocumentTypesAttached(
+  processId: string,
+  documentTypes: string[]
+): Promise<number> {
+  const uniqueTypes = [...new Set(documentTypes.map((t) => t.trim()).filter(Boolean))];
+  if (uniqueTypes.length === 0) return 0;
+
+  const existing = await getComponentsRequired(processId);
+  const existingTypes = new Set(
+    existing.map((item) => item.documentType || item.key).filter(Boolean)
+  );
+
+  const missing = uniqueTypes.filter((type) => !existingTypes.has(type));
+  if (missing.length === 0) return 0;
+
+  const catalogMap = await getDocumentTypeSamplesByValues(missing);
+  const unknown = missing.filter((type) => !catalogMap.has(type));
+  if (unknown.length > 0) {
+    throw new Error(`Unknown document type(s): ${unknown.join(', ')}`);
+  }
+
+  let nextOrder = (await getMaxComponentSortOrder(processId)) + 1;
+  const rows = missing.map((documentType) => ({
+    visaListingId: processId,
+    key: crypto.randomUUID(),
+    documentType,
+    label: catalogMap.get(documentType)?.label || documentTypeLabel(documentType),
+    amount: '0' as const,
+    chargeable: false,
+    familyEnabled: false,
+    onlyB2b: false,
+    toggle: false,
+    attributes: [] as string[],
+    sourceUrl: null,
+    sortOrder: nextOrder++,
+  }));
+
+  await db.insert(componentsRequired).values(rows);
+  return rows.length;
+}
 
 /**
  * Server actions for visa listing management
@@ -391,6 +437,8 @@ export async function createQuestion(processId: string, data: AdditionalQuestion
       return { error: visibilityError };
     }
 
+    const documentConditions = validated.documentConditions ?? null;
+
     // Create question
     await db.insert(additionalQuestions).values({
       visaListingId: processId,
@@ -407,12 +455,29 @@ export async function createQuestion(processId: string, data: AdditionalQuestion
       sourceUrl: null,
       options: validated.options || [],
       visibility: validated.visibility ?? null,
+      documentConditions,
       sortOrder: maxOrder + 1
     });
+
+    const conditionDocs =
+      normalizeDocumentConditions(documentConditions)?.documents.map((d) => d.documentType) ??
+      [];
+    try {
+      await ensureDocumentTypesAttached(processId, conditionDocs);
+    } catch (attachError) {
+      console.error('Error attaching document types for question:', attachError);
+      return {
+        error:
+          attachError instanceof Error
+            ? attachError.message
+            : 'Failed to attach document types for this question',
+      };
+    }
 
     // Revalidate pages
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/forms`);
+    revalidatePath(`/admin/config/visa-listings/${processId}/docs`);
     revalidatePath('/admin/config/visa-listings');
 
     return {
@@ -457,6 +522,8 @@ export async function updateQuestion(questionId: string, data: AdditionalQuestio
       return { error: visibilityError };
     }
 
+    const documentConditions = validated.documentConditions ?? null;
+
     // Update question. Key and unused flags stay as stored — they are not editable in the form UI.
     await db
       .update(additionalQuestions)
@@ -469,13 +536,30 @@ export async function updateQuestion(questionId: string, data: AdditionalQuestio
         requiredDoc: validated.requiredDoc || null,
         options: validated.options || [],
         visibility: validated.visibility ?? null,
+        documentConditions,
       })
       .where(eq(additionalQuestions.id, questionId));
 
-    // Revalidate pages
     const processId = question.visaListingId;
+    const conditionDocs =
+      normalizeDocumentConditions(documentConditions)?.documents.map((d) => d.documentType) ??
+      [];
+    try {
+      await ensureDocumentTypesAttached(processId, conditionDocs);
+    } catch (attachError) {
+      console.error('Error attaching document types for question:', attachError);
+      return {
+        error:
+          attachError instanceof Error
+            ? attachError.message
+            : 'Failed to attach document types for this question',
+      };
+    }
+
+    // Revalidate pages
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/forms`);
+    revalidatePath(`/admin/config/visa-listings/${processId}/docs`);
     revalidatePath('/admin/config/visa-listings');
 
     return {

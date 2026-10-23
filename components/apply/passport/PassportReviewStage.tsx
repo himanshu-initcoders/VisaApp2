@@ -29,6 +29,10 @@ import {
   type TravellerTripDetails,
   type TripCopySource,
 } from '@/lib/apply/applicationForm';
+import {
+  clearHiddenDocumentUploads,
+  getVisibleDocumentSlots,
+} from '@/lib/document-conditions';
 import { formatProfileName } from '@/lib/apply/travellerProfiles';
 import type { IndianPassportFields } from '@/lib/passport/types';
 import { isReviewComplete } from '@/lib/passport/schema';
@@ -188,9 +192,23 @@ export function PassportReviewStage({
         : isAdditionalQuestionsComplete(trip, formConfig.extraQuestions),
     [trip, formConfig.extraQuestions]
   );
+  const visibleDocumentSlots = useMemo(
+    () =>
+      getVisibleDocumentSlots(
+        formConfig.documentSlots,
+        formConfig.extraQuestions,
+        trip.extra
+      ),
+    [formConfig.documentSlots, formConfig.extraQuestions, trip.extra]
+  );
+
+  useEffect(() => {
+    setDocuments((prev) => clearHiddenDocumentUploads(prev, visibleDocumentSlots));
+  }, [visibleDocumentSlots]);
+
   const documentsComplete = useMemo(
-    () => isDocumentsComplete(documents, formConfig.documentSlots),
-    [documents, formConfig.documentSlots]
+    () => isDocumentsComplete(documents, visibleDocumentSlots),
+    [documents, visibleDocumentSlots]
   );
   const unlocked = tabUnlockState({
     visibleTabs,
@@ -200,8 +218,13 @@ export function PassportReviewStage({
     documentsComplete,
   });
 
-  const [tab, setTab] = useState<ApplicationFormTabId>(() =>
-    firstIncompleteTab({
+  const [tab, setTab] = useState<ApplicationFormTabId>(() => {
+    const initialVisibleSlots = getVisibleDocumentSlots(
+      formConfig.documentSlots,
+      formConfig.extraQuestions,
+      (savedTrip ?? emptyTripDetails()).extra
+    );
+    return firstIncompleteTab({
       visibleTabs,
       generalComplete: formConfig.showGeneralInfo
         ? isReviewComplete(form)
@@ -215,10 +238,10 @@ export function PassportReviewStage({
           : isAdditionalQuestionsComplete(trip, formConfig.extraQuestions),
       documentsComplete: isDocumentsComplete(
         savedDocuments ?? [],
-        formConfig.documentSlots
+        initialVisibleSlots
       ),
-    })
-  );
+    });
+  });
 
   const goNext = () => {
     const index = visibleTabs.indexOf(tab);
@@ -341,7 +364,7 @@ export function PassportReviewStage({
             passengerId={travellerId}
             sessionUserId={sessionUserId}
             ownerUserId={ownerUserId}
-            slots={formConfig.documentSlots}
+            slots={visibleDocumentSlots}
             uploads={documents}
             passportPreviewUrl={
               formConfig.showGeneralInfo ? initial.frontPreviewUrl : undefined
@@ -354,7 +377,7 @@ export function PassportReviewStage({
             fields={form}
             trip={trip}
             extraQuestions={formConfig.extraQuestions}
-            slots={formConfig.documentSlots}
+            slots={visibleDocumentSlots}
             uploads={documents}
             countryName={formConfig.countryName}
             passportPreviewUrl={

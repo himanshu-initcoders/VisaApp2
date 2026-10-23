@@ -107,8 +107,10 @@ export function formatExtraAnswer(
   if (!question) return value;
 
   if (question.type === 'boolean') {
-    // Unchecked optional yes/no is stored as empty. Treat that as No.
-    return value === 'true' || value === 'yes' ? 'Yes' : 'No';
+    const normalized = value.toLowerCase();
+    if (normalized === 'true' || normalized === 'yes') return 'Yes';
+    if (normalized === 'false' || normalized === 'no') return 'No';
+    return value;
   }
   if (!value) return '';
   if (question.type === 'checkbox') {

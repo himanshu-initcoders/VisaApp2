@@ -254,6 +254,17 @@ export const additionalQuestions = pgTable('additional_questions', {
     value: string;
   } | null>().default(null),
 
+  /**
+   * When this question's answer matches, show/require these catalog document types.
+   * null = no document gating from this question.
+   */
+  documentConditions: jsonb('document_conditions').$type<{
+    enabled: true;
+    operator: 'equals' | 'is_empty' | 'is_filled';
+    value: string;
+    documents: Array<{ documentType: string; required: boolean }>;
+  } | null>().default(null),
+
   sortOrder: integer('sort_order').default(0),
   createdAt: timestamp('created_at').defaultNow().notNull()
 }, (table) => ({

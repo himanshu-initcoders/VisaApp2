@@ -5,6 +5,10 @@ import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/Button';
 import { questionCategoryLabel } from '@/lib/question-categories';
 import { normalizeQuestionVisibility } from '@/lib/question-visibility';
+import {
+  normalizeDocumentConditions,
+  type DocumentConditions,
+} from '@/lib/document-conditions';
 import { GripVertical } from 'lucide-react';
 
 interface Question {
@@ -33,6 +37,7 @@ interface Question {
     operator: 'equals' | 'is_empty' | 'is_filled';
     value: string;
   } | null;
+  documentConditions?: DocumentConditions;
 }
 
 interface QuestionCardProps {
@@ -68,6 +73,8 @@ export function QuestionCard({ question, index, onEdit, onDelete }: QuestionCard
 
   const visibilityRule = normalizeQuestionVisibility(question.visibility);
   const isConditional = Boolean(visibilityRule);
+  const documentConditionsRule = normalizeDocumentConditions(question.documentConditions);
+  const hasDocumentConditions = Boolean(documentConditionsRule);
 
   // Get question type color
   const getTypeColor = (type: string) => {
@@ -137,6 +144,13 @@ export function QuestionCard({ question, index, onEdit, onDelete }: QuestionCard
                 : visibilityRule?.operator === 'is_filled'
                   ? 'Show if filled'
                   : 'Conditional'}
+            </span>
+          )}
+
+          {hasDocumentConditions && (
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-sky-wash text-portrait-ink">
+              {documentConditionsRule!.documents.length} conditional doc
+              {documentConditionsRule!.documents.length === 1 ? '' : 's'}
             </span>
           )}
 
