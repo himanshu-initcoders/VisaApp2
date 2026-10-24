@@ -7,9 +7,15 @@ Copy each block into **Twilio Console → Messaging → Content Template Builder
 **Language:** `en`  
 **Base URL:** replace `https://app.viserv.com` with your production `NEXTAUTH_URL` (no trailing slash)
 
+### Voice (match TravelFirst-style client preference)
+- Open with **Dear {{1}},** — never “Hi”, never “Dear User / Applicant”.
+- Body: short, clear, transactional sentences.
+- Close with **Thank you for choosing Viserv.** — never “Team Viserv”, never “Regards,”.
+- Optional one-liner for help when useful: *For any assistance, please contact us through your Viserv account.*
+
 ### Approval tips
 - Keep category **Utility** (transactional visa updates — not marketing).
-- Do not start the body with a variable; put greeting text first.
+- Do not start the body with a variable; put greeting text first (`Dear {{1}},` is fine).
 - URL buttons can have **one** dynamic suffix only (`{{n}}` at the end of the path).
 - Sample values below are required for approval — keep them realistic.
 - After approval, map each `Template name` to the matching notify function in code.
@@ -37,7 +43,13 @@ Copy each block into **Twilio Console → Messaging → Content Template Builder
 
 ### Body (copy)
 ```
-Hi {{1}}, welcome to Viserv. Your account is ready. Sign in to track visa applications and pick up where you left off.
+Dear {{1}},
+
+We're delighted to welcome you to Viserv. Your account is ready, and you can now track visa applications and continue from where you left off.
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
 ```
 
 ### Variables
@@ -61,7 +73,13 @@ Hi {{1}}, welcome to Viserv. Your account is ready. Sign in to track visa applic
 
 ### Body (copy)
 ```
-Hi {{1}}, an admin created your Viserv reviewer account. Sign in with the email and password they shared to review visa applications.
+Dear {{1}},
+
+Your Viserv reviewer account has been created. Please sign in with the email and password shared with you to begin reviewing visa applications.
+
+For any assistance, please contact your Viserv administrator.
+
+Thank you for choosing Viserv.
 ```
 
 ### Variables
@@ -85,11 +103,17 @@ Hi {{1}}, an admin created your Viserv reviewer account. Sign in with the email 
 
 ### Body (copy)
 ```
-Hi {{1}}, we received your visa application and will review it shortly.
+Dear {{1}},
+
+We're delighted to confirm that we have received your visa application. Our team will review it shortly.
 
 Destination: {{2}}
 Visa: {{3}}
 Reference: {{4}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
 ```
 
 ### Variables
@@ -111,11 +135,17 @@ Reference: {{4}}
 
 ### Body (alternate — use if URL var must be dedicated)
 ```
-Hi {{1}}, we received your visa application and will review it shortly.
+Dear {{1}},
+
+We're delighted to confirm that we have received your visa application. Our team will review it shortly.
 
 Destination: {{2}}
 Visa: {{3}}
 Reference: {{4}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
 ```
 
 | Button URL | `https://app.viserv.com/applications/visa/{{5}}` |
@@ -133,13 +163,17 @@ Reference: {{4}}
 
 ### Body (copy)
 ```
-New visa request on Viserv.
+Dear Admin,
+
+A new visa application has been submitted on Viserv and is ready for your attention.
 
 Applicant: {{1}}
 Phone: {{2}}
 Destination: {{3}}
 Visa: {{4}}
 Reference: {{5}}
+
+Thank you for choosing Viserv.
 ```
 
 ### Variables
@@ -169,12 +203,16 @@ Reference: {{5}}
 
 ### Body (copy)
 ```
-Hi {{1}}, a visa application is now on your Viserv queue.
+Dear {{1}},
+
+A visa application has been assigned to you and is ready for review.
 
 Applicant: {{2}}
 Destination: {{3}}
 Visa: {{4}}
 Reference: {{5}}
+
+Thank you for choosing Viserv.
 ```
 
 ### Variables
@@ -203,13 +241,19 @@ Reference: {{5}}
 
 ### Body (copy)
 ```
-Hi {{1}}, we need a few updates before we can continue your visa application.
+Dear {{1}},
+
+We need a few updates before we can continue with your visa application. Please review the details below and submit the required corrections.
 
 {{2}}
 
 Destination: {{3}}
 Visa: {{4}}
 Reference: {{5}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
 ```
 
 ### Variables
@@ -244,11 +288,15 @@ Sample `{{6}}`: same UUID as reference.
 
 ### Body (copy)
 ```
-Hi {{1}}, {{2}} updated the items you asked for on Viserv.
+Dear {{1}},
+
+{{2}} has submitted the requested updates for their visa application. The file is ready for your review.
 
 Destination: {{3}}
 Visa: {{4}}
 Reference: {{5}}
+
+Thank you for choosing Viserv.
 ```
 
 ### Variables
@@ -279,13 +327,19 @@ Use the same template for applicant ↔ staff. Pass the correct deep link path s
 
 ### Body (copy)
 ```
-Hi {{1}}, {{2}} commented on a visa application:
+Dear {{1}},
+
+{{2}} has left a comment on a visa application:
 
 {{3}}
 
 Destination: {{4}}
 Visa: {{5}}
 Reference: {{6}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
 ```
 
 ### Variables
@@ -327,13 +381,19 @@ If you prefer **one** approved template only, omit the URL button and put the li
 
 ### Body (copy)
 ```
-Hi {{1}}, your visa application status is now {{2}}.
+Dear {{1}},
+
+We're writing to confirm that your visa application status is now {{2}}.
 
 {{3}}
 
 Destination: {{4}}
 Visa: {{5}}
 Reference: {{6}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
 ```
 
 ### Variables
@@ -370,21 +430,47 @@ If Meta rejects a generic status template, submit these three instead of #9.
 
 ### 9c. `viserv_status_under_review`
 ```
-Hi {{1}}, your {{2}} visa application for {{3}} is now under review. Reference: {{4}}.
+Dear {{1}},
+
+We're writing to confirm that your {{2}} visa application for {{3}} is now under review.
+
+Reference: {{4}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
 ```
 Samples: Priya Sharma / Tourist Visa / United Arab Emirates / UUID  
 Button: `https://app.viserv.com/applications/visa/{{4}}`
 
 ### 9d. `viserv_status_approved`
 ```
-Hi {{1}}, your {{2}} visa application for {{3}} has been approved. Reference: {{4}}.
+Dear {{1}},
+
+We're delighted to confirm that your {{2}} visa application for {{3}} has been approved.
+
+Reference: {{4}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv. Have a wonderful trip!
 ```
 Samples: same pattern  
 Button: `https://app.viserv.com/applications/visa/{{4}}`
 
 ### 9e. `viserv_status_rejected`
 ```
-Hi {{1}}, your {{2}} visa application for {{3}} was not approved. {{4}} Reference: {{5}}.
+Dear {{1}},
+
+We're writing to inform you that your {{2}} visa application for {{3}} was not approved.
+
+{{4}}
+
+Reference: {{5}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
 ```
 | Var | Sample |
 |---|---|
@@ -446,5 +532,6 @@ Phone format for Twilio: `whatsapp:+91XXXXXXXXXX`
 
 ---
 
-**Last updated:** 2026-10-19  
-**Source of truth for copy:** `lib/email/notify.ts` + `lib/notifications.ts`
+**Last updated:** 2026-10-24  
+**Voice reference:** TravelFirst booking confirmations (Dear / delighted to confirm / Thank you for choosing)  
+**Source of truth for events:** `lib/email/notify.ts` + `lib/notifications.ts`
