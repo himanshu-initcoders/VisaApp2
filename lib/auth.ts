@@ -13,7 +13,7 @@ import { verifyOtpAndEnsureUser } from '@/lib/auth/otp';
  * NextAuth Configuration
  *
  * - Email/password credentials (admins)
- * - Phone OTP credentials (applicants) — mock OTP always passes
+ * - Phone OTP credentials (applicants) — mock accepts any 5 digits; whatsapp verifies challenge
  */
 
 const loginSchema = z.object({

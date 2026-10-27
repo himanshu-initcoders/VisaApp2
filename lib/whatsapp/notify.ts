@@ -1,6 +1,9 @@
 import 'server-only';
 
-import { sendWhatsAppContent } from '@/lib/whatsapp/client';
+import {
+  sendWhatsAppContent,
+  toWhatsAppAddress,
+} from '@/lib/whatsapp/client';
 import {
   recipientFromUserPhone,
   resolveAdminWhatsAppRecipients,
@@ -335,4 +338,33 @@ export async function notifyStatusChangedWhatsApp(input: {
     ),
     `status changed ${input.audience}`
   );
+}
+
+/**
+ * Login OTP — sends to the requested mobile even if no users row exists yet.
+ * Returns false when Twilio/SID is missing or the API fails (caller must fail the request).
+ */
+export async function sendLoginOtpWhatsApp(input: {
+  phone: string;
+  name: string;
+  code: string;
+}): Promise<boolean> {
+  const contentSid = sid('TWILIO_WA_SID_LOGIN_OTP');
+  if (!contentSid) {
+    console.warn('[whatsapp] TWILIO_WA_SID_LOGIN_OTP missing; cannot send login OTP');
+    return false;
+  }
+
+  const to = toWhatsAppAddress(`+91${input.phone}`);
+  if (!to) {
+    console.warn('[whatsapp] Invalid login OTP phone; cannot send');
+    return false;
+  }
+
+  return sendWhatsAppContent({
+    to,
+    contentSid,
+    variables: vars([input.name, input.code]),
+    label: 'login otp',
+  });
 }
