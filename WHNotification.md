@@ -14,23 +14,26 @@ Copy each block into **Twilio Console → Messaging → Content Template Builder
 - Optional one-liner for help when useful: *For any assistance, please contact us through your Viserv account.*
 
 ### Approval tips
-- Keep category **Utility** (transactional visa updates — not marketing).
-- Do not start the body with a variable; put greeting text first (`Dear {{1}},` is fine).
+- Keep category **Utility** for transactional visa updates — not marketing.
+- Login OTP: use full Utility sentences (`Dear {{1}},` … code is `{{2}}`). Do **not** submit a code-only body.
+- Do not start a Utility body with a variable; put greeting text first (`Dear {{1}},` is fine).
 - URL buttons can have **one** dynamic suffix only (`{{n}}` at the end of the path).
 - Sample values below are required for approval — keep them realistic.
 - After approval, map each `Template name` to the matching notify function in code.
 
-| # | Template name | Maps to | Audience |
-|---|---|---|---|
-| 1 | `viserv_user_welcome` | `notifyUserWelcome` | Applicant |
-| 2 | `viserv_reviewer_welcome` | `notifyReviewerWelcome` | Reviewer |
-| 3 | `viserv_visa_submitted_applicant` | `notifyVisaSubmittedToApplicant` | Applicant |
-| 4 | `viserv_visa_submitted_admin` | `notifyVisaSubmittedToAdmin` | Admin |
-| 5 | `viserv_reviewer_assigned` | `notifyReviewerAssigned` | Reviewer |
-| 6 | `viserv_correction_requested` | `notifyCorrectionRequested` | Applicant |
-| 7 | `viserv_correction_resubmitted` | `notifyCorrectionResubmitted` | Reviewer / Admin |
-| 8 | `viserv_new_comment` | `notifyNewComment` | Applicant or Staff |
-| 9 | `viserv_status_changed` | `notifyStatusChanged` | Applicant + Staff |
+| # | Template name | Maps to | Audience | Status |
+|---|---|---|---|---|
+| 1 | `viserv_user_welcome` | `notifyUserWelcome` | Applicant | Submit |
+| 2a | `viserv_reviewer_welcome` | — | Reviewer | **Denied — do not resubmit** |
+| 2b | `viserv_reviewer_access` | `notifyReviewerWelcome` · `TWILIO_WA_SID_REVIEWER_WELCOME` | Reviewer | **Submit (replacement)** |
+| 3 | `viserv_visa_submitted_applicant` | `notifyVisaSubmittedToApplicant` | Applicant | Submit |
+| 4 | `viserv_visa_submitted_admin` | `notifyVisaSubmittedToAdmin` | Admin | Submit |
+| 5 | `viserv_reviewer_assigned` | `notifyReviewerAssigned` | Reviewer | Submit |
+| 6 | `viserv_correction_requested` | `notifyCorrectionRequested` | Applicant | Submit |
+| 7 | `viserv_correction_resubmitted` | `notifyCorrectionResubmitted` | Reviewer / Admin | Submit |
+| 8 | `viserv_new_comment` | `notifyNewComment` | Applicant or Staff | Submit |
+| 9 | `viserv_status_changed` | `notifyStatusChanged` | Applicant + Staff | Submit |
+| 10 | `viserv_login_otp` | `requestOtp` (later) · `TWILIO_WA_SID_LOGIN_OTP` | Applicant | **Submit (Utility — full sentences)** |
 
 ---
 
@@ -64,14 +67,12 @@ Thank you for choosing Viserv.
 
 ---
 
-## 2. Reviewer welcome
+## 2a. Reviewer welcome — DENIED (do not resubmit)
 
 **Template name:** `viserv_reviewer_welcome`  
-**Category:** Utility  
-**Language:** English (`en`)  
-**Maps to:** Admin creates reviewer → `notifyReviewerWelcome`
+**Status:** Denied by Meta — keep for history only. Use **2b** instead.
 
-### Body (copy)
+### Body (historical — rejected)
 ```
 Dear {{1}},
 
@@ -82,15 +83,40 @@ For any assistance, please contact your Viserv administrator.
 Thank you for choosing Viserv.
 ```
 
+Likely denial triggers: “password shared with you”, soft invite-to-start language, “contact your Viserv administrator”.
+
+---
+
+## 2b. Reviewer access (replacement)
+
+**Template name:** `viserv_reviewer_access`  
+**Category:** Utility  
+**Language:** English (`en`)  
+**Maps to:** Admin creates reviewer → `notifyReviewerWelcome`  
+**Env after approval:** `TWILIO_WA_SID_REVIEWER_WELCOME` (reuse existing env key; no code rename)
+
+### Body (copy)
+```
+Dear {{1}},
+
+Your Viserv staff access is ready. You can sign in with the credentials already shared with you by email to review assigned visa applications.
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
 ### Variables
 | Var | Meaning | Sample value |
 |---|---|---|
 | `{{1}}` | Reviewer name | Rajesh Kumar |
 
-### Button (optional)
+### Button
 | Type | Text | URL |
 |---|---|---|
 | URL | Sign in | `https://app.viserv.com/login` |
+
+**Why this should approve better:** no “password” in the WhatsApp body, no soft invite marketing, same Viserv Utility voice as approved templates.
 
 ---
 
@@ -481,6 +507,43 @@ Button: `https://app.viserv.com/applications/visa/{{5}}`
 
 ---
 
+## 10. Login OTP (applicant sign-in)
+
+**Template name:** `viserv_login_otp`  
+**Category:** Utility  
+**Language:** English (`en`)  
+**Maps to:** Applicant OTP request → `requestOtp` (wire later)  
+**Env after approval:** `TWILIO_WA_SID_LOGIN_OTP`
+
+Submit as a normal **Utility** text template with full sentences — same voice as the other Viserv notices. Do **not** submit a code-only / bare-OTP body (Meta often rejects that). Put the OTP inside a clear sentence as `{{2}}`.
+
+### Body (copy)
+```
+Dear {{1}},
+
+Your Viserv login verification code is {{2}}. This code is valid for 10 minutes. Please enter it on the sign-in screen to continue. Do not share this code with anyone.
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+### Variables
+| Var | Meaning | Sample value |
+|---|---|---|
+| `{{1}}` | Applicant name (or “Traveller” if name unknown) | Priya Sharma |
+| `{{2}}` | 5-digit OTP (`mobileOtpSchema`) | 48291 |
+
+### Button (optional)
+| Type | Text | URL |
+|---|---|---|
+| URL | Sign in | `https://app.viserv.com/signin` |
+
+### App note
+Sending path today is **mock** in `lib/auth/otp.ts` (`AUTH_OTP_MODE=mock`). Real WhatsApp OTP send is a follow-up after Meta approves this template and `TWILIO_WA_SID_LOGIN_OTP` is set.
+
+---
+
 ## URL button note
 
 WhatsApp / Meta URL buttons usually require:
@@ -502,7 +565,8 @@ When the button URL uses `{{1}}`, body variables must still be numbered sequenti
 ## Quick copy checklist (submit in this order)
 
 1. [ ] `viserv_user_welcome`
-2. [ ] `viserv_reviewer_welcome`
+2. [x] `viserv_reviewer_welcome` — **denied; do not resubmit**
+2b. [ ] `viserv_reviewer_access` — **submit this instead**
 3. [ ] `viserv_visa_submitted_applicant`
 4. [ ] `viserv_visa_submitted_admin`
 5. [ ] `viserv_reviewer_assigned`
@@ -511,27 +575,29 @@ When the button URL uses `{{1}}`, body variables must still be numbered sequenti
 8. [ ] `viserv_new_comment_applicant` + `viserv_new_comment_staff`
 9. [ ] `viserv_status_changed_applicant` + `viserv_status_changed_staff`  
    *(or optional 9c–9e if generic status is rejected)*
+10. [ ] `viserv_login_otp` — Utility with full sentences (OTP as `{{2}}`, not code-only)
 
 ---
 
 ## Twilio send mapping (for later implementation)
 
-| Event | Content SID / template name | To |
-|---|---|---|
-| User registers | `viserv_user_welcome` | Applicant phone |
-| Reviewer created | `viserv_reviewer_welcome` | Reviewer phone |
-| Visa submitted | `viserv_visa_submitted_applicant` | Applicant phone |
-| Visa submitted | `viserv_visa_submitted_admin` | Admin WhatsApp |
-| Reviewer assigned | `viserv_reviewer_assigned` | Reviewer phone |
-| Correction requested | `viserv_correction_requested` | Applicant phone |
-| Correction resubmitted | `viserv_correction_resubmitted` | Assigned reviewer (else admins) |
-| New comment | `viserv_new_comment_*` | Opposite party |
-| Status changed | `viserv_status_changed_*` | Applicant + staff audience |
+| Event | Content SID / template name | Env | To |
+|---|---|---|---|
+| User registers | `viserv_user_welcome` | `TWILIO_WA_SID_USER_WELCOME` | Applicant phone |
+| Reviewer created | `viserv_reviewer_access` | `TWILIO_WA_SID_REVIEWER_WELCOME` | Reviewer phone |
+| Visa submitted | `viserv_visa_submitted_applicant` | `TWILIO_WA_SID_VISA_SUBMITTED_APPLICANT` | Applicant phone |
+| Visa submitted | `viserv_visa_submitted_admin` | `TWILIO_WA_SID_VISA_SUBMITTED_ADMIN` | Admins with `users.phone` |
+| Reviewer assigned | `viserv_reviewer_assigned` | `TWILIO_WA_SID_REVIEWER_ASSIGNED` | Reviewer phone |
+| Correction requested | `viserv_correction_requested` | `TWILIO_WA_SID_CORRECTION_REQUESTED` | Applicant phone |
+| Correction resubmitted | `viserv_correction_resubmitted` | `TWILIO_WA_SID_CORRECTION_RESUBMITTED` | Assigned reviewer (else admins) |
+| New comment | `viserv_new_comment_*` | `TWILIO_WA_SID_NEW_COMMENT_*` | Opposite party |
+| Status changed | `viserv_status_changed_*` | `TWILIO_WA_SID_STATUS_CHANGED_*` | Applicant + staff audience |
+| Applicant login OTP | `viserv_login_otp` | `TWILIO_WA_SID_LOGIN_OTP` | Applicant phone (requested number) |
 
 Phone format for Twilio: `whatsapp:+91XXXXXXXXXX`
 
 ---
 
-**Last updated:** 2026-10-24  
+**Last updated:** 2026-10-27  
 **Voice reference:** TravelFirst booking confirmations (Dear / delighted to confirm / Thank you for choosing)  
-**Source of truth for events:** `lib/email/notify.ts` + `lib/notifications.ts`
+**Source of truth for events:** `lib/email/notify.ts` + `lib/notifications.ts` + `lib/whatsapp/notify.ts`

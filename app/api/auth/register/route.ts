@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
 import { db } from '@/lib/db';
 import { notifyUserWelcome } from '@/lib/email/notify';
+import { notifyUserWelcomeWhatsApp } from '@/lib/whatsapp/notify';
 import { users } from '@/lib/db/schema';
 import { registerSchema } from '@/lib/validations/auth';
 import { eq } from 'drizzle-orm';
@@ -71,11 +72,17 @@ export async function POST(request: NextRequest) {
         id: users.id,
         email: users.email,
         name: users.name,
+        phone: users.phone,
       });
 
     await notifyUserWelcome({
       name: newUser.name,
       email: newUser.email,
+    });
+    await notifyUserWelcomeWhatsApp({
+      userId: newUser.id,
+      name: newUser.name,
+      phone: newUser.phone,
     });
 
     return NextResponse.json(

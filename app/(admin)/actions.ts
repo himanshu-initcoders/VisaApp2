@@ -26,6 +26,10 @@ import {
   notifyReviewerAssigned,
   notifyReviewerWelcome,
 } from '@/lib/email/notify';
+import {
+  notifyReviewerAssignedWhatsApp,
+  notifyReviewerWelcomeWhatsApp,
+} from '@/lib/whatsapp/notify';
 import { createReviewerSchema } from '@/lib/validations/auth';
 import { recomputeVisaCaseStatus } from '@/lib/visa/travellerStatus';
 import {
@@ -733,18 +737,28 @@ export async function createReviewer(input: unknown): Promise<ActionResponse> {
 
     const passwordHash = await hash(password, 12);
 
-    await db.insert(users).values({
-      name,
-      email,
-      phone,
-      passwordHash,
-      role: 'reviewer',
-      emailVerified: new Date(),
-    });
+    const [created] = await db
+      .insert(users)
+      .values({
+        name,
+        email,
+        phone,
+        passwordHash,
+        role: 'reviewer',
+        emailVerified: new Date(),
+      })
+      .returning({ id: users.id, name: users.name, phone: users.phone });
 
     revalidatePath('/admin/users');
 
     await notifyReviewerWelcome({ name, email });
+    if (created) {
+      await notifyReviewerWelcomeWhatsApp({
+        userId: created.id,
+        name: created.name,
+        phone: created.phone ?? phone,
+      });
+    }
 
     return {
       success: true,
@@ -909,6 +923,14 @@ export async function assignVisaReviewer(
 
     await notifyReviewerAssigned({
       email: reviewer.email,
+      reviewerName: reviewer.name,
+      applicantName: application.applicantName || 'Applicant',
+      country: application.country || application.countryCode || 'Unknown',
+      visaType: application.visaType,
+      applicationId,
+    });
+    await notifyReviewerAssignedWhatsApp({
+      reviewerUserId: reviewer.id,
       reviewerName: reviewer.name,
       applicantName: application.applicantName || 'Applicant',
       country: application.country || application.countryCode || 'Unknown',

@@ -11,6 +11,12 @@ import {
   notifyStatusChanged,
   resolveApplicantEmail,
 } from '@/lib/email/notify';
+import {
+  notifyCorrectionRequestedWhatsApp,
+  notifyCorrectionResubmittedWhatsApp,
+  notifyNewCommentWhatsApp,
+  notifyStatusChangedWhatsApp,
+} from '@/lib/whatsapp/notify';
 
 const STATUS_EMAILS = new Set(['approved', 'rejected', 'under_review']);
 
@@ -34,6 +40,7 @@ interface VisaContext {
   assignedReviewerId: string | null;
   accountEmail: string | null;
   accountName: string | null;
+  accountPhone: string | null;
   passportEmail: string | null;
 }
 
@@ -50,6 +57,7 @@ async function loadVisaContext(applicationId: string): Promise<VisaContext | nul
       travellers: visaApplications.travellers,
       accountEmail: users.email,
       accountName: users.name,
+      accountPhone: users.phone,
     })
     .from(visaApplications)
     .innerJoin(users, eq(visaApplications.userId, users.id))
@@ -77,6 +85,7 @@ async function loadVisaContext(applicationId: string): Promise<VisaContext | nul
     assignedReviewerId: row.assignedReviewerId,
     accountEmail: row.accountEmail,
     accountName: row.accountName,
+    accountPhone: row.accountPhone,
     passportEmail,
   };
 }
@@ -183,17 +192,29 @@ export async function notifyCorrectionRequestedEvent(input: {
     accountEmail: visa.accountEmail,
     passportEmail: visa.passportEmail,
   });
-  if (!to) return;
+  if (to) {
+    await sendSafely(
+      notifyCorrectionRequested({
+        to,
+        applicantName: applicantLabel(visa),
+        country: countryOf(visa),
+        visaType: visa.visaType,
+        applicationId: visa.id,
+        message: input.message,
+      }),
+      'correction requested'
+    );
+  }
   await sendSafely(
-    notifyCorrectionRequested({
-      to,
+    notifyCorrectionRequestedWhatsApp({
+      userId: visa.userId,
       applicantName: applicantLabel(visa),
       country: countryOf(visa),
       visaType: visa.visaType,
       applicationId: visa.id,
       message: input.message,
     }),
-    'correction requested'
+    'correction requested whatsapp'
   );
 }
 
@@ -215,8 +236,8 @@ export async function notifyCorrectionResubmittedEvent(input: {
     body,
     href,
   });
-  await Promise.all(
-    audience.emails.map((recipient) =>
+  await Promise.all([
+    ...audience.emails.map((recipient) =>
       sendSafely(
         notifyCorrectionResubmitted({
           to: recipient.email,
@@ -228,8 +249,18 @@ export async function notifyCorrectionResubmittedEvent(input: {
         }),
         'correction resubmitted'
       )
-    )
-  );
+    ),
+    sendSafely(
+      notifyCorrectionResubmittedWhatsApp({
+        recipientUserIds: audience.userIds,
+        applicantName: applicantLabel(visa),
+        country: countryOf(visa),
+        visaType: visa.visaType,
+        applicationId: visa.id,
+      }),
+      'correction resubmitted whatsapp'
+    ),
+  ]);
 }
 
 export async function notifyCommentEvent(input: {
@@ -261,19 +292,33 @@ export async function notifyCommentEvent(input: {
       accountEmail: visa.accountEmail,
       passportEmail: visa.passportEmail,
     });
-    if (!to) return;
+    if (to) {
+      await sendSafely(
+        notifyNewComment({
+          to,
+          recipientName: applicantLabel(visa),
+          authorName: input.authorName,
+          country: countryOf(visa),
+          visaType: visa.visaType,
+          applicationId: visa.id,
+          excerpt,
+          href,
+        }),
+        'staff comment'
+      );
+    }
     await sendSafely(
-      notifyNewComment({
-        to,
+      notifyNewCommentWhatsApp({
+        recipientUserId: visa.userId,
         recipientName: applicantLabel(visa),
         authorName: input.authorName,
         country: countryOf(visa),
         visaType: visa.visaType,
         applicationId: visa.id,
         excerpt,
-        href,
+        audience: 'applicant',
       }),
-      'staff comment'
+      'staff comment whatsapp'
     );
     return;
   }
@@ -287,8 +332,8 @@ export async function notifyCommentEvent(input: {
     body: excerpt,
     href,
   });
-  await Promise.all(
-    audience.emails.map((recipient) =>
+  await Promise.all([
+    ...audience.emails.map((recipient) =>
       sendSafely(
         notifyNewComment({
           to: recipient.email,
@@ -302,8 +347,23 @@ export async function notifyCommentEvent(input: {
         }),
         'applicant comment'
       )
-    )
-  );
+    ),
+    ...audience.userIds.map((userId) =>
+      sendSafely(
+        notifyNewCommentWhatsApp({
+          recipientUserId: userId,
+          recipientName: '',
+          authorName: input.authorName,
+          country: countryOf(visa),
+          visaType: visa.visaType,
+          applicationId: visa.id,
+          excerpt,
+          audience: 'staff',
+        }),
+        'applicant comment whatsapp'
+      )
+    ),
+  ]);
 }
 
 export async function notifyStatusChangedEvent(input: {
@@ -348,6 +408,19 @@ export async function notifyStatusChangedEvent(input: {
         'status to applicant'
       );
     }
+    await sendSafely(
+      notifyStatusChangedWhatsApp({
+        recipientUserId: visa.userId,
+        recipientName: applicantLabel(visa),
+        country: countryOf(visa),
+        visaType: visa.visaType,
+        applicationId: visa.id,
+        newStatus: input.newStatus,
+        notes: input.notes,
+        audience: 'applicant',
+      }),
+      'status to applicant whatsapp'
+    );
   }
 
   const audience = await staffAudience(visa, input.actorId);
@@ -360,8 +433,8 @@ export async function notifyStatusChangedEvent(input: {
     body,
     href,
   });
-  await Promise.all(
-    audience.emails.map((recipient) =>
+  await Promise.all([
+    ...audience.emails.map((recipient) =>
       sendSafely(
         notifyStatusChanged({
           to: recipient.email,
@@ -375,8 +448,23 @@ export async function notifyStatusChangedEvent(input: {
         }),
         'status to staff'
       )
-    )
-  );
+    ),
+    ...audience.userIds.map((userId) =>
+      sendSafely(
+        notifyStatusChangedWhatsApp({
+          recipientUserId: userId,
+          recipientName: '',
+          country: countryOf(visa),
+          visaType: visa.visaType,
+          applicationId: visa.id,
+          newStatus: input.newStatus,
+          notes: input.notes,
+          audience: 'staff',
+        }),
+        'status to staff whatsapp'
+      )
+    ),
+  ]);
 }
 
 export async function listNotifications(

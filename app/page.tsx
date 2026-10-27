@@ -4,6 +4,7 @@ import { Footer } from '@/components/layout/Footer';
 import { HomeLandingClient } from '@/components/public/HomeLandingClient';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
+import { WhatsAppFloat } from '@/components/public/WhatsAppFloat';
 import { getEnabledCountriesWithProcesses } from '@/lib/db/queries/public';
 
 export const dynamic = 'force-dynamic';
@@ -144,6 +145,7 @@ export default async function Home() {
         </section>
       </main>
       <Footer />
+      <WhatsAppFloat />
     </>
   );
 }
