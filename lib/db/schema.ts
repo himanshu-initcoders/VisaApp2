@@ -39,6 +39,18 @@ export const users = pgTable(
 );
 
 /**
+ * Active WhatsApp/login OTP challenges (one row per phone).
+ * Code is stored hashed; expires after 10 minutes.
+ */
+export const phoneOtpChallenges = pgTable('phone_otp_challenges', {
+  phone: varchar('phone', { length: 20 }).primaryKey(),
+  codeHash: varchar('code_hash', { length: 128 }).notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+/**
  * Client apply drafts synced after applicant OTP login (JSON only; files stay in IndexedDB).
  */
 export const applicationDrafts = pgTable(

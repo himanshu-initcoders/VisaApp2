@@ -26,6 +26,10 @@ import {
   notifyVisaSubmittedToAdmin,
   notifyVisaSubmittedToApplicant,
 } from '@/lib/email/notify';
+import {
+  notifyVisaSubmittedToAdminWhatsApp,
+  notifyVisaSubmittedToApplicantWhatsApp,
+} from '@/lib/whatsapp/notify';
 import { promoteDraftFileToApplication } from '@/lib/upload/promoteDraftFile';
 import { deleteDraftStorageFiles } from '@/lib/apply/deleteDraftStorageFiles';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
@@ -576,7 +580,22 @@ export async function submitApplication(
       visaType: visaTypeLabel,
       applicationId,
     });
+    await notifyVisaSubmittedToApplicantWhatsApp({
+      userId: userRow.id,
+      applicantName: primaryName,
+      phone: userRow.phone,
+      country: countryName,
+      visaType: visaTypeLabel,
+      applicationId,
+    });
     await notifyVisaSubmittedToAdmin({
+      applicantName: primaryName,
+      phone: userRow.phone,
+      country: countryName,
+      visaType: visaTypeLabel,
+      applicationId,
+    });
+    await notifyVisaSubmittedToAdminWhatsApp({
       applicantName: primaryName,
       phone: userRow.phone,
       country: countryName,

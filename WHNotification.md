@@ -15,7 +15,6 @@ Copy each block into **Twilio Console → Messaging → Content Template Builder
 - Optional one-liner for help when useful: *For any assistance, please contact us through your Viserv account.*
 
 ### Approval tips
-
 - Keep category **Utility** for transactional visa updates — not marketing.
 - Login OTP: use full Utility sentences (`Dear {{1}},` … code is `{{2}}`). Do **not** submit a code-only body.
 - Do not start a Utility body with a variable; put greeting text first (`Dear {{1}},` is fine).
@@ -102,7 +101,6 @@ Likely denial triggers: “password shared with you”, soft invite-to-start lan
 **Env after approval:** `TWILIO_WA_SID_REVIEWER_WELCOME` (reuse existing env key; no code rename)
 
 ### Body (copy)
-
 ```
 Dear {{1}},
 
@@ -120,7 +118,6 @@ Thank you for choosing Viserv.
 | `{{1}}` | Reviewer name | Rajesh Kumar |
 
 ### Button
-
 | Type | Text | URL |
 |---|---|---|
 | URL | Sign in | `https://app.viserv.com/login` |
@@ -565,20 +562,17 @@ Thank you for choosing Viserv.
 ```
 
 ### Variables
-
 | Var | Meaning | Sample value |
 |---|---|---|
 | `{{1}}` | Applicant name (or “Traveller” if name unknown) | Priya Sharma |
 | `{{2}}` | 5-digit OTP (`mobileOtpSchema`) | 48291 |
 
 ### Button (optional)
-
 | Type | Text | URL |
 |---|---|---|
 | URL | Sign in | `https://app.viserv.com/signin` |
 
 ### App note
-
 Sending path today is **mock** in `lib/auth/otp.ts` (`AUTH_OTP_MODE=mock`). Real WhatsApp OTP send is a follow-up after Meta approves this template and `TWILIO_WA_SID_LOGIN_OTP` is set.
 
 ---
@@ -605,7 +599,6 @@ When the button URL uses `{{1}}`, body variables must still be numbered sequenti
 
 1. [ ] `viserv_user_welcome`
 2. [x] `viserv_reviewer_welcome` — **denied; do not resubmit**
-
 2b. [ ] `viserv_reviewer_access` — **submit this instead**
 3. [ ] `viserv_visa_submitted_applicant`
 4. [ ] `viserv_visa_submitted_admin`

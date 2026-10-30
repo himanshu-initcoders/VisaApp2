@@ -1,12 +1,15 @@
 /**
- * Mock mobile OTP helpers (AUTH_OTP_MODE=mock always accepts valid OTP).
+ * Mobile OTP helpers.
+ * - mock: any valid 5-digit OTP signs in (local / CI)
+ * - whatsapp: generate, store hashed challenge (10m expiry), send via Twilio template
  */
 
 'use server';
 
+import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { users } from '@/lib/db/schema';
+import { phoneOtpChallenges, users } from '@/lib/db/schema';
 import {
   normalizeIndianPhone,
   otpSyntheticEmail,
@@ -15,14 +18,44 @@ import {
   requestOtpSchema,
   verifyOtpSchema,
 } from '@/lib/validations/auth';
+import { sendLoginOtpWhatsApp } from '@/lib/whatsapp/notify';
 
 const rateLimit = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 60_000;
+const OTP_TTL_MS = 10 * 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
 
-function otpMode(): 'mock' | 'sms' {
+function otpMode(): 'mock' | 'whatsapp' {
   const mode = (process.env.AUTH_OTP_MODE || 'mock').toLowerCase();
-  return mode === 'sms' ? 'sms' : 'mock';
+  return mode === 'whatsapp' ? 'whatsapp' : 'mock';
+}
+
+function otpPepper(): string {
+  return (
+    process.env.OTP_PEPPER?.trim() ||
+    process.env.NEXTAUTH_SECRET?.trim() ||
+    'viserv-otp-dev-pepper'
+  );
+}
+
+function hashOtp(code: string): string {
+  return createHash('sha256').update(`${code}:${otpPepper()}`).digest('hex');
+}
+
+function hashesMatch(a: string, b: string): boolean {
+  try {
+    const bufA = Buffer.from(a, 'utf8');
+    const bufB = Buffer.from(b, 'utf8');
+    if (bufA.length !== bufB.length) return false;
+    return timingSafeEqual(bufA, bufB);
+  } catch {
+    return false;
+  }
+}
+
+function generateOtpCode(): string {
+  return String(randomInt(0, 100_000)).padStart(5, '0');
 }
 
 function checkRateLimit(key: string): boolean {
@@ -60,19 +93,75 @@ export async function requestOtp(input: {
     };
   }
 
-  if (otpMode() === 'sms') {
+  const mode = otpMode();
+  const code = generateOtpCode();
+
+  if (mode === 'mock') {
+    console.info(`[otp] mock code for +91${phone}: ${code}`);
+    return { success: true };
+  }
+
+  const [existingUser] = await db
+    .select({ name: users.name, role: users.role })
+    .from(users)
+    .where(eq(users.phone, phone))
+    .limit(1);
+
+  if (
+    existingUser &&
+    (existingUser.role === 'admin' || existingUser.role === 'reviewer')
+  ) {
     return {
       success: false,
-      error: 'SMS OTP is not configured yet. Set AUTH_OTP_MODE=mock.',
+      error: 'This number is linked to a staff account. Please use email login.',
     };
   }
 
-  // Mock: no SMS sent
+  const displayName = existingUser?.name?.trim() || 'Traveller';
+  const expiresAt = new Date(Date.now() + OTP_TTL_MS);
+  const codeHash = hashOtp(code);
+  const now = new Date();
+
+  await db
+    .insert(phoneOtpChallenges)
+    .values({
+      phone,
+      codeHash,
+      expiresAt,
+      attempts: 0,
+      createdAt: now,
+    })
+    .onConflictDoUpdate({
+      target: phoneOtpChallenges.phone,
+      set: {
+        codeHash,
+        expiresAt,
+        attempts: 0,
+        createdAt: now,
+      },
+    });
+
+  const sent = await sendLoginOtpWhatsApp({
+    phone,
+    name: displayName,
+    code,
+  });
+
+  if (!sent) {
+    await db
+      .delete(phoneOtpChallenges)
+      .where(eq(phoneOtpChallenges.phone, phone));
+    return {
+      success: false,
+      error: 'Could not send OTP via WhatsApp. Please try again shortly.',
+    };
+  }
+
   return { success: true };
 }
 
 /**
- * Verify OTP (mock always passes when Zod-valid) and find-or-create applicant user.
+ * Verify OTP and find-or-create applicant user.
  * Does not create a session — caller should signIn('phone-otp', …).
  */
 export async function verifyOtpAndEnsureUser(input: {
@@ -95,16 +184,54 @@ export async function verifyOtpAndEnsureUser(input: {
   }
 
   const { phone, otp } = parsed.data;
+  const mode = otpMode();
 
-  if (otpMode() === 'sms') {
-    return {
-      success: false,
-      error: 'SMS OTP is not configured yet. Set AUTH_OTP_MODE=mock.',
-    };
+  if (mode === 'whatsapp') {
+    const [challenge] = await db
+      .select()
+      .from(phoneOtpChallenges)
+      .where(eq(phoneOtpChallenges.phone, phone))
+      .limit(1);
+
+    if (!challenge) {
+      return {
+        success: false,
+        error: 'No OTP found. Please request a new code.',
+      };
+    }
+
+    if (challenge.expiresAt.getTime() < Date.now()) {
+      await db
+        .delete(phoneOtpChallenges)
+        .where(eq(phoneOtpChallenges.phone, phone));
+      return {
+        success: false,
+        error: 'OTP expired. Please request a new code.',
+      };
+    }
+
+    if (challenge.attempts >= OTP_MAX_ATTEMPTS) {
+      await db
+        .delete(phoneOtpChallenges)
+        .where(eq(phoneOtpChallenges.phone, phone));
+      return {
+        success: false,
+        error: 'Too many incorrect attempts. Please request a new code.',
+      };
+    }
+
+    if (!hashesMatch(challenge.codeHash, hashOtp(otp))) {
+      await db
+        .update(phoneOtpChallenges)
+        .set({ attempts: challenge.attempts + 1 })
+        .where(eq(phoneOtpChallenges.phone, phone));
+      return { success: false, error: 'Invalid OTP. Please try again.' };
+    }
+
+    await db
+      .delete(phoneOtpChallenges)
+      .where(eq(phoneOtpChallenges.phone, phone));
   }
-
-  // Mock: any Zod-valid 5-digit OTP is accepted
-  void otp;
 
   const [existing] = await db
     .select()
