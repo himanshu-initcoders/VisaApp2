@@ -98,7 +98,7 @@ export function Footer() {
                 <span className="text-yellow-400">★</span>
                 <span className="text-yellow-400">★</span>
               </div>
-              <span className="text-sm font-medium">20K+ reviews</span>
+              <span className="text-sm font-medium">200+ reviews</span>
             </div>
 
             {/* Social Links */}
@@ -156,7 +156,7 @@ export function Footer() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             {/* Logo & Copyright */}
             <div className="flex flex-col items-center gap-3 sm:flex-row">
-              <Logo href="/" size="md" />
+              <Logo href="/" size="md" inverted />
               <span className="text-sm text-white/70">
                 © {currentYear} {BRAND_NAME}. All rights reserved.
               </span>

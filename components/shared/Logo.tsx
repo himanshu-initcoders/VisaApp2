@@ -17,6 +17,8 @@ export interface LogoProps {
   className?: string;
   imageClassName?: string;
   priority?: boolean;
+  /** Use inverted mark for dark backgrounds (`/logo-inverted.png`). */
+  inverted?: boolean;
   /** Optional subtitle under the mark (e.g. Admin Panel). */
   subtitle?: string;
   /** Fires when the linked logo is activated (e.g. close mobile menus). */
@@ -24,7 +26,7 @@ export interface LogoProps {
 }
 
 /**
- * Viserv brand mark — uses `/logo.png` (icon + wordmark).
+ * Viserv brand mark — uses `/logo.png` (icon + wordmark), or inverted for dark surfaces.
  */
 export function Logo({
   href = '/',
@@ -32,6 +34,7 @@ export function Logo({
   className,
   imageClassName,
   priority = false,
+  inverted = false,
   subtitle,
   onNavigate,
 }: LogoProps) {
@@ -40,7 +43,7 @@ export function Logo({
   const mark = (
     <span className={cn('inline-flex flex-col items-start gap-0.5', className)}>
       <Image
-        src="/logo.png"
+        src={inverted ? '/logo-inverted.png' : '/logo.png'}
         alt={BRAND_NAME}
         width={width}
         height={height}

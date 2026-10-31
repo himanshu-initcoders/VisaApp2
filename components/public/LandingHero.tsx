@@ -24,13 +24,13 @@ const PRODUCT_TABS = [
     imageSrc: '/visa.gif',
     playOnHover: false,
   },
-  {
-    id: 'passport',
-    label: 'Passport',
-    href: '/passport',
-    imageSrc: '/passport.gif',
-    playOnHover: true,
-  },
+  // {
+  //   id: 'passport',
+  //   label: 'Passport',
+  //   href: '/passport',
+  //   imageSrc: '/passport.gif',
+  //   playOnHover: true,
+  // },
 ] as const;
 
 const CATEGORY_ICONS = {
