@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { StartApplicationCTA } from '@/components/apply/StartApplicationCTA';
 
 interface MobileStickyBarProps {
@@ -38,13 +38,15 @@ export function MobileStickyBar({
           </p>
           <p className="text-sm text-slate-helper">{price}</p>
         </div>
-        <StartApplicationCTA
-          countryCode={countryCode}
-          listingId={listingId}
-          label="Apply now"
-          size="md"
-          variant="mobile"
-        />
+        <Suspense fallback={null}>
+          <StartApplicationCTA
+            countryCode={countryCode}
+            listingId={listingId}
+            label="Apply now"
+            size="md"
+            variant="mobile"
+          />
+        </Suspense>
       </div>
     </div>
   );

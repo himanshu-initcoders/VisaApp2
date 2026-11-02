@@ -366,19 +366,32 @@ export function AdminSidebar({
             )}
           </nav>
 
-          {/* User footer */}
+          {/* User footer — opens profile settings */}
           <div className="border-t border-ash px-2 py-4">
             {collapsed ? (
-              <div
-                className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-mint-wash to-sky-wash"
-                title={user.name || user.email || 'Admin'}
+              <Link
+                href="/admin/profile"
+                onClick={closeMobile}
+                title="Profile settings"
+                className={cn(
+                  'mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-mint-wash to-sky-wash transition-shadow',
+                  pathname.startsWith('/admin/profile') &&
+                    'ring-2 ring-portrait-ink/20'
+                )}
               >
                 <span className="font-switzer text-sm font-semibold text-portrait-ink">
                   {user.name?.charAt(0).toUpperCase() || 'A'}
                 </span>
-              </div>
+              </Link>
             ) : (
-              <div className="flex items-center space-x-3 px-3 py-2">
+              <Link
+                href="/admin/profile"
+                onClick={closeMobile}
+                className={cn(
+                  'flex items-center space-x-3 rounded-[12px] px-3 py-2 transition-colors hover:bg-sky-wash/30',
+                  pathname.startsWith('/admin/profile') && 'bg-sky-wash/40'
+                )}
+              >
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-mint-wash to-sky-wash">
                   <span className="font-switzer text-sm font-semibold text-portrait-ink">
                     {user.name?.charAt(0).toUpperCase() || 'A'}
@@ -392,7 +405,7 @@ export function AdminSidebar({
                     {user.email}
                   </p>
                 </div>
-              </div>
+              </Link>
             )}
 
             <form action={signOutAction} className={collapsed ? 'flex justify-center' : 'px-1'}>

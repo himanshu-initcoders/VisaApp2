@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { AnimatedStatValue } from '@/components/ui/AnimatedStatValue';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import {
@@ -125,24 +125,26 @@ export function ListingOverviewSection({
       </MotionReveal>
 
       <div id="pricing" className="scroll-mt-28 sm:scroll-mt-32">
-        <PricingPanel
-          compact
-          countryCode={countryCode}
-          listingId={listingId}
-          isFree={isFree}
-          visaFree={visaFree}
-          officialPortalUrl={officialPortalUrl}
-          withFreeInsurance={withFreeInsurance}
-          priceOptions={priceOptions}
-          headline={headline}
-          visaKinds={visaKinds}
-          currentListingId={listingId}
-          selectedId={selected?.id}
-          onSelectedIdChange={setSelectedId}
-          applyPath={applyPath}
-          onApplyPathChange={setApplyPath}
-          onVisaKindSelect={onVisaKindSelect}
-        />
+        <Suspense fallback={null}>
+          <PricingPanel
+            compact
+            countryCode={countryCode}
+            listingId={listingId}
+            isFree={isFree}
+            visaFree={visaFree}
+            officialPortalUrl={officialPortalUrl}
+            withFreeInsurance={withFreeInsurance}
+            priceOptions={priceOptions}
+            headline={headline}
+            visaKinds={visaKinds}
+            currentListingId={listingId}
+            selectedId={selected?.id}
+            onSelectedIdChange={setSelectedId}
+            applyPath={applyPath}
+            onApplyPathChange={setApplyPath}
+            onVisaKindSelect={onVisaKindSelect}
+          />
+        </Suspense>
       </div>
     </section>
   );

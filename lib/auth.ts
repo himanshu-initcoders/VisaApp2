@@ -1,4 +1,4 @@
-import NextAuth, { NextAuthConfig } from 'next-auth';
+import NextAuth, { CredentialsSignin, type NextAuthConfig } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { compare } from 'bcryptjs';
 import { db } from '@/lib/db';
@@ -7,13 +7,22 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { normalizeIndianPhone } from '@/lib/auth/phone';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
-import { verifyOtpAndEnsureUser } from '@/lib/auth/otp';
+import { verifyOtpAndEnsureUser } from '@/lib/auth/otp-core';
+
+class PhoneOtpSignInError extends CredentialsSignin {
+  code: string;
+  constructor(code: string) {
+    super();
+    this.code = code;
+  }
+}
 
 /**
  * NextAuth Configuration
  *
  * - Email/password credentials (admins)
- * - Phone OTP credentials (applicants) — mock accepts any 5 digits; whatsapp verifies challenge
+ * - Phone OTP credentials (applicants + staff with a saved phone)
+ *   mock accepts any 5 digits; whatsapp verifies challenge
  */
 
 const loginSchema = z.object({
@@ -82,12 +91,16 @@ export const authConfig: NextAuthConfig = {
       async authorize(credentials) {
         try {
           const phone = normalizeIndianPhone(String(credentials?.phone ?? ''));
-          const otp = String(credentials?.otp ?? '');
+          const otp = String(credentials?.otp ?? '').trim();
           if (!phone) return null;
 
           const result = await verifyOtpAndEnsureUser({ phone, otp });
           if (!result.success) {
-            throw new Error(result.error);
+            console.warn('[auth] phone-otp verify failed:', result.error);
+            if (/deactivated/i.test(result.error)) {
+              throw new PhoneOtpSignInError('deactivated');
+            }
+            throw new PhoneOtpSignInError('invalid_otp');
           }
 
           const [user] = await db
@@ -99,7 +112,7 @@ export const authConfig: NextAuthConfig = {
           if (!user) return null;
 
           if (user.deactivatedAt) {
-            throw new Error('This account has been deactivated');
+            throw new PhoneOtpSignInError('deactivated');
           }
 
           return {
@@ -111,6 +124,7 @@ export const authConfig: NextAuthConfig = {
             emailVerified: Boolean(user.emailVerified),
           };
         } catch (error) {
+          if (error instanceof CredentialsSignin) throw error;
           console.error('Phone OTP auth error:', error);
           return null;
         }

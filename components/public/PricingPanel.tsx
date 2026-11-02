@@ -7,7 +7,6 @@ import { AnimatedStatValue, AnimatedTabs, Badge, Button } from '@/components/ui'
 import { beginVisaKindNavigation } from '@/components/public/PreserveListingView';
 import { useApplyStartFlow } from '@/components/apply/useApplyStartFlow';
 import { formatPrice } from '@/lib/public';
-import { readApplyDraft } from '@/lib/apply/draftStorage';
 
 const INR = 'INR';
 const MIN_TRAVELLERS = 1;
@@ -309,6 +308,7 @@ export function PricingPanel({
     listingId,
     travellers,
     priceOptionId: selected?.id,
+    consumeStartApplyQuery: true,
   });
 
   const scaleAmount = (amount: number) => amount * travellers;
@@ -327,20 +327,10 @@ export function PricingPanel({
       : formatPrice(scaledTotal, INR)
     : headline || 'FREE';
 
-  const applyHref = `/visa/${countryCode.toLowerCase()}/${listingId}/apply?travellers=${Math.min(100, Math.max(1, travellers))}${
-    selected?.id ? `&priceOption=${selected.id}` : ''
-  }`;
-
   const startButton = (className?: string) => (
     <Button
       type="button"
-        onClick={() => {
-          if (readApplyDraft(listingId)) {
-            requestStart();
-            return;
-          }
-          window.location.assign(applyHref);
-        }}
+      onClick={() => requestStart()}
       className={
         className ||
         'w-full group flex items-center justify-center'

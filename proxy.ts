@@ -5,10 +5,25 @@ import { NextResponse } from 'next/server';
  * Route protection (Next.js proxy).
  *
  * Protected: /dashboard, /applications, /documents, /profile, /admin
+ * Apply: /visa/[countryCode]/[listingId]/apply — user, admin, or reviewer
  * Auth pages:
  * - /login, /register → staff; applicants redirected away
  * - /signin → applicant OTP; staff redirected to admin
  */
+
+const APPLY_ROLES = new Set(['user', 'admin', 'reviewer']);
+
+/** /visa/{countryCode}/{listingId}/apply */
+function matchVisaApplyPath(pathname: string) {
+  const match = pathname.match(
+    /^\/visa\/([^/]+)\/([^/]+)\/apply\/?$/i
+  );
+  if (!match) return null;
+  return {
+    countryCode: match[1],
+    listingId: match[2],
+  };
+}
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
@@ -33,6 +48,23 @@ export default auth((req) => {
     );
     loginUrl.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  const visaApply = matchVisaApplyPath(pathname);
+  if (visaApply) {
+    const allowed = isLoggedIn && role && APPLY_ROLES.has(role);
+    if (!allowed) {
+      // Send guests back to the listing so the OTP login dialog can open.
+      const listingUrl = new URL(
+        `/visa/${visaApply.countryCode}/${visaApply.listingId}`,
+        req.url
+      );
+      listingUrl.searchParams.set('startApply', '1');
+      req.nextUrl.searchParams.forEach((value, key) => {
+        listingUrl.searchParams.set(key, value);
+      });
+      return NextResponse.redirect(listingUrl);
+    }
   }
 
   if (pathname.startsWith('/admin') && isLoggedIn) {

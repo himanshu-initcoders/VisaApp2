@@ -3,12 +3,12 @@
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { useApplyStartFlow } from '@/components/apply/useApplyStartFlow';
-import { readApplyDraft } from '@/lib/apply/draftStorage';
 
 interface StartApplicationCTAProps {
   countryCode: string;
   listingId: string;
   travellers?: number;
+  priceOptionId?: string;
   label?: string;
   className?: string;
   size?: 'sm' | 'md' | 'lg';
@@ -19,6 +19,7 @@ export function StartApplicationCTA({
   countryCode,
   listingId,
   travellers = 1,
+  priceOptionId,
   label = 'Start application',
   className,
   size = 'lg',
@@ -28,22 +29,15 @@ export function StartApplicationCTA({
     countryCode,
     listingId,
     travellers,
+    priceOptionId,
   });
-
-  const applyHref = `/visa/${countryCode.toLowerCase()}/${listingId}/apply?travellers=${Math.min(100, Math.max(1, travellers))}`;
 
   return (
     <>
       <Button
         type="button"
         size={size}
-        onClick={() => {
-          if (readApplyDraft(listingId)) {
-            requestStart();
-            return;
-          }
-          window.location.assign(applyHref);
-        }}
+        onClick={() => requestStart()}
         className={
           className ||
           (variant === 'hero'

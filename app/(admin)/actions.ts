@@ -19,9 +19,10 @@ import {
   correctionRequests,
   staffFieldEdits,
 } from '@/lib/db/schema';
-import { and, asc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 import { signOut } from '@/lib/auth';
 import { requireRole, isValidStatusTransition, isAdmin } from '@/lib/auth-utils';
+import { normalizeIndianPhone } from '@/lib/auth/phone';
 import {
   notifyReviewerAssigned,
   notifyReviewerWelcome,
@@ -30,7 +31,10 @@ import {
   notifyReviewerAssignedWhatsApp,
   notifyReviewerWelcomeWhatsApp,
 } from '@/lib/whatsapp/notify';
-import { createReviewerSchema } from '@/lib/validations/auth';
+import {
+  createReviewerSchema,
+  updateProfileSchema,
+} from '@/lib/validations/auth';
 import { recomputeVisaCaseStatus } from '@/lib/visa/travellerStatus';
 import {
   buildCorrectableTargets,
@@ -85,6 +89,115 @@ import type {
 /** Clears the staff session and returns to the home page. */
 export async function signOutAction() {
   await signOut({ redirectTo: '/' });
+}
+
+/**
+ * Staff self-service profile update (admin / reviewer).
+ * Always allows `name`. Phone can be set only when the account has none yet.
+ */
+export async function updateStaffProfile(
+  input: unknown
+): Promise<ActionResponse<{ name: string; phone: string | null }>> {
+  try {
+    const session = await requireRole(['admin', 'reviewer']);
+
+    const [current] = await db
+      .select({
+        id: users.id,
+        phone: users.phone,
+      })
+      .from(users)
+      .where(eq(users.id, session.user.id))
+      .limit(1);
+
+    if (!current) {
+      return { success: false, message: 'User not found' };
+    }
+
+    const raw =
+      input && typeof input === 'object'
+        ? {
+            name: (input as { name?: unknown }).name,
+            phone: (input as { phone?: unknown }).phone,
+          }
+        : {};
+
+    const parsed = updateProfileSchema.safeParse({ name: raw.name });
+    if (!parsed.success) {
+      const first =
+        parsed.error.flatten().fieldErrors.name?.[0] ||
+        parsed.error.issues[0]?.message ||
+        'Invalid input';
+      return { success: false, message: first };
+    }
+
+    const name = parsed.data.name.trim();
+    const patch: {
+      name: string;
+      updatedAt: Date;
+      phone?: string;
+      phoneVerified?: Date;
+    } = {
+      name,
+      updatedAt: new Date(),
+    };
+
+    // Only allow adding a mobile when none is stored yet.
+    if (!current.phone) {
+      const phoneRaw =
+        typeof raw.phone === 'string' ? raw.phone.trim() : '';
+      if (phoneRaw) {
+        const phone = normalizeIndianPhone(phoneRaw);
+        if (!phone) {
+          return {
+            success: false,
+            message: 'Enter a valid 10-digit Indian mobile number',
+          };
+        }
+
+        const [taken] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(and(eq(users.phone, phone), ne(users.id, current.id)))
+          .limit(1);
+
+        if (taken) {
+          return {
+            success: false,
+            message: 'This mobile number is already linked to another account',
+          };
+        }
+
+        patch.phone = phone;
+        patch.phoneVerified = new Date();
+      }
+    }
+
+    const [updated] = await db
+      .update(users)
+      .set(patch)
+      .where(eq(users.id, session.user.id))
+      .returning({ name: users.name, phone: users.phone });
+
+    if (!updated) {
+      return { success: false, message: 'User not found' };
+    }
+
+    revalidatePath('/admin/profile');
+    revalidatePath('/admin');
+
+    return {
+      success: true,
+      message: 'Profile updated',
+      data: { name: updated.name, phone: updated.phone },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: 'Failed to update profile',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
 }
 
 async function denyReviewerUnlessAssigned(

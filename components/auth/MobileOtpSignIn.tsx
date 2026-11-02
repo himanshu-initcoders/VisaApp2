@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { signIn } from 'next-auth/react';
+import { getSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -92,10 +92,16 @@ export function MobileOtpSignIn({
       });
 
       if (result?.error) {
+        const code =
+          typeof (result as { code?: string }).code === 'string'
+            ? (result as { code?: string }).code
+            : undefined;
         setError(
-          result.error === 'CredentialsSignin'
-            ? 'Invalid OTP or this number cannot sign in here.'
-            : result.error
+          code === 'deactivated'
+            ? 'This account has been deactivated.'
+            : result.error === 'CredentialsSignin'
+              ? 'Invalid OTP. Please try again.'
+              : result.error
         );
         return;
       }
@@ -103,10 +109,22 @@ export function MobileOtpSignIn({
       onVerified?.({ phone, userId: '' });
       router.refresh();
 
-      if (variant === 'page' && redirectTo) {
-        router.push(redirectTo);
-      } else if (variant === 'page' && !onVerified) {
-        router.push('/dashboard');
+      if (variant === 'page') {
+        const session = await getSession();
+        const role = session?.user?.role;
+        const isStaff = role === 'admin' || role === 'reviewer';
+
+        if (isStaff) {
+          const staffTarget =
+            redirectTo && redirectTo.startsWith('/admin')
+              ? redirectTo
+              : '/admin';
+          router.push(staffTarget);
+        } else if (redirectTo) {
+          router.push(redirectTo);
+        } else if (!onVerified) {
+          router.push('/dashboard');
+        }
       }
     } catch {
       setError('Sign-in failed. Please try again.');
@@ -217,11 +235,10 @@ export function MobileOtpSignIn({
           <p className="mt-1 font-switzer text-base font-medium text-portrait-ink">
             +91 {phone}
           </p>
-          {variant === 'checkout-embed' && (
-            <p className="mt-2 text-xs text-slate-helper">
-              Mock OTP: any {otpLength} digits work for now.
-            </p>
-          )}
+          <p className="mt-2 text-xs text-slate-helper">
+            Dev tip: with AUTH_OTP_MODE=mock, any {otpLength} digits work (e.g.
+            11111).
+          </p>
         </div>
 
         <div className="flex justify-between gap-2">
