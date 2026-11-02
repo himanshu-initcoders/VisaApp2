@@ -6,11 +6,12 @@ import {
 } from '@/components/apply/form/UnderlineField';
 import type {
   ApplyTripQuestion,
+  ApplyTripQuestionNode,
   TravellerTripDetails,
 } from '@/lib/apply/applicationForm';
 import { CorrectionGate } from '@/components/apply/form/CorrectionGate';
 import {
-  groupApplyTripQuestions,
+  groupApplyTripQuestionForest,
   parseCheckboxValues,
   stringifyCheckboxValues,
 } from '@/lib/apply/applicationForm';
@@ -177,6 +178,14 @@ function ExtraQuestionField({
   );
 }
 
+function nodeNeedsCorrection(
+  node: ApplyTripQuestionNode,
+  editableKeys: ReadonlySet<string>
+): boolean {
+  if (editableKeys.has(`extra.${node.question.key}`)) return true;
+  return node.children.some((child) => nodeNeedsCorrection(child, editableKeys));
+}
+
 export function AdditionalQuestionsTab({
   trip,
   extraQuestions,
@@ -185,7 +194,7 @@ export function AdditionalQuestionsTab({
   comments,
 }: AdditionalQuestionsTabProps) {
   const visibleQuestions = getVisibleExtraQuestions(extraQuestions, trip.extra);
-  const questionGroups = groupApplyTripQuestions(visibleQuestions);
+  const questionGroups = groupApplyTripQuestionForest(visibleQuestions);
 
   const updateExtra = (key: string, next: string) => {
     if (editableKeys && !editableKeys.has(`extra.${key}`)) return;
@@ -194,48 +203,58 @@ export function AdditionalQuestionsTab({
     onChange({ ...trip, extra: cleaned });
   };
 
+  const renderField = (question: ApplyTripQuestion) => {
+    const value = trip.extra[question.key] ?? '';
+    return (
+      <CorrectionGate
+        key={question.id}
+        targetKey={`extra.${question.key}`}
+        editableKeys={editableKeys}
+        comment={comments?.[`extra.${question.key}`]}
+      >
+        <ExtraQuestionField
+          question={question}
+          value={value}
+          onUpdate={(next) => updateExtra(question.key, next)}
+        />
+      </CorrectionGate>
+    );
+  };
+
+  const renderNode = (node: ApplyTripQuestionNode) => {
+    if (node.children.length === 0) {
+      return renderField(node.question);
+    }
+
+    // Keep parent + conditional follow-ups stacked so the child sits
+    // directly under the controlling field (not beside it in the grid).
+    return (
+      <div key={node.question.id} className="sm:col-span-2 space-y-5">
+        {renderField(node.question)}
+        {node.children.map((child) => renderNode(child))}
+      </div>
+    );
+  };
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h2 className="font-basier text-xl text-portrait-ink">
-          Additional questions
-        </h2>
-        <p className="mt-1 text-sm text-slate-helper">
-          Answer the questions required for this visa listing.
-        </p>
-      </div>
-
       {questionGroups.length === 0 ? (
         <p className="text-sm text-slate-helper">No additional questions.</p>
       ) : (
         questionGroups.map((group) => (
           <div key={group.category} className="pt-2">
-            <h3 className="font-basier text-lg text-portrait-ink">{group.label}</h3>
+            <h3 className="font-basier text-lg font-bold text-portrait-ink">
+              {group.label}
+            </h3>
             <div className="mt-5 grid gap-5 sm:grid-cols-2">
-              {[...group.questions]
+              {[...group.nodes]
                 .sort((a, b) => {
                   if (!editableKeys) return 0;
-                  const aOpen = editableKeys.has(`extra.${a.key}`) ? 0 : 1;
-                  const bOpen = editableKeys.has(`extra.${b.key}`) ? 0 : 1;
+                  const aOpen = nodeNeedsCorrection(a, editableKeys) ? 0 : 1;
+                  const bOpen = nodeNeedsCorrection(b, editableKeys) ? 0 : 1;
                   return aOpen - bOpen;
                 })
-                .map((question) => {
-                const value = trip.extra[question.key] ?? '';
-                return (
-                  <CorrectionGate
-                    key={question.id}
-                    targetKey={`extra.${question.key}`}
-                    editableKeys={editableKeys}
-                    comment={comments?.[`extra.${question.key}`]}
-                  >
-                    <ExtraQuestionField
-                      question={question}
-                      value={value}
-                      onUpdate={(next) => updateExtra(question.key, next)}
-                    />
-                  </CorrectionGate>
-                );
-              })}
+                .map((node) => renderNode(node))}
             </div>
           </div>
         ))

@@ -118,18 +118,79 @@ export type ApplyTripQuestionGroup = {
   questions: ApplyTripQuestion[];
 };
 
-/** Group extra questions by category order defined in QUESTION_CATEGORIES. */
-export function groupApplyTripQuestions(
+export type ApplyTripQuestionNode = {
+  question: ApplyTripQuestion;
+  children: ApplyTripQuestionNode[];
+};
+
+export type ApplyTripQuestionForestGroup = {
+  category: QuestionCategory;
+  label: string;
+  nodes: ApplyTripQuestionNode[];
+};
+
+/**
+ * Nest show-if questions under their source parent so they render
+ * immediately below the controlling field. Preserves input order for roots
+ * and for siblings that share a parent.
+ */
+export function buildApplyTripQuestionForest(
   questions: ApplyTripQuestion[]
-): ApplyTripQuestionGroup[] {
-  const byCategory = new Map<QuestionCategory, ApplyTripQuestion[]>();
+): ApplyTripQuestionNode[] {
+  const byKey = new Map(questions.map((question) => [question.key, question]));
+  const childrenOf = new Map<string, ApplyTripQuestion[]>();
+  const childKeys = new Set<string>();
 
   for (const question of questions) {
-    const category = isQuestionCategory(question.category)
-      ? question.category
+    const rule = normalizeQuestionVisibility(question.visibility);
+    const parentKey = rule?.sourceQuestionKey;
+    if (!parentKey || parentKey === question.key || !byKey.has(parentKey)) {
+      continue;
+    }
+    childKeys.add(question.key);
+    const siblings = childrenOf.get(parentKey) ?? [];
+    siblings.push(question);
+    childrenOf.set(parentKey, siblings);
+  }
+
+  const toNode = (question: ApplyTripQuestion): ApplyTripQuestionNode => ({
+    question,
+    children: (childrenOf.get(question.key) ?? []).map(toNode),
+  });
+
+  return questions
+    .filter((question) => !childKeys.has(question.key))
+    .map(toNode);
+}
+
+/** Flatten a forest depth-first (parent, then its dependents). */
+export function flattenApplyTripQuestionForest(
+  nodes: ApplyTripQuestionNode[]
+): ApplyTripQuestion[] {
+  const result: ApplyTripQuestion[] = [];
+  const walk = (node: ApplyTripQuestionNode) => {
+    result.push(node.question);
+    node.children.forEach(walk);
+  };
+  nodes.forEach(walk);
+  return result;
+}
+
+/**
+ * Group by root question category. Conditional children stay under their
+ * parent even when they have a different category.
+ */
+export function groupApplyTripQuestionForest(
+  questions: ApplyTripQuestion[]
+): ApplyTripQuestionForestGroup[] {
+  const byCategory = new Map<QuestionCategory, ApplyTripQuestionNode[]>();
+
+  for (const node of buildApplyTripQuestionForest(questions)) {
+    const category = isQuestionCategory(node.question.category)
+      ? node.question.category
       : 'other';
     const list = byCategory.get(category) ?? [];
-    list.push(question);
+    list.push(node);
     byCategory.set(category, list);
   }
 
@@ -137,9 +198,20 @@ export function groupApplyTripQuestions(
     (entry) => ({
       category: entry.value,
       label: entry.label,
-      questions: byCategory.get(entry.value)!,
+      nodes: byCategory.get(entry.value)!,
     })
   );
+}
+
+/** Group extra questions by category order defined in QUESTION_CATEGORIES. */
+export function groupApplyTripQuestions(
+  questions: ApplyTripQuestion[]
+): ApplyTripQuestionGroup[] {
+  return groupApplyTripQuestionForest(questions).map((group) => ({
+    category: group.category,
+    label: group.label,
+    questions: flattenApplyTripQuestionForest(group.nodes),
+  }));
 }
 
 export interface ApplyDocumentSlot {
