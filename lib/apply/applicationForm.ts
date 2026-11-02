@@ -450,6 +450,57 @@ export function formatDocumentTitle(
   );
 }
 
+const UUID_SLOT_KEY_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Human label for an uploaded document slot.
+ * `documents.document_type` often stores the component upload key (UUID),
+ * not the catalog slug — resolve via form snapshot when available.
+ */
+export function resolveDocumentSlotLabel(
+  slotKey: string,
+  config?: Pick<ApplyFormConfig, 'documentSlots'> | null
+): string {
+  const key = slotKey.trim();
+  if (!key) return 'Document';
+  if (key === 'passport-front') return 'Passport front';
+  if (key === 'passport-back' || key === 'passport_back') {
+    return documentTypeLabel('passport_back');
+  }
+
+  const slot = config?.documentSlots?.find(
+    (item) => item.key === key || item.documentType === key
+  );
+  if (slot?.title?.trim()) return slot.title.trim();
+  if (slot?.documentType) return documentTypeLabel(slot.documentType);
+
+  const catalog = documentTypeLabel(key);
+  if (catalog !== key) return catalog;
+
+  if (UUID_SLOT_KEY_RE.test(key)) return 'Document';
+  return formatDocumentTitle(key);
+}
+
+/** Precompute slotKey → label for DocumentViewer and similar UIs. */
+export function buildDocumentSlotLabelMap(
+  config?: Pick<ApplyFormConfig, 'documentSlots'> | null
+): Record<string, string> {
+  const map: Record<string, string> = {
+    'passport-front': 'Passport front',
+    'passport-back': documentTypeLabel('passport_back'),
+    passport_back: documentTypeLabel('passport_back'),
+  };
+
+  for (const slot of config?.documentSlots ?? []) {
+    const label = resolveDocumentSlotLabel(slot.key, config);
+    if (slot.key) map[slot.key] = label;
+    if (slot.documentType) map[slot.documentType] = label;
+  }
+
+  return map;
+}
+
 function isFileQuestionType(type: string) {
   return type === 'file' || type === 'file_upload';
 }

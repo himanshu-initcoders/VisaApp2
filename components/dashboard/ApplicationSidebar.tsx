@@ -15,6 +15,8 @@ import type {
 interface ApplicationSidebarProps {
   documents: DocumentWithVerification[];
   statusHistory: StatusHistoryItem[];
+  /** Slot key → human document name (from form snapshot). */
+  documentLabels?: Record<string, string>;
 }
 
 /**
@@ -23,6 +25,7 @@ interface ApplicationSidebarProps {
 export function ApplicationSidebar({
   documents,
   statusHistory,
+  documentLabels,
 }: ApplicationSidebarProps) {
   const selection = useTravellerSelectionOptional();
 
@@ -73,6 +76,7 @@ export function ApplicationSidebar({
           <DocumentViewer
             documents={visibleDocuments}
             getPreviewUrl={getMyDocumentPreviewUrl}
+            labelBySlotKey={documentLabels}
           />
         </CardContent>
       </Card>

@@ -24,6 +24,8 @@ interface VisaApplicationActionsProps {
   statusHistory: StatusHistoryItem[];
   travellers: Array<{ id: string; name: string }>;
   correctionTargets: CorrectableTarget[];
+  /** Slot key → human document name (from form snapshot). */
+  documentLabels?: Record<string, string>;
 }
 
 export function VisaApplicationActions({
@@ -33,6 +35,7 @@ export function VisaApplicationActions({
   statusHistory,
   travellers,
   correctionTargets,
+  documentLabels,
 }: VisaApplicationActionsProps) {
   const router = useRouter();
   const selection = useTravellerSelectionOptional();
@@ -131,6 +134,7 @@ export function VisaApplicationActions({
           <DocumentViewer
             documents={visibleDocuments}
             onDocumentVerified={handleSuccess}
+            labelBySlotKey={documentLabels}
             onRequestReupload={(slotKey) => {
               setPrefillSlot(slotKey);
               setShowCorrectionModal(true);

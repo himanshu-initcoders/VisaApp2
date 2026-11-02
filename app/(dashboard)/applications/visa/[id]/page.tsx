@@ -14,7 +14,10 @@ import { TravellersSection } from '@/components/admin/TravellersSection';
 import { TravellerSelectionProvider } from '@/components/admin/TravellerSelectionContext';
 import { Timeline } from '@/components/admin/Timeline';
 import { attachStatusToTravellers } from '@/lib/visa/caseStatus';
-import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
+import {
+  buildDocumentSlotLabelMap,
+  type ApplyFormConfig,
+} from '@/lib/apply/applicationForm';
 import { ApplicationSidebar } from '@/components/dashboard/ApplicationSidebar';
 import { ApplicantActivityTabs } from '@/components/dashboard/ApplicantActivityTabs';
 import { ActionRequiredBanner } from '@/components/dashboard/ActionRequiredBanner';
@@ -91,6 +94,7 @@ export default async function UserVisaApplicationDetailPage({
   };
 
   const snapshot = (app.formSnapshot as ApplyFormConfig | null) ?? null;
+  const documentLabels = buildDocumentSlotLabelMap(snapshot);
   const editors = buildStaffEditors(snapshot);
   const storedTravellers: StoredTraveller[] = Array.isArray(app.travellers)
     ? app.travellers
@@ -258,6 +262,7 @@ export default async function UserVisaApplicationDetailPage({
           <ApplicationSidebar
             documents={details.documents}
             statusHistory={details.statusHistory}
+            documentLabels={documentLabels}
           />
         </div>
       </TravellerSelectionProvider>

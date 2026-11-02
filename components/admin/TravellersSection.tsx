@@ -11,7 +11,10 @@ import {
   Badge,
   getStatusVariant,
 } from '@/components/ui';
-import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
+import {
+  resolveDocumentSlotLabel,
+  type ApplyFormConfig,
+} from '@/lib/apply/applicationForm';
 import {
   formatExtraAnswer,
   formatReviewDate,
@@ -74,11 +77,7 @@ function labelForDocSlot(
   snapshot: ApplyFormConfig | null,
   slotKey: string
 ): string {
-  const slot = snapshot?.documentSlots?.find((item) => item.key === slotKey);
-  if (slot?.title) return slot.title;
-  if (slotKey === 'passport-front') return 'Passport front';
-  if (slotKey === 'passport-back') return 'Passport back';
-  return slotKey;
+  return resolveDocumentSlotLabel(slotKey, snapshot);
 }
 
 function Field({

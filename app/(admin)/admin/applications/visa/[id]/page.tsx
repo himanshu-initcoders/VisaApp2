@@ -29,7 +29,10 @@ import { TravellerSelectionProvider } from '@/components/admin/TravellerSelectio
 import { Timeline } from '@/components/admin/Timeline';
 import { PaymentHistory } from '@/components/applications/PaymentHistory';
 import { attachStatusToTravellers } from '@/lib/visa/caseStatus';
-import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
+import {
+  buildDocumentSlotLabelMap,
+  type ApplyFormConfig,
+} from '@/lib/apply/applicationForm';
 import { postStaffComment } from '@/app/(admin)/actions';
 import {
   buildCorrectableTargets,
@@ -133,6 +136,7 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
   };
 
   const snapshot = (app.formSnapshot as ApplyFormConfig | null) ?? null;
+  const documentLabels = buildDocumentSlotLabelMap(snapshot);
   const storedTravellers: StoredTraveller[] = Array.isArray(app.travellers)
     ? app.travellers
     : [];
@@ -406,6 +410,7 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
               statusHistory={details.statusHistory}
               travellers={correctionTravellers}
               correctionTargets={buildCorrectableTargets(snapshot)}
+              documentLabels={documentLabels}
             />
           </div>
         </div>

@@ -5,6 +5,7 @@ import { Eye, FileText, Image as ImageIcon, X } from 'lucide-react';
 import { Card, CardContent, Badge, Button } from '@/components/ui';
 import { getDocumentPreviewUrl, verifyDocument } from '@/app/(admin)/actions';
 import type { ActionResponse, DocumentWithVerification } from '@/types/admin';
+import { resolveDocumentSlotLabel } from '@/lib/apply/applicationForm';
 import { cn } from '@/lib/utils';
 
 /**
@@ -25,6 +26,21 @@ interface DocumentViewerProps {
   onRequestReupload?: (slotKey: string) => void;
   /** `grid` shows tiles and opens the file in a dialog. `list` keeps the inline preview. */
   layout?: 'list' | 'grid';
+  /**
+   * Human labels keyed by upload slot (`documents.document_type`).
+   * Needed when slots are UUID component keys rather than catalog slugs.
+   */
+  labelBySlotKey?: Record<string, string>;
+}
+
+function documentDisplayName(
+  doc: DocumentWithVerification,
+  labelBySlotKey?: Record<string, string>
+) {
+  return (
+    labelBySlotKey?.[doc.documentType] ||
+    resolveDocumentSlotLabel(doc.documentType)
+  );
 }
 
 function statusOf(doc: DocumentWithVerification) {
@@ -66,12 +82,15 @@ function DocumentCard({
   doc,
   getPreviewUrl,
   onPreview,
+  labelBySlotKey,
 }: {
   doc: DocumentWithVerification;
   getPreviewUrl: PreviewUrlFn;
   onPreview: () => void;
+  labelBySlotKey?: Record<string, string>;
 }) {
   const status = statusOf(doc);
+  const title = documentDisplayName(doc, labelBySlotKey);
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -123,7 +142,7 @@ function DocumentCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h4 className="font-switzer text-sm font-semibold text-portrait-ink">
-              {doc.documentType}
+              {title}
             </h4>
             <p className="mt-1 truncate font-switzer text-xs text-slate-helper">
               {doc.filename}
@@ -152,7 +171,7 @@ function DocumentCard({
                 onPreview();
               }}
               title="Preview"
-              aria-label={`Preview ${doc.filename}`}
+              aria-label={`Preview ${title}`}
               className={cn(
                 'inline-flex h-8 w-8 items-center justify-center rounded-full',
                 'bg-sky-wash text-portrait-ink transition-colors hover:bg-sky-wash/70'
@@ -274,12 +293,15 @@ function DocumentGridCard({
   doc,
   getPreviewUrl,
   onPreview,
+  labelBySlotKey,
 }: {
   doc: DocumentWithVerification;
   getPreviewUrl: PreviewUrlFn;
   onPreview: () => void;
+  labelBySlotKey?: Record<string, string>;
 }) {
   const status = statusOf(doc);
+  const title = documentDisplayName(doc, labelBySlotKey);
   const [downloading, setDownloading] = useState(false);
   const image = isImageMime(doc.mimeType);
 
@@ -320,7 +342,7 @@ function DocumentGridCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <h4 className="truncate font-switzer text-sm font-semibold text-portrait-ink">
-              {doc.documentType}
+              {title}
             </h4>
             <Badge
               variant={
@@ -404,12 +426,14 @@ function DocumentPreviewDialog({
   onClose,
   onDocumentVerified,
   onRequestReupload,
+  labelBySlotKey,
 }: {
   doc: DocumentWithVerification | null;
   getPreviewUrl: PreviewUrlFn;
   onClose: () => void;
   onDocumentVerified?: () => void;
   onRequestReupload?: (slotKey: string) => void;
+  labelBySlotKey?: Record<string, string>;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -507,7 +531,7 @@ function DocumentPreviewDialog({
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ash px-5 py-4">
           <div className="min-w-0">
             <p className="truncate font-switzer text-sm font-semibold text-portrait-ink">
-              {doc.documentType}
+              {documentDisplayName(doc, labelBySlotKey)}
             </p>
             <p className="truncate font-switzer text-xs text-slate-helper">
               {doc.filename}
@@ -627,6 +651,7 @@ export function DocumentViewer({
   getPreviewUrl = getDocumentPreviewUrl,
   onRequestReupload,
   layout = 'list',
+  labelBySlotKey,
 }: DocumentViewerProps) {
   const [previewDoc, setPreviewDoc] = useState<DocumentWithVerification | null>(
     null
@@ -672,6 +697,7 @@ export function DocumentViewer({
               doc={doc}
               getPreviewUrl={getPreviewUrl}
               onPreview={() => setPreviewDoc(doc)}
+              labelBySlotKey={labelBySlotKey}
             />
           ))}
         </div>
@@ -681,6 +707,7 @@ export function DocumentViewer({
           onClose={() => setPreviewDoc(null)}
           onDocumentVerified={onDocumentVerified}
           onRequestReupload={onRequestReupload}
+          labelBySlotKey={labelBySlotKey}
         />
       </>
     );
@@ -696,6 +723,7 @@ export function DocumentViewer({
               doc={doc}
               getPreviewUrl={getPreviewUrl}
               onPreview={() => setPreviewDoc(doc)}
+              labelBySlotKey={labelBySlotKey}
             />
           ))}
         </div>
@@ -706,6 +734,7 @@ export function DocumentViewer({
         onClose={() => setPreviewDoc(null)}
         onDocumentVerified={onDocumentVerified}
         onRequestReupload={onRequestReupload}
+        labelBySlotKey={labelBySlotKey}
       />
     </>
   );
