@@ -143,7 +143,7 @@ export function CreateVisaListingWizard({
       visaFree: false,
       withFreeInsurance: false,
       showGeneralInfo: true,
-      showTripDetails: true,
+      showTripDetails: false,
       showInsuranceInterest: false,
       sourceUrl: '',
       description: '',
@@ -490,7 +490,7 @@ export function CreateVisaListingWizard({
                 <Checkbox
                   label="Trip Details"
                   description="Show purpose, dates, and accommodation on apply."
-                  checked={form.watch('showTripDetails') ?? true}
+                  checked={form.watch('showTripDetails') ?? false}
                   onChange={(checked) =>
                     form.setValue('showTripDetails', checked, { shouldDirty: true })
                   }

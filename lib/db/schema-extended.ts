@@ -136,9 +136,9 @@ export const visaListings = pgTable('visa_listings', {
   visaFree: boolean('visa_free').default(false),
   withFreeInsurance: boolean('with_free_insurance').default(false).notNull(),
 
-  // Apply form section visibility (default: shown)
+  // Apply form section visibility (general shown; trip details off until enabled)
   showGeneralInfo: boolean('show_general_info').default(true).notNull(),
-  showTripDetails: boolean('show_trip_details').default(true).notNull(),
+  showTripDetails: boolean('show_trip_details').default(false).notNull(),
   /** Offer optional insurance-interest question on checkout (off when free insurance is included). */
   showInsuranceInterest: boolean('show_insurance_interest').default(false).notNull(),
 

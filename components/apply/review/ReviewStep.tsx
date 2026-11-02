@@ -49,7 +49,7 @@ export function ReviewStep({
   showEmptyProfiles = false,
   selectingProfile = false,
   showGeneralInfo = true,
-  showTripDetails = true,
+  showTripDetails = false,
   extraQuestions = [],
   listingId,
   draftOwnerUserId = null,

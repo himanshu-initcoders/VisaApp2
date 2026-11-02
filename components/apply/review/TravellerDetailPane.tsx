@@ -52,7 +52,7 @@ export function TravellerDetailPane({
   filled,
   started = false,
   showGeneralInfo = true,
-  showTripDetails = true,
+  showTripDetails = false,
   extraQuestions = [],
   documentSlots = [],
   listingId,

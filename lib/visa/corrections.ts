@@ -143,7 +143,7 @@ export function buildCorrectableTargets(
 ): CorrectableTarget[] {
   const targets: CorrectableTarget[] = [];
   const showGeneral = config?.showGeneralInfo !== false;
-  const showTrip = config?.showTripDetails !== false;
+  const showTrip = config?.showTripDetails === true;
 
   if (showGeneral) {
     for (const group of PASSPORT_REVIEW_GROUPS) {

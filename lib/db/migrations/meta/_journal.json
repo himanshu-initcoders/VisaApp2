@@ -169,6 +169,13 @@
       "when": 1793604229909,
       "tag": "0023_swift_famine",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793700000000,
+      "tag": "0024_trip_details_default_off",
+      "breakpoints": true
     }
   ]
 }

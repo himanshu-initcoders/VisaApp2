@@ -95,7 +95,7 @@ export function ProcessBasicInfoForm({ processId, initialData }: ProcessBasicInf
       visaFree: initialData.visaFree ?? false,
       withFreeInsurance: initialData.withFreeInsurance ?? false,
       showGeneralInfo: initialData.showGeneralInfo ?? true,
-      showTripDetails: initialData.showTripDetails ?? true,
+      showTripDetails: initialData.showTripDetails ?? false,
       showInsuranceInterest: initialData.showInsuranceInterest ?? false,
       sourceUrl: initialData.sourceUrl || '',
       description: initialData.description || '',
@@ -278,7 +278,7 @@ export function ProcessBasicInfoForm({ processId, initialData }: ProcessBasicInf
             <Checkbox
               label="Trip Details"
               description="Purpose, dates, accommodation, and flight fields on the apply form."
-              checked={form.watch('showTripDetails') ?? true}
+              checked={form.watch('showTripDetails') ?? false}
               onChange={(checked) => form.setValue('showTripDetails', checked, { shouldDirty: true })}
             />
             <Checkbox

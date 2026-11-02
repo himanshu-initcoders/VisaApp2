@@ -38,7 +38,7 @@ export function validateSubmitTravellers(
       return `Complete passport details for ${traveller.name || 'each traveller'}.`;
     }
 
-    if (snapshot.showTripDetails !== false) {
+    if (snapshot.showTripDetails === true) {
       const trip = emptyTripDetails(
         (traveller.tripDetails ?? undefined) as
           | Partial<TravellerTripDetails>

@@ -84,7 +84,7 @@ export function ReviewSubmitTab({
   passportFrontFilename,
   passportBackFilename,
   showGeneralInfo = true,
-  showTripDetails = true,
+  showTripDetails = false,
   editableKeys,
   onEditSection,
 }: ReviewSubmitTabProps) {

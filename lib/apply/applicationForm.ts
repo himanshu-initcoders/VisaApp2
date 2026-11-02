@@ -432,7 +432,7 @@ export function defaultApplyFormConfig(
     countryName,
     processName,
     showGeneralInfo: true,
-    showTripDetails: true,
+    showTripDetails: false,
     components: [],
     questions: [],
   });
@@ -667,7 +667,7 @@ export function buildApplyFormConfig(input: {
     countryName: input.countryName,
     processName: input.processName,
     showGeneralInfo: input.showGeneralInfo !== false,
-    showTripDetails: input.showTripDetails !== false,
+    showTripDetails: input.showTripDetails === true,
     showInsuranceInterest: input.showInsuranceInterest === true,
     extraQuestions,
     documentSlots,
