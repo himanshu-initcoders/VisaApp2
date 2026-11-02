@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Logo } from '@/components/shared/Logo';
@@ -150,10 +151,17 @@ export function UserSidebar({
               <Link
                 href="/dashboard"
                 onClick={closeMobile}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-sky-wash/40 font-switzer text-sm font-semibold text-portrait-ink"
+                className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl"
                 title="Dashboard"
+                aria-label="Dashboard"
               >
-                V
+                <Image
+                  src="/favicon.png"
+                  alt="Viserv"
+                  width={40}
+                  height={40}
+                  className="h-10 w-10 object-contain"
+                />
               </Link>
             )}
 
