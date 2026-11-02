@@ -34,6 +34,7 @@
 ### Database Schema
 - [x] Users table
 - [x] Visa Applications table
+- [x] Visa public `reference_number` (`VI` + 12 digits) for URLs, WhatsApp, admin filter
 - [x] Passport Services table
 - [x] Documents table
 - [x] Payments table

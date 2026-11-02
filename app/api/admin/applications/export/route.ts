@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
   const isReviewer = session.user.role === 'reviewer';
   const sp = request.nextUrl.searchParams;
   const filters: ApplicationFilters = {
+    referenceNumber: sp.get('ref') || undefined,
     search: sp.get('q') || sp.get('search') || undefined,
     phone: sp.get('phone') || undefined,
     country: sp.get('country') || undefined,
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest) {
   );
 
   const header = [
+    'reference_number',
     'id',
     'type',
     'applicant',
@@ -88,6 +90,7 @@ export async function GET(request: NextRequest) {
           ? tripById.get(r.id) || EMPTY_TRIP_EXPORT
           : EMPTY_TRIP_EXPORT;
       return [
+        csvEscape(r.type === 'visa' ? r.referenceNumber || '' : ''),
         csvEscape(r.id),
         csvEscape(r.type),
         csvEscape(r.applicantName || r.userName),

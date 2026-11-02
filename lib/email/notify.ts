@@ -68,13 +68,13 @@ export async function notifyVisaSubmittedToApplicant(input: {
   applicantName: string;
   country: string;
   visaType: string;
-  applicationId: string;
+  referenceNumber: string;
 }): Promise<void> {
   const to = resolveApplicantEmail(input);
   if (!to) {
     console.warn(
       '[email] No deliverable applicant email; skipping submit confirmation',
-      input.applicationId
+      input.referenceNumber
     );
     return;
   }
@@ -91,10 +91,10 @@ export async function notifyVisaSubmittedToApplicant(input: {
       details: [
         { label: 'Destination', value: input.country },
         { label: 'Visa', value: input.visaType },
-        { label: 'Reference', value: input.applicationId },
+        { label: 'Reference', value: input.referenceNumber },
       ],
       buttonLabel: 'View application',
-      buttonHref: `/applications/visa/${input.applicationId}`,
+      buttonHref: `/applications/visa/${input.referenceNumber}`,
     }),
   });
 }
@@ -104,7 +104,7 @@ export async function notifyVisaSubmittedToAdmin(input: {
   phone?: string | null;
   country: string;
   visaType: string;
-  applicationId: string;
+  referenceNumber: string;
 }): Promise<void> {
   const to = process.env.ADMIN_NOTIFY_EMAIL?.trim();
   if (!to) {
@@ -124,10 +124,10 @@ export async function notifyVisaSubmittedToAdmin(input: {
         { label: 'Phone', value: input.phone?.trim() || '—' },
         { label: 'Destination', value: input.country },
         { label: 'Visa', value: input.visaType },
-        { label: 'Reference', value: input.applicationId },
+        { label: 'Reference', value: input.referenceNumber },
       ],
       buttonLabel: 'Open in admin',
-      buttonHref: `/admin/applications/visa/${input.applicationId}`,
+      buttonHref: `/admin/applications/visa/${input.referenceNumber}`,
     }),
   });
 }
@@ -138,7 +138,7 @@ export async function notifyReviewerAssigned(input: {
   applicantName: string;
   country: string;
   visaType: string;
-  applicationId: string;
+  referenceNumber: string;
 }): Promise<void> {
   if (!isDeliverableEmail(input.email)) return;
 
@@ -155,10 +155,10 @@ export async function notifyReviewerAssigned(input: {
         { label: 'Applicant', value: input.applicantName },
         { label: 'Destination', value: input.country },
         { label: 'Visa', value: input.visaType },
-        { label: 'Reference', value: input.applicationId },
+        { label: 'Reference', value: input.referenceNumber },
       ],
       buttonLabel: 'Open application',
-      buttonHref: `/admin/applications/visa/${input.applicationId}`,
+      buttonHref: `/admin/applications/visa/${input.referenceNumber}`,
     }),
   });
 }
@@ -168,7 +168,7 @@ export async function notifyCorrectionRequested(input: {
   applicantName: string;
   country: string;
   visaType: string;
-  applicationId: string;
+  referenceNumber: string;
   message: string;
 }): Promise<void> {
   if (!isDeliverableEmail(input.to)) return;
@@ -185,10 +185,10 @@ export async function notifyCorrectionRequested(input: {
       details: [
         { label: 'Destination', value: input.country },
         { label: 'Visa', value: input.visaType },
-        { label: 'Reference', value: input.applicationId },
+        { label: 'Reference', value: input.referenceNumber },
       ],
       buttonLabel: 'Fix now',
-      buttonHref: `/applications/visa/${input.applicationId}/fix`,
+      buttonHref: `/applications/visa/${input.referenceNumber}/fix`,
     }),
   });
 }
@@ -199,7 +199,7 @@ export async function notifyCorrectionResubmitted(input: {
   applicantName: string;
   country: string;
   visaType: string;
-  applicationId: string;
+  referenceNumber: string;
 }): Promise<void> {
   if (!isDeliverableEmail(input.to)) return;
   await sendEmail({
@@ -215,10 +215,10 @@ export async function notifyCorrectionResubmitted(input: {
         { label: 'Applicant', value: input.applicantName },
         { label: 'Destination', value: input.country },
         { label: 'Visa', value: input.visaType },
-        { label: 'Reference', value: input.applicationId },
+        { label: 'Reference', value: input.referenceNumber },
       ],
       buttonLabel: 'Review updates',
-      buttonHref: `/admin/applications/visa/${input.applicationId}`,
+      buttonHref: `/admin/applications/visa/${input.referenceNumber}`,
     }),
   });
 }
@@ -229,7 +229,7 @@ export async function notifyNewComment(input: {
   authorName: string;
   country: string;
   visaType: string;
-  applicationId: string;
+  referenceNumber: string;
   excerpt: string;
   href: string;
 }): Promise<void> {
@@ -247,7 +247,7 @@ export async function notifyNewComment(input: {
       details: [
         { label: 'Destination', value: input.country },
         { label: 'Visa', value: input.visaType },
-        { label: 'Reference', value: input.applicationId },
+        { label: 'Reference', value: input.referenceNumber },
       ],
       buttonLabel: 'Open conversation',
       buttonHref: input.href,
@@ -260,7 +260,7 @@ export async function notifyStatusChanged(input: {
   recipientName: string;
   country: string;
   visaType: string;
-  applicationId: string;
+  referenceNumber: string;
   newStatus: string;
   href: string;
   notes?: string | null;
@@ -280,7 +280,7 @@ export async function notifyStatusChanged(input: {
       details: [
         { label: 'Destination', value: input.country },
         { label: 'Visa', value: input.visaType },
-        { label: 'Reference', value: input.applicationId },
+        { label: 'Reference', value: input.referenceNumber },
       ],
       buttonLabel: 'View application',
       buttonHref: input.href,

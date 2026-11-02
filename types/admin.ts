@@ -16,6 +16,8 @@ import { User, VisaApplication, PassportService, Document } from '@/lib/db/schem
  */
 export interface ApplicationListItem {
   id: string;
+  /** Public VI… reference for visa rows. Null/undefined for passport. */
+  referenceNumber?: string | null;
   type: 'visa' | 'passport';
   userId: string;
   userName: string;
@@ -61,6 +63,8 @@ export interface ReviewerOption {
 export interface ApplicationFilters {
   status?: string; // draft, submitted, under_review, action_required, approved, rejected, partially_approved
   type?: 'visa' | 'passport' | 'all';
+  /** Public visa reference (VI + digits); visa rows only */
+  referenceNumber?: string;
   search?: string; // search by applicant / user name
   phone?: string; // mobile (last 10 digits)
   country?: string; // legacy single ISO2 country code
@@ -314,6 +318,8 @@ export interface SetUserDeactivatedRequest {
  */
 export interface UserApplicationSummary {
   id: string;
+  /** Public VI… reference for visa rows. */
+  referenceNumber?: string | null;
   type: 'visa' | 'passport';
   title: string;
   detail: string;

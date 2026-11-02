@@ -16,6 +16,10 @@ import { eq, and, or, like, gte, lte, desc, sql, count, ilike, inArray } from 'd
 import { alias } from 'drizzle-orm/pg-core';
 import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
 import { passengerProfileKey } from '@/lib/dashboard/passengerProfiles';
+import {
+  normalizeVisaReferenceNumber,
+  resolveVisaApplicationId,
+} from '@/lib/visa/reference-number';
 import type {
   ApplicationListItem,
   ApplicationFilters,
@@ -69,6 +73,7 @@ export async function getApplicationsWithFilters(
     status,
     type = 'all',
     search,
+    referenceNumber,
     phone,
     country,
     countryCodes,
@@ -83,6 +88,7 @@ export async function getApplicationsWithFilters(
     sortBy = 'submittedAt',
     sortOrder = 'desc',
   } = filters;
+  const hasReferenceFilter = Boolean(referenceNumber?.trim());
 
   const phoneDigits = phone ? last10Digits(phone) : '';
   const selectedCountryCodes = [
@@ -138,6 +144,17 @@ export async function getApplicationsWithFilters(
         lte(visaApplications.submittedAt, istDayEndUtc(dateTo))
       );
     }
+    if (hasReferenceFilter) {
+      const ref = referenceNumber!.trim();
+      const exact = normalizeVisaReferenceNumber(ref);
+      if (exact) {
+        visaConditions.push(eq(visaApplications.referenceNumber, exact));
+      } else {
+        visaConditions.push(
+          ilike(visaApplications.referenceNumber, `%${ref}%`)
+        );
+      }
+    }
     if (search?.trim()) {
       const q = `%${search.trim()}%`;
       visaConditions.push(
@@ -166,6 +183,7 @@ export async function getApplicationsWithFilters(
     const visaResults = await db
       .select({
         id: visaApplications.id,
+        referenceNumber: visaApplications.referenceNumber,
         userId: visaApplications.userId,
         userName: users.name,
         userEmail: users.email,
@@ -198,6 +216,7 @@ export async function getApplicationsWithFilters(
 
     visaApps = visaResults.map((v) => ({
       id: v.id,
+      referenceNumber: v.referenceNumber,
       type: 'visa' as const,
       userId: v.userId,
       userName: v.applicantName || v.userName,
@@ -225,6 +244,7 @@ export async function getApplicationsWithFilters(
     (type === 'all' || type === 'passport') &&
     !assignedReviewerId &&
     !hasDestinationFilter &&
+    !hasReferenceFilter &&
     !passenger &&
     !phoneDigits
   ) {
@@ -495,8 +515,16 @@ export async function getApplicationDetails(
   let user: ApplicationDetail['user'];
   let formVersionNumber: number | null = null;
   let assignedReviewer: ApplicationDetail['assignedReviewer'] = null;
+  /** Canonical UUID used for child-table lookups. */
+  let resolvedId = id;
 
   if (type === 'visa') {
+    const resolved = await resolveVisaApplicationId(db, id);
+    if (!resolved) {
+      return null;
+    }
+    resolvedId = resolved;
+
     const visaResult = await db
       .select({
         application: visaApplications,
@@ -521,7 +549,7 @@ export async function getApplicationDetails(
         formVersions,
         eq(visaApplications.formVersionId, formVersions.id)
       )
-      .where(eq(visaApplications.id, id))
+      .where(eq(visaApplications.id, resolvedId))
       .limit(1);
 
     if (!visaResult || visaResult.length === 0) {
@@ -562,22 +590,23 @@ export async function getApplicationDetails(
     user = passportResult[0].user;
   }
 
-  const docs = await getDocumentsByApplicationId(id, type);
-  const history = await getStatusHistoryByApplicationId(id, type);
-  const notes = await getApplicationNotes(id);
-  const callLogs = type === 'visa' ? await getApplicationCallLogs(id) : [];
+  const docs = await getDocumentsByApplicationId(resolvedId, type);
+  const history = await getStatusHistoryByApplicationId(resolvedId, type);
+  const notes = await getApplicationNotes(resolvedId);
+  const callLogs =
+    type === 'visa' ? await getApplicationCallLogs(resolvedId) : [];
   const [credentialRow] = await db
     .select({ username: applicationCredentials.username })
     .from(applicationCredentials)
     .where(
       and(
-        eq(applicationCredentials.applicationId, id),
+        eq(applicationCredentials.applicationId, resolvedId),
         eq(applicationCredentials.applicationType, type)
       )
     )
     .limit(1);
   const travellers =
-    type === 'visa' ? await getVisaTravellers(id) : [];
+    type === 'visa' ? await getVisaTravellers(resolvedId) : [];
   const paymentRows = await db
     .select({
       id: payments.id,
@@ -592,7 +621,10 @@ export async function getApplicationDetails(
     })
     .from(payments)
     .where(
-      and(eq(payments.applicationId, id), eq(payments.applicationType, type))
+      and(
+        eq(payments.applicationId, resolvedId),
+        eq(payments.applicationType, type)
+      )
     )
     .orderBy(desc(payments.createdAt));
 
@@ -988,6 +1020,7 @@ export async function getApplicationsForUser(
     db
       .select({
         id: visaApplications.id,
+        referenceNumber: visaApplications.referenceNumber,
         country: visaApplications.country,
         countryCode: visaApplications.countryCode,
         visaType: visaApplications.visaType,
@@ -1012,6 +1045,7 @@ export async function getApplicationsForUser(
   const applications: UserApplicationSummary[] = await attachVisaTravellerSummaries([
     ...visaRows.map((row) => ({
       id: row.id,
+      referenceNumber: row.referenceNumber,
       type: 'visa' as const,
       title: visaPlaceLabel(row.country, row.countryCode, row.visaType),
       detail: row.visaType,

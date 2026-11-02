@@ -62,7 +62,7 @@ export function ApplicationsTable({
           <thead>
             <tr className="border-b border-ash bg-[#fafbfc]">
               <th className="px-6 py-4 text-left font-switzer text-xs font-semibold text-slate-helper uppercase tracking-wider">
-                Application ID
+                Reference
               </th>
               <th className="px-6 py-4 text-left font-switzer text-xs font-semibold text-slate-helper uppercase tracking-wider">
                 User
@@ -90,10 +90,12 @@ export function ApplicationsTable({
                 key={`${app.type}-${app.id}`}
                 className="border-b border-ash hover:bg-sky-wash/10 transition-colors"
               >
-                {/* Application ID (shortened) */}
+                {/* Public reference (visa) or short UUID (passport) */}
                 <td className="px-6 py-4">
                   <span className="font-switzer text-sm font-mono text-portrait-ink">
-                    {app.id.slice(0, 8)}
+                    {app.type === 'visa' && app.referenceNumber
+                      ? app.referenceNumber
+                      : app.id.slice(0, 8)}
                   </span>
                 </td>
 
@@ -178,7 +180,11 @@ export function ApplicationsTable({
                       />
                     )}
                     <Link
-                      href={`/admin/applications/${app.type}/${app.id}`}
+                      href={`/admin/applications/${app.type}/${
+                        app.type === 'visa' && app.referenceNumber
+                          ? app.referenceNumber
+                          : app.id
+                      }`}
                       aria-label="View details"
                       title="View details"
                       className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] border border-ash text-portrait-ink transition-colors hover:bg-sky-wash"

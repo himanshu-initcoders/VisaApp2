@@ -874,6 +874,7 @@ export async function assignVisaReviewer(
     const [application] = await db
       .select({
         id: visaApplications.id,
+        referenceNumber: visaApplications.referenceNumber,
         country: visaApplications.country,
         countryCode: visaApplications.countryCode,
         visaType: visaApplications.visaType,
@@ -919,6 +920,7 @@ export async function assignVisaReviewer(
       .where(eq(visaApplications.id, applicationId));
 
     revalidatePath('/admin/applications');
+    revalidatePath(`/admin/applications/visa/${application.referenceNumber}`);
     revalidatePath(`/admin/applications/visa/${applicationId}`);
 
     await notifyReviewerAssigned({
@@ -927,7 +929,7 @@ export async function assignVisaReviewer(
       applicantName: application.applicantName || 'Applicant',
       country: application.country || application.countryCode || 'Unknown',
       visaType: application.visaType,
-      applicationId,
+      referenceNumber: application.referenceNumber,
     });
     await notifyReviewerAssignedWhatsApp({
       reviewerUserId: reviewer.id,
@@ -935,7 +937,7 @@ export async function assignVisaReviewer(
       applicantName: application.applicantName || 'Applicant',
       country: application.country || application.countryCode || 'Unknown',
       visaType: application.visaType,
-      applicationId,
+      referenceNumber: application.referenceNumber,
     });
 
     return {
@@ -952,12 +954,24 @@ export async function assignVisaReviewer(
   }
 }
 
-function revalidateVisaSurfaces(applicationId: string) {
+async function revalidateVisaSurfaces(applicationId: string) {
+  const [row] = await db
+    .select({ referenceNumber: visaApplications.referenceNumber })
+    .from(visaApplications)
+    .where(eq(visaApplications.id, applicationId))
+    .limit(1);
+  const referenceNumber = row?.referenceNumber;
+
   revalidatePath('/admin');
   revalidatePath('/admin/applications');
   revalidatePath(`/admin/applications/visa/${applicationId}`);
   revalidatePath(`/applications/visa/${applicationId}`);
   revalidatePath(`/applications/visa/${applicationId}/fix`);
+  if (referenceNumber) {
+    revalidatePath(`/admin/applications/visa/${referenceNumber}`);
+    revalidatePath(`/applications/visa/${referenceNumber}`);
+    revalidatePath(`/applications/visa/${referenceNumber}/fix`);
+  }
   revalidatePath('/applications');
   revalidatePath('/dashboard');
 }
@@ -1112,7 +1126,7 @@ export async function requestCorrection(
     });
 
     await recomputeVisaCaseStatus(applicationId);
-    revalidateVisaSurfaces(applicationId);
+    await revalidateVisaSurfaces(applicationId);
     try {
       await notifyCorrectionRequestedEvent({ applicationId, message });
     } catch (notifyError) {
@@ -1385,7 +1399,7 @@ export async function applyStaffFieldEdit(
       });
     });
 
-    revalidateVisaSurfaces(applicationId);
+    await revalidateVisaSurfaces(applicationId);
     return { success: true, message: 'Correction saved' };
   } catch (error) {
     console.error('Error saving staff field edit:', error);
@@ -1460,7 +1474,7 @@ export async function resolveCorrection(
       });
     });
 
-    revalidateVisaSurfaces(request.applicationId);
+    await revalidateVisaSurfaces(request.applicationId);
     try {
       await notifyCommentEvent({
         applicationId: request.applicationId,
@@ -1523,7 +1537,7 @@ export async function postStaffComment(
       createdAt: new Date(),
     });
 
-    revalidateVisaSurfaces(applicationId);
+    await revalidateVisaSurfaces(applicationId);
     try {
       await notifyCommentEvent({
         applicationId,

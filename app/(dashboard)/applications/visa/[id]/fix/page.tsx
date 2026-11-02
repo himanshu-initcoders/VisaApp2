@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { visaApplicationTravellers, visaApplications } from '@/lib/db/schema';
+import { resolveVisaApplicationId } from '@/lib/visa/reference-number';
 import {
   emptyTripDetails,
   type ApplyFormConfig,
@@ -70,12 +71,15 @@ export default async function FixVisaApplicationPage({
   const { id } = await params;
   const query = await searchParams;
 
+  const resolvedId = await resolveVisaApplicationId(db, id);
+  if (!resolvedId) notFound();
+
   const [application] = await db
     .select()
     .from(visaApplications)
     .where(
       and(
-        eq(visaApplications.id, id),
+        eq(visaApplications.id, resolvedId),
         eq(visaApplications.userId, session.user.id)
       )
     )

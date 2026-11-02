@@ -242,7 +242,14 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
                           </Badge>
                         }
                       />
-                      <Field label="Application ID" value={app.id} />
+                      <Field
+                        label="Reference number"
+                        value={
+                          'referenceNumber' in app && app.referenceNumber
+                            ? String(app.referenceNumber)
+                            : app.id
+                        }
+                      />
                       <Field
                         label="Applicant"
                         value={app.applicantName || details.user.name}

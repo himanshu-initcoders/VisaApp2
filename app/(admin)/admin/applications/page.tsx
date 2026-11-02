@@ -15,6 +15,7 @@ import type { ApplicationFilters } from '@/types/admin';
 
 interface PageProps {
   searchParams: Promise<{
+    ref?: string;
     q?: string;
     search?: string;
     phone?: string;
@@ -39,6 +40,7 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
   const isReviewer = session.user.role === 'reviewer';
 
   const filters: ApplicationFilters = {
+    referenceNumber: params.ref,
     search: params.q || params.search,
     phone: params.phone,
     country: params.country,

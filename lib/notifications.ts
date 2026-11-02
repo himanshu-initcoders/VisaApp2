@@ -32,6 +32,7 @@ export interface AppNotice {
 
 interface VisaContext {
   id: string;
+  referenceNumber: string;
   userId: string;
   applicantName: string | null;
   country: string | null;
@@ -48,6 +49,7 @@ async function loadVisaContext(applicationId: string): Promise<VisaContext | nul
   const [row] = await db
     .select({
       id: visaApplications.id,
+      referenceNumber: visaApplications.referenceNumber,
       userId: visaApplications.userId,
       applicantName: visaApplications.applicantName,
       country: visaApplications.country,
@@ -77,6 +79,7 @@ async function loadVisaContext(applicationId: string): Promise<VisaContext | nul
 
   return {
     id: row.id,
+    referenceNumber: row.referenceNumber,
     userId: row.userId,
     applicantName: row.applicantName,
     country: row.country,
@@ -178,7 +181,7 @@ export async function notifyCorrectionRequestedEvent(input: {
 }): Promise<void> {
   const visa = await loadVisaContext(input.applicationId);
   if (!visa) return;
-  const href = `/applications/visa/${visa.id}/fix`;
+  const href = `/applications/visa/${visa.referenceNumber}/fix`;
   const title = 'Updates needed on your visa application';
   await insertNotifications({
     userIds: [visa.userId],
@@ -199,7 +202,7 @@ export async function notifyCorrectionRequestedEvent(input: {
         applicantName: applicantLabel(visa),
         country: countryOf(visa),
         visaType: visa.visaType,
-        applicationId: visa.id,
+        referenceNumber: visa.referenceNumber,
         message: input.message,
       }),
       'correction requested'
@@ -211,7 +214,7 @@ export async function notifyCorrectionRequestedEvent(input: {
       applicantName: applicantLabel(visa),
       country: countryOf(visa),
       visaType: visa.visaType,
-      applicationId: visa.id,
+      referenceNumber: visa.referenceNumber,
       message: input.message,
     }),
     'correction requested whatsapp'
@@ -225,7 +228,7 @@ export async function notifyCorrectionResubmittedEvent(input: {
   const visa = await loadVisaContext(input.applicationId);
   if (!visa) return;
   const audience = await staffAudience(visa, input.excludeUserId);
-  const href = `/admin/applications/visa/${visa.id}`;
+  const href = `/admin/applications/visa/${visa.referenceNumber}`;
   const title = `${applicantLabel(visa)} sent the requested updates`;
   const body = `${countryOf(visa)} · ${visa.visaType}`;
   await insertNotifications({
@@ -245,7 +248,7 @@ export async function notifyCorrectionResubmittedEvent(input: {
           applicantName: applicantLabel(visa),
           country: countryOf(visa),
           visaType: visa.visaType,
-          applicationId: visa.id,
+          referenceNumber: visa.referenceNumber,
         }),
         'correction resubmitted'
       )
@@ -256,7 +259,7 @@ export async function notifyCorrectionResubmittedEvent(input: {
         applicantName: applicantLabel(visa),
         country: countryOf(visa),
         visaType: visa.visaType,
-        applicationId: visa.id,
+        referenceNumber: visa.referenceNumber,
       }),
       'correction resubmitted whatsapp'
     ),
@@ -275,8 +278,8 @@ export async function notifyCommentEvent(input: {
   const excerpt = input.body.length > 280 ? `${input.body.slice(0, 277)}...` : input.body;
   const toApplicant = input.authorRole !== 'applicant';
   const href = toApplicant
-    ? `/applications/visa/${visa.id}`
-    : `/admin/applications/visa/${visa.id}`;
+    ? `/applications/visa/${visa.referenceNumber}`
+    : `/admin/applications/visa/${visa.referenceNumber}`;
   const title = `New comment from ${input.authorName}`;
 
   if (toApplicant) {
@@ -300,7 +303,7 @@ export async function notifyCommentEvent(input: {
           authorName: input.authorName,
           country: countryOf(visa),
           visaType: visa.visaType,
-          applicationId: visa.id,
+          referenceNumber: visa.referenceNumber,
           excerpt,
           href,
         }),
@@ -314,7 +317,7 @@ export async function notifyCommentEvent(input: {
         authorName: input.authorName,
         country: countryOf(visa),
         visaType: visa.visaType,
-        applicationId: visa.id,
+        referenceNumber: visa.referenceNumber,
         excerpt,
         audience: 'applicant',
       }),
@@ -341,7 +344,7 @@ export async function notifyCommentEvent(input: {
           authorName: input.authorName,
           country: countryOf(visa),
           visaType: visa.visaType,
-          applicationId: visa.id,
+          referenceNumber: visa.referenceNumber,
           excerpt,
           href,
         }),
@@ -356,7 +359,7 @@ export async function notifyCommentEvent(input: {
           authorName: input.authorName,
           country: countryOf(visa),
           visaType: visa.visaType,
-          applicationId: visa.id,
+          referenceNumber: visa.referenceNumber,
           excerpt,
           audience: 'staff',
         }),
@@ -380,7 +383,7 @@ export async function notifyStatusChangedEvent(input: {
   const body = input.notes?.trim() || `${countryOf(visa)} · ${visa.visaType}`;
 
   if (visa.userId !== input.actorId) {
-    const href = `/applications/visa/${visa.id}`;
+    const href = `/applications/visa/${visa.referenceNumber}`;
     await insertNotifications({
       userIds: [visa.userId],
       applicationId: visa.id,
@@ -400,7 +403,7 @@ export async function notifyStatusChangedEvent(input: {
           recipientName: applicantLabel(visa),
           country: countryOf(visa),
           visaType: visa.visaType,
-          applicationId: visa.id,
+          referenceNumber: visa.referenceNumber,
           newStatus: input.newStatus,
           href,
           notes: input.notes,
@@ -414,7 +417,7 @@ export async function notifyStatusChangedEvent(input: {
         recipientName: applicantLabel(visa),
         country: countryOf(visa),
         visaType: visa.visaType,
-        applicationId: visa.id,
+        referenceNumber: visa.referenceNumber,
         newStatus: input.newStatus,
         notes: input.notes,
         audience: 'applicant',
@@ -424,7 +427,7 @@ export async function notifyStatusChangedEvent(input: {
   }
 
   const audience = await staffAudience(visa, input.actorId);
-  const href = `/admin/applications/visa/${visa.id}`;
+  const href = `/admin/applications/visa/${visa.referenceNumber}`;
   await insertNotifications({
     userIds: audience.userIds,
     applicationId: visa.id,
@@ -441,7 +444,7 @@ export async function notifyStatusChangedEvent(input: {
           recipientName: recipient.name,
           country: countryOf(visa),
           visaType: visa.visaType,
-          applicationId: visa.id,
+          referenceNumber: visa.referenceNumber,
           newStatus: input.newStatus,
           href,
           notes: input.notes,
@@ -456,7 +459,7 @@ export async function notifyStatusChangedEvent(input: {
           recipientName: '',
           country: countryOf(visa),
           visaType: visa.visaType,
-          applicationId: visa.id,
+          referenceNumber: visa.referenceNumber,
           newStatus: input.newStatus,
           notes: input.notes,
           audience: 'staff',

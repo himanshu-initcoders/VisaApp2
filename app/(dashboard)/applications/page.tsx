@@ -52,7 +52,7 @@ export default async function ApplicationsPage() {
         approvedTravellerCount: summary?.approvedCount ?? 0,
         date: app.submittedAt || app.createdAt,
         kind: 'visa' as const,
-        href: `/applications/visa/${app.id}`,
+        href: `/applications/visa/${app.referenceNumber || app.id}`,
       };
     }),
     ...passportApps.map((app) => ({

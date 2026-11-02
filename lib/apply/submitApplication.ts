@@ -39,6 +39,7 @@ import {
 } from '@/lib/apply/validateSubmitTravellers';
 import { quoteVisaListing } from '@/lib/payments/quote';
 import { attachPaymentsToApplication } from '@/lib/payments/record';
+import { ensureUniqueVisaReferenceNumber } from '@/lib/visa/reference-number';
 
 export type { SubmitTravellerPayload } from '@/lib/apply/validateSubmitTravellers';
 
@@ -90,6 +91,7 @@ export type SubmitApplicationResult =
   | {
       success: true;
       applicationId: string;
+      referenceNumber: string;
       alreadySubmitted?: boolean;
     }
   | { success: false; error: string };
@@ -253,6 +255,7 @@ export async function submitApplication(
       .select({
         id: visaApplications.id,
         userId: visaApplications.userId,
+        referenceNumber: visaApplications.referenceNumber,
       })
       .from(visaApplications)
       .where(eq(visaApplications.submitId, input.submitId))
@@ -280,6 +283,7 @@ export async function submitApplication(
       return {
         success: true,
         applicationId: existing.id,
+        referenceNumber: existing.referenceNumber,
         alreadySubmitted: true,
       };
     }
@@ -375,6 +379,7 @@ export async function submitApplication(
     }
 
     const applicationId = randomUUID();
+    const referenceNumber = await ensureUniqueVisaReferenceNumber(db);
     const draftRow = await loadAndClearDraft(userId, input.listingId);
 
     const uploadResult = await resolveDocumentUploads({
@@ -436,6 +441,7 @@ export async function submitApplication(
         await tx.insert(visaApplications).values({
           id: applicationId,
           userId,
+          referenceNumber,
           countryCode,
           visaListingId: input.listingId,
           country: country?.name ?? countryCode,
@@ -531,7 +537,10 @@ export async function submitApplication(
       });
     } catch (insertError) {
       const [raced] = await db
-        .select({ id: visaApplications.id })
+        .select({
+          id: visaApplications.id,
+          referenceNumber: visaApplications.referenceNumber,
+        })
         .from(visaApplications)
         .where(eq(visaApplications.submitId, input.submitId))
         .limit(1);
@@ -544,6 +553,7 @@ export async function submitApplication(
         return {
           success: true,
           applicationId: raced.id,
+          referenceNumber: raced.referenceNumber,
           alreadySubmitted: true,
         };
       }
@@ -578,7 +588,7 @@ export async function submitApplication(
       applicantName: primaryName,
       country: countryName,
       visaType: visaTypeLabel,
-      applicationId,
+      referenceNumber,
     });
     await notifyVisaSubmittedToApplicantWhatsApp({
       userId: userRow.id,
@@ -586,24 +596,24 @@ export async function submitApplication(
       phone: userRow.phone,
       country: countryName,
       visaType: visaTypeLabel,
-      applicationId,
+      referenceNumber,
     });
     await notifyVisaSubmittedToAdmin({
       applicantName: primaryName,
       phone: userRow.phone,
       country: countryName,
       visaType: visaTypeLabel,
-      applicationId,
+      referenceNumber,
     });
     await notifyVisaSubmittedToAdminWhatsApp({
       applicantName: primaryName,
       phone: userRow.phone,
       country: countryName,
       visaType: visaTypeLabel,
-      applicationId,
+      referenceNumber,
     });
 
-    return { success: true, applicationId };
+    return { success: true, applicationId, referenceNumber };
   } catch (error) {
     console.error('submitApplication error:', error);
     const message = error instanceof Error ? error.message : '';

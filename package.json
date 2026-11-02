@@ -18,7 +18,8 @@
     "db:push": "drizzle-kit push",
     "db:seed": "tsx lib/db/seed.ts",
     "db:seed:occupations": "tsx lib/db/seeds/seedOccupations.ts",
-    "db:seed:document-types": "tsx lib/db/seeds/seedDocumentTypes.ts"
+    "db:seed:document-types": "tsx lib/db/seeds/seedDocumentTypes.ts",
+    "db:backfill-visa-refs": "tsx scripts/backfill-visa-reference-numbers.ts"
   },
   "keywords": [
     "visa",

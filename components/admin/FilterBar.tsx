@@ -64,6 +64,9 @@ export function FilterBar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  const [referenceNumber, setReferenceNumber] = useState(
+    searchParams.get('ref') || ''
+  );
   const [search, setSearch] = useState(searchParams.get('q') || searchParams.get('search') || '');
   const [phone, setPhone] = useState(searchParams.get('phone') || '');
   const [destination, setDestination] = useState(() =>
@@ -90,6 +93,7 @@ export function FilterBar({
   const applyFilters = () => {
     const params = new URLSearchParams();
 
+    if (referenceNumber.trim()) params.set('ref', referenceNumber.trim());
     if (search.trim()) params.set('q', search.trim());
     if (phone.trim()) params.set('phone', phone.trim());
     if (destination.parents.length) params.set('countries', destination.parents.join(','));
@@ -105,6 +109,7 @@ export function FilterBar({
   };
 
   const clearFilters = () => {
+    setReferenceNumber('');
     setSearch('');
     setPhone('');
     setDestination({ parents: [], children: [] });
@@ -117,6 +122,7 @@ export function FilterBar({
   };
 
   const hasActiveFilters =
+    referenceNumber.trim() !== '' ||
     search.trim() !== '' ||
     phone.trim() !== '' ||
     destination.parents.length > 0 ||
@@ -134,6 +140,15 @@ export function FilterBar({
   return (
     <div className="bg-white border border-ash rounded-[24px] p-6 shadow-sm">
       <div className="flex flex-col gap-4 md:flex-row md:items-end">
+        <div className="min-w-0 w-full md:w-56 md:shrink-0">
+          <Input
+            label="Reference number"
+            placeholder="VI…"
+            value={referenceNumber}
+            onChange={(e) => setReferenceNumber(e.target.value)}
+            onKeyDown={onEnterApply}
+          />
+        </div>
         <div className="min-w-0 flex-1">
           <Input
             label="Applicant name"

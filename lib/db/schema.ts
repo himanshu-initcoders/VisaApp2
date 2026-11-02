@@ -115,6 +115,12 @@ export const visaApplications = pgTable(
       .references(() => users.id)
       .notNull(),
 
+    /**
+     * Public application reference shown to users/admins (e.g. VI234567898765).
+     * Internal FKs and actions still use `id` (UUID).
+     */
+    referenceNumber: varchar('reference_number', { length: 14 }).notNull(),
+
     countryCode: char('country_code', { length: 2 }).references(
       () => countries.iso2Code
     ),
@@ -160,6 +166,9 @@ export const visaApplications = pgTable(
   },
   (table) => [
     uniqueIndex('visa_applications_submit_id_unique').on(table.submitId),
+    uniqueIndex('visa_applications_reference_number_unique').on(
+      table.referenceNumber
+    ),
     index('visa_applications_status_submitted_at_idx').on(
       table.status,
       table.submittedAt

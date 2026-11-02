@@ -156,7 +156,7 @@ Thank you for choosing Viserv.
 | `{{1}}` | Applicant name | Priya Sharma |
 | `{{2}}` | Country / destination | United Arab Emirates |
 | `{{3}}` | Visa type | Tourist Visa |
-| `{{4}}` | Application ID (UUID) | a1b2c3d4-e5f6-7890-abcd-ef1234567890 |
+| `{{4}}` | Reference number | VI234567898765 |
 
 ### Button
 
@@ -164,7 +164,7 @@ Thank you for choosing Viserv.
 |---|---|---|
 | URL | View application | `https://app.viserv.com/applications/visa/{{4}}` |
 
-> If Twilio/Meta only allow **one** dynamic URL variable and it must be the last path segment, use a dedicated URL var — see [URL button note](#url-button-note) at the bottom. Prefer keeping `{{4}}` as the application id in both body and URL when the builder allows it.
+> If Twilio/Meta only allow **one** dynamic URL variable and it must be the last path segment, use a dedicated URL var — see [URL button note](#url-button-note) at the bottom. Prefer keeping `{{4}}` as the reference number in both body and URL when the builder allows it.
 
 **Safer URL form (if builder requires a separate URL variable):**
 
@@ -185,7 +185,7 @@ Thank you for choosing Viserv.
 ```
 
 | Button URL | `https://app.viserv.com/applications/visa/{{5}}` |
-| Sample `{{5}}` | `a1b2c3d4-e5f6-7890-abcd-ef1234567890` |
+| Sample `{{5}}` | `VI234567898765` |
 
 ---
 
@@ -221,7 +221,7 @@ Thank you for choosing Viserv.
 | `{{2}}` | Phone | +919876543210 |
 | `{{3}}` | Country | United Arab Emirates |
 | `{{4}}` | Visa type | Tourist Visa |
-| `{{5}}` | Application ID | a1b2c3d4-e5f6-7890-abcd-ef1234567890 |
+| `{{5}}` | Reference number | VI234567898765 |
 
 ### Button
 
@@ -229,7 +229,7 @@ Thank you for choosing Viserv.
 |---|---|---|
 | URL | Open in admin | `https://app.viserv.com/admin/applications/visa/{{5}}` |
 
-**Safer URL form:** button `https://app.viserv.com/admin/applications/visa/{{6}}` with sample UUID matching `{{5}}`.
+**Safer URL form:** button `https://app.viserv.com/admin/applications/visa/{{6}}` with sample reference matching `{{5}}`.
 
 ---
 
@@ -263,7 +263,7 @@ Thank you for choosing Viserv.
 | `{{2}}` | Applicant name | Priya Sharma |
 | `{{3}}` | Country | United Arab Emirates |
 | `{{4}}` | Visa type | Tourist Visa |
-| `{{5}}` | Application ID | a1b2c3d4-e5f6-7890-abcd-ef1234567890 |
+| `{{5}}` | Reference number | VI234567898765 |
 
 ### Button
 
@@ -307,7 +307,7 @@ Thank you for choosing Viserv.
 | `{{2}}` | Correction message from reviewer | Please re-upload a clearer passport bio page and correct your travel date. |
 | `{{3}}` | Country | United Arab Emirates |
 | `{{4}}` | Visa type | Tourist Visa |
-| `{{5}}` | Application ID | a1b2c3d4-e5f6-7890-abcd-ef1234567890 |
+| `{{5}}` | Reference number | VI234567898765 |
 
 ### Button
 
@@ -317,7 +317,7 @@ Thank you for choosing Viserv.
 
 **Safer URL form:**  
 `https://app.viserv.com/applications/visa/{{6}}/fix`  
-Sample `{{6}}`: same UUID as reference.
+Sample `{{6}}`: same reference number.
 
 > Keep `{{2}}` under ~500 characters when sending so the full WhatsApp body stays readable.
 
@@ -353,7 +353,7 @@ Thank you for choosing Viserv.
 | `{{2}}` | Applicant name | Priya Sharma |
 | `{{3}}` | Country | United Arab Emirates |
 | `{{4}}` | Visa type | Tourist Visa |
-| `{{5}}` | Application ID | a1b2c3d4-e5f6-7890-abcd-ef1234567890 |
+| `{{5}}` | Reference number | VI234567898765 |
 
 ### Button
 
@@ -400,7 +400,7 @@ Thank you for choosing Viserv.
 | `{{3}}` | Comment excerpt (truncate ~280 chars in code) | Please confirm your hotel booking dates match the travel form. |
 | `{{4}}` | Country | United Arab Emirates |
 | `{{5}}` | Visa type | Tourist Visa |
-| `{{6}}` | Application ID | a1b2c3d4-e5f6-7890-abcd-ef1234567890 |
+| `{{6}}` | Reference number | VI234567898765 |
 
 ### Buttons (pick one per send — or submit two templates)
 
@@ -456,7 +456,7 @@ Thank you for choosing Viserv.
 | `{{3}}` | Notes (or `—` if empty) | Documents look good. We are reviewing your case. |
 | `{{4}}` | Country | United Arab Emirates |
 | `{{5}}` | Visa type | Tourist Visa |
-| `{{6}}` | Application ID | a1b2c3d4-e5f6-7890-abcd-ef1234567890 |
+| `{{6}}` | Reference number | VI234567898765 |
 
 **Status sample values to list in approval notes:** `under review`, `approved`, `rejected`
 
@@ -533,7 +533,7 @@ Thank you for choosing Viserv.
 | Var | Sample |
 |---|---|
 | `{{4}}` | Reason notes | Please check the comments on your application for next steps. |
-| `{{5}}` | Application ID | UUID |
+| `{{5}}` | Reference number | UUID |
 
 Button: `https://app.viserv.com/applications/visa/{{5}}`
 
@@ -589,7 +589,7 @@ In Twilio Content Template Builder:
 - **Button type:** Visit website  
 - **URL type:** Dynamic  
 - **URL:** `https://app.viserv.com/applications/visa/{{1}}`  
-- **Sample for** `{{1}`**:** `a1b2c3d4-e5f6-7890-abcd-ef1234567890`
+- **Sample for** `{{1}`**:** `VI234567898765`
 
 When the button URL uses `{{1}}`, body variables must still be numbered sequentially without gaps. Prefer putting the application id as the **last** body variable and reuse that index in the URL when the console allows; otherwise add a dedicated final URL-only variable.
 

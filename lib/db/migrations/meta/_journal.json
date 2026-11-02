@@ -162,6 +162,13 @@
       "when": 1793200000000,
       "tag": "0022_phone_otp_challenges",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793604229909,
+      "tag": "0023_swift_famine",
+      "breakpoints": true
     }
   ]
 }

@@ -98,7 +98,7 @@ export async function notifyVisaSubmittedToApplicantWhatsApp(input: {
   phone?: string | null;
   country: string;
   visaType: string;
-  applicationId: string;
+  referenceNumber: string;
 }): Promise<void> {
   const recipient =
     recipientFromUserPhone({
@@ -116,7 +116,7 @@ export async function notifyVisaSubmittedToApplicantWhatsApp(input: {
         input.applicantName,
         input.country,
         input.visaType,
-        input.applicationId,
+        input.referenceNumber,
       ],
       'visa submitted applicant'
     ),
@@ -130,7 +130,7 @@ export async function notifyVisaSubmittedToAdminWhatsApp(input: {
   phone?: string | null;
   country: string;
   visaType: string;
-  applicationId: string;
+  referenceNumber: string;
 }): Promise<void> {
   const admins = await resolveAdminWhatsAppRecipients();
   if (admins.length === 0) {
@@ -159,7 +159,7 @@ export async function notifyVisaSubmittedToAdminWhatsApp(input: {
             phoneDisplay,
             input.country,
             input.visaType,
-            input.applicationId,
+            input.referenceNumber,
           ],
           'visa submitted admin'
         ),
@@ -175,7 +175,7 @@ export async function notifyReviewerAssignedWhatsApp(input: {
   applicantName: string;
   country: string;
   visaType: string;
-  applicationId: string;
+  referenceNumber: string;
 }): Promise<void> {
   const recipient = await resolveUserWhatsApp(input.reviewerUserId);
   if (!recipient) return;
@@ -189,7 +189,7 @@ export async function notifyReviewerAssignedWhatsApp(input: {
         input.applicantName,
         input.country,
         input.visaType,
-        input.applicationId,
+        input.referenceNumber,
       ],
       'reviewer assigned'
     ),
@@ -202,7 +202,7 @@ export async function notifyCorrectionRequestedWhatsApp(input: {
   applicantName: string;
   country: string;
   visaType: string;
-  applicationId: string;
+  referenceNumber: string;
   message: string;
 }): Promise<void> {
   const recipient = await resolveUserWhatsApp(input.userId);
@@ -222,7 +222,7 @@ export async function notifyCorrectionRequestedWhatsApp(input: {
         message,
         input.country,
         input.visaType,
-        input.applicationId,
+        input.referenceNumber,
       ],
       'correction requested'
     ),
@@ -235,7 +235,7 @@ export async function notifyCorrectionResubmittedWhatsApp(input: {
   applicantName: string;
   country: string;
   visaType: string;
-  applicationId: string;
+  referenceNumber: string;
 }): Promise<void> {
   await Promise.all(
     [...new Set(input.recipientUserIds)].map(async (userId) => {
@@ -250,7 +250,7 @@ export async function notifyCorrectionResubmittedWhatsApp(input: {
             input.applicantName,
             input.country,
             input.visaType,
-            input.applicationId,
+            input.referenceNumber,
           ],
           'correction resubmitted'
         ),
@@ -266,7 +266,7 @@ export async function notifyNewCommentWhatsApp(input: {
   authorName: string;
   country: string;
   visaType: string;
-  applicationId: string;
+  referenceNumber: string;
   excerpt: string;
   audience: 'applicant' | 'staff';
 }): Promise<void> {
@@ -293,7 +293,7 @@ export async function notifyNewCommentWhatsApp(input: {
         excerpt,
         input.country,
         input.visaType,
-        input.applicationId,
+        input.referenceNumber,
       ],
       `new comment ${input.audience}`
     ),
@@ -306,7 +306,7 @@ export async function notifyStatusChangedWhatsApp(input: {
   recipientName: string;
   country: string;
   visaType: string;
-  applicationId: string;
+  referenceNumber: string;
   newStatus: string;
   notes?: string | null;
   audience: 'applicant' | 'staff';
@@ -332,7 +332,7 @@ export async function notifyStatusChangedWhatsApp(input: {
         notes,
         input.country,
         input.visaType,
-        input.applicationId,
+        input.referenceNumber,
       ],
       `status changed ${input.audience}`
     ),
