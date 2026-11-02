@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { AnimatedTabs } from '@/components/ui';
 import { AdditionalQuestionsTab } from '@/components/apply/form/AdditionalQuestionsTab';
@@ -11,6 +11,7 @@ import { TripDetailsTab } from '@/components/apply/form/TripDetailsTab';
 import { ReviewSubmitTab } from '@/components/apply/form/ReviewSubmitTab';
 import {
   APPLICATION_FORM_TABS,
+  DOCUMENT_FILE_ACCEPT,
   defaultApplyFormConfig,
   emptyTripDetails,
   firstIncompleteTab,
@@ -20,9 +21,11 @@ import {
   getVisibleApplicationTabs,
   hasPassportBackImage,
   isAdditionalQuestionsComplete,
+  isAllowedPassportFile,
   isCoreTripComplete,
   isDocumentsComplete,
   isMultiStopComplete,
+  isWithinUploadLimit,
   resolveDocumentSlotsWithPassportBack,
   tabUnlockState,
   type ApplicationFormTabId,
@@ -35,6 +38,14 @@ import {
   clearHiddenDocumentUploads,
   getVisibleDocumentSlots,
 } from '@/lib/document-conditions';
+import type { DraftScopeInput } from '@/lib/apply/draftScope';
+import {
+  PASSPORT_BACK_SLOT,
+  PASSPORT_FRONT_SLOT,
+  idbErrorMessage,
+  isIdbAvailable,
+  putFile,
+} from '@/lib/apply/idbDraftStorage';
 import { formatProfileName } from '@/lib/apply/travellerProfiles';
 import type { IndianPassportFields } from '@/lib/passport/types';
 import { isReviewComplete } from '@/lib/passport/schema';
@@ -66,10 +77,15 @@ interface PassportReviewStageProps {
   tripSources?: TripCopySource[];
   onBack: () => void;
   onClose: () => void;
-  onEditFront: () => void;
   /** Autosave while the user fills tabs (debounced). */
   onProgress?: (data: PassportApplicationPayload) => void;
   onContinue: (data: PassportApplicationPayload) => void;
+}
+
+function revokeIfObjectUrl(url?: string) {
+  if (url?.startsWith('blob:')) {
+    URL.revokeObjectURL(url);
+  }
 }
 
 export function PassportReviewStage({
@@ -86,7 +102,6 @@ export function PassportReviewStage({
   tripSources,
   onBack,
   onClose,
-  onEditFront,
   onProgress,
   onContinue,
 }: PassportReviewStageProps) {
@@ -135,19 +150,42 @@ export function PassportReviewStage({
   const [documents, setDocuments] = useState<TravellerDocumentUpload[]>(
     savedDocuments ?? []
   );
+  const [frontPreviewUrl, setFrontPreviewUrl] = useState(
+    initial.frontPreviewUrl
+  );
   const [backPreviewUrl, setBackPreviewUrl] = useState<string | undefined>(
     initial.backPreviewUrl
   );
+  // OCR crops are images; replace can switch to PDF.
+  const [frontMimeType, setFrontMimeType] = useState('image/jpeg');
+  const [backMimeType, setBackMimeType] = useState(
+    initial.backPreviewUrl ? 'image/jpeg' : undefined
+  );
+  const [frontFilename, setFrontFilename] = useState<string | undefined>();
+  const [backFilename, setBackFilename] = useState<string | undefined>();
+  const [replaceBusy, setReplaceBusy] = useState<'front' | 'back' | null>(null);
+  const [replaceError, setReplaceError] = useState<string | null>(null);
 
+  const frontInputRef = useRef<HTMLInputElement>(null);
+  const backInputRef = useRef<HTMLInputElement>(null);
   const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onProgressRef = useRef(onProgress);
   onProgressRef.current = onProgress;
+
+  const draftScope: DraftScopeInput = useMemo(
+    () => ({
+      listingId,
+      sessionUserId,
+      onBehalfOfUserId: ownerUserId,
+    }),
+    [listingId, sessionUserId, ownerUserId]
+  );
 
   const buildPayload = (): PassportApplicationPayload => ({
     fields: form,
     tripDetails: trip,
     documents,
-    frontPreviewUrl: initial.frontPreviewUrl,
+    frontPreviewUrl,
     backPreviewUrl,
   });
 
@@ -162,7 +200,7 @@ export function PassportReviewStage({
       if (progressTimer.current) clearTimeout(progressTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, trip, documents, initial.frontPreviewUrl, backPreviewUrl]);
+  }, [form, trip, documents, frontPreviewUrl, backPreviewUrl]);
 
   // Immediate first save when review opens (OCR fields + passport images)
   useEffect(() => {
@@ -175,10 +213,87 @@ export function PassportReviewStage({
     const backUpload = documents.find((item) =>
       isPassportBackDocument({ key: item.key })
     );
-    if (backUpload?.previewUrl) {
-      setBackPreviewUrl(backUpload.previewUrl);
-    }
-  }, [documents]);
+    const next = backUpload?.previewUrl;
+    if (!next) return;
+    setBackPreviewUrl((prev) => {
+      if (prev === next) return prev;
+      if (prev && prev !== initial.backPreviewUrl) revokeIfObjectUrl(prev);
+      return next;
+    });
+    if (backUpload.mimeType) setBackMimeType(backUpload.mimeType);
+    if (backUpload.name) setBackFilename(backUpload.name);
+  }, [documents, initial.backPreviewUrl]);
+
+  const replacePassportImage = useCallback(
+    async (which: 'front' | 'back', file: File) => {
+      if (!isAllowedPassportFile(file)) {
+        setReplaceError('Please upload a JPG, PNG, WEBP, or PDF file.');
+        return;
+      }
+      if (!isWithinUploadLimit(file)) {
+        setReplaceError('File is too large. Max 5MB for images, 10MB for PDFs.');
+        return;
+      }
+      if (!isIdbAvailable()) {
+        setReplaceError(idbErrorMessage(new Error('IndexedDB unavailable')));
+        return;
+      }
+
+      setReplaceBusy(which);
+      setReplaceError(null);
+      const slotKey = which === 'front' ? PASSPORT_FRONT_SLOT : PASSPORT_BACK_SLOT;
+      const mimeType = file.type || 'application/octet-stream';
+      const filename = file.name || `${slotKey}.bin`;
+
+      try {
+        await putFile(draftScope, travellerId, slotKey, {
+          blob: file,
+          mimeType,
+          filename,
+        });
+        const nextUrl = URL.createObjectURL(file);
+        if (which === 'front') {
+          setFrontPreviewUrl((prev) => {
+            if (prev !== initial.frontPreviewUrl) revokeIfObjectUrl(prev);
+            return nextUrl;
+          });
+          setFrontMimeType(mimeType);
+          setFrontFilename(filename);
+        } else {
+          setBackPreviewUrl((prev) => {
+            if (prev && prev !== initial.backPreviewUrl) revokeIfObjectUrl(prev);
+            return nextUrl;
+          });
+          setBackMimeType(mimeType);
+          setBackFilename(filename);
+          // Keep documents-slot back upload in sync when present.
+          setDocuments((prev) => {
+            const hasBackSlot = prev.some((item) =>
+              isPassportBackDocument({ key: item.key })
+            );
+            if (!hasBackSlot) return prev;
+            return prev.map((item) =>
+              isPassportBackDocument({ key: item.key })
+                ? {
+                    ...item,
+                    name: filename,
+                    previewUrl: nextUrl,
+                    mimeType,
+                    size: file.size,
+                    storedInIdb: true,
+                  }
+                : item
+            );
+          });
+        }
+      } catch (error) {
+        setReplaceError(idbErrorMessage(error));
+      } finally {
+        setReplaceBusy(null);
+      }
+    },
+    [draftScope, travellerId, initial.frontPreviewUrl, initial.backPreviewUrl]
+  );
 
   const generalComplete = useMemo(
     () => (formConfig.showGeneralInfo ? isReviewComplete(form) : true),
@@ -208,7 +323,10 @@ export function PassportReviewStage({
         : isAdditionalQuestionsComplete(trip, formConfig.extraQuestions),
     [trip, formConfig.extraQuestions]
   );
-  const ocrHadPassportBack = Boolean(initial.backPreviewUrl);
+  const hasBackImage = hasPassportBackImage({
+    passportBackUrl: backPreviewUrl,
+    uploads: documents,
+  });
   const visibleDocumentSlots = useMemo(
     () =>
       resolveDocumentSlotsWithPassportBack(
@@ -217,15 +335,14 @@ export function PassportReviewStage({
           formConfig.extraQuestions,
           trip.extra
         ),
-        // Hide the upload slot when OCR already captured a back page.
-        // Documents-tab uploads stay as normal slots for completion / replace.
-        ocrHadPassportBack
+        // Hide passport-back slot once a back image exists (OCR or documents).
+        hasBackImage
       ),
     [
       formConfig.documentSlots,
       formConfig.extraQuestions,
       trip.extra,
-      ocrHadPassportBack,
+      hasBackImage,
     ]
   );
 
@@ -312,7 +429,7 @@ export function PassportReviewStage({
       ? tripStepIssues[0]
       : tab === 'additional' && additionalIssues.length > 0
         ? additionalIssues[0]
-        : null;
+        : replaceError;
 
   const firstTab = visibleTabs[0] ?? 'review';
 
@@ -323,6 +440,29 @@ export function PassportReviewStage({
 
   return (
     <div className="min-h-dvh bg-white">
+      <input
+        ref={frontInputRef}
+        type="file"
+        accept={DOCUMENT_FILE_ACCEPT}
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file) void replacePassportImage('front', file);
+        }}
+      />
+      <input
+        ref={backInputRef}
+        type="file"
+        accept={DOCUMENT_FILE_ACCEPT}
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file) void replacePassportImage('back', file);
+        }}
+      />
+
       <header className="relative flex items-center justify-between px-4 py-4 sm:px-6">
         <button
           type="button"
@@ -370,10 +510,17 @@ export function PassportReviewStage({
           <GeneralDetailsTab
             form={form}
             onChange={setForm}
-            frontPreviewUrl={initial.frontPreviewUrl}
+            frontPreviewUrl={frontPreviewUrl}
             backPreviewUrl={backPreviewUrl}
+            frontMimeType={frontMimeType}
+            backMimeType={backMimeType}
+            frontFilename={frontFilename}
+            backFilename={backFilename}
             warnings={initial.warnings}
-            onEditFront={onEditFront}
+            onEditFront={() => frontInputRef.current?.click()}
+            onEditBack={
+              backPreviewUrl ? () => backInputRef.current?.click() : undefined
+            }
           />
         )}
         {tab === 'trip' && formConfig.showTripDetails && (
@@ -400,11 +547,24 @@ export function PassportReviewStage({
             slots={visibleDocumentSlots}
             uploads={documents}
             passportPreviewUrl={
-              formConfig.showGeneralInfo ? initial.frontPreviewUrl : undefined
+              formConfig.showGeneralInfo ? frontPreviewUrl : undefined
             }
             passportBackPreviewUrl={
-              formConfig.showGeneralInfo && ocrHadPassportBack
-                ? backPreviewUrl
+              formConfig.showGeneralInfo ? backPreviewUrl : undefined
+            }
+            passportFrontMimeType={frontMimeType}
+            passportBackMimeType={backMimeType}
+            passportFrontFilename={frontFilename}
+            passportBackFilename={backFilename}
+            passportReplaceBusy={replaceBusy}
+            onReplacePassportFront={(file) => {
+              void replacePassportImage('front', file);
+            }}
+            onReplacePassportBack={
+              backPreviewUrl
+                ? (file) => {
+                    void replacePassportImage('back', file);
+                  }
                 : undefined
             }
             onChange={setDocuments}
@@ -415,18 +575,19 @@ export function PassportReviewStage({
             fields={form}
             trip={trip}
             extraQuestions={formConfig.extraQuestions}
-            slots={resolveDocumentSlotsWithPassportBack(
-              visibleDocumentSlots,
-              Boolean(backPreviewUrl)
-            )}
+            slots={visibleDocumentSlots}
             uploads={documents}
             countryName={formConfig.countryName}
             passportPreviewUrl={
-              formConfig.showGeneralInfo ? initial.frontPreviewUrl : undefined
+              formConfig.showGeneralInfo ? frontPreviewUrl : undefined
             }
             passportBackPreviewUrl={
               formConfig.showGeneralInfo ? backPreviewUrl : undefined
             }
+            passportFrontMimeType={frontMimeType}
+            passportBackMimeType={backMimeType}
+            passportFrontFilename={frontFilename}
+            passportBackFilename={backFilename}
             showGeneralInfo={formConfig.showGeneralInfo}
             showTripDetails={formConfig.showTripDetails}
             onEditSection={setTab}

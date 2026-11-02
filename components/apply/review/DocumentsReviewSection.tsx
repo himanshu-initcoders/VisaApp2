@@ -10,10 +10,12 @@ import type {
   ApplyDocumentSlot,
   TravellerDocumentUpload,
 } from '@/lib/apply/applicationForm';
+import { isDocumentSlotFilled } from '@/lib/apply/applicationForm';
 import {
   PASSPORT_BACK_SLOT,
   PASSPORT_FRONT_SLOT,
 } from '@/lib/apply/idbDraftStorage';
+import { isPassportBackDocument } from '@/lib/document-types';
 import { resolveDocumentPreviewUrl } from '@/lib/apply/resolveDocumentPreview';
 import type { DraftFileRef } from '@/lib/apply/types';
 
@@ -22,6 +24,10 @@ interface DocumentsReviewSectionProps {
   uploads: TravellerDocumentUpload[];
   passportPreviewUrl?: string;
   passportBackPreviewUrl?: string;
+  passportFrontMimeType?: string;
+  passportBackMimeType?: string;
+  passportFrontFilename?: string;
+  passportBackFilename?: string;
   /** Needed to rehydrate draft previews from IndexedDB / server. */
   listingId?: string;
   travellerId?: string;
@@ -56,6 +62,10 @@ export function DocumentsReviewSection({
   uploads,
   passportPreviewUrl,
   passportBackPreviewUrl,
+  passportFrontMimeType,
+  passportBackMimeType,
+  passportFrontFilename,
+  passportBackFilename,
   listingId,
   travellerId,
   draftFileRefs,
@@ -79,14 +89,33 @@ export function DocumentsReviewSection({
   const frontRef = refForSlot(draftFileRefs, PASSPORT_FRONT_SLOT);
   const backRef = refForSlot(draftFileRefs, PASSPORT_BACK_SLOT);
 
+  // Passport back is captured in the passport step (or documents slot). Never
+  // also list it as a separate empty required slot — that caused "Not uploaded"
+  // even when passportBackUrl / IDB back already existed.
+  const passportBackSlot = slots.find((slot) => isPassportBackDocument(slot));
+  const otherSlots = slots.filter((slot) => !isPassportBackDocument(slot));
+  const backUpload =
+    (passportBackSlot && byKey.get(passportBackSlot.key)) ||
+    byKey.get(PASSPORT_BACK_SLOT);
+  const backFilled =
+    Boolean(passportBackPreviewUrl?.trim()) ||
+    Boolean(backRef) ||
+    isDocumentSlotFilled(backUpload);
+
   const items: PreviewCard[] = [
     ...(passportPreviewUrl || frontRef
       ? [
           {
             title: 'Passport bio page',
-            name: frontRef?.filename || 'Passport front',
+            name:
+              passportFrontFilename ||
+              frontRef?.filename ||
+              'Passport front',
             previewUrl: passportPreviewUrl || frontRef?.url || '',
-            mimeType: frontRef?.mimeType || 'image/jpeg',
+            mimeType:
+              passportFrontMimeType ||
+              frontRef?.mimeType ||
+              'image/jpeg',
             slotKey: PASSPORT_FRONT_SLOT,
             storageKey: frontRef?.storageKey,
             storageUrl: frontRef?.url,
@@ -99,20 +128,41 @@ export function DocumentsReviewSection({
             required: true,
           },
         ]),
-    ...(passportBackPreviewUrl || backRef
+    ...(backFilled
       ? [
           {
-            title: 'Passport back page',
-            name: backRef?.filename || 'Passport back',
-            previewUrl: passportBackPreviewUrl || backRef?.url || '',
-            mimeType: backRef?.mimeType || 'image/jpeg',
+            title: passportBackSlot?.title || 'Passport back page',
+            name:
+              passportBackFilename ||
+              backUpload?.name ||
+              backRef?.filename ||
+              'Passport back',
+            previewUrl:
+              passportBackPreviewUrl ||
+              backUpload?.previewUrl ||
+              backUpload?.storageUrl ||
+              backRef?.url ||
+              '',
+            mimeType:
+              passportBackMimeType ||
+              backUpload?.mimeType ||
+              backRef?.mimeType ||
+              'image/jpeg',
             slotKey: PASSPORT_BACK_SLOT,
-            storageKey: backRef?.storageKey,
-            storageUrl: backRef?.url,
+            storageKey: backUpload?.storageKey || backRef?.storageKey,
+            storageUrl: backUpload?.storageUrl || backRef?.url,
           },
         ]
-      : []),
-    ...slots.map((slot) => {
+      : passportBackSlot
+        ? [
+            {
+              title: passportBackSlot.title,
+              missing: true as const,
+              required: passportBackSlot.required,
+            },
+          ]
+        : []),
+    ...otherSlots.map((slot) => {
       const upload = byKey.get(slot.key);
       const ref = refForSlot(draftFileRefs, slot.key);
       if (

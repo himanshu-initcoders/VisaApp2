@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Camera, Check, Download, Trash2, Upload } from 'lucide-react';
+import { Camera, Check, Download, FileText, Trash2, Upload } from 'lucide-react';
 import { PassportPhotoCaptureDialog } from '@/components/apply/form/PassportPhotoCaptureDialog';
 import type {
   ApplyDocumentSlot,
@@ -28,6 +28,14 @@ interface DocumentsTabProps {
   passportPreviewUrl?: string;
   /** When OCR already captured the back page, show it as uploaded. */
   passportBackPreviewUrl?: string;
+  passportFrontMimeType?: string;
+  passportBackMimeType?: string;
+  passportFrontFilename?: string;
+  passportBackFilename?: string;
+  /** Image-only replace (no OCR). */
+  onReplacePassportFront?: (file: File) => void;
+  onReplacePassportBack?: (file: File) => void;
+  passportReplaceBusy?: 'front' | 'back' | null;
   onChange: (next: TravellerDocumentUpload[]) => void;
   editableKeys?: ReadonlySet<string>;
   comments?: Record<string, string>;
@@ -41,6 +49,102 @@ function revokeIfObjectUrl(url?: string) {
   if (url?.startsWith('blob:')) {
     URL.revokeObjectURL(url);
   }
+}
+
+function isImagePreview(mimeType?: string, filename?: string) {
+  if (mimeType?.startsWith('image/')) return true;
+  if (mimeType === 'application/pdf') return false;
+  if (filename && /\.pdf$/i.test(filename)) return false;
+  return !mimeType || mimeType.startsWith('image/');
+}
+
+function PassportPreviewCard({
+  title,
+  previewUrl,
+  mimeType,
+  filename,
+  busy,
+  onReplace,
+}: {
+  title: string;
+  previewUrl: string;
+  mimeType?: string;
+  filename?: string;
+  busy?: boolean;
+  onReplace?: (file: File) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const showImage = isImagePreview(mimeType, filename);
+
+  const acceptFile = (file: File) => {
+    if (!isAllowedPassportFile(file)) {
+      setError('Please upload a JPG, PNG, WEBP, or PDF file.');
+      return;
+    }
+    if (!isWithinUploadLimit(file)) {
+      setError('File is too large. Max 5MB for images, 10MB for PDFs.');
+      return;
+    }
+    setError(null);
+    onReplace?.(file);
+  };
+
+  return (
+    <div className="rounded-[24px] border border-ash bg-[#f8fafc] p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-portrait-ink">{title}</p>
+        <span className="inline-flex items-center gap-1 rounded-full bg-mint-wash px-2.5 py-1 text-[11px] font-medium text-[#00a32a]">
+          <Check className="h-3 w-3" />
+          Uploaded
+        </span>
+      </div>
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={previewUrl}
+          alt={title}
+          className="mt-3 max-h-44 w-full rounded-2xl object-contain bg-white"
+        />
+      ) : (
+        <div className="mt-3 flex min-h-[11rem] flex-col items-center justify-center gap-2 rounded-2xl bg-white px-4 text-center">
+          <FileText className="h-8 w-8 text-[#3b82f6]" />
+          <p className="truncate text-sm font-medium text-portrait-ink">
+            {filename || 'PDF uploaded'}
+          </p>
+          <p className="text-xs text-slate-helper">PDF preview not shown</p>
+        </div>
+      )}
+      {onReplace && (
+        <>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/jpg,application/pdf"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (!file) return;
+              acceptFile(file);
+            }}
+          />
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => inputRef.current?.click()}
+              className="inline-flex items-center gap-2 rounded-full bg-[#eef4ff] px-4 py-2 text-sm font-medium text-[#3b82f6] transition-colors hover:bg-[#dce8ff] disabled:opacity-60"
+            >
+              <Upload className="h-4 w-4" />
+              Replace file
+            </button>
+          </div>
+        </>
+      )}
+      {error && <p className="mt-2 text-xs text-[#ff4940]">{error}</p>}
+    </div>
+  );
 }
 
 function SlotCard({
@@ -199,6 +303,13 @@ export function DocumentsTab({
   uploads,
   passportPreviewUrl,
   passportBackPreviewUrl,
+  passportFrontMimeType,
+  passportBackMimeType,
+  passportFrontFilename,
+  passportBackFilename,
+  onReplacePassportFront,
+  onReplacePassportBack,
+  passportReplaceBusy = null,
   onChange,
   editableKeys,
   comments,
@@ -310,42 +421,24 @@ export function DocumentsTab({
       {(passportPreviewUrl || passportBackPreviewUrl) && (
         <div className="grid gap-4 sm:grid-cols-2">
           {passportPreviewUrl && (
-            <div className="rounded-[24px] border border-ash bg-[#f8fafc] p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-portrait-ink">
-                  Passport bio page
-                </p>
-                <span className="inline-flex items-center gap-1 rounded-full bg-mint-wash px-2.5 py-1 text-[11px] font-medium text-[#00a32a]">
-                  <Check className="h-3 w-3" />
-                  Uploaded
-                </span>
-              </div>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={passportPreviewUrl}
-                alt="Passport bio page"
-                className="mt-3 max-h-44 w-full rounded-2xl object-contain bg-white"
-              />
-            </div>
+            <PassportPreviewCard
+              title="Passport bio page"
+              previewUrl={passportPreviewUrl}
+              mimeType={passportFrontMimeType}
+              filename={passportFrontFilename}
+              busy={passportReplaceBusy === 'front'}
+              onReplace={onReplacePassportFront}
+            />
           )}
           {passportBackPreviewUrl && (
-            <div className="rounded-[24px] border border-ash bg-[#f8fafc] p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-portrait-ink">
-                  Passport back page
-                </p>
-                <span className="inline-flex items-center gap-1 rounded-full bg-mint-wash px-2.5 py-1 text-[11px] font-medium text-[#00a32a]">
-                  <Check className="h-3 w-3" />
-                  Uploaded
-                </span>
-              </div>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={passportBackPreviewUrl}
-                alt="Passport back page"
-                className="mt-3 max-h-44 w-full rounded-2xl object-contain bg-white"
-              />
-            </div>
+            <PassportPreviewCard
+              title="Passport back page"
+              previewUrl={passportBackPreviewUrl}
+              mimeType={passportBackMimeType}
+              filename={passportBackFilename}
+              busy={passportReplaceBusy === 'back'}
+              onReplace={onReplacePassportBack}
+            />
           )}
         </div>
       )}

@@ -10,6 +10,8 @@ import { formatProfileName } from '@/lib/apply/travellerProfiles';
 import { PASSPORT_REVIEW_GROUPS } from '@/lib/apply/reviewFields';
 import {
   emptyTripDetails,
+  hasPassportBackImage,
+  resolveDocumentSlotsWithPassportBack,
   type ApplyDocumentSlot,
   type ApplyTripQuestion,
 } from '@/lib/apply/applicationForm';
@@ -77,10 +79,16 @@ export function TravellerDetailPane({
   };
 
   const uploads = traveller.documents ?? [];
-  const visibleDocumentSlots = getVisibleDocumentSlots(
-    documentSlots,
-    extraQuestions,
-    traveller.tripDetails?.extra ?? {}
+  const visibleDocumentSlots = resolveDocumentSlotsWithPassportBack(
+    getVisibleDocumentSlots(
+      documentSlots,
+      extraQuestions,
+      traveller.tripDetails?.extra ?? {}
+    ),
+    hasPassportBackImage({
+      passportBackUrl: traveller.passportBackUrl,
+      uploads,
+    })
   );
 
   return (

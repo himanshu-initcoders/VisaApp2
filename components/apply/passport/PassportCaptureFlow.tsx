@@ -337,7 +337,6 @@ export function PassportCaptureFlow({
           tripSources={tripSources}
           onBack={onClose}
           onClose={onClose}
-          onEditFront={() => reuploadRef.current?.click()}
           onProgress={onProgress}
           onContinue={onComplete}
         />

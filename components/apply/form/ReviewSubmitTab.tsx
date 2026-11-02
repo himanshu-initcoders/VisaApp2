@@ -13,6 +13,10 @@ import type {
   TravellerDocumentUpload,
   TravellerTripDetails,
 } from '@/lib/apply/applicationForm';
+import {
+  hasPassportBackImage,
+  resolveDocumentSlotsWithPassportBack,
+} from '@/lib/apply/applicationForm';
 import { getVisibleDocumentSlots } from '@/lib/document-conditions';
 import type { IndianPassportFields } from '@/lib/passport/types';
 
@@ -25,6 +29,10 @@ interface ReviewSubmitTabProps {
   countryName: string;
   passportPreviewUrl?: string;
   passportBackPreviewUrl?: string;
+  passportFrontMimeType?: string;
+  passportBackMimeType?: string;
+  passportFrontFilename?: string;
+  passportBackFilename?: string;
   showGeneralInfo?: boolean;
   showTripDetails?: boolean;
   editableKeys?: ReadonlySet<string>;
@@ -71,16 +79,22 @@ export function ReviewSubmitTab({
   countryName,
   passportPreviewUrl,
   passportBackPreviewUrl,
+  passportFrontMimeType,
+  passportBackMimeType,
+  passportFrontFilename,
+  passportBackFilename,
   showGeneralInfo = true,
   showTripDetails = true,
   editableKeys,
   onEditSection,
 }: ReviewSubmitTabProps) {
   const hasAdditional = extraQuestions.length > 0;
-  const visibleSlots = getVisibleDocumentSlots(
-    slots,
-    extraQuestions,
-    trip.extra
+  const visibleSlots = resolveDocumentSlotsWithPassportBack(
+    getVisibleDocumentSlots(slots, extraQuestions, trip.extra),
+    hasPassportBackImage({
+      passportBackUrl: passportBackPreviewUrl,
+      uploads,
+    })
   );
   const edit = (tab: ApplicationFormTabId) =>
     onEditSection ? () => onEditSection(tab) : undefined;
@@ -137,6 +151,10 @@ export function ReviewSubmitTab({
           uploads={uploads}
           passportPreviewUrl={passportPreviewUrl}
           passportBackPreviewUrl={passportBackPreviewUrl}
+          passportFrontMimeType={passportFrontMimeType}
+          passportBackMimeType={passportBackMimeType}
+          passportFrontFilename={passportFrontFilename}
+          passportBackFilename={passportBackFilename}
         />
       </ReviewSection>
     </div>

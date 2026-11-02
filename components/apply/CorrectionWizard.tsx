@@ -307,6 +307,10 @@ export function CorrectionWizard({
               onChange={setPassport}
               frontPreviewUrl={frontUrl}
               backPreviewUrl={backUrl || undefined}
+              frontMimeType={frontFile?.type}
+              backMimeType={backFile?.type}
+              frontFilename={frontFile?.name}
+              backFilename={backFile?.name}
               onEditFront={() => frontInput.current?.click()}
               onEditBack={() => backInput.current?.click()}
               editableKeys={editableKeys}

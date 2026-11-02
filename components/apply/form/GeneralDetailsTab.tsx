@@ -1,6 +1,6 @@
 'use client';
 
-import { Pencil } from 'lucide-react';
+import { FileText, Pencil } from 'lucide-react';
 import type { ReactNode } from 'react';
 import {
   UnderlineField,
@@ -16,11 +16,68 @@ import {
   pastDateError,
 } from '@/lib/passport/schema';
 
+function isImagePreview(mimeType?: string, filename?: string) {
+  if (mimeType?.startsWith('image/')) return true;
+  if (mimeType === 'application/pdf') return false;
+  if (filename && /\.pdf$/i.test(filename)) return false;
+  // OCR canvas blobs are images; unknown mime defaults to image.
+  return !mimeType || mimeType.startsWith('image/');
+}
+
+function PassportSideMedia({
+  previewUrl,
+  mimeType,
+  filename,
+  alt,
+  emptyLabel,
+  minHeightClass,
+}: {
+  previewUrl?: string;
+  mimeType?: string;
+  filename?: string;
+  alt: string;
+  emptyLabel: string;
+  minHeightClass: string;
+}) {
+  if (!previewUrl) {
+    return (
+      <div
+        className={`flex ${minHeightClass} items-center justify-center px-6 text-center text-sm text-slate-helper`}
+      >
+        {emptyLabel}
+      </div>
+    );
+  }
+
+  if (!isImagePreview(mimeType, filename)) {
+    return (
+      <div
+        className={`flex ${minHeightClass} flex-col items-center justify-center gap-2 px-6 text-center`}
+      >
+        <FileText className="h-10 w-10 text-[#3b82f6]" />
+        <p className="text-sm font-medium text-portrait-ink">
+          {filename || 'PDF uploaded'}
+        </p>
+        <p className="text-xs text-slate-helper">PDF preview not shown</p>
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={previewUrl} alt={alt} className="w-full object-contain" />
+  );
+}
+
 interface GeneralDetailsTabProps {
   form: IndianPassportFields;
   onChange: (next: IndianPassportFields) => void;
   frontPreviewUrl: string;
   backPreviewUrl?: string;
+  frontMimeType?: string;
+  backMimeType?: string;
+  frontFilename?: string;
+  backFilename?: string;
   warnings?: string[];
   onEditFront: () => void;
   onEditBack?: () => void;
@@ -42,6 +99,10 @@ export function GeneralDetailsTab({
   onChange,
   frontPreviewUrl,
   backPreviewUrl,
+  frontMimeType,
+  backMimeType,
+  frontFilename,
+  backFilename,
   warnings,
   onEditFront,
   onEditBack,
@@ -82,18 +143,14 @@ export function GeneralDetailsTab({
     <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-12">
       <div className="space-y-4 rounded-[24px] border border-ash bg-[#f8fafc] p-4">
         <div className="relative overflow-hidden rounded-2xl bg-white">
-          {frontPreviewUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={frontPreviewUrl}
-              alt="Passport front"
-              className="w-full object-contain"
-            />
-          ) : (
-            <div className="flex min-h-[220px] items-center justify-center px-6 text-center text-sm text-slate-helper">
-              Passport preview unavailable — use the edit button to re-upload
-            </div>
-          )}
+          <PassportSideMedia
+            previewUrl={frontPreviewUrl}
+            mimeType={frontMimeType}
+            filename={frontFilename}
+            alt="Passport front"
+            emptyLabel="Passport preview unavailable — use the edit button to re-upload"
+            minHeightClass="min-h-[220px]"
+          />
           {!frontLocked && (
             <button
               type="button"
@@ -112,18 +169,14 @@ export function GeneralDetailsTab({
         )}
         {(backPreviewUrl || (editableKeys?.has('passport-back') ?? false)) && (
           <div className="relative overflow-hidden rounded-2xl bg-white">
-            {backPreviewUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={backPreviewUrl}
-                alt="Passport back"
-                className="w-full object-contain"
-              />
-            ) : (
-              <div className="flex min-h-[160px] items-center justify-center px-6 text-center text-sm text-slate-helper">
-                Passport back is not on file yet
-              </div>
-            )}
+            <PassportSideMedia
+              previewUrl={backPreviewUrl}
+              mimeType={backMimeType}
+              filename={backFilename}
+              alt="Passport back"
+              emptyLabel="Passport back is not on file yet"
+              minHeightClass="min-h-[160px]"
+            />
             {!backLocked && onEditBack && (
               <button
                 type="button"
