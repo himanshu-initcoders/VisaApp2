@@ -18,10 +18,12 @@ import {
   getCoreTripIssues,
   getMultiStopIssues,
   getVisibleApplicationTabs,
+  hasPassportBackImage,
   isAdditionalQuestionsComplete,
   isCoreTripComplete,
   isDocumentsComplete,
   isMultiStopComplete,
+  resolveDocumentSlotsWithPassportBack,
   tabUnlockState,
   type ApplicationFormTabId,
   type ApplyFormConfig,
@@ -36,6 +38,7 @@ import {
 import { formatProfileName } from '@/lib/apply/travellerProfiles';
 import type { IndianPassportFields } from '@/lib/passport/types';
 import { isReviewComplete } from '@/lib/passport/schema';
+import { isPassportBackDocument } from '@/lib/document-types';
 
 export interface PassportApplicationPayload {
   fields: IndianPassportFields;
@@ -132,6 +135,9 @@ export function PassportReviewStage({
   const [documents, setDocuments] = useState<TravellerDocumentUpload[]>(
     savedDocuments ?? []
   );
+  const [backPreviewUrl, setBackPreviewUrl] = useState<string | undefined>(
+    initial.backPreviewUrl
+  );
 
   const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onProgressRef = useRef(onProgress);
@@ -142,7 +148,7 @@ export function PassportReviewStage({
     tripDetails: trip,
     documents,
     frontPreviewUrl: initial.frontPreviewUrl,
-    backPreviewUrl: initial.backPreviewUrl,
+    backPreviewUrl,
   });
 
   // Persist in-progress form so reload can resume (not only final Continue)
@@ -156,13 +162,23 @@ export function PassportReviewStage({
       if (progressTimer.current) clearTimeout(progressTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, trip, documents, initial.frontPreviewUrl, initial.backPreviewUrl]);
+  }, [form, trip, documents, initial.frontPreviewUrl, backPreviewUrl]);
 
   // Immediate first save when review opens (OCR fields + passport images)
   useEffect(() => {
     onProgressRef.current?.(buildPayload());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Documents-tab passport back upload becomes the traveller back image.
+  useEffect(() => {
+    const backUpload = documents.find((item) =>
+      isPassportBackDocument({ key: item.key })
+    );
+    if (backUpload?.previewUrl) {
+      setBackPreviewUrl(backUpload.previewUrl);
+    }
+  }, [documents]);
 
   const generalComplete = useMemo(
     () => (formConfig.showGeneralInfo ? isReviewComplete(form) : true),
@@ -192,14 +208,25 @@ export function PassportReviewStage({
         : isAdditionalQuestionsComplete(trip, formConfig.extraQuestions),
     [trip, formConfig.extraQuestions]
   );
+  const ocrHadPassportBack = Boolean(initial.backPreviewUrl);
   const visibleDocumentSlots = useMemo(
     () =>
-      getVisibleDocumentSlots(
-        formConfig.documentSlots,
-        formConfig.extraQuestions,
-        trip.extra
+      resolveDocumentSlotsWithPassportBack(
+        getVisibleDocumentSlots(
+          formConfig.documentSlots,
+          formConfig.extraQuestions,
+          trip.extra
+        ),
+        // Hide the upload slot when OCR already captured a back page.
+        // Documents-tab uploads stay as normal slots for completion / replace.
+        ocrHadPassportBack
       ),
-    [formConfig.documentSlots, formConfig.extraQuestions, trip.extra]
+    [
+      formConfig.documentSlots,
+      formConfig.extraQuestions,
+      trip.extra,
+      ocrHadPassportBack,
+    ]
   );
 
   useEffect(() => {
@@ -219,10 +246,16 @@ export function PassportReviewStage({
   });
 
   const [tab, setTab] = useState<ApplicationFormTabId>(() => {
-    const initialVisibleSlots = getVisibleDocumentSlots(
-      formConfig.documentSlots,
-      formConfig.extraQuestions,
-      (savedTrip ?? emptyTripDetails()).extra
+    const initialVisibleSlots = resolveDocumentSlotsWithPassportBack(
+      getVisibleDocumentSlots(
+        formConfig.documentSlots,
+        formConfig.extraQuestions,
+        (savedTrip ?? emptyTripDetails()).extra
+      ),
+      hasPassportBackImage({
+        passportBackUrl: initial.backPreviewUrl,
+        uploads: savedDocuments,
+      })
     );
     return firstIncompleteTab({
       visibleTabs,
@@ -338,7 +371,7 @@ export function PassportReviewStage({
             form={form}
             onChange={setForm}
             frontPreviewUrl={initial.frontPreviewUrl}
-            backPreviewUrl={initial.backPreviewUrl}
+            backPreviewUrl={backPreviewUrl}
             warnings={initial.warnings}
             onEditFront={onEditFront}
           />
@@ -369,6 +402,11 @@ export function PassportReviewStage({
             passportPreviewUrl={
               formConfig.showGeneralInfo ? initial.frontPreviewUrl : undefined
             }
+            passportBackPreviewUrl={
+              formConfig.showGeneralInfo && ocrHadPassportBack
+                ? backPreviewUrl
+                : undefined
+            }
             onChange={setDocuments}
           />
         )}
@@ -377,14 +415,17 @@ export function PassportReviewStage({
             fields={form}
             trip={trip}
             extraQuestions={formConfig.extraQuestions}
-            slots={visibleDocumentSlots}
+            slots={resolveDocumentSlotsWithPassportBack(
+              visibleDocumentSlots,
+              Boolean(backPreviewUrl)
+            )}
             uploads={documents}
             countryName={formConfig.countryName}
             passportPreviewUrl={
               formConfig.showGeneralInfo ? initial.frontPreviewUrl : undefined
             }
             passportBackPreviewUrl={
-              formConfig.showGeneralInfo ? initial.backPreviewUrl : undefined
+              formConfig.showGeneralInfo ? backPreviewUrl : undefined
             }
             showGeneralInfo={formConfig.showGeneralInfo}
             showTripDetails={formConfig.showTripDetails}

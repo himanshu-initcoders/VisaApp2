@@ -26,6 +26,8 @@ interface DocumentsTabProps {
   slots: ApplyDocumentSlot[];
   uploads: TravellerDocumentUpload[];
   passportPreviewUrl?: string;
+  /** When OCR already captured the back page, show it as uploaded. */
+  passportBackPreviewUrl?: string;
   onChange: (next: TravellerDocumentUpload[]) => void;
   editableKeys?: ReadonlySet<string>;
   comments?: Record<string, string>;
@@ -196,6 +198,7 @@ export function DocumentsTab({
   slots,
   uploads,
   passportPreviewUrl,
+  passportBackPreviewUrl,
   onChange,
   editableKeys,
   comments,
@@ -304,23 +307,46 @@ export function DocumentsTab({
         </p>
       )}
 
-      {passportPreviewUrl && (
-        <div className="rounded-[24px] border border-ash bg-[#f8fafc] p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-portrait-ink">
-              Passport bio page
-            </p>
-            <span className="inline-flex items-center gap-1 rounded-full bg-mint-wash px-2.5 py-1 text-[11px] font-medium text-[#00a32a]">
-              <Check className="h-3 w-3" />
-              Uploaded
-            </span>
-          </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={passportPreviewUrl}
-            alt="Passport"
-            className="mt-3 max-h-44 w-full rounded-2xl object-contain bg-white"
-          />
+      {(passportPreviewUrl || passportBackPreviewUrl) && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {passportPreviewUrl && (
+            <div className="rounded-[24px] border border-ash bg-[#f8fafc] p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-portrait-ink">
+                  Passport bio page
+                </p>
+                <span className="inline-flex items-center gap-1 rounded-full bg-mint-wash px-2.5 py-1 text-[11px] font-medium text-[#00a32a]">
+                  <Check className="h-3 w-3" />
+                  Uploaded
+                </span>
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={passportPreviewUrl}
+                alt="Passport bio page"
+                className="mt-3 max-h-44 w-full rounded-2xl object-contain bg-white"
+              />
+            </div>
+          )}
+          {passportBackPreviewUrl && (
+            <div className="rounded-[24px] border border-ash bg-[#f8fafc] p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-portrait-ink">
+                  Passport back page
+                </p>
+                <span className="inline-flex items-center gap-1 rounded-full bg-mint-wash px-2.5 py-1 text-[11px] font-medium text-[#00a32a]">
+                  <Check className="h-3 w-3" />
+                  Uploaded
+                </span>
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={passportBackPreviewUrl}
+                alt="Passport back page"
+                className="mt-3 max-h-44 w-full rounded-2xl object-contain bg-white"
+              />
+            </div>
+          )}
         </div>
       )}
 

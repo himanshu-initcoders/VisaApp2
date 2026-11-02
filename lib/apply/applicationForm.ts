@@ -9,10 +9,12 @@ import {
 } from '@/lib/question-categories';
 import {
   DOCUMENT_TYPES,
-  PASSPORT_DOCUMENT_TYPES,
+  PASSPORT_CAPTURE_FRONT_TYPES,
   documentTypeLabel,
+  isPassportBackDocument,
   isPassportPhotoDocument,
 } from '@/lib/document-types';
+import { PASSPORT_BACK_SLOT } from '@/lib/apply/idbDraftStorage';
 import {
   getVisibleExtraQuestions,
   normalizeQuestionVisibility,
@@ -250,9 +252,9 @@ export interface ApplyFormConfig {
 export const DOCUMENT_FILE_ACCEPT =
   'image/jpeg,image/png,image/webp,image/jpg,application/pdf';
 
-const PASSPORT_COMPONENT_KEYS = new Set([
+/** Bio / copy keys handled by passport capture — not shown as document slots. */
+const PASSPORT_FRONT_COMPONENT_KEYS = new Set([
   'passport',
-  'passport_back',
   'passport_copy',
 ]);
 
@@ -556,12 +558,22 @@ export function buildApplyFormConfig(input: {
 
   const fromComponents = input.components
     .filter((item) => {
-      if (item.documentType && PASSPORT_DOCUMENT_TYPES.has(item.documentType)) {
+      // Passport bio / full copy stay in the capture flow.
+      // Passport back is kept so Documents can collect it when OCR found none.
+      if (
+        item.documentType &&
+        PASSPORT_CAPTURE_FRONT_TYPES.has(item.documentType)
+      ) {
         return false;
       }
-      return !PASSPORT_COMPONENT_KEYS.has(item.key);
+      if (PASSPORT_FRONT_COMPONENT_KEYS.has(item.key)) return false;
+      return true;
     })
     .map((item) => {
+      const isBack = isPassportBackDocument({
+        key: item.key,
+        documentType: item.documentType,
+      });
       const captureFace = isPassportPhotoDocument({
         key: item.key,
         documentType: item.documentType,
@@ -571,18 +583,21 @@ export function buildApplyFormConfig(input: {
           input.documentTypeSamples?.get(item.documentType)) ||
         input.documentTypeSamples?.get(item.key);
       const catalogLabel = sample?.label;
-      const docType = item.documentType || null;
+      const docType = item.documentType || (isBack ? 'passport_back' : null);
       const gateRules = docType ? gatingByType.get(docType) : undefined;
       const primaryGate = gateRules?.[0];
       return {
         id: item.id,
-        key: item.key,
+        // Normalize to the IDB / sync slot used by passport capture.
+        key: isBack ? PASSPORT_BACK_SLOT : item.key,
         documentType: docType,
         title: formatDocumentTitle(item.key, {
           label: item.label || catalogLabel,
-          documentType: item.documentType,
+          documentType: docType,
         }),
-        description: documentSlotDescription(captureFace),
+        description: isBack
+          ? 'Upload a clear photo of the passport back / address page.'
+          : documentSlotDescription(captureFace),
         // Gated docs always required when shown (optional-when-shown disabled for now).
         required: true,
         visibility: primaryGate
@@ -801,6 +816,30 @@ export function isDocumentsComplete(
   return slots
     .filter((slot) => slot.required)
     .every((slot) => isDocumentSlotFilled(byKey.get(slot.key)));
+}
+
+/** True when passport back is already on the traveller (OCR or later upload). */
+export function hasPassportBackImage(input: {
+  passportBackUrl?: string | null;
+  uploads?: TravellerDocumentUpload[] | null;
+}) {
+  if (input.passportBackUrl?.trim()) return true;
+  const backUpload = (input.uploads ?? []).find((item) =>
+    isPassportBackDocument({ key: item.key })
+  );
+  return isDocumentSlotFilled(backUpload);
+}
+
+/**
+ * Hide the passport-back document slot once a back image already exists
+ * (from OCR). When missing, keep the admin-configured slot so the user can upload.
+ */
+export function resolveDocumentSlotsWithPassportBack(
+  slots: ApplyDocumentSlot[],
+  hasBackImage: boolean
+): ApplyDocumentSlot[] {
+  if (!hasBackImage) return slots;
+  return slots.filter((slot) => !isPassportBackDocument(slot));
 }
 
 /** Tabs shown for this listing based on admin flags + configured questions. */

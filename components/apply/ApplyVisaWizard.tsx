@@ -15,10 +15,12 @@ import type { PassportApplicationPayload } from '@/components/apply/passport/Pas
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 import {
   defaultApplyFormConfig,
+  hasPassportBackImage,
   isAdditionalQuestionsComplete,
   isCoreTripComplete,
   isDocumentsComplete,
   isMultiStopComplete,
+  resolveDocumentSlotsWithPassportBack,
 } from '@/lib/apply/applicationForm';
 import { getVisibleDocumentSlots } from '@/lib/document-conditions';
 import { isReviewComplete } from '@/lib/passport/schema';
@@ -131,10 +133,16 @@ function isListingApplicationComplete(
           traveller.tripDetails,
           formConfig.extraQuestions
         );
-  const visibleDocumentSlots = getVisibleDocumentSlots(
-    formConfig.documentSlots,
-    formConfig.extraQuestions,
-    traveller.tripDetails?.extra ?? {}
+  const visibleDocumentSlots = resolveDocumentSlotsWithPassportBack(
+    getVisibleDocumentSlots(
+      formConfig.documentSlots,
+      formConfig.extraQuestions,
+      traveller.tripDetails?.extra ?? {}
+    ),
+    hasPassportBackImage({
+      passportBackUrl: traveller.passportBackUrl,
+      uploads: traveller.documents,
+    })
   );
   const documentsComplete = isDocumentsComplete(
     traveller.documents,

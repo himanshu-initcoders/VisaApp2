@@ -112,6 +112,28 @@ export const PASSPORT_DOCUMENT_TYPES = new Set<string>([
   'passport_copy',
 ]);
 
+/**
+ * Bio / full-copy passport types captured in the passport scan step.
+ * `passport_back` is intentionally excluded — when OCR finds no back page,
+ * apply shows a documents-tab upload for it.
+ */
+export const PASSPORT_CAPTURE_FRONT_TYPES = new Set<string>([
+  'passport',
+  'passport_copy',
+]);
+
+/** Passport back / address page (admin component or IDB slot key). */
+export function isPassportBackDocument(input: {
+  key?: string | null;
+  documentType?: string | null;
+}) {
+  return (
+    input.documentType === 'passport_back' ||
+    input.key === 'passport_back' ||
+    input.key === 'passport-back'
+  );
+}
+
 /** Passport-style face photo. Live capture is offered only for this document. */
 export function isPassportPhotoDocument(input: {
   key?: string | null;
