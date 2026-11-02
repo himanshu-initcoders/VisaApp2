@@ -15,6 +15,8 @@ import {
 interface UseApplyStartFlowOptions {
   countryCode: string;
   listingId: string;
+  /** Public URL segment. Draft storage still uses listingId. */
+  listingSlug?: string;
   travellers?: number;
   priceOptionId?: string;
   /** Only one mount on the listing page should consume ?startApply=1 from proxy. */
@@ -36,6 +38,7 @@ function canStartApply(role: string | undefined | null) {
 export function useApplyStartFlow({
   countryCode,
   listingId,
+  listingSlug,
   travellers = 1,
   priceOptionId,
   consumeStartApplyQuery = false,
@@ -46,6 +49,7 @@ export function useApplyStartFlow({
   const [choiceOpen, setChoiceOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [draft, setDraft] = useState<ApplyDraft | null>(null);
+  const publicSegment = listingSlug || listingId;
   const pendingAfterLoginRef = useRef(false);
   const pendingQueryRef = useRef<PendingApplyQuery | null>(null);
   const consumedStartApplyRef = useRef(false);
@@ -71,10 +75,10 @@ export function useApplyStartFlow({
 
       pendingQueryRef.current = null;
       router.push(
-        `/visa/${countryCode.toLowerCase()}/${listingId}/apply?${params.toString()}`
+        `/visa/${countryCode.toLowerCase()}/${publicSegment}/apply?${params.toString()}`
       );
     },
-    [countryCode, listingId, priceOptionId, router, travellers]
+    [countryCode, priceOptionId, publicSegment, router, travellers]
   );
 
   const continueStart = useCallback(() => {
@@ -154,8 +158,8 @@ export function useApplyStartFlow({
     const qs = next.toString();
     router.replace(
       qs
-        ? `/visa/${countryCode.toLowerCase()}/${listingId}?${qs}`
-        : `/visa/${countryCode.toLowerCase()}/${listingId}`
+        ? `/visa/${countryCode.toLowerCase()}/${publicSegment}?${qs}`
+        : `/visa/${countryCode.toLowerCase()}/${publicSegment}`
     );
 
     if (canStartApply(session?.user?.role)) {
@@ -169,7 +173,7 @@ export function useApplyStartFlow({
     consumeStartApplyQuery,
     continueStart,
     countryCode,
-    listingId,
+    publicSegment,
     router,
     searchParams,
     session?.user?.role,

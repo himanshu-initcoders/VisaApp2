@@ -8,6 +8,7 @@ import { flagUrlFor } from '@/lib/countries/flags';
 export interface DraftApplicationRow {
   id: string;
   listingId: string;
+  listingSlug?: string | null;
   countryCode: string | null;
   updatedAt: string;
   payload: ServerDraftPayload;
@@ -23,7 +24,8 @@ interface DraftApplicationsListProps {
 
 function continueHref(draft: DraftApplicationRow) {
   const cc = (draft.countryCode || draft.payload.countryCode || 'xx').toLowerCase();
-  return `/visa/${cc}/${draft.listingId}/apply?resume=1`;
+  const segment = draft.listingSlug || draft.listingId;
+  return `/visa/${cc}/${segment}/apply?resume=1`;
 }
 
 function draftCountryCode(draft: DraftApplicationRow): string {

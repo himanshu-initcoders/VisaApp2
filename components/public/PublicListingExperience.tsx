@@ -35,6 +35,20 @@ function listingIdFromPath(pathname: string) {
   return segments[2] || null;
 }
 
+function rememberListing(next: PublicProcessPageData) {
+  const countryCode = next.country.iso2Code;
+  listingCache.set(cacheKey(countryCode, next.process.id), next);
+  listingCache.set(cacheKey(countryCode, next.process.slug), next);
+}
+
+function pathMatchesListing(segment: string, data: PublicProcessPageData) {
+  return (
+    segment === data.process.id ||
+    segment === data.process.slug ||
+    segment.toLowerCase() === data.process.slug.toLowerCase()
+  );
+}
+
 function applyListingDocument(next: PublicProcessPageData, updateUrl: boolean) {
   document.title = `${next.process.processName} for ${next.country.name}`;
   if (updateUrl && window.location.pathname !== next.href) {
@@ -51,7 +65,7 @@ async function readListing(
   if (cached) return cached;
 
   const loaded = await loadPublicListingPage({ countryCode, listingId });
-  if (loaded) listingCache.set(key, loaded);
+  if (loaded) rememberListing(loaded);
   return loaded;
 }
 
@@ -67,17 +81,11 @@ export function PublicListingExperience({
   const requestRef = useRef(0);
 
   dataRef.current = data;
-  listingCache.set(
-    cacheKey(initialData.country.iso2Code, initialData.process.id),
-    initialData
-  );
+  rememberListing(initialData);
 
   const showListing = useCallback(
     (next: PublicProcessPageData, updateUrl: boolean) => {
-      listingCache.set(
-        cacheKey(next.country.iso2Code, next.process.id),
-        next
-      );
+      rememberListing(next);
       activeIdRef.current = next.process.id;
       setData(next);
       applyListingDocument(next, updateUrl);
@@ -122,7 +130,7 @@ export function PublicListingExperience({
 
   useEffect(() => {
     const pathListingId = listingIdFromPath(pathname);
-    if (!pathListingId || pathListingId === activeIdRef.current) return;
+    if (!pathListingId || pathMatchesListing(pathListingId, dataRef.current)) return;
     void switchListing(pathListingId, false);
   }, [pathname, switchListing]);
 
@@ -170,6 +178,7 @@ export function PublicListingExperience({
             withFreeInsurance={data.page.withFreeInsurance}
             countryCode={data.country.iso2Code}
             listingId={data.process.id}
+            listingSlug={data.process.slug}
             priceOptions={data.page.pricing.priceOptions}
             headline={data.page.pricing.headline}
             visaKinds={data.page.visaKinds}
@@ -236,6 +245,7 @@ export function PublicListingExperience({
           processName={data.process.processName}
           countryCode={data.country.iso2Code}
           listingId={data.process.id}
+          listingSlug={data.process.slug}
         />
       </main>
       <Footer />

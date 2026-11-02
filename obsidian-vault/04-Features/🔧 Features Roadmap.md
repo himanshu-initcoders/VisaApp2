@@ -105,6 +105,7 @@
 - [ ] User management
 - [x] Add Country (admin config create flow)
 - [x] Add Visa listing (admin config create flow)
+- [x] Visa listing public URL slug (basic info, SEO paths)
 
 ---
 

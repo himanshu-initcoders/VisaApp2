@@ -8,6 +8,7 @@ interface MobileStickyBarProps {
   processName: string;
   countryCode: string;
   listingId: string;
+  listingSlug: string;
 }
 
 export function MobileStickyBar({
@@ -15,6 +16,7 @@ export function MobileStickyBar({
   processName,
   countryCode,
   listingId,
+  listingSlug,
 }: MobileStickyBarProps) {
   const [visible, setVisible] = useState(false);
 
@@ -42,6 +44,7 @@ export function MobileStickyBar({
           <StartApplicationCTA
             countryCode={countryCode}
             listingId={listingId}
+            listingSlug={listingSlug}
             label="Apply now"
             size="md"
             variant="mobile"

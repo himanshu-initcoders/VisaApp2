@@ -11,6 +11,7 @@ import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { canAccessAdmin } from '@/lib/auth-utils';
 import { db } from '@/lib/db';
 import { applicationDrafts, users } from '@/lib/db/schema';
+import { visaListings } from '@/lib/db/schema-extended';
 import { deleteDraftStorageFiles } from '@/lib/apply/deleteDraftStorageFiles';
 import { parseServerDraftPayload } from '@/lib/validations/draft';
 
@@ -33,6 +34,7 @@ export interface ServerDraftPayload {
 export interface ApplicationDraftListItem {
   id: string;
   listingId: string;
+  listingSlug: string | null;
   countryCode: string | null;
   updatedAt: string;
   createdAt: string;
@@ -285,6 +287,7 @@ export async function listMyApplicationDrafts(): Promise<
       drafts: Array<{
         id: string;
         listingId: string;
+        listingSlug: string | null;
         countryCode: string | null;
         updatedAt: string;
         payload: ServerDraftPayload;
@@ -300,11 +303,13 @@ export async function listMyApplicationDrafts(): Promise<
     .select({
       id: applicationDrafts.id,
       listingId: applicationDrafts.listingId,
+      listingSlug: visaListings.slug,
       countryCode: applicationDrafts.countryCode,
       updatedAt: applicationDrafts.updatedAt,
       payload: applicationDrafts.payload,
     })
     .from(applicationDrafts)
+    .leftJoin(visaListings, eq(applicationDrafts.listingId, visaListings.id))
     .where(eq(applicationDrafts.userId, authResult.userId))
     .orderBy(desc(applicationDrafts.updatedAt));
 
@@ -313,6 +318,7 @@ export async function listMyApplicationDrafts(): Promise<
     drafts: rows.map((row) => ({
       id: row.id,
       listingId: row.listingId,
+      listingSlug: row.listingSlug,
       countryCode: row.countryCode,
       updatedAt: row.updatedAt.toISOString(),
       payload: row.payload as ServerDraftPayload,
@@ -352,6 +358,7 @@ export async function listAdminApplicationDrafts(input?: {
     .select({
       id: applicationDrafts.id,
       listingId: applicationDrafts.listingId,
+      listingSlug: visaListings.slug,
       countryCode: applicationDrafts.countryCode,
       updatedAt: applicationDrafts.updatedAt,
       createdAt: applicationDrafts.createdAt,
@@ -367,6 +374,7 @@ export async function listAdminApplicationDrafts(input?: {
     })
     .from(applicationDrafts)
     .innerJoin(users, eq(applicationDrafts.userId, users.id))
+    .leftJoin(visaListings, eq(applicationDrafts.listingId, visaListings.id))
     .leftJoin(savedBy, eq(applicationDrafts.savedByUserId, savedBy.id))
     .where(conditions)
     .orderBy(desc(applicationDrafts.updatedAt))
@@ -377,6 +385,7 @@ export async function listAdminApplicationDrafts(input?: {
     drafts: rows.map((row) => ({
       id: row.id,
       listingId: row.listingId,
+      listingSlug: row.listingSlug,
       countryCode: row.countryCode,
       updatedAt: row.updatedAt.toISOString(),
       createdAt: row.createdAt.toISOString(),

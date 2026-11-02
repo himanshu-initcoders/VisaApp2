@@ -158,6 +158,6 @@ export function slugifyProcessName(name: string) {
     .replace(/^-+|-+$/g, '');
 }
 
-export function buildProcessHref(countryCode: string, listingId: string) {
-  return `/visa/${countryCode.toLowerCase()}/${listingId}`;
+export function buildProcessHref(countryCode: string, slug: string) {
+  return `/visa/${countryCode.toLowerCase()}/${slug}`;
 }

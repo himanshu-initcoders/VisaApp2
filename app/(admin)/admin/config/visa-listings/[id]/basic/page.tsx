@@ -61,7 +61,11 @@ export default async function BasicInfoPage({
           </p>
         </div>
 
-        <ProcessBasicInfoForm processId={id} initialData={process} />
+        <ProcessBasicInfoForm
+          processId={id}
+          countryCode={process.country.iso2Code}
+          initialData={process}
+        />
       </div>
     </div>
   );

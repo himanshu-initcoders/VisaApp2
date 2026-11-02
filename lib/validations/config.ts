@@ -8,6 +8,10 @@ import {
   documentConditionsDraftSchema,
   normalizeDocumentConditions,
 } from '@/lib/document-conditions';
+import {
+  normalizeVisaListingSlug,
+  VISA_LISTING_SLUG_PATTERN,
+} from '@/lib/visa/listingSlug';
 
 /**
  * Validation schemas for admin configuration forms
@@ -61,6 +65,15 @@ export type CreateCountryFormValues = z.input<typeof createCountrySchema>;
 
 export const processBasicInfoSchema = z.object({
   processName: z.string().min(3, 'Visa name must be at least 3 characters').max(100, 'Visa name too long'),
+  slug: z
+    .string()
+    .trim()
+    .min(3, 'URL slug must be at least 3 characters')
+    .max(120, 'URL slug is too long')
+    .transform((value) => normalizeVisaListingSlug(value))
+    .refine((value) => VISA_LISTING_SLUG_PATTERN.test(value), {
+      message: 'Use words separated by hyphens, like Japan-Tourism-Visa',
+    }),
   processType: z.enum(
     ['electronic_travel_authorisation', 'afc', 'visa', 'appointment', 'visa_on_arrival', 'sticker_visa', 'visa_free'],
     'Invalid process type'

@@ -7,6 +7,7 @@ import { useApplyStartFlow } from '@/components/apply/useApplyStartFlow';
 interface StartApplicationCTAProps {
   countryCode: string;
   listingId: string;
+  listingSlug?: string;
   travellers?: number;
   priceOptionId?: string;
   label?: string;
@@ -18,6 +19,7 @@ interface StartApplicationCTAProps {
 export function StartApplicationCTA({
   countryCode,
   listingId,
+  listingSlug,
   travellers = 1,
   priceOptionId,
   label = 'Start application',
@@ -28,6 +30,7 @@ export function StartApplicationCTA({
   const { requestStart, modals } = useApplyStartFlow({
     countryCode,
     listingId,
+    listingSlug,
     travellers,
     priceOptionId,
   });

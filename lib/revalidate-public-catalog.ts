@@ -7,16 +7,24 @@ import { revalidatePath } from 'next/cache';
 export function revalidatePublicVisaCatalog(options?: {
   countryCode?: string;
   listingId?: string;
+  listingSlug?: string;
+  previousSlug?: string;
 }) {
   revalidatePath('/');
   revalidatePath('/destinations');
 
-  const countryCode = options?.countryCode?.toUpperCase();
-  const listingId = options?.listingId;
+  const countryCode = options?.countryCode?.toLowerCase();
+  const segments = [
+    options?.listingId,
+    options?.listingSlug,
+    options?.previousSlug,
+  ].filter((segment): segment is string => Boolean(segment));
 
-  if (countryCode && listingId) {
-    revalidatePath(`/visa/${countryCode}/${listingId}`);
-    revalidatePath(`/visa/${countryCode}/${listingId}/apply`);
+  if (countryCode) {
+    for (const segment of segments) {
+      revalidatePath(`/visa/${countryCode}/${segment}`);
+      revalidatePath(`/visa/${countryCode}/${segment}/apply`);
+    }
   }
 
   // Refresh all process detail pages under /visa

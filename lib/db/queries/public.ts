@@ -17,9 +17,9 @@ import {
   formatProcessType,
   formatVisaKindLabel,
   getFlagEmoji,
-  slugifyProcessName,
   stableDemoCount,
 } from '@/lib/public';
+import { isVisaListingUuid } from '@/lib/visa/listingSlug';
 import {
   getDemoHighlights,
   getDemoPriceOptions,
@@ -92,6 +92,7 @@ function mapProcess(process: {
   withFreeInsurance: boolean;
   standardEtaDuration: number | null;
   standardEtaUnit: string | null;
+  slug: string;
   prices: Array<typeof visaListingPrices.$inferSelect>;
 }) {
   const priceOptions = [...process.prices]
@@ -108,7 +109,7 @@ function mapProcess(process: {
 
   return {
     ...process,
-    slug: slugifyProcessName(process.processName),
+    slug: process.slug,
     processTypeLabel:
       process.processTypeLabel || formatProcessType(process.processType),
     processTypeDisplay: formatProcessType(process.processType),
@@ -158,7 +159,7 @@ export async function getEnabledCountriesWithProcesses() {
         .map((process) => ({
           ...mapProcess(process),
           featured: false,
-          href: buildProcessHref(country.iso2Code, process.id),
+          href: buildProcessHref(country.iso2Code, process.slug),
         })),
     }))
     .filter((country) => country.visaListings.length > 0);
@@ -192,7 +193,7 @@ export async function getCountryWithProcesses(iso2Code: string) {
       .filter((process) => !process.unsupported)
       .map((process) => ({
         ...mapProcess(process),
-        href: buildProcessHref(country.iso2Code, process.id),
+        href: buildProcessHref(country.iso2Code, process.slug),
       })),
   };
 }
@@ -226,15 +227,28 @@ export async function getEntryProcessDetails(processId: string) {
   });
 }
 
+function publicListingWhere(countryCode: string, listingKey: string) {
+  const country = eq(
+    visaListings.destinationCountry,
+    countryCode.toUpperCase()
+  );
+
+  if (isVisaListingUuid(listingKey)) {
+    return and(country, eq(visaListings.id, listingKey));
+  }
+
+  return and(
+    country,
+    sql`lower(${visaListings.slug}) = ${listingKey.toLowerCase()}`
+  );
+}
+
 export async function getPublicProcessPageData(
   countryCode: string,
-  processId: string
+  listingKey: string
 ) {
   const process = await db.query.visaListings.findFirst({
-    where: and(
-      eq(visaListings.id, processId),
-      eq(visaListings.destinationCountry, countryCode.toUpperCase())
-    ),
+    where: publicListingWhere(countryCode, listingKey),
     with: {
       country: true,
       prices: {
@@ -311,7 +325,7 @@ export async function getPublicProcessPageData(
       label: formatVisaKindLabel({
         purpose: listing.purpose,
       }),
-      href: buildProcessHref(process.country.iso2Code, listing.id),
+      href: buildProcessHref(process.country.iso2Code, listing.slug),
     }));
 
   // Prefer unique labels; fall back to process name when purpose clashes
@@ -355,7 +369,7 @@ export async function getPublicProcessPageData(
 
   return {
     id: process.id,
-    href: buildProcessHref(process.country.iso2Code, process.id),
+    href: buildProcessHref(process.country.iso2Code, process.slug),
     country: {
       ...process.country,
       flag: getFlagEmoji(process.country.iso2Code),

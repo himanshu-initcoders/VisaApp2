@@ -17,7 +17,8 @@ import {
   jsonb,
   pgEnum,
   char,
-  index
+  index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -162,11 +163,20 @@ export const visaListings = pgTable('visa_listings', {
   sourceUrl: text('source_url'), // Official government URL
   /** Traveler-facing product overview copy shown on the public listing page. */
   description: text('description'),
+  /**
+   * Public URL segment, e.g. Japan-Tourism-Visa.
+   * Unique per destination country. Stored in title case.
+   */
+  slug: varchar('slug', { length: 120 }).notNull(),
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
 }, (table) => ({
-  destinationCountryIdx: index('visa_listings_destination_country_idx').on(table.destinationCountry)
+  destinationCountryIdx: index('visa_listings_destination_country_idx').on(table.destinationCountry),
+  countrySlugUnique: uniqueIndex('visa_listings_country_slug_unique').on(
+    table.destinationCountry,
+    table.slug
+  ),
 }));
 
 /**

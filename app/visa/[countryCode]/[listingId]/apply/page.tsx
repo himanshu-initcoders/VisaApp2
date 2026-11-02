@@ -1,10 +1,11 @@
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { ApplyVisaWizard } from '@/components/apply/ApplyVisaWizard';
 import { auth } from '@/lib/auth';
 import { getPublicProcessPageData } from '@/lib/db/queries/public';
 import { getApplyPreviousProfiles } from '@/lib/apply/previousProfilesAutofill';
 import { getApplicantSummaryForDraft } from '@/lib/apply/serverDraft';
 import { formatFullVisaLabel } from '@/lib/public';
+import { withSearchQuery } from '@/lib/visa/listingSlug';
 import type { TravellerProfile } from '@/lib/apply/travellerProfiles';
 
 export const dynamic = 'force-dynamic';
@@ -77,6 +78,7 @@ export async function generateMetadata({ params }: PageProps) {
   return {
     title: `Apply · ${visaFullName}`,
     description: `Complete your ${visaFullName} application.`,
+    alternates: { canonical: `${data.href}/apply` },
   };
 }
 
@@ -87,6 +89,10 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
 
   if (!data) {
     notFound();
+  }
+
+  if (listingId !== data.process.slug) {
+    permanentRedirect(withSearchQuery(`${data.href}/apply`, query));
   }
 
   const session = await auth();
@@ -152,6 +158,7 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
       countryCode={data.country.iso2Code}
       flagUrl={data.country.images?.flag?.url ?? null}
       listingId={data.process.id}
+      listingSlug={data.process.slug}
       processName={data.process.processName}
       visaFullName={visaFullName}
       initialTravellerCount={initialTravellerCount}

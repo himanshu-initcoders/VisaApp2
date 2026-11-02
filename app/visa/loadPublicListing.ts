@@ -2,10 +2,20 @@
 
 import { z } from 'zod';
 import { getPublicProcessPageData } from '@/lib/db/queries/public';
+import { isVisaListingUuid } from '@/lib/visa/listingSlug';
 
 const loadPublicListingSchema = z.object({
   countryCode: z.string().trim().regex(/^[a-zA-Z]{2}$/),
-  listingId: z.string().uuid(),
+  listingId: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .refine(
+      (value) =>
+        isVisaListingUuid(value) || /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/.test(value),
+      'Invalid visa listing'
+    ),
 });
 
 export async function loadPublicListingPage(input: {

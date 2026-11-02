@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { countries, visaListings, visaListingPrices, additionalQuestions, componentsRequired, faqs, postCheckoutSteps, multiTripCountries } from '@/lib/db/schema-extended';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, ne } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth-utils';
 import { processBasicInfoSchema, type ProcessBasicInfo, createVisaListingSchema, visaListingPriceSchema, type VisaListingPriceInput, additionalQuestionSchema, type AdditionalQuestion, componentRequiredSchema, type ComponentRequired, createComponentsBulkSchema, type CreateComponentsBulk, faqSchema, type FAQ, postCheckoutStepSchema, type PostCheckoutStep, multiCountrySchema, type MultiCountry } from '@/lib/validations/config';
 import { getQuestionById, getMaxQuestionSortOrder, getAdditionalQuestions, searchAdditionalQuestionsByLabel, getComponentById, getMaxComponentSortOrder, getComponentsRequired, getFaqById, getMaxFaqSortOrder, getPostCheckoutStepById, getMaxStepSortOrder, getProcessWithAllRelations, getDocumentTypeByValue, getDocumentTypeSamplesByValues } from '@/lib/db/queries/config';
@@ -57,6 +57,53 @@ async function ensureDocumentTypesAttached(
   return rows.length;
 }
 
+const SLUG_TAKEN_ERROR = 'This URL slug is already used for this country';
+
+async function findSlugOwner(
+  destinationCountry: string,
+  slug: string,
+  excludeId?: string
+) {
+  const filters = [
+    eq(visaListings.destinationCountry, destinationCountry),
+    sql`lower(${visaListings.slug}) = ${slug.toLowerCase()}`,
+  ];
+  if (excludeId) {
+    filters.push(ne(visaListings.id, excludeId));
+  }
+
+  return db.query.visaListings.findFirst({
+    where: and(...filters),
+    columns: { id: true },
+  });
+}
+
+function invalidListingError(error: unknown, fallback: string) {
+  if (error instanceof Error && error.name === 'ZodError' && 'issues' in error) {
+    const issue = (
+      error as { issues?: Array<{ message?: string; path?: Array<PropertyKey> }> }
+    ).issues?.[0];
+    return {
+      success: false as const,
+      error: issue?.message || 'Invalid visa listing data provided',
+      field: issue?.path?.[0] === 'slug' ? ('slug' as const) : undefined,
+    };
+  }
+
+  if (
+    error instanceof Error &&
+    /visa_listings_country_slug_unique|duplicate key/i.test(error.message)
+  ) {
+    return {
+      success: false as const,
+      error: SLUG_TAKEN_ERROR,
+      field: 'slug' as const,
+    };
+  }
+
+  return { success: false as const, error: fallback };
+}
+
 /**
  * Server actions for visa listing management
  * All actions require admin role
@@ -77,7 +124,18 @@ export async function createVisaListing(data: unknown) {
     });
 
     if (!country) {
-      return { error: `Destination country ${validated.destinationCountry} does not exist` };
+      return {
+        success: false as const,
+        error: `Destination country ${validated.destinationCountry} does not exist`,
+      };
+    }
+
+    const slugTaken = await findSlugOwner(
+      validated.destinationCountry,
+      validated.slug
+    );
+    if (slugTaken) {
+      return { success: false as const, error: SLUG_TAKEN_ERROR, field: 'slug' as const };
     }
 
     const [created] = await db
@@ -105,11 +163,12 @@ export async function createVisaListing(data: unknown) {
           : validated.showInsuranceInterest,
         sourceUrl: validated.sourceUrl || null,
         description: validated.description?.trim() || null,
+        slug: validated.slug,
       })
       .returning({ id: visaListings.id });
 
     if (!created) {
-      return { error: 'Failed to create visa listing' };
+      return { success: false as const, error: 'Failed to create visa listing' };
     }
 
     revalidatePath('/admin/config/visa-listings');
@@ -120,21 +179,17 @@ export async function createVisaListing(data: unknown) {
     revalidatePublicVisaCatalog({
       countryCode: validated.destinationCountry,
       listingId: created.id,
+      listingSlug: validated.slug,
     });
 
     return {
-      success: true,
+      success: true as const,
       id: created.id,
       message: 'Visa listing created successfully',
     };
   } catch (error) {
     console.error('Error creating visa listing:', error);
-
-    if (error instanceof Error && error.name === 'ZodError') {
-      return { error: 'Invalid visa listing data provided' };
-    }
-
-    return { error: 'Failed to create visa listing' };
+    return invalidListingError(error, 'Failed to create visa listing');
   }
 }
 
@@ -152,17 +207,32 @@ export async function updateProcessBasicInfo(processId: string, data: ProcessBas
       columns: {
         id: true,
         destinationCountry: true,
+        slug: true,
       },
     });
 
     if (!process) {
-      return { error: 'Visa listing not found' };
+      return { success: false as const, error: 'Visa listing not found' };
+    }
+
+    const slugTaken = await findSlugOwner(
+      process.destinationCountry,
+      validated.slug,
+      processId
+    );
+    if (slugTaken) {
+      return {
+        success: false as const,
+        error: SLUG_TAKEN_ERROR,
+        field: 'slug' as const,
+      };
     }
 
     await db
       .update(visaListings)
       .set({
         processName: validated.processName,
+        slug: validated.slug,
         processType: validated.processType,
         purpose: validated.purpose,
         processTypeLabel: validated.processTypeLabel || null,
@@ -197,20 +267,17 @@ export async function updateProcessBasicInfo(processId: string, data: ProcessBas
     revalidatePublicVisaCatalog({
       countryCode: process.destinationCountry,
       listingId: processId,
+      listingSlug: validated.slug,
+      previousSlug: process.slug,
     });
 
     return {
-      success: true,
+      success: true as const,
       message: 'Process details updated successfully',
     };
   } catch (error) {
     console.error('Error updating process basic info:', error);
-
-    if (error instanceof Error && error.name === 'ZodError') {
-      return { error: 'Invalid process data provided' };
-    }
-
-    return { error: 'Failed to update process details' };
+    return invalidListingError(error, 'Failed to update process details');
   }
 }
 

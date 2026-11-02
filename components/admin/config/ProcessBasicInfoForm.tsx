@@ -7,6 +7,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Check } from 'lucide-react';
 import { processBasicInfoSchema, type ProcessBasicInfo } from '@/lib/validations/config';
 import { updateProcessBasicInfo } from '@/app/(admin)/admin/config/visa-listings/actions';
+import { VisaListingSlugField } from '@/components/admin/config/VisaListingSlugField';
+import { normalizeVisaListingSlug } from '@/lib/visa/listingSlug';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -14,8 +16,10 @@ import { Button } from '@/components/ui/Button';
 
 interface ProcessBasicInfoFormProps {
   processId: string;
+  countryCode: string;
   initialData: {
     processName: string;
+    slug: string;
     processType:
       | 'electronic_travel_authorisation'
       | 'afc'
@@ -72,7 +76,11 @@ const UNIT_OPTIONS = [
   { value: 'years', label: 'Years' },
 ] as const;
 
-export function ProcessBasicInfoForm({ processId, initialData }: ProcessBasicInfoFormProps) {
+export function ProcessBasicInfoForm({
+  processId,
+  countryCode,
+  initialData,
+}: ProcessBasicInfoFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -81,6 +89,7 @@ export function ProcessBasicInfoForm({ processId, initialData }: ProcessBasicInf
     resolver: zodResolver(processBasicInfoSchema),
     defaultValues: {
       processName: initialData.processName,
+      slug: initialData.slug,
       processType: initialData.processType,
       purpose: initialData.purpose,
       processTypeLabel: initialData.processTypeLabel || '',
@@ -116,6 +125,10 @@ export function ProcessBasicInfoForm({ processId, initialData }: ProcessBasicInf
       const result = await updateProcessBasicInfo(processId, data);
 
       if (!result.success) {
+        if (result.field === 'slug' && result.error) {
+          form.setError('slug', { message: result.error });
+          return;
+        }
         alert(result.error || 'Failed to update process details');
         return;
       }
@@ -150,6 +163,25 @@ export function ProcessBasicInfoForm({ processId, initialData }: ProcessBasicInf
               placeholder="Thailand TDAC"
               error={form.formState.errors.processName?.message}
               {...form.register('processName')}
+            />
+
+            <VisaListingSlugField
+              countryCode={countryCode}
+              value={form.watch('slug') || ''}
+              error={form.formState.errors.slug?.message}
+              registration={{
+                ...form.register('slug'),
+                onBlur: (event) => {
+                  const normalized = normalizeVisaListingSlug(event.target.value);
+                  if (normalized && normalized !== event.target.value) {
+                    form.setValue('slug', normalized, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                  }
+                  return form.register('slug').onBlur(event);
+                },
+              }}
             />
 
             <Input

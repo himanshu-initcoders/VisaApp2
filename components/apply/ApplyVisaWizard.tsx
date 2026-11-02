@@ -79,6 +79,7 @@ interface ApplyVisaWizardProps {
   /** Flag image URL from countries.images.flag.url */
   flagUrl?: string | null;
   listingId: string;
+  listingSlug: string;
   processName: string;
   /** e.g. "United States Business Visa 30 Days" — always shown in the apply header */
   visaFullName?: string;
@@ -166,6 +167,7 @@ export function ApplyVisaWizard({
   countryCode,
   flagUrl,
   listingId,
+  listingSlug,
   processName,
   visaFullName,
   initialTravellerCount,
@@ -377,7 +379,7 @@ export function ApplyVisaWizard({
     void pushDraftToServer();
   };
 
-  const backHref = `/visa/${countryCode.toLowerCase()}/${listingId}`;
+  const backHref = `/visa/${countryCode.toLowerCase()}/${listingSlug}`;
   const namedTraveller = travellers.some((t) => t.name.trim());
   const usedProfileNames = new Set(
     travellers

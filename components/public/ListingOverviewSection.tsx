@@ -32,6 +32,7 @@ interface ListingOverviewSectionProps {
   withFreeInsurance?: boolean;
   countryCode: string;
   listingId: string;
+  listingSlug: string;
   priceOptions: PriceOptionView[];
   headline?: string;
   visaKinds?: VisaKindOption[];
@@ -67,6 +68,7 @@ export function ListingOverviewSection({
   withFreeInsurance = false,
   countryCode,
   listingId,
+  listingSlug,
   priceOptions,
   headline,
   visaKinds = [],
@@ -130,6 +132,7 @@ export function ListingOverviewSection({
             compact
             countryCode={countryCode}
             listingId={listingId}
+            listingSlug={listingSlug}
             isFree={isFree}
             visaFree={visaFree}
             officialPortalUrl={officialPortalUrl}

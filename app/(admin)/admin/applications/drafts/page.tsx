@@ -96,9 +96,10 @@ export default async function AdminApplyDraftsPage({ searchParams }: PageProps) 
                 const ownerIsStaff =
                   draft.user.role === 'admin' || draft.user.role === 'reviewer';
                 // Own staff drafts: resume without onBehalfOf. Applicant drafts: on behalf.
+                const segment = draft.listingSlug || draft.listingId;
                 const continueHref = ownerIsStaff
-                  ? `/visa/${cc}/${draft.listingId}/apply?resume=1`
-                  : `/visa/${cc}/${draft.listingId}/apply?onBehalfOf=${encodeURIComponent(draft.user.id)}&resume=1`;
+                  ? `/visa/${cc}/${segment}/apply?resume=1`
+                  : `/visa/${cc}/${segment}/apply?onBehalfOf=${encodeURIComponent(draft.user.id)}&resume=1`;
                 const processLabel =
                   draft.payload.processName ||
                   draft.payload.countryName ||

@@ -176,6 +176,20 @@
       "when": 1793700000000,
       "tag": "0024_trip_details_default_off",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793800000000,
+      "tag": "0025_visa_listing_slug",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793900000000,
+      "tag": "0026_visa_listing_slug_acronyms",
+      "breakpoints": true
     }
   ]
 }

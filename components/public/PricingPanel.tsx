@@ -78,6 +78,7 @@ interface PricingPanelProps {
   withFreeInsurance?: boolean;
   countryCode: string;
   listingId: string;
+  listingSlug?: string;
   compact?: boolean;
   priceOptions: PriceOptionView[];
   headline?: string;
@@ -267,6 +268,7 @@ export function PricingPanel({
   withFreeInsurance = false,
   countryCode,
   listingId,
+  listingSlug,
   compact: _compact = false,
   priceOptions,
   headline,
@@ -306,6 +308,7 @@ export function PricingPanel({
   const { requestStart, modals } = useApplyStartFlow({
     countryCode,
     listingId,
+    listingSlug,
     travellers,
     priceOptionId: selected?.id,
     consumeStartApplyQuery: true,

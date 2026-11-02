@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,6 +14,11 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Button } from '@/components/ui/Button';
+import { VisaListingSlugField } from '@/components/admin/config/VisaListingSlugField';
+import {
+  normalizeVisaListingSlug,
+  suggestVisaListingSlug,
+} from '@/lib/visa/listingSlug';
 import {
   PriceOptionsManager,
   type ListingPrice,
@@ -147,8 +152,29 @@ export function CreateVisaListingWizard({
       showInsuranceInterest: false,
       sourceUrl: '',
       description: '',
+      slug: '',
     },
   });
+
+  const slugEditedRef = useRef(false);
+  const watchedCountry = form.watch('destinationCountry');
+  const watchedPurpose = form.watch('purpose');
+
+  useEffect(() => {
+    if (slugEditedRef.current) return;
+    const country = countries.find(
+      (item) => item.iso2Code === watchedCountry?.toUpperCase()
+    );
+    if (!country || !watchedPurpose) return;
+    form.setValue(
+      'slug',
+      suggestVisaListingSlug({
+        countryName: country.name,
+        purpose: watchedPurpose,
+      }),
+      { shouldDirty: false, shouldValidate: false }
+    );
+  }, [countries, form, watchedCountry, watchedPurpose]);
 
   const buildWizardUrl = (nextStep: WizardStep, id: string) => {
     const params = new URLSearchParams();
@@ -179,8 +205,12 @@ export function CreateVisaListingWizard({
     try {
       const result = await createVisaListing(data);
 
-      if (!result.success || !result.id) {
-        setFormError(result.error || 'Failed to create visa listing');
+      if (!result.success) {
+        const message = result.error || 'Failed to create visa listing';
+        if (result.field === 'slug') {
+          form.setError('slug', { message });
+        }
+        setFormError(message);
         return;
       }
 
@@ -304,6 +334,29 @@ export function CreateVisaListingWizard({
                   placeholder="Thailand TDAC"
                   error={form.formState.errors.processName?.message}
                   {...form.register('processName')}
+                />
+
+                <VisaListingSlugField
+                  countryCode={watchedCountry || ''}
+                  value={form.watch('slug') || ''}
+                  error={form.formState.errors.slug?.message}
+                  registration={{
+                    ...form.register('slug'),
+                    onChange: (event) => {
+                      slugEditedRef.current = true;
+                      return form.register('slug').onChange(event);
+                    },
+                    onBlur: (event) => {
+                      const normalized = normalizeVisaListingSlug(event.target.value);
+                      if (normalized && normalized !== event.target.value) {
+                        form.setValue('slug', normalized, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        });
+                      }
+                      return form.register('slug').onBlur(event);
+                    },
+                  }}
                 />
 
                 <Select
