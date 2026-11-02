@@ -16,8 +16,8 @@ const MAX_TRAVELLERS = 100;
 export type ApplyPath = 'portal' | 'viserv';
 
 const APPLY_PATH_TABS = [
-  { id: 'portal' as const, label: 'Visa portal' },
   { id: 'viserv' as const, label: 'Apply with Viserv' },
+  { id: 'portal' as const, label: 'DIY - FREE' },
 ];
 
 function safeHttpUrl(value: string | null | undefined): string | null {
@@ -392,7 +392,7 @@ export function PricingPanel({
         </Badge>
       </div>
 
-      <div className="mt-5 space-y-3 rounded-xl bg-white/8 p-4 sm:mt-6 sm:space-y-4 sm:rounded-[24px] sm:p-5">
+      {/* <div className="mt-5 space-y-3 rounded-xl bg-white/8 p-4 sm:mt-6 sm:space-y-4 sm:rounded-[24px] sm:p-5">
         <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
           <span>Visa fee</span>
           <span>FREE</span>
@@ -411,7 +411,7 @@ export function PricingPanel({
           You fill and submit the form on the official visa portal. Viserv does
           not process this path or charge a fee.
         </p>
-      </div>
+      </div> */}
 
       <div className="mt-5 sm:mt-6">{portalButton(darkCta)}</div>
     </>
