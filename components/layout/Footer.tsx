@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { BRAND_NAME, Logo } from '@/components/shared/Logo';
 
-export function Footer() {
+export function Footer() { 
   const currentYear = new Date().getFullYear();
   const linkGroups = [
     {
