@@ -129,6 +129,7 @@
 - [ ] Document verification tools
 - [x] GTM / GA4 funnel event tracking (client dataLayer; GA tags configured in GTM)
 - [x] JSON-LD structured data (Organization, WebSite, WebPage, Breadcrumb, Service, FAQ)
+- [x] Sitemap (`/sitemap.xml`) + robots (`/robots.txt`)
 - [ ] Analytics dashboard
 - [ ] Reporting system
 

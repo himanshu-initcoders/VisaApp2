@@ -10,7 +10,7 @@ export function getSiteUrl(): string {
   return raw.replace(/\/$/, '');
 }
 
-function absoluteUrl(pathOrUrl: string, siteUrl = getSiteUrl()): string {
+export function absoluteUrl(pathOrUrl: string, siteUrl = getSiteUrl()): string {
   if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
   const path = pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`;
   return `${siteUrl}${path}`;

@@ -5,10 +5,11 @@ import Script from 'next/script';
 import { AuthSessionProvider } from '@/components/auth/AuthSessionProvider';
 import { GtmRouteListener } from '@/components/analytics/GtmRouteListener';
 import { JsonLd } from '@/components/seo/JsonLd';
-import { buildSiteGraphJsonLd } from '@/lib/seo/jsonld';
+import { buildSiteGraphJsonLd, getSiteUrl } from '@/lib/seo/jsonld';
 import './globals.css';
 
 const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID?.trim();
+const siteUrl = getSiteUrl();
 
 const caveat = Caveat({
   subsets: ['latin'],
@@ -25,6 +26,7 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: 'Viserv — Visa & Passport Services',
   description:
     'Get your visa and passport services done quickly and easily with Viserv. We help Indian citizens with visa applications and passport services.',
