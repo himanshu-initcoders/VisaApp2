@@ -2,7 +2,12 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { PublicProcessCard } from '@/components/public/PublicProcessCard';
+import { JsonLd } from '@/components/seo/JsonLd';
 import { getEnabledCountriesWithProcesses } from '@/lib/db/queries/public';
+import {
+  buildBreadcrumbJsonLd,
+  buildWebPageJsonLd,
+} from '@/lib/seo/jsonld';
 
 /** Static at build; refresh hourly or when admin emits catalog revalidation. */
 export const revalidate = 3600;
@@ -22,6 +27,20 @@ export default async function DestinationsPage() {
 
   return (
     <>
+      <JsonLd
+        data={[
+          buildWebPageJsonLd({
+            title: 'Visa destinations — Viserv',
+            description:
+              'Browse every live visa and arrival-card page. Pricing, documents, and timelines stay aligned with what operations has enabled.',
+            path: '/destinations',
+          }),
+          buildBreadcrumbJsonLd([
+            { name: 'Home', path: '/' },
+            { name: 'Destinations', path: '/destinations' },
+          ]),
+        ]}
+      />
       <Header />
       <main className="min-h-screen bg-[#f8f6f1] px-4 pb-20 pt-32 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl space-y-10">

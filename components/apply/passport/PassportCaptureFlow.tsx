@@ -23,11 +23,13 @@ import type {
   TravellerTripDetails,
   TripCopySource,
 } from '@/lib/apply/applicationForm';
+import { trackEvent } from '@/lib/analytics/gtm';
 
 interface PassportCaptureFlowProps {
   travellerName?: string;
   travellerId: string;
   listingId: string;
+  countryCode?: string;
   sessionUserId?: string | null;
   ownerUserId?: string | null;
   initialFile?: File;
@@ -137,6 +139,7 @@ export function PassportCaptureFlow({
   travellerName,
   travellerId,
   listingId,
+  countryCode,
   sessionUserId = null,
   ownerUserId = null,
   initialFile,
@@ -226,6 +229,12 @@ export function PassportCaptureFlow({
         setExtraction(result);
         setPreviewUrl(result.frontPreviewUrl);
       }
+      trackEvent('visa_passport_scan_complete', {
+        listing_id: listingId,
+        country_code: countryCode,
+        confidence: result.confidence,
+        warnings_count: result.warnings?.length ?? 0,
+      });
       setStage('review');
     } catch (err) {
       const pdfPreview = await pdfPreviewPromise.catch(() => null);
@@ -247,6 +256,11 @@ export function PassportCaptureFlow({
         setExtraction(emptyManualExtraction(preview));
         setPreviewUrl(preview || null);
         setError(null);
+        trackEvent('visa_passport_scan_failed', {
+          listing_id: listingId,
+          country_code: countryCode,
+          error_code: 'india_gate',
+        });
         setStage('review');
         return;
       }
@@ -256,6 +270,12 @@ export function PassportCaptureFlow({
           : err instanceof Error
             ? err.message
             : 'Could not read this passport. Try a clearer image.';
+      trackEvent('visa_passport_scan_failed', {
+        listing_id: listingId,
+        country_code: countryCode,
+        error_code:
+          err instanceof IndianPassportError ? 'passport_ocr' : 'ocr_error',
+      });
       setError(message);
       setStage('scan');
     }

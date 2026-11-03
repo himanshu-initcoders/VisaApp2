@@ -18,6 +18,12 @@ import { FaqAccordion } from '@/components/public/FaqAccordion';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
 import { StickySectionNav } from '@/components/public/StickySectionNav';
+import { JsonLd } from '@/components/seo/JsonLd';
+import {
+  buildBreadcrumbJsonLd,
+  buildFaqPageJsonLd,
+  buildWebPageJsonLd,
+} from '@/lib/seo/jsonld';
 
 const sectionItems = [
   { id: 'overview', label: 'Overview' },
@@ -267,8 +273,31 @@ const faqs = [
 ];
 
 export default function PassportPage() {
+  const faqSchema = buildFaqPageJsonLd(
+    faqs.map((faq) => ({
+      question: faq.question,
+      answer: faq.answer,
+    }))
+  );
+  const jsonLd = [
+    buildWebPageJsonLd({
+      title: 'Indian passport services - Viserv',
+      description:
+        'New passport, renewal, or updates - clear documents, fees, and tracking for Indian passport services.',
+      path: '/passport',
+    }),
+    buildBreadcrumbJsonLd([
+      { name: 'Home', path: '/' },
+      { name: 'Passport', path: '/passport' },
+    ]),
+  ];
+  if (faqSchema) {
+    jsonLd.push(faqSchema);
+  }
+
   return (
     <>
+      <JsonLd data={jsonLd} />
       <Header />
       <main className="min-h-screen bg-[#f8f6f1] pb-20 pt-28 sm:pt-32">
         <section className="px-4 sm:px-6 lg:px-8">

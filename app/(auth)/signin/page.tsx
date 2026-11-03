@@ -16,7 +16,11 @@ function SignInForm() {
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
 
   return (
-    <MobileOtpSignIn variant="page" redirectTo={callbackUrl} />
+    <MobileOtpSignIn
+      variant="page"
+      redirectTo={callbackUrl}
+      analyticsContext="signin"
+    />
   );
 }
 

@@ -14,8 +14,33 @@ import { FaqAccordion } from '@/components/public/FaqAccordion';
 import { ExploreMoreRail } from '@/components/public/ExploreMoreRail';
 import { MobileStickyBar } from '@/components/public/MobileStickyBar';
 import { loadPublicListingPage } from '@/app/visa/loadPublicListing';
+import { trackEvent } from '@/lib/analytics/gtm';
 import type { PublicProcessPageData } from '@/lib/db/queries/public';
 import type { VisaKindOption } from '@/components/public/PricingPanel';
+
+function trackListingView(listing: PublicProcessPageData) {
+  const price = listing.page.pricing.priceOptions[0];
+  const value =
+    typeof price?.totalAmount === 'number' ? price.totalAmount : undefined;
+  trackEvent('view_item', {
+    item_id: listing.process.id,
+    item_name: listing.process.processName,
+    country_code: listing.country.iso2Code,
+    listing_id: listing.process.id,
+    listing_slug: listing.process.slug,
+    currency: 'INR',
+    value,
+    items: [
+      {
+        item_id: listing.process.id,
+        item_name: listing.process.processName,
+        item_category: listing.country.iso2Code,
+        price: value,
+        quantity: 1,
+      },
+    ],
+  });
+}
 
 const listingCache = new Map<string, PublicProcessPageData>();
 
@@ -83,12 +108,17 @@ export function PublicListingExperience({
   dataRef.current = data;
   rememberListing(initialData);
 
+  useEffect(() => {
+    trackListingView(initialData);
+  }, [initialData.process.id]);
+
   const showListing = useCallback(
     (next: PublicProcessPageData, updateUrl: boolean) => {
       rememberListing(next);
       activeIdRef.current = next.process.id;
       setData(next);
       applyListingDocument(next, updateUrl);
+      trackListingView(next);
     },
     []
   );

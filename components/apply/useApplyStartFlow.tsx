@@ -11,6 +11,7 @@ import {
   readApplyDraft,
   type ApplyDraft,
 } from '@/lib/apply/draftStorage';
+import { trackEvent } from '@/lib/analytics/gtm';
 
 interface UseApplyStartFlowOptions {
   countryCode: string;
@@ -100,14 +101,34 @@ export function useApplyStartFlow({
   const requestStart = useCallback(() => {
     if (sessionStatus === 'loading') return;
 
+    trackEvent('visa_apply_start_click', {
+      country_code: countryCode,
+      listing_id: listingId,
+      travellers,
+      price_option_id: priceOptionId,
+    });
+
     if (!canStartApply(session?.user?.role)) {
       pendingAfterLoginRef.current = true;
+      trackEvent('visa_apply_login_prompt', {
+        source: 'listing_cta',
+        listing_id: listingId,
+        country_code: countryCode,
+      });
       setLoginOpen(true);
       return;
     }
 
     continueStart();
-  }, [continueStart, session?.user?.role, sessionStatus]);
+  }, [
+    continueStart,
+    countryCode,
+    listingId,
+    priceOptionId,
+    session?.user?.role,
+    sessionStatus,
+    travellers,
+  ]);
 
   const handleLoginVerified = useCallback(() => {
     setLoginOpen(false);
@@ -168,11 +189,17 @@ export function useApplyStartFlow({
     }
 
     pendingAfterLoginRef.current = true;
+    trackEvent('visa_apply_login_prompt', {
+      source: 'proxy_redirect',
+      listing_id: listingId,
+      country_code: countryCode,
+    });
     setLoginOpen(true);
   }, [
     consumeStartApplyQuery,
     continueStart,
     countryCode,
+    listingId,
     publicSegment,
     router,
     searchParams,
@@ -208,6 +235,7 @@ export function useApplyStartFlow({
         open={loginOpen}
         onClose={closeLogin}
         onVerified={handleLoginVerified}
+        analyticsContext="apply_modal"
       />
       {draft ? (
         <ResumeOrNewModal

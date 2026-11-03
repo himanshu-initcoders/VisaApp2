@@ -13,11 +13,13 @@ import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import { indianMobileSchema, mobileOtpSchema } from '@/lib/validations/auth';
 import { requestOtp } from '@/lib/auth/otp';
+import { trackEvent } from '@/lib/analytics/gtm';
 
 export interface MobileOtpSignInProps {
   otpLength?: number;
   variant?: 'page' | 'checkout-embed';
   redirectTo?: string;
+  analyticsContext?: 'signin' | 'apply_modal' | 'checkout' | 'save_draft';
   onVerified?: (payload: { phone: string; userId: string }) => void;
   /** Legacy: fired when OTP digits are complete (before server verify). Prefer onVerified. */
   onOtpComplete?: (payload: { phone: string; otp: string }) => void;
@@ -27,9 +29,13 @@ export function MobileOtpSignIn({
   otpLength = 5,
   variant = 'page',
   redirectTo,
+  analyticsContext,
   onVerified,
   onOtpComplete,
 }: MobileOtpSignInProps) {
+  const authContext =
+    analyticsContext ??
+    (variant === 'checkout-embed' ? 'checkout' : 'signin');
   const router = useRouter();
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
@@ -66,6 +72,7 @@ export function MobileOtpSignIn({
         setError(response.error);
         return;
       }
+      trackEvent('auth_otp_requested', { context: authContext });
       setOtp(Array(otpLength).fill(''));
       setOtpComplete(false);
       setStep('otp');
@@ -96,6 +103,16 @@ export function MobileOtpSignIn({
           typeof (result as { code?: string }).code === 'string'
             ? (result as { code?: string }).code
             : undefined;
+        trackEvent('login_failed', {
+          method: 'phone_otp',
+          error_code:
+            code === 'deactivated'
+              ? 'deactivated'
+              : result.error === 'CredentialsSignin'
+                ? 'invalid_otp'
+                : 'unknown',
+          context: authContext,
+        });
         setError(
           code === 'deactivated'
             ? 'This account has been deactivated.'
@@ -106,6 +123,7 @@ export function MobileOtpSignIn({
         return;
       }
 
+      trackEvent('login', { method: 'phone_otp', context: authContext });
       onVerified?.({ phone, userId: '' });
       router.refresh();
 

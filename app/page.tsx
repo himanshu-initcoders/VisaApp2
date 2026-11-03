@@ -5,7 +5,12 @@ import { HomeLandingClient } from '@/components/public/HomeLandingClient';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
 import { WhatsAppFloat } from '@/components/public/WhatsAppFloat';
+import { JsonLd } from '@/components/seo/JsonLd';
 import { getEnabledCountriesWithProcesses } from '@/lib/db/queries/public';
+import {
+  buildBreadcrumbJsonLd,
+  buildWebPageJsonLd,
+} from '@/lib/seo/jsonld';
 
 /** Static at build; refresh hourly or when admin emits catalog revalidation. */
 export const revalidate = 3600;
@@ -91,6 +96,17 @@ export default async function Home() {
 
   return (
     <>
+      <JsonLd
+        data={[
+          buildWebPageJsonLd({
+            title: 'Viserv — Visa & Passport Services',
+            description:
+              'Get your visa and passport services done quickly and easily with Viserv. We help Indian citizens with visa applications and passport services.',
+            path: '/',
+          }),
+          buildBreadcrumbJsonLd([{ name: 'Home', path: '/' }]),
+        ]}
+      />
       <main className="min-h-screen bg-[#f8f6f1]">
         <HomeLandingClient countries={countries} processes={allProcesses} />
 

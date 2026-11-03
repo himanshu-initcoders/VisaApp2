@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Tabs, TabsPanel, Button } from '@/components/ui';
 import { GeneralDetailsTab } from '@/components/apply/form/GeneralDetailsTab';
@@ -21,6 +21,7 @@ import {
   getVisibleDocumentSlots,
 } from '@/lib/document-conditions';
 import type { IndianPassportFields } from '@/lib/passport/types';
+import { trackEvent } from '@/lib/analytics/gtm';
 
 export interface CorrectionItemView {
   targetKey: string;
@@ -118,6 +119,16 @@ export function CorrectionWizard({
   const [tab, setTab] = useState('general');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const startedTracked = useRef(false);
+
+  useEffect(() => {
+    if (startedTracked.current) return;
+    startedTracked.current = true;
+    trackEvent('visa_correction_started', {
+      application_id: applicationId,
+      item_count: items.length,
+    });
+  }, [applicationId, items.length]);
 
   const editableKeys = useMemo(
     () => new Set(items.map((item) => item.targetKey)),
@@ -246,6 +257,11 @@ export function CorrectionWizard({
         setError(result.message || 'Could not send the updates');
         return;
       }
+      trackEvent('visa_correction_submitted', {
+        application_id: applicationId,
+        fields_changed_count: Object.keys(fields).length,
+        files_count: files.length,
+      });
       router.push(`/applications/visa/${applicationId}`);
       router.refresh();
     } catch (sendError) {
