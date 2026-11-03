@@ -61,6 +61,7 @@ export function SaveDraftLoginModal({
         <div className="px-5 py-5">
           <MobileOtpSignIn
             variant="checkout-embed"
+            analyticsContext="save_draft"
             onVerified={() => {
               onVerified();
             }}

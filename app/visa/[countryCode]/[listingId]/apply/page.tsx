@@ -1,10 +1,15 @@
 import { notFound, permanentRedirect } from 'next/navigation';
 import { ApplyVisaWizard } from '@/components/apply/ApplyVisaWizard';
+import { JsonLd } from '@/components/seo/JsonLd';
 import { auth } from '@/lib/auth';
 import { getPublicProcessPageData } from '@/lib/db/queries/public';
 import { getApplyPreviousProfiles } from '@/lib/apply/previousProfilesAutofill';
 import { getApplicantSummaryForDraft } from '@/lib/apply/serverDraft';
 import { formatFullVisaLabel } from '@/lib/public';
+import {
+  buildBreadcrumbJsonLd,
+  buildWebPageJsonLd,
+} from '@/lib/seo/jsonld';
 import { withSearchQuery } from '@/lib/visa/listingSlug';
 import type { TravellerProfile } from '@/lib/apply/travellerProfiles';
 
@@ -152,30 +157,49 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
     daysLabel: selectedPrice?.daysLabel,
   });
 
+  const applyPath = `${data.href}/apply`;
+
   return (
-    <ApplyVisaWizard
-      countryName={data.country.name}
-      countryCode={data.country.iso2Code}
-      flagUrl={data.country.images?.flag?.url ?? null}
-      listingId={data.process.id}
-      listingSlug={data.process.slug}
-      processName={data.process.processName}
-      visaFullName={visaFullName}
-      initialTravellerCount={initialTravellerCount}
-      departureLabel={departureLabel}
-      departureMeta={{
-        mode: query.mode,
-        departure: query.departure,
-        month: query.month,
-        label: departureLabel,
-        priceOption: query.priceOption,
-      }}
-      formConfig={data.page.applyForm}
-      resume={resume}
-      isAuthenticated={isAuthenticated}
-      previousProfiles={previousProfiles}
-      onBehalfOfUserId={onBehalfOfUserId}
-      onBehalfOfLabel={onBehalfOfLabel}
-    />
+    <>
+      <JsonLd
+        data={[
+          buildWebPageJsonLd({
+            title: `Apply · ${visaFullName}`,
+            description: `Complete your ${visaFullName} application.`,
+            path: applyPath,
+          }),
+          buildBreadcrumbJsonLd([
+            { name: 'Home', path: '/' },
+            { name: 'Destinations', path: '/destinations' },
+            { name: data.country.name, path: data.href },
+            { name: 'Apply', path: applyPath },
+          ]),
+        ]}
+      />
+      <ApplyVisaWizard
+        countryName={data.country.name}
+        countryCode={data.country.iso2Code}
+        flagUrl={data.country.images?.flag?.url ?? null}
+        listingId={data.process.id}
+        listingSlug={data.process.slug}
+        processName={data.process.processName}
+        visaFullName={visaFullName}
+        initialTravellerCount={initialTravellerCount}
+        departureLabel={departureLabel}
+        departureMeta={{
+          mode: query.mode,
+          departure: query.departure,
+          month: query.month,
+          label: departureLabel,
+          priceOption: query.priceOption,
+        }}
+        formConfig={data.page.applyForm}
+        resume={resume}
+        isAuthenticated={isAuthenticated}
+        previousProfiles={previousProfiles}
+        onBehalfOfUserId={onBehalfOfUserId}
+        onBehalfOfLabel={onBehalfOfLabel}
+      />
+    </>
   );
 }

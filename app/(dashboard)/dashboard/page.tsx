@@ -18,6 +18,7 @@ import { listApplicantActionItems } from '@/lib/visa/corrections';
 import { ActionRequiredBanner } from '@/components/dashboard/ActionRequiredBanner';
 import { DraftApplicationsList } from '@/components/dashboard/DraftApplicationsList';
 import { FlagLogo } from '@/components/shared/FlagLogo';
+import { SubmissionConfirmationTracker } from '@/components/analytics/SubmissionConfirmationTracker';
 import { listMyApplicationDrafts } from '@/lib/apply/serverDraft';
 import { flagUrlFor, getCountryFlagMap } from '@/lib/countries/flags';
 import Link from 'next/link';
@@ -147,6 +148,7 @@ export default async function DashboardPage({
       <ActionRequiredBanner items={actionItems} />
       {submittedId && (
         <div className="rounded-[24px] border border-ash bg-mint-wash/60 px-6 py-4">
+          <SubmissionConfirmationTracker applicationId={submittedId} />
           <p className="font-switzer text-sm text-portrait-ink">
             Application submitted successfully
             {submittedId.length > 8 ? ` (${submittedId.slice(0, 8)}…)` : ''}.

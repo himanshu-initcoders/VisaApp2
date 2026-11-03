@@ -19,6 +19,7 @@ import {
   isIdbAvailable,
   putFile,
 } from '@/lib/apply/idbDraftStorage';
+import { trackEvent } from '@/lib/analytics/gtm';
 
 interface DocumentsTabProps {
   listingId: string;
@@ -378,8 +379,18 @@ export function DocumentsTab({
         storedInIdb: true,
       };
       onChange([...uploads.filter((item) => item.key !== slot.key), next]);
+      trackEvent('visa_document_upload_success', {
+        slot_key: slot.key,
+        storage: 'idb',
+        mime_type: file.type || 'application/octet-stream',
+      });
     } catch (error) {
-      setStorageError(idbErrorMessage(error));
+      const message = idbErrorMessage(error);
+      trackEvent('visa_document_upload_error', {
+        slot_key: slot.key,
+        error_message: message.slice(0, 120),
+      });
+      setStorageError(message);
     } finally {
       setBusyKey(null);
     }

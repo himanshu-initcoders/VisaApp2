@@ -5,6 +5,11 @@ import {
   LegalSection,
   LegalTable,
 } from '@/components/legal/LegalPageShell';
+import { JsonLd } from '@/components/seo/JsonLd';
+import {
+  buildBreadcrumbJsonLd,
+  buildWebPageJsonLd,
+} from '@/lib/seo/jsonld';
 
 export const metadata: Metadata = {
   title: 'Refund Policy — Viserv',
@@ -14,6 +19,21 @@ export const metadata: Metadata = {
 
 export default function RefundPolicyPage() {
   return (
+    <>
+    <JsonLd
+      data={[
+        buildWebPageJsonLd({
+          title: 'Refund Policy — Viserv',
+          description:
+            'When and how Viserv refunds Government Fees, Service Fees and Third-Party Charges for visa Orders.',
+          path: '/refund',
+        }),
+        buildBreadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Refund Policy', path: '/refund' },
+        ]),
+      ]}
+    />
     <LegalPageShell
       title="Refund Policy"
       lastUpdated="01 Nov 2026"
@@ -357,5 +377,6 @@ export default function RefundPolicyPage() {
         </p>
       </LegalSection>
     </LegalPageShell>
+    </>
   );
 }

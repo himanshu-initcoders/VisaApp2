@@ -5,6 +5,11 @@ import {
   LegalSection,
   LegalTable,
 } from '@/components/legal/LegalPageShell';
+import { JsonLd } from '@/components/seo/JsonLd';
+import {
+  buildBreadcrumbJsonLd,
+  buildWebPageJsonLd,
+} from '@/lib/seo/jsonld';
 
 export const metadata: Metadata = {
   title: 'Terms and Conditions — Viserv',
@@ -14,6 +19,21 @@ export const metadata: Metadata = {
 
 export default function TermsAndConditionsPage() {
   return (
+    <>
+    <JsonLd
+      data={[
+        buildWebPageJsonLd({
+          title: 'Terms and Conditions — Viserv',
+          description:
+            'Terms and Conditions for using Viserv visa assistance services on www.viserv.in and related channels.',
+          path: '/terms',
+        }),
+        buildBreadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Terms and Conditions', path: '/terms' },
+        ]),
+      ]}
+    />
     <LegalPageShell
       title="Terms and Conditions"
       lastUpdated="October 2026"
@@ -797,5 +817,6 @@ export default function TermsAndConditionsPage() {
         </p>
       </LegalSection>
     </LegalPageShell>
+    </>
   );
 }

@@ -7,6 +7,7 @@ interface ApplyLoginModalProps {
   open: boolean;
   onClose: () => void;
   onVerified: () => void;
+  analyticsContext?: 'apply_modal' | 'checkout' | 'save_draft';
 }
 
 /**
@@ -16,6 +17,7 @@ export function ApplyLoginModal({
   open,
   onClose,
   onVerified,
+  analyticsContext = 'apply_modal',
 }: ApplyLoginModalProps) {
   if (!open) return null;
 
@@ -61,6 +63,7 @@ export function ApplyLoginModal({
         <div className="px-5 py-5">
           <MobileOtpSignIn
             variant="checkout-embed"
+            analyticsContext={analyticsContext}
             onVerified={() => {
               onVerified();
             }}

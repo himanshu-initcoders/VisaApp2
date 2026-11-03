@@ -5,6 +5,11 @@ import {
   LegalSection,
   LegalTable,
 } from '@/components/legal/LegalPageShell';
+import { JsonLd } from '@/components/seo/JsonLd';
+import {
+  buildBreadcrumbJsonLd,
+  buildWebPageJsonLd,
+} from '@/lib/seo/jsonld';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy — Viserv',
@@ -14,6 +19,21 @@ export const metadata: Metadata = {
 
 export default function PrivacyPolicyPage() {
   return (
+    <>
+    <JsonLd
+      data={[
+        buildWebPageJsonLd({
+          title: 'Privacy Policy — Viserv',
+          description:
+            'How Viserv collects, uses, shares and protects personal data under the Digital Personal Data Protection Act, 2023.',
+          path: '/privacy',
+        }),
+        buildBreadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Privacy Policy', path: '/privacy' },
+        ]),
+      ]}
+    />
     <LegalPageShell
       title="Privacy Policy"
       lastUpdated="October 2026"
@@ -555,5 +575,6 @@ export default function PrivacyPolicyPage() {
         </p>
       </LegalSection>
     </LegalPageShell>
+    </>
   );
 }

@@ -2,6 +2,11 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
+import { JsonLd } from '@/components/seo/JsonLd';
+import {
+  buildBreadcrumbJsonLd,
+  buildWebPageJsonLd,
+} from '@/lib/seo/jsonld';
 
 const steps = [
   {
@@ -37,6 +42,20 @@ const steps = [
 export default function HowItWorksPage() {
   return (
     <>
+      <JsonLd
+        data={[
+          buildWebPageJsonLd({
+            title: 'How it works — Viserv',
+            description:
+              'Your visa in four simple steps. Clear guidance for first-time travellers, and no repeated paperwork for frequent ones.',
+            path: '/how-it-works',
+          }),
+          buildBreadcrumbJsonLd([
+            { name: 'Home', path: '/' },
+            { name: 'How it works', path: '/how-it-works' },
+          ]),
+        ]}
+      />
       <Header />
       <main className="min-h-screen bg-[#f8f6f1] px-4 pb-20 pt-32 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl space-y-14">

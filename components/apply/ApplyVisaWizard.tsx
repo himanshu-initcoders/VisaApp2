@@ -70,6 +70,7 @@ import {
 import { getMyPassengerAutofill } from '@/app/visa/actions';
 import { restoreAutofillDocumentsToIdb } from '@/lib/apply/restoreAutofillDocuments';
 import { getFlagEmoji } from '@/lib/public';
+import { trackEvent } from '@/lib/analytics/gtm';
 
 export type { ApplyStep, ApplyTraveller };
 
@@ -229,6 +230,39 @@ export function ApplyVisaWizard({
   travellersRef.current = travellers;
   const stepRef = useRef(step);
   stepRef.current = step;
+  const enterTrackedRef = useRef(false);
+
+  useEffect(() => {
+    if (lifecycle !== 'ready' || enterTrackedRef.current) return;
+    enterTrackedRef.current = true;
+    trackEvent('visa_apply_enter', {
+      country_code: countryCode,
+      listing_id: listingId,
+      listing_slug: listingSlug,
+      resume: Boolean(resume),
+      travellers: initialTravellerCount,
+      price_option: departureMeta?.priceOption,
+    });
+  }, [
+    countryCode,
+    departureMeta?.priceOption,
+    initialTravellerCount,
+    lifecycle,
+    listingId,
+    listingSlug,
+    resume,
+  ]);
+
+  useEffect(() => {
+    if (lifecycle !== 'ready') return;
+    trackEvent('visa_wizard_step_view', {
+      step,
+      listing_id: listingId,
+      country_code: countryCode,
+      traveller_count: travellersRef.current.length,
+      filled_count: travellersRef.current.filter(isTravellerFilled).length,
+    });
+  }, [step, lifecycle, listingId, countryCode]);
   const primaryNameRef = useRef(primaryName);
   primaryNameRef.current = primaryName;
   const departureRef = useRef(departure);
@@ -300,6 +334,11 @@ export function ApplyVisaWizard({
 
       if (!savingOnBehalf && sessionStatus !== 'authenticated') {
         await persistLocalDraft();
+        trackEvent('visa_apply_login_prompt', {
+          source: 'save_draft',
+          listing_id: listingId,
+          country_code: countryCode,
+        });
         setLoginForDraftOpen(true);
         return false;
       }
@@ -608,6 +647,12 @@ export function ApplyVisaWizard({
     persistNamedProfile(
       travellers[0] ? { ...travellers[0], name } : nextTraveller
     );
+    trackEvent('visa_basic_info_complete', {
+      listing_id: listingId,
+      country_code: countryCode,
+      traveller_count: Math.max(1, travellers.length),
+      has_profile_selected: false,
+    });
     setStep('documents');
   };
 
@@ -1010,6 +1055,11 @@ export function ApplyVisaWizard({
     );
 
     if (options.complete) {
+      trackEvent('visa_traveller_complete', {
+        listing_id: listingId,
+        country_code: countryCode,
+        document_slot_count: documents.length,
+      });
       persistNamedProfile({
         id,
         name: fullName,
@@ -1228,6 +1278,12 @@ export function ApplyVisaWizard({
               onEditTraveller={(id) => openPassport(id, true)}
               onProceedCheckout={() => {
                 if (filledTravellers.length === 0) return;
+                trackEvent('visa_review_proceed_checkout', {
+                  listing_id: listingId,
+                  country_code: countryCode,
+                  filled_count: filledTravellers.length,
+                  total_travellers: travellers.length,
+                });
                 setStep('pay');
               }}
             />
@@ -1299,6 +1355,7 @@ export function ApplyVisaWizard({
           travellerName={activePassportTraveller?.name}
           travellerId={passportTravellerId}
           listingId={listingId}
+          countryCode={countryCode}
           sessionUserId={sessionUserId}
           ownerUserId={onBehalfOfUserId}
           initialFile={passportFile ?? undefined}

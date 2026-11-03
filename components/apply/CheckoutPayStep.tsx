@@ -16,6 +16,7 @@ import {
   verifyVisaCheckout,
 } from '@/lib/payments/actions';
 import { formatInrFromPaise } from '@/lib/payments/money';
+import { trackEvent } from '@/lib/analytics/gtm';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/Checkbox';
 
@@ -169,6 +170,22 @@ export function CheckoutPayStep({
           travellerCount: result.travellerCount,
         });
         setError(null);
+        trackEvent('begin_checkout', {
+          listing_id: listingId,
+          country_code: countryCode,
+          currency: 'INR',
+          value: result.amountPaise / 100,
+          traveller_count: result.travellerCount,
+          items: [
+            {
+              item_id: listingId,
+              item_name: countryName,
+              item_category: countryCode,
+              price: result.amountPaise / 100,
+              quantity: result.travellerCount,
+            },
+          ],
+        });
       }
       setQuoting(false);
     }
@@ -192,6 +209,35 @@ export function CheckoutPayStep({
   };
 
   const finishSubmitted = async (applicationId: string) => {
+    const value = (quote?.amountPaise ?? 0) / 100;
+    const travellerCount = quote?.travellerCount ?? filledCount;
+    trackEvent('purchase', {
+      transaction_id: applicationId,
+      currency: 'INR',
+      value,
+      listing_id: listingId,
+      country_code: countryCode,
+      traveller_count: travellerCount,
+      free: quote?.free,
+      items: [
+        {
+          item_id: listingId,
+          item_name: countryName,
+          item_category: countryCode,
+          price: value,
+          quantity: travellerCount,
+        },
+      ],
+    });
+    trackEvent('visa_application_submitted', {
+      application_id: applicationId,
+      listing_id: listingId,
+      country_code: countryCode,
+      traveller_count: travellerCount,
+      value,
+      currency: 'INR',
+      free: quote?.free,
+    });
     onSubmitSuccess?.();
     try {
       await deleteApplicationDraft(listingId);
@@ -281,6 +327,19 @@ export function CheckoutPayStep({
         releaseSubmit();
         return;
       }
+
+      trackEvent('visa_payment_order_created', {
+        listing_id: listingId,
+        country_code: countryCode,
+        kind: created.kind,
+        amount:
+          created.kind === 'order'
+            ? created.amount / 100
+            : quote?.amountPaise
+              ? quote.amountPaise / 100
+              : undefined,
+        currency: 'INR',
+      });
 
       if (created.kind === 'already_submitted') {
         setUploadStatus(null);
@@ -389,6 +448,11 @@ export function CheckoutPayStep({
         modal: {
           ondismiss: () => {
             if (!checkoutFinished) {
+              trackEvent('visa_payment_dismissed', {
+                listing_id: listingId,
+                country_code: countryCode,
+                submit_id: submitId,
+              });
               setUploadStatus(null);
               setSubmitting(false);
               releaseSubmit();
@@ -399,6 +463,12 @@ export function CheckoutPayStep({
 
       razorpay.on('payment.failed', (response) => {
         checkoutFinished = true;
+        trackEvent('visa_payment_failed', {
+          listing_id: listingId,
+          country_code: countryCode,
+          error_description: response.error?.description,
+          submit_id: submitId,
+        });
         releaseSubmit();
         setError(
           response.error?.description ||
@@ -454,7 +524,10 @@ export function CheckoutPayStep({
 
       {!isAuthed && status !== 'loading' && (
         <div className="mt-8">
-          <MobileOtpSignIn variant="checkout-embed" />
+          <MobileOtpSignIn
+            variant="checkout-embed"
+            analyticsContext="checkout"
+          />
         </div>
       )}
 
