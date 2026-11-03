@@ -2,6 +2,7 @@
 
 import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { ZodError } from 'zod';
 import { db } from '@/lib/db';
 import { blogPosts } from '@/lib/db/schema-extended';
 import { requireRole } from '@/lib/auth-utils';
@@ -12,6 +13,22 @@ import {
   type BlogPostFormInput,
 } from '@/lib/validations/blog';
 import { uploadService } from '@/lib/upload';
+
+function actionErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ZodError) {
+    return error.issues[0]?.message || 'Invalid blog post data provided';
+  }
+  if (error instanceof Error) {
+    const message = error.message || '';
+    if (/relation ["']?blog_posts["']? does not exist/i.test(message)) {
+      return 'Database is missing blog_posts. Run npm run db:migrate on production.';
+    }
+    if (/Failed query/i.test(message)) {
+      return 'Database query failed while saving the blog post.';
+    }
+  }
+  return fallback;
+}
 
 function normalizeSeo(seo: BlogPostFormInput['seo']) {
   if (!seo) return null;
@@ -76,10 +93,7 @@ export async function createBlogPost(data: unknown) {
     };
   } catch (error) {
     console.error('Error creating blog post:', error);
-    if (error instanceof Error && error.name === 'ZodError') {
-      return { error: 'Invalid blog post data provided' };
-    }
-    return { error: 'Failed to create blog post' };
+    return { error: actionErrorMessage(error, 'Failed to create blog post') };
   }
 }
 
@@ -125,10 +139,7 @@ export async function updateBlogPost(id: string, data: unknown) {
     return { success: true, message: 'Blog post updated successfully' };
   } catch (error) {
     console.error('Error updating blog post:', error);
-    if (error instanceof Error && error.name === 'ZodError') {
-      return { error: 'Invalid blog post data provided' };
-    }
-    return { error: 'Failed to update blog post' };
+    return { error: actionErrorMessage(error, 'Failed to update blog post') };
   }
 }
 

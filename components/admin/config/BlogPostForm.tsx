@@ -143,8 +143,12 @@ export function BlogPostForm({ post }: BlogPostFormProps) {
         ? await updateBlogPost(post!.id, payload)
         : await createBlogPost(payload);
 
-      if (!result.success) {
-        setFormError(result.error || 'Failed to save blog post');
+      if (!result || !('success' in result) || !result.success) {
+        setFormError(
+          result && 'error' in result && result.error
+            ? result.error
+            : 'Failed to save blog post'
+        );
         return;
       }
 
@@ -159,7 +163,15 @@ export function BlogPostForm({ post }: BlogPostFormProps) {
       router.refresh();
     } catch (error) {
       console.error('Error saving blog post:', error);
-      setFormError('Failed to save blog post');
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Failed to save blog post';
+      setFormError(
+        /441|Minified React error/i.test(message)
+          ? 'Save failed on the server. Check that blog_posts exists (run db:migrate) and try again.'
+          : message
+      );
     } finally {
       setIsSubmitting(false);
     }

@@ -1,52 +1,4 @@
-import DOMPurify from 'isomorphic-dompurify';
-
-const ALLOWED_TAGS = [
-  'p',
-  'br',
-  'strong',
-  'b',
-  'em',
-  'i',
-  'u',
-  's',
-  'a',
-  'ul',
-  'ol',
-  'li',
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'blockquote',
-  'pre',
-  'code',
-  'img',
-  'figure',
-  'figcaption',
-  'table',
-  'thead',
-  'tbody',
-  'tr',
-  'th',
-  'td',
-  'hr',
-  'span',
-  'div',
-  'small',
-];
-
-const ALLOWED_ATTR = [
-  'href',
-  'target',
-  'rel',
-  'src',
-  'alt',
-  'title',
-  'width',
-  'height',
-  'class',
-  'loading',
-];
+import sanitizeHtml from 'sanitize-html';
 
 /**
  * TinyMCE treats pasted HTML source as text and stores &lt;p&gt;…&lt;/p&gt;.
@@ -77,12 +29,30 @@ export function decodeEscapedHtml(html: string): string {
   return current;
 }
 
-/** Sanitize TinyMCE HTML before persist or public render. */
+/**
+ * Sanitize TinyMCE HTML before persist or public render.
+ * Uses sanitize-html (no jsdom) so Vercel serverless does not OOM/crash.
+ */
 export function sanitizeBlogHtml(html: string): string {
   const decoded = decodeEscapedHtml(html);
-  return DOMPurify.sanitize(decoded, {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR,
-    ALLOW_DATA_ATTR: false,
+
+  return sanitizeHtml(decoded, {
+    allowedTags: [
+      ...sanitizeHtml.defaults.allowedTags,
+      'img',
+      'h1',
+      'h2',
+      'figure',
+      'figcaption',
+      'small',
+    ],
+    allowedAttributes: {
+      ...sanitizeHtml.defaults.allowedAttributes,
+      a: ['href', 'name', 'target', 'rel', 'class'],
+      img: ['src', 'srcset', 'alt', 'title', 'width', 'height', 'loading', 'class'],
+      '*': ['class'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowProtocolRelative: false,
   });
 }
