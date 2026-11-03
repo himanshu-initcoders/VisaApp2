@@ -501,6 +501,28 @@ export function buildDocumentSlotLabelMap(
   return map;
 }
 
+/** Slot keys / catalog slugs that are passport-style face photos. */
+export function buildPassportPhotoSlotKeySet(
+  config?: Pick<ApplyFormConfig, 'documentSlots'> | null
+): Set<string> {
+  const keys = new Set<string>(['photo']);
+
+  for (const slot of config?.documentSlots ?? []) {
+    if (
+      !isPassportPhotoDocument({
+        key: slot.key,
+        documentType: slot.documentType,
+      })
+    ) {
+      continue;
+    }
+    if (slot.key) keys.add(slot.key);
+    if (slot.documentType) keys.add(slot.documentType);
+  }
+
+  return keys;
+}
+
 function isFileQuestionType(type: string) {
   return type === 'file' || type === 'file_upload';
 }

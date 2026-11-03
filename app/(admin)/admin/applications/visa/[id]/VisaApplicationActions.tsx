@@ -26,6 +26,8 @@ interface VisaApplicationActionsProps {
   correctionTargets: CorrectableTarget[];
   /** Slot key → human document name (from form snapshot). */
   documentLabels?: Record<string, string>;
+  /** Slot keys that are passport face photos (download menu). */
+  passportPhotoKeys?: ReadonlySet<string> | readonly string[];
 }
 
 export function VisaApplicationActions({
@@ -36,6 +38,7 @@ export function VisaApplicationActions({
   travellers,
   correctionTargets,
   documentLabels,
+  passportPhotoKeys,
 }: VisaApplicationActionsProps) {
   const router = useRouter();
   const selection = useTravellerSelectionOptional();
@@ -135,6 +138,7 @@ export function VisaApplicationActions({
             documents={visibleDocuments}
             onDocumentVerified={handleSuccess}
             labelBySlotKey={documentLabels}
+            passportPhotoKeys={passportPhotoKeys}
             onRequestReupload={(slotKey) => {
               setPrefillSlot(slotKey);
               setShowCorrectionModal(true);

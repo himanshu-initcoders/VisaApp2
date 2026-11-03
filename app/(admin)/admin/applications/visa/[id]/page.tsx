@@ -31,6 +31,7 @@ import { PaymentHistory } from '@/components/applications/PaymentHistory';
 import { attachStatusToTravellers } from '@/lib/visa/caseStatus';
 import {
   buildDocumentSlotLabelMap,
+  buildPassportPhotoSlotKeySet,
   type ApplyFormConfig,
 } from '@/lib/apply/applicationForm';
 import { postStaffComment } from '@/app/(admin)/actions';
@@ -137,6 +138,7 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
 
   const snapshot = (app.formSnapshot as ApplyFormConfig | null) ?? null;
   const documentLabels = buildDocumentSlotLabelMap(snapshot);
+  const passportPhotoKeys = Array.from(buildPassportPhotoSlotKeySet(snapshot));
   const storedTravellers: StoredTraveller[] = Array.isArray(app.travellers)
     ? app.travellers
     : [];
@@ -411,6 +413,7 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
               travellers={correctionTravellers}
               correctionTargets={buildCorrectableTargets(snapshot)}
               documentLabels={documentLabels}
+              passportPhotoKeys={passportPhotoKeys}
             />
           </div>
         </div>

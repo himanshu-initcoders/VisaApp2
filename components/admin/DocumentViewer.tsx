@@ -1,11 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Eye, FileText, Image as ImageIcon, X } from 'lucide-react';
 import { Card, CardContent, Badge, Button } from '@/components/ui';
 import { getDocumentPreviewUrl, verifyDocument } from '@/app/(admin)/actions';
 import type { ActionResponse, DocumentWithVerification } from '@/types/admin';
 import { resolveDocumentSlotLabel } from '@/lib/apply/applicationForm';
+import { isPassportPhotoDocument } from '@/lib/document-types';
+import {
+  downloadPassportPhotoWithWhiteBackground,
+  triggerUrlDownload,
+} from '@/lib/apply/passportPhotoWhiteBackground';
 import { cn } from '@/lib/utils';
 
 /**
@@ -31,6 +36,11 @@ interface DocumentViewerProps {
    * Needed when slots are UUID component keys rather than catalog slugs.
    */
   labelBySlotKey?: Record<string, string>;
+  /**
+   * Slot keys / catalog slugs that are passport face photos.
+   * Those cards get a download menu (original vs white background).
+   */
+  passportPhotoKeys?: ReadonlySet<string> | readonly string[];
 }
 
 function documentDisplayName(
@@ -78,22 +88,215 @@ function DownloadIcon({ className }: { className?: string }) {
   );
 }
 
+function toPassportPhotoKeySet(
+  keys?: ReadonlySet<string> | readonly string[]
+): ReadonlySet<string> {
+  if (!keys) return new Set();
+  return keys instanceof Set ? keys : new Set(keys);
+}
+
+function isPassportPhotoDoc(
+  doc: DocumentWithVerification,
+  passportPhotoKeys: ReadonlySet<string>
+) {
+  if (passportPhotoKeys.has(doc.documentType)) return true;
+  return isPassportPhotoDocument({
+    key: doc.documentType,
+    documentType: doc.documentType,
+  });
+}
+
+function DocumentDownloadControl({
+  doc,
+  getPreviewUrl,
+  readyUrl,
+  isPassportPhoto,
+  size = 'md',
+}: {
+  doc: DocumentWithVerification;
+  getPreviewUrl: PreviewUrlFn;
+  /** When the card already resolved a preview URL, reuse it for original download. */
+  readyUrl?: string | null;
+  isPassportPhoto: boolean;
+  size?: 'sm' | 'md';
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<'original' | 'white' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const buttonSize = size === 'sm' ? 'h-8 w-8' : 'h-9 w-9';
+  const canWhiteBackground =
+    isPassportPhoto && isImageMime(doc.mimeType);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const resolveUrl = async () => {
+    if (readyUrl) return readyUrl;
+    const result = await getPreviewUrl(doc.id);
+    if (!result.success || !result.data?.url) {
+      throw new Error(result.message || 'Could not resolve download URL');
+    }
+    return result.data.url;
+  };
+
+  const downloadOriginal = async () => {
+    setBusy('original');
+    setError(null);
+    try {
+      const url = await resolveUrl();
+      triggerUrlDownload(url, doc.filename || 'document');
+      setOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Download failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const downloadWhite = async () => {
+    setBusy('white');
+    setError(null);
+    try {
+      const url = await resolveUrl();
+      await downloadPassportPhotoWithWhiteBackground({
+        imageUrl: url,
+        filename: doc.filename || 'passport-photo.jpg',
+      });
+      setOpen(false);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not create white-background photo'
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const downloadDisabled =
+    busy !== null || (readyUrl !== undefined && !readyUrl);
+
+  if (!canWhiteBackground) {
+    return (
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          void downloadOriginal();
+        }}
+        disabled={downloadDisabled}
+        title="Download"
+        aria-label={`Download ${doc.filename}`}
+        className={cn(
+          'inline-flex items-center justify-center rounded-full',
+          buttonSize,
+          'text-portrait-ink transition-colors',
+          'hover:bg-sky-wash/50 disabled:cursor-not-allowed disabled:opacity-40'
+        )}
+      >
+        <DownloadIcon className="h-4 w-4" />
+      </button>
+    );
+  }
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          setError(null);
+          setOpen((value) => !value);
+        }}
+        disabled={downloadDisabled}
+        title="Download"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Download options for ${doc.filename}`}
+        className={cn(
+          'inline-flex items-center justify-center rounded-full',
+          buttonSize,
+          'text-portrait-ink transition-colors',
+          'hover:bg-sky-wash/50 disabled:cursor-not-allowed disabled:opacity-40',
+          open && 'bg-sky-wash/70'
+        )}
+      >
+        <DownloadIcon className="h-4 w-4" />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          aria-label="Download options"
+          className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-2xl border border-ash bg-white py-1 shadow-elevated"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            disabled={busy !== null}
+            onClick={() => void downloadOriginal()}
+            className="flex w-full items-center px-3 py-2 text-left font-switzer text-sm text-portrait-ink hover:bg-sky-wash/60 disabled:opacity-50"
+          >
+            {busy === 'original' ? 'Downloading…' : 'Download original'}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={busy !== null}
+            onClick={() => void downloadWhite()}
+            className="flex w-full items-center px-3 py-2 text-left font-switzer text-sm text-portrait-ink hover:bg-sky-wash/60 disabled:opacity-50"
+          >
+            {busy === 'white'
+              ? 'Making white background…'
+              : 'Download with white background'}
+          </button>
+          {error && (
+            <p className="border-t border-ash px-3 py-2 font-switzer text-xs text-red-600">
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DocumentCard({
   doc,
   getPreviewUrl,
   onPreview,
   labelBySlotKey,
+  passportPhotoKeys,
 }: {
   doc: DocumentWithVerification;
   getPreviewUrl: PreviewUrlFn;
   onPreview: () => void;
   labelBySlotKey?: Record<string, string>;
+  passportPhotoKeys: ReadonlySet<string>;
 }) {
   const status = statusOf(doc);
   const title = documentDisplayName(doc, labelBySlotKey);
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const passportPhoto = isPassportPhotoDoc(doc, passportPhotoKeys);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,18 +318,6 @@ function DocumentCard({
       cancelled = true;
     };
   }, [doc.id, getPreviewUrl]);
-
-  const handleDownload = () => {
-    if (!url) return;
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = doc.filename || 'document';
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  };
 
   return (
     <Card
@@ -179,23 +370,13 @@ function DocumentCard({
             >
               <Eye className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                handleDownload();
-              }}
-              disabled={!url}
-              title="Download"
-              aria-label={`Download ${doc.filename}`}
-              className={cn(
-                'inline-flex h-8 w-8 items-center justify-center rounded-full',
-                'text-portrait-ink transition-colors',
-                'hover:bg-sky-wash/50 disabled:cursor-not-allowed disabled:opacity-40'
-              )}
-            >
-              <DownloadIcon className="h-4 w-4" />
-            </button>
+            <DocumentDownloadControl
+              doc={doc}
+              getPreviewUrl={getPreviewUrl}
+              readyUrl={url}
+              isPassportPhoto={passportPhoto}
+              size="sm"
+            />
           </div>
         </div>
 
@@ -294,31 +475,18 @@ function DocumentGridCard({
   getPreviewUrl,
   onPreview,
   labelBySlotKey,
+  passportPhotoKeys,
 }: {
   doc: DocumentWithVerification;
   getPreviewUrl: PreviewUrlFn;
   onPreview: () => void;
   labelBySlotKey?: Record<string, string>;
+  passportPhotoKeys: ReadonlySet<string>;
 }) {
   const status = statusOf(doc);
   const title = documentDisplayName(doc, labelBySlotKey);
-  const [downloading, setDownloading] = useState(false);
   const image = isImageMime(doc.mimeType);
-
-  const handleDownload = async () => {
-    setDownloading(true);
-    const result = await getPreviewUrl(doc.id);
-    setDownloading(false);
-    if (!result.success || !result.data?.url) return;
-    const link = document.createElement('a');
-    link.href = result.data.url;
-    link.download = doc.filename || 'document';
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  };
+  const passportPhoto = isPassportPhotoDoc(doc, passportPhotoKeys);
 
   return (
     <Card
@@ -394,23 +562,12 @@ function DocumentGridCard({
             >
               <Eye className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                void handleDownload();
-              }}
-              disabled={downloading}
-              title="Download"
-              aria-label={`Download ${doc.filename}`}
-              className={cn(
-                'inline-flex h-9 w-9 items-center justify-center rounded-full',
-                'text-portrait-ink transition-colors',
-                'hover:bg-sky-wash/50 disabled:cursor-not-allowed disabled:opacity-40'
-              )}
-            >
-              <DownloadIcon className="h-4 w-4" />
-            </button>
+            <DocumentDownloadControl
+              doc={doc}
+              getPreviewUrl={getPreviewUrl}
+              isPassportPhoto={passportPhoto}
+              size="md"
+            />
           </div>
         </div>
       </CardContent>
@@ -652,10 +809,12 @@ export function DocumentViewer({
   onRequestReupload,
   layout = 'list',
   labelBySlotKey,
+  passportPhotoKeys,
 }: DocumentViewerProps) {
   const [previewDoc, setPreviewDoc] = useState<DocumentWithVerification | null>(
     null
   );
+  const photoKeys = toPassportPhotoKeySet(passportPhotoKeys);
 
   useEffect(() => {
     if (!previewDoc) return;
@@ -698,6 +857,7 @@ export function DocumentViewer({
               getPreviewUrl={getPreviewUrl}
               onPreview={() => setPreviewDoc(doc)}
               labelBySlotKey={labelBySlotKey}
+              passportPhotoKeys={photoKeys}
             />
           ))}
         </div>
@@ -724,6 +884,7 @@ export function DocumentViewer({
               getPreviewUrl={getPreviewUrl}
               onPreview={() => setPreviewDoc(doc)}
               labelBySlotKey={labelBySlotKey}
+              passportPhotoKeys={photoKeys}
             />
           ))}
         </div>
