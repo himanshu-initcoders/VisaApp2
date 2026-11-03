@@ -9,6 +9,7 @@ export function Footer() {
       links: [
         { href: '/', label: 'Home' },
         { href: '/destinations', label: 'Destinations' },
+        { href: '/blogs', label: 'Blogs' },
         { href: '/how-it-works', label: 'How it works' },
       ],
     },

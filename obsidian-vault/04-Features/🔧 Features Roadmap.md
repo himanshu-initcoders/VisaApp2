@@ -106,6 +106,7 @@
 - [x] Add Country (admin config create flow)
 - [x] Add Visa listing (admin config create flow)
 - [x] Visa listing public URL slug (basic info, SEO paths)
+- [x] Admin blogs (TinyMCE) under Configuration + public `/blog` SEO
 
 ---
 
@@ -128,8 +129,9 @@
 - [ ] Application workflow automation
 - [ ] Document verification tools
 - [x] GTM / GA4 funnel event tracking (client dataLayer; GA tags configured in GTM)
-- [x] JSON-LD structured data (Organization, WebSite, WebPage, Breadcrumb, Service, FAQ)
+- [x] JSON-LD structured data (Organization, WebSite, WebPage, Breadcrumb, Service, FAQ, BlogPosting)
 - [x] Sitemap (`/sitemap.xml`) + robots (`/robots.txt`)
+- [x] Blog index + post pages in sitemap, footer, header, `view_blog_post` analytics
 - [ ] Analytics dashboard
 - [ ] Reporting system
 

@@ -68,7 +68,7 @@ export function Header({
               </div>
             )}
 
-            <div className="ml-auto flex shrink-0 items-center gap-2">
+            <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-4">
               {cta === 'none' ? null : cta === 'account' ? (
                 <Link
                   href="/signin"
@@ -85,7 +85,18 @@ export function Header({
               ) : (
                 <>
                   <Link
-                    href="/destinations"
+                    href="/blogs"
+                    className={cn(
+                      'pointer-events-auto hidden text-sm font-medium transition-colors md:inline',
+                      inverted
+                        ? 'text-white/90 hover:text-white'
+                        : 'text-portrait-ink hover:text-nautical-teal'
+                    )}
+                  >
+                    Blog
+                  </Link>
+                  <Link
+                    href="/"
                     className={cn(
                       'pointer-events-auto',
                       center ? 'hidden lg:block' : 'hidden md:block'
@@ -134,7 +145,14 @@ export function Header({
           />
           <div className="absolute top-20 right-4 left-4 rounded-3xl bg-white p-6 shadow-elevated">
             <nav className="flex flex-col gap-4">
-              <Link href="/destinations" onClick={() => setIsMobileMenuOpen(false)}>
+              <Link
+                href="/blogs"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="text-center text-sm font-medium text-portrait-ink hover:text-nautical-teal"
+              >
+                Blog
+              </Link>
+              <Link href="/" onClick={() => setIsMobileMenuOpen(false)}>
                 <Button variant="primary" size="md" className="w-full">
                   Apply now
                 </Button>

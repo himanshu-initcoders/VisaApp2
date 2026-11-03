@@ -376,6 +376,41 @@ export const postCheckoutSteps = pgTable('post_checkout_steps', {
   visaListingIdIdx: index('post_checkout_steps_visa_listing_id_idx').on(table.visaListingId)
 }));
 
+/**
+ * Blog Posts - Marketing content managed by admins (TinyMCE HTML body)
+ * authorUserId references users.id without a Drizzle FK to avoid schema circular imports.
+ */
+export const blogPosts = pgTable(
+  'blog_posts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    slug: varchar('slug', { length: 120 }).notNull(),
+    title: varchar('title', { length: 255 }).notNull(),
+    excerpt: text('excerpt'),
+    body: text('body').notNull().default(''),
+    coverImageUrl: text('cover_image_url'),
+    coverImageKey: text('cover_image_key'),
+    coverImageAlt: varchar('cover_image_alt', { length: 255 }),
+    seo: jsonb('seo').$type<{
+      metaTitle?: string;
+      metaDescription?: string;
+      ogImageUrl?: string;
+    }>(),
+    status: varchar('status', { length: 20 }).notNull().default('draft'),
+    publishedAt: timestamp('published_at'),
+    authorUserId: uuid('author_user_id'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    slugUnique: uniqueIndex('blog_posts_slug_unique').on(table.slug),
+    statusPublishedIdx: index('blog_posts_status_published_at_idx').on(
+      table.status,
+      table.publishedAt
+    ),
+  })
+);
+
 // ============================================================================
 // VALIDATION SETTINGS
 // ============================================================================
@@ -555,6 +590,9 @@ export type NewFaq = typeof faqs.$inferInsert;
 
 export type PostCheckoutStep = typeof postCheckoutSteps.$inferSelect;
 export type NewPostCheckoutStep = typeof postCheckoutSteps.$inferInsert;
+
+export type BlogPost = typeof blogPosts.$inferSelect;
+export type NewBlogPost = typeof blogPosts.$inferInsert;
 
 export type PassportOcrSetting = typeof passportOcrSettings.$inferSelect;
 export type NewPassportOcrSetting = typeof passportOcrSettings.$inferInsert;

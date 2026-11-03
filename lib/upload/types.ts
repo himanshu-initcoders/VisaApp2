@@ -13,6 +13,8 @@ export type UploadFolder =
   | 'country-banners'
   | 'country-heroes'
   | 'country-flags'
+  | 'blog-covers'
+  | 'blog-inline'
   | 'documents'
   | 'document-samples'
   | 'passports'

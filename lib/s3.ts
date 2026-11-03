@@ -16,7 +16,15 @@ const s3Client = new S3Client({
   },
 });
 
-export type S3Folder = 'visa-cards' | 'visa-heroes' | 'visa-gallery' | 'country-banners' | 'country-heroes' | 'country-flags';
+export type S3Folder =
+  | 'visa-cards'
+  | 'visa-heroes'
+  | 'visa-gallery'
+  | 'country-banners'
+  | 'country-heroes'
+  | 'country-flags'
+  | 'blog-covers'
+  | 'blog-inline';
 
 /**
  * Generate presigned URL for direct browser upload to S3
@@ -86,6 +94,8 @@ export function validateFileSize(fileSize: number, folder: S3Folder): boolean {
     'country-banners': 5 * 1024 * 1024, // 5MB
     'country-heroes': 5 * 1024 * 1024, // 5MB
     'country-flags': 1 * 1024 * 1024, // 1MB
+    'blog-covers': 5 * 1024 * 1024, // 5MB
+    'blog-inline': 3 * 1024 * 1024, // 3MB
   };
 
   const limit = limits[folder];

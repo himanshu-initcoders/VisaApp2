@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { Camera, Upload, X } from 'lucide-react';
-import { replaceFileByUrl } from '@/lib/upload/server-actions';
+import { replaceFileByUrlFromFormData } from '@/lib/upload/server-actions';
 import type { UploadFolder } from '@/lib/upload';
 
 interface LinkedInStyleImageUploadProps {
@@ -47,25 +47,15 @@ export function LinkedInStyleImageUpload({
     setIsUploading(true);
 
     try {
-      // Convert file to buffer
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Array.from(new Uint8Array(arrayBuffer));
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', folder);
+      formData.append('maxSizeMB', String(maxSizeMB));
+      if (currentImageUrl) {
+        formData.append('oldUrl', currentImageUrl);
+      }
 
-      // Upload and replace old image
-      const result = await replaceFileByUrl(
-        {
-          buffer: buffer as any,
-          filename: file.name,
-          mimeType: file.type,
-          size: file.size,
-        },
-        {
-          folder,
-          maxSizeMB,
-          allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
-        },
-        currentImageUrl // Old image will be deleted
-      );
+      const result = await replaceFileByUrlFromFormData(formData);
 
       if (!result.success) {
         throw new Error(result.error);

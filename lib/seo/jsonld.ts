@@ -154,6 +154,54 @@ export function buildVisaServiceJsonLd(input: {
   };
 }
 
+export function buildBlogPostingJsonLd(input: {
+  title: string;
+  description: string;
+  path: string;
+  datePublished?: string | Date | null;
+  dateModified?: string | Date | null;
+  imageUrl?: string | null;
+  authorName?: string | null;
+  siteUrl?: string;
+}): JsonLdDocument {
+  const siteUrl = input.siteUrl ?? getSiteUrl();
+  const url = absoluteUrl(input.path, siteUrl);
+  const toIso = (value?: string | Date | null) => {
+    if (!value) return undefined;
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+  };
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    '@id': `${url}#blogposting`,
+    headline: input.title,
+    description: input.description,
+    url,
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': `${url}#webpage`,
+    },
+    author: {
+      '@type': 'Person',
+      name: input.authorName || DEFAULT_SITE_NAME,
+    },
+    publisher: { '@id': `${siteUrl}/#organization` },
+    ...(input.imageUrl
+      ? { image: [absoluteUrl(input.imageUrl, siteUrl)] }
+      : {}),
+    ...(toIso(input.datePublished)
+      ? { datePublished: toIso(input.datePublished) }
+      : {}),
+    ...(toIso(input.dateModified)
+      ? { dateModified: toIso(input.dateModified) }
+      : {}),
+    inLanguage: 'en-IN',
+    isPartOf: { '@id': `${siteUrl}/#website` },
+  };
+}
+
 /** Organization + WebSite graph for global SEO. */
 export function buildSiteGraphJsonLd(siteUrl = getSiteUrl()): JsonLdDocument {
   return {

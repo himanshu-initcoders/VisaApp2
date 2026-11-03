@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { Upload, X, Image as ImageIcon, Check } from 'lucide-react';
-import { replaceFileByUrl } from '@/lib/upload/server-actions';
+import { replaceFileByUrlFromFormData } from '@/lib/upload/server-actions';
 import type { UploadFolder } from '@/lib/upload';
 
 interface ImageUploadV2Props {
@@ -72,25 +72,16 @@ export function ImageUploadV2({
 
     setIsUploading(true);
     try {
-      // Convert file to buffer for server action
-      const arrayBuffer = await selectedFile.arrayBuffer();
-      const buffer = Array.from(new Uint8Array(arrayBuffer));
+      // FormData avoids Flight "Maximum array nesting exceeded" from byte arrays
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('folder', folder);
+      formData.append('maxSizeMB', String(maxSizeMB));
+      if (currentImageUrl) {
+        formData.append('oldUrl', currentImageUrl);
+      }
 
-      // Upload file (automatically deletes old one if currentImageUrl exists)
-      const result = await replaceFileByUrl(
-        {
-          buffer: buffer as any,
-          filename: selectedFile.name,
-          mimeType: selectedFile.type,
-          size: selectedFile.size,
-        },
-        {
-          folder,
-          maxSizeMB,
-          allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
-        },
-        currentImageUrl // This will be deleted automatically
-      );
+      const result = await replaceFileByUrlFromFormData(formData);
 
       if (!result.success) {
         throw new Error(result.error);

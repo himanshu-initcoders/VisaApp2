@@ -161,6 +161,53 @@ export async function replaceFileByUrl(
 }
 
 /**
+ * Prefer this over replaceFileByUrl with Array.from(bytes) — large byte arrays
+ * hit React Flight "Maximum array nesting exceeded" on Server Actions.
+ */
+export async function replaceFileByUrlFromFormData(
+  formData: FormData
+): Promise<{ success: true; result: UploadResult } | { success: false; error: string }> {
+  try {
+    await requireRole(['admin']);
+
+    const file = formData.get('file');
+    if (!(file instanceof File)) {
+      return { success: false, error: 'No file provided' };
+    }
+
+    const folder = String(formData.get('folder') || '') as UploadOptions['folder'];
+    const maxSizeMB = Number(formData.get('maxSizeMB') || 5);
+    const oldUrlRaw = formData.get('oldUrl');
+    const oldUrl =
+      typeof oldUrlRaw === 'string' && oldUrlRaw.trim() ? oldUrlRaw.trim() : null;
+
+    if (!folder) {
+      return { success: false, error: 'Upload folder is required' };
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const result = await uploadService.replaceImageByUrl(
+      buffer,
+      {
+        folder,
+        maxSizeMB,
+        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+        filename: file.name,
+      },
+      oldUrl || undefined
+    );
+
+    return { success: true, result };
+  } catch (error) {
+    console.error('Replace by FormData error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Replace failed',
+    };
+  }
+}
+
+/**
  * Get current upload provider name
  */
 export async function getUploadProvider(): Promise<string> {

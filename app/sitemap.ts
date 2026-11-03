@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { getPublishedPosts } from '@/lib/db/queries/blog';
 import { getEnabledCountriesWithProcesses } from '@/lib/db/queries/public';
 import { absoluteUrl, getSiteUrl } from '@/lib/seo/jsonld';
 
@@ -10,6 +11,7 @@ const STATIC_PATHS: Array<{
 }> = [
   { path: '/', changeFrequency: 'daily', priority: 1 },
   { path: '/destinations', changeFrequency: 'daily', priority: 0.9 },
+  { path: '/blogs', changeFrequency: 'daily', priority: 0.8 },
   { path: '/how-it-works', changeFrequency: 'monthly', priority: 0.7 },
   { path: '/passport', changeFrequency: 'monthly', priority: 0.8 },
   { path: '/privacy', changeFrequency: 'yearly', priority: 0.3 },
@@ -29,6 +31,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   let listingEntries: MetadataRoute.Sitemap = [];
+  let blogEntries: MetadataRoute.Sitemap = [];
   try {
     const countries = await getEnabledCountriesWithProcesses();
     listingEntries = countries.flatMap((country) =>
@@ -44,5 +47,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     listingEntries = [];
   }
 
-  return [...staticEntries, ...listingEntries];
+  try {
+    const posts = await getPublishedPosts();
+    blogEntries = posts.map((post) => ({
+      url: absoluteUrl(`/blogs/${post.slug}`, siteUrl),
+      lastModified: post.updatedAt ? new Date(post.updatedAt) : now,
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    }));
+  } catch {
+    blogEntries = [];
+  }
+
+  return [...staticEntries, ...listingEntries, ...blogEntries];
 }

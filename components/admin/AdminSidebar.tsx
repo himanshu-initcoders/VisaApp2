@@ -84,6 +84,7 @@ export function AdminSidebar({
     { name: 'Countries', href: '/admin/config/countries' },
     { name: 'Visa Listings', href: '/admin/config/visa-listings' },
     { name: 'Document Types', href: '/admin/config/document-types' },
+    { name: 'Blogs', href: '/admin/config/blogs' },
   ];
 
   const isActive = (href: string) => {

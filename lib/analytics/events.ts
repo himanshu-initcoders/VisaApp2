@@ -24,6 +24,11 @@ export type AnalyticsEventMap = {
     value?: number;
     items?: AnalyticsItem[];
   };
+  view_blog_post: {
+    post_id: string;
+    slug: string;
+    title: string;
+  };
   visa_apply_start_click: {
     country_code: string;
     listing_id: string;
