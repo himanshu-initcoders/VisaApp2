@@ -7,7 +7,8 @@ import { ProcessTimeline } from '@/components/public/ProcessTimeline';
 import { WhatsAppFloat } from '@/components/public/WhatsAppFloat';
 import { getEnabledCountriesWithProcesses } from '@/lib/db/queries/public';
 
-export const dynamic = 'force-dynamic';
+/** Static at build; refresh hourly or when admin emits catalog revalidation. */
+export const revalidate = 3600;
 
 const HOW_IT_WORKS_STEPS = [
   {

@@ -1,4 +1,7 @@
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
+
+/** Shared cache tag for public landing / destinations / listing queries. */
+export const PUBLIC_VISA_CATALOG_TAG = 'public-visa-catalog';
 
 /**
  * Invalidate public catalog pages after admin country / visa-listing changes.
@@ -10,6 +13,7 @@ export function revalidatePublicVisaCatalog(options?: {
   listingSlug?: string;
   previousSlug?: string;
 }) {
+  revalidateTag(PUBLIC_VISA_CATALOG_TAG, 'max');
   revalidatePath('/');
   revalidatePath('/destinations');
 

@@ -4,8 +4,8 @@ import { MotionReveal } from '@/components/public/MotionReveal';
 import { PublicProcessCard } from '@/components/public/PublicProcessCard';
 import { getEnabledCountriesWithProcesses } from '@/lib/db/queries/public';
 
-// Always read live catalog so admin adds show up on Vercel without a redeploy
-export const dynamic = 'force-dynamic';
+/** Static at build; refresh hourly or when admin emits catalog revalidation. */
+export const revalidate = 3600;
 
 export default async function DestinationsPage() {
   const countriesWithProcesses = await getEnabledCountriesWithProcesses();

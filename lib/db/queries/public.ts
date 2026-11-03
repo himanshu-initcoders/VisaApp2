@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache';
 import { db } from '@/lib/db';
 import { eq, and, gte, sql } from 'drizzle-orm';
 import {
@@ -27,12 +28,14 @@ import {
 } from '@/lib/public-demo';
 import { buildApplyFormConfig, formatDocumentTitle } from '@/lib/apply/applicationForm';
 import { getDocumentTypeSamplesByValues } from '@/lib/db/queries/config';
+import { PUBLIC_VISA_CATALOG_TAG } from '@/lib/revalidate-public-catalog';
 
 /**
  * Public-facing database queries for landing pages
  */
 
 const INR = 'INR';
+const CATALOG_REVALIDATE_SECONDS = 3600;
 
 function getPriceAmount(amount: string | number | null | undefined) {
   return typeof amount === 'string' ? Number(amount) : (amount ?? 0);
@@ -135,35 +138,42 @@ function mapProcess(process: {
  * Get all enabled countries with their active visa listings
  * Used for the landing page visa grid
  */
-export async function getEnabledCountriesWithProcesses() {
-  const enabledCountries = await db.query.countries.findMany({
-    where: and(eq(countries.enabled, true), eq(countries.supported, true)),
-    with: {
-      visaListings: {
-        with: {
-          prices: {
-            orderBy: [visaListingPrices.sortOrder],
+export const getEnabledCountriesWithProcesses = unstable_cache(
+  async () => {
+    const enabledCountries = await db.query.countries.findMany({
+      where: and(eq(countries.enabled, true), eq(countries.supported, true)),
+      with: {
+        visaListings: {
+          with: {
+            prices: {
+              orderBy: [visaListingPrices.sortOrder],
+            },
           },
+          orderBy: [visaListings.processName],
         },
-        orderBy: [visaListings.processName],
       },
-    },
-    orderBy: [countries.name],
-  });
+      orderBy: [countries.name],
+    });
 
-  return enabledCountries
-    .map((country) => ({
-      ...country,
-      visaListings: country.visaListings
-        .filter((process) => !process.unsupported)
-        .map((process) => ({
-          ...mapProcess(process),
-          featured: false,
-          href: buildProcessHref(country.iso2Code, process.slug),
-        })),
-    }))
-    .filter((country) => country.visaListings.length > 0);
-}
+    return enabledCountries
+      .map((country) => ({
+        ...country,
+        visaListings: country.visaListings
+          .filter((process) => !process.unsupported)
+          .map((process) => ({
+            ...mapProcess(process),
+            featured: false,
+            href: buildProcessHref(country.iso2Code, process.slug),
+          })),
+      }))
+      .filter((country) => country.visaListings.length > 0);
+  },
+  ['enabled-countries-with-processes'],
+  {
+    tags: [PUBLIC_VISA_CATALOG_TAG],
+    revalidate: CATALOG_REVALIDATE_SECONDS,
+  }
+);
 
 /**
  * Get a single country with all its processes
@@ -243,250 +253,268 @@ function publicListingWhere(countryCode: string, listingKey: string) {
   );
 }
 
+const getCachedPublicProcessPageData = unstable_cache(
+  async (countryCode: string, listingKey: string) => {
+    const process = await db.query.visaListings.findFirst({
+      where: publicListingWhere(countryCode, listingKey),
+      with: {
+        country: true,
+        prices: {
+          orderBy: [visaListingPrices.sortOrder],
+        },
+        componentsRequired: {
+          orderBy: [componentsRequired.sortOrder],
+        },
+        additionalQuestions: {
+          orderBy: [additionalQuestions.sortOrder],
+        },
+        multiTripCountries: true,
+        faqs: {
+          orderBy: [faqs.sortOrder],
+        },
+        postCheckoutSteps: {
+          orderBy: [postCheckoutSteps.sortOrder],
+        },
+      },
+    });
+
+    if (!process || process.unsupported || !process.country.enabled) {
+      return null;
+    }
+
+    const mappedProcess = mapProcess(process);
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+
+    const [weeklyCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(visaApplications)
+      .where(
+        and(
+          eq(visaApplications.visaListingId, process.id),
+          gte(visaApplications.createdAt, weekAgo)
+        )
+      );
+
+    const weeklyApplications =
+      Number(weeklyCount?.count ?? 0) || stableDemoCount(process.id);
+
+    const [relatedCountries, siblingListings] = await Promise.all([
+      getEnabledCountriesWithProcesses(),
+      db.query.visaListings.findMany({
+        where: eq(
+          visaListings.destinationCountry,
+          process.destinationCountry
+        ),
+        orderBy: [visaListings.processName],
+      }),
+    ]);
+
+    const exploreMore = relatedCountries
+      .flatMap((country) =>
+        country.visaListings.map((visaListing) => ({
+          ...visaListing,
+          country: {
+            id: country.id,
+            name: country.name,
+            iso2Code: country.iso2Code,
+            images: country.images,
+          },
+        }))
+      )
+      .filter((visaListing) => visaListing.id !== process.id)
+      .slice(0, 4);
+
+    const visaKindsRaw = siblingListings
+      .filter((listing) => !listing.unsupported)
+      .map((listing) => ({
+        id: listing.id,
+        purpose: listing.purpose,
+        label: formatVisaKindLabel({
+          purpose: listing.purpose,
+        }),
+        href: buildProcessHref(process.country.iso2Code, listing.slug),
+      }));
+
+    // Prefer unique labels; fall back to process name when purpose clashes
+    const labelCounts = visaKindsRaw.reduce<Record<string, number>>(
+      (acc, kind) => {
+        acc[kind.label] = (acc[kind.label] ?? 0) + 1;
+        return acc;
+      },
+      {}
+    );
+
+    const visaKinds = visaKindsRaw.map((kind) => {
+      if ((labelCounts[kind.label] ?? 0) <= 1) return kind;
+      const listing = siblingListings.find((item) => item.id === kind.id);
+      return {
+        ...kind,
+        label: listing?.processName || kind.label,
+      };
+    });
+
+    const dbRequirements = process.componentsRequired.map((item) => {
+      return {
+        id: item.id,
+        key: item.key,
+        title: formatDocumentTitle(item.key, {
+          label: item.label,
+          documentType: item.documentType,
+        }),
+        description: 'Needed before you can submit',
+        helper: 'Standard requirement for this destination',
+        chargeable: false,
+      };
+    });
+
+    const priceOptions =
+      mappedProcess.priceOptions.length > 0
+        ? mappedProcess.priceOptions
+        : getDemoPriceOptions(mappedProcess);
+
+    // Fully free product (no government or Viserv fees) — distinct from card "FREE".
+    const isFullyFree =
+      mappedProcess.startingPrice === 0 &&
+      priceOptions.every((option) => option.totalAmount === 0);
+
+    return {
+      id: process.id,
+      href: buildProcessHref(process.country.iso2Code, process.slug),
+      country: {
+        ...process.country,
+        flag: getFlagEmoji(process.country.iso2Code),
+      },
+      process: mappedProcess,
+      page: {
+        title: `${process.country.name} ${process.processName}`,
+        eyebrow:
+          process.processTypeLabel ||
+          (process.processType === 'electronic_travel_authorisation'
+            ? `Official ${process.country.name} digital arrival card`
+            : `Official support for ${process.country.name} travellers`),
+        accentLabel: isFullyFree
+          ? 'free and instant'
+          : mappedProcess.standardEta || 'processed on time',
+        isFree: isFullyFree,
+        visaFree: Boolean(process.visaFree),
+        officialPortalUrl: process.sourceUrl?.trim() || null,
+        withFreeInsurance: mappedProcess.withFreeInsurance,
+        weeklyApplications,
+        highlights: getDemoHighlights(mappedProcess, process.country.name),
+        stats: [
+          {
+            label: 'Entry validity',
+            value: mappedProcess.entryValidity || 'Varies by traveler',
+          },
+          {
+            label: 'Purpose',
+            value: process.entryType || process.purpose.replace(/_/g, ' '),
+          },
+          {
+            label: 'Max stay',
+            value: mappedProcess.stayDuration || 'Check requirements',
+          },
+        ],
+        overview:
+          process.description?.trim() ||
+          process.country.seo?.headline ||
+          process.country.seo?.metaDescription ||
+          (process.processType === 'electronic_travel_authorisation'
+            ? `${process.processName} lets Indian travellers complete ${process.country.name}'s entry documentation online before departure. It is designed to be quick, low-friction, and easy to submit with the core travel documents you already have.`
+            : `${process.processName} gives Indian travellers a guided application experience with document checks, timeline clarity, and transparent pricing before submission.`),
+        requirements:
+          dbRequirements.length > 0
+            ? dbRequirements
+            : getDemoRequirements(mappedProcess),
+        pricing: {
+          priceOptions,
+          usingDemoPrices: mappedProcess.priceOptions.length === 0,
+          headline: mappedProcess.formattedStartingPrice,
+          governmentFeeAmount: priceOptions[0]?.governmentFeeAmount ?? 0,
+          serviceFeeAmount: priceOptions[0]?.serviceFeeAmount ?? 0,
+          governmentGstFeeAmount: priceOptions[0]?.governmentGstFeeAmount ?? 0,
+          governmentFeeLabel: priceOptions[0]?.governmentFeeLabel,
+          serviceFeeLabel: priceOptions[0]?.serviceFeeLabel,
+          governmentGstFeeLabel: priceOptions[0]?.governmentGstFeeLabel,
+        },
+        timeline:
+          process.postCheckoutSteps.length > 0
+            ? process.postCheckoutSteps.map((step, index) => ({
+                id: step.id,
+                title: step.heading,
+                description:
+                  step.subheading ||
+                  'We guide you through this step end to end.',
+                stepNumber: index + 1,
+              }))
+            : [
+                {
+                  id: 'step-1',
+                  title: 'Share your details',
+                  description: `Add traveler information for ${process.processName} and confirm the trip purpose.`,
+                  stepNumber: 1,
+                },
+                {
+                  id: 'step-2',
+                  title: 'Upload documents',
+                  description:
+                    'Passport, photo, and any extra questions configured for this destination.',
+                  stepNumber: 2,
+                },
+                {
+                  id: 'step-3',
+                  title: 'We review and file',
+                  description:
+                    'Your application is checked against this process configuration, then submitted.',
+                  stepNumber: 3,
+                },
+                {
+                  id: 'step-4',
+                  title: 'Receive approval',
+                  description: mappedProcess.standardEta
+                    ? `Typical turnaround is ${mappedProcess.standardEta}. You get status updates as it moves.`
+                    : 'You receive approval details and the next steps before travel.',
+                  stepNumber: 4,
+                },
+              ],
+        faqs: process.faqs,
+        exploreMore,
+        visaKinds,
+        applyForm: buildApplyFormConfig({
+          purpose: process.purpose,
+          countryName: process.country.name,
+          processName: process.processName,
+          showGeneralInfo: process.showGeneralInfo,
+          showTripDetails: process.showTripDetails,
+          showInsuranceInterest:
+            process.showInsuranceInterest && !process.withFreeInsurance,
+          components: process.componentsRequired,
+          questions: process.additionalQuestions,
+          documentTypeSamples: await getDocumentTypeSamplesByValues(
+            process.componentsRequired.flatMap((item) =>
+              [item.documentType, item.key].filter(Boolean) as string[]
+            )
+          ),
+        }),
+      },
+    };
+  },
+  ['public-process-page-data'],
+  {
+    tags: [PUBLIC_VISA_CATALOG_TAG],
+    revalidate: CATALOG_REVALIDATE_SECONDS,
+  }
+);
+
 export async function getPublicProcessPageData(
   countryCode: string,
   listingKey: string
 ) {
-  const process = await db.query.visaListings.findFirst({
-    where: publicListingWhere(countryCode, listingKey),
-    with: {
-      country: true,
-      prices: {
-        orderBy: [visaListingPrices.sortOrder],
-      },
-      componentsRequired: {
-        orderBy: [componentsRequired.sortOrder],
-      },
-      additionalQuestions: {
-        orderBy: [additionalQuestions.sortOrder],
-      },
-      multiTripCountries: true,
-      faqs: {
-        orderBy: [faqs.sortOrder],
-      },
-      postCheckoutSteps: {
-        orderBy: [postCheckoutSteps.sortOrder],
-      },
-    },
-  });
-
-  if (!process || process.unsupported || !process.country.enabled) {
-    return null;
-  }
-
-  const mappedProcess = mapProcess(process);
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-
-  const [weeklyCount] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(visaApplications)
-    .where(
-      and(
-        eq(visaApplications.visaListingId, process.id),
-        gte(visaApplications.createdAt, weekAgo)
-      )
-    );
-
-  const weeklyApplications =
-    Number(weeklyCount?.count ?? 0) || stableDemoCount(process.id);
-
-  const [relatedCountries, siblingListings] = await Promise.all([
-    getEnabledCountriesWithProcesses(),
-    db.query.visaListings.findMany({
-      where: eq(
-        visaListings.destinationCountry,
-        process.destinationCountry
-      ),
-      orderBy: [visaListings.processName],
-    }),
-  ]);
-
-  const exploreMore = relatedCountries
-    .flatMap((country) =>
-      country.visaListings.map((visaListing) => ({
-        ...visaListing,
-        country: {
-          id: country.id,
-          name: country.name,
-          iso2Code: country.iso2Code,
-          images: country.images,
-        },
-      }))
-    )
-    .filter((visaListing) => visaListing.id !== process.id)
-    .slice(0, 4);
-
-  const visaKindsRaw = siblingListings
-    .filter((listing) => !listing.unsupported)
-    .map((listing) => ({
-      id: listing.id,
-      purpose: listing.purpose,
-      label: formatVisaKindLabel({
-        purpose: listing.purpose,
-      }),
-      href: buildProcessHref(process.country.iso2Code, listing.slug),
-    }));
-
-  // Prefer unique labels; fall back to process name when purpose clashes
-  const labelCounts = visaKindsRaw.reduce<Record<string, number>>((acc, kind) => {
-    acc[kind.label] = (acc[kind.label] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  const visaKinds = visaKindsRaw.map((kind) => {
-    if ((labelCounts[kind.label] ?? 0) <= 1) return kind;
-    const listing = siblingListings.find((item) => item.id === kind.id);
-    return {
-      ...kind,
-      label: listing?.processName || kind.label,
-    };
-  });
-
-  const dbRequirements = process.componentsRequired.map((item) => {
-    return {
-    id: item.id,
-    key: item.key,
-    title: formatDocumentTitle(item.key, {
-      label: item.label,
-      documentType: item.documentType,
-    }),
-    description: 'Needed before you can submit',
-    helper: 'Standard requirement for this destination',
-    chargeable: false,
-  };
-  });
-
-  const priceOptions =
-    mappedProcess.priceOptions.length > 0
-      ? mappedProcess.priceOptions
-      : getDemoPriceOptions(mappedProcess);
-
-  // Fully free product (no government or Viserv fees) — distinct from card "FREE".
-  const isFullyFree =
-    mappedProcess.startingPrice === 0 &&
-    priceOptions.every((option) => option.totalAmount === 0);
-
-  return {
-    id: process.id,
-    href: buildProcessHref(process.country.iso2Code, process.slug),
-    country: {
-      ...process.country,
-      flag: getFlagEmoji(process.country.iso2Code),
-    },
-    process: mappedProcess,
-    page: {
-      title: `${process.country.name} ${process.processName}`,
-      eyebrow:
-        process.processTypeLabel ||
-        (process.processType === 'electronic_travel_authorisation'
-          ? `Official ${process.country.name} digital arrival card`
-          : `Official support for ${process.country.name} travellers`),
-      accentLabel: isFullyFree
-        ? 'free and instant'
-        : mappedProcess.standardEta || 'processed on time',
-      isFree: isFullyFree,
-      visaFree: Boolean(process.visaFree),
-      officialPortalUrl: process.sourceUrl?.trim() || null,
-      withFreeInsurance: mappedProcess.withFreeInsurance,
-      weeklyApplications,
-      highlights: getDemoHighlights(mappedProcess, process.country.name),
-      stats: [
-        {
-          label: 'Entry validity',
-          value: mappedProcess.entryValidity || 'Varies by traveler',
-        },
-        {
-          label: 'Purpose',
-          value: process.entryType || process.purpose.replace(/_/g, ' '),
-        },
-        {
-          label: 'Max stay',
-          value: mappedProcess.stayDuration || 'Check requirements',
-        },
-      ],
-      overview:
-        process.description?.trim() ||
-        process.country.seo?.headline ||
-        process.country.seo?.metaDescription ||
-        (process.processType === 'electronic_travel_authorisation'
-          ? `${process.processName} lets Indian travellers complete ${process.country.name}'s entry documentation online before departure. It is designed to be quick, low-friction, and easy to submit with the core travel documents you already have.`
-          : `${process.processName} gives Indian travellers a guided application experience with document checks, timeline clarity, and transparent pricing before submission.`),
-      requirements:
-        dbRequirements.length > 0
-          ? dbRequirements
-          : getDemoRequirements(mappedProcess),
-      pricing: {
-        priceOptions,
-        usingDemoPrices: mappedProcess.priceOptions.length === 0,
-        headline: mappedProcess.formattedStartingPrice,
-        governmentFeeAmount: priceOptions[0]?.governmentFeeAmount ?? 0,
-        serviceFeeAmount: priceOptions[0]?.serviceFeeAmount ?? 0,
-        governmentGstFeeAmount: priceOptions[0]?.governmentGstFeeAmount ?? 0,
-        governmentFeeLabel: priceOptions[0]?.governmentFeeLabel,
-        serviceFeeLabel: priceOptions[0]?.serviceFeeLabel,
-        governmentGstFeeLabel: priceOptions[0]?.governmentGstFeeLabel,
-      },
-      timeline:
-        process.postCheckoutSteps.length > 0
-          ? process.postCheckoutSteps.map((step, index) => ({
-              id: step.id,
-              title: step.heading,
-              description:
-                step.subheading || 'We guide you through this step end to end.',
-              stepNumber: index + 1,
-            }))
-          : [
-              {
-                id: 'step-1',
-                title: 'Share your details',
-                description: `Add traveler information for ${process.processName} and confirm the trip purpose.`,
-                stepNumber: 1,
-              },
-              {
-                id: 'step-2',
-                title: 'Upload documents',
-                description:
-                  'Passport, photo, and any extra questions configured for this destination.',
-                stepNumber: 2,
-              },
-              {
-                id: 'step-3',
-                title: 'We review and file',
-                description:
-                  'Your application is checked against this process configuration, then submitted.',
-                stepNumber: 3,
-              },
-              {
-                id: 'step-4',
-                title: 'Receive approval',
-                description: mappedProcess.standardEta
-                  ? `Typical turnaround is ${mappedProcess.standardEta}. You get status updates as it moves.`
-                  : 'You receive approval details and the next steps before travel.',
-                stepNumber: 4,
-              },
-            ],
-      faqs: process.faqs,
-      exploreMore,
-      visaKinds,
-      applyForm: buildApplyFormConfig({
-        purpose: process.purpose,
-        countryName: process.country.name,
-        processName: process.processName,
-        showGeneralInfo: process.showGeneralInfo,
-        showTripDetails: process.showTripDetails,
-        showInsuranceInterest:
-          process.showInsuranceInterest && !process.withFreeInsurance,
-        components: process.componentsRequired,
-        questions: process.additionalQuestions,
-        documentTypeSamples: await getDocumentTypeSamplesByValues(
-          process.componentsRequired.flatMap((item) =>
-            [item.documentType, item.key].filter(Boolean) as string[]
-          )
-        ),
-      }),
-    },
-  };
+  return getCachedPublicProcessPageData(
+    countryCode.toLowerCase(),
+    listingKey.toLowerCase()
+  );
 }
 
 export type PublicProcessPageData = NonNullable<
