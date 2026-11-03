@@ -6,7 +6,7 @@ export function Footer() {
   const linkGroups = [
     {
       title: 'Company',
-      links: [
+      links: [ 
         { href: '/', label: 'Home' },
         { href: '/destinations', label: 'Destinations' },
         { href: '/blogs', label: 'Blogs' },
