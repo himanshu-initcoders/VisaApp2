@@ -12,6 +12,7 @@
     "passport:smoke": "tsx lib/passport/__smoke__/mrz.smoke.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/db-migrate.ts",
+    "db:ensure-blog-posts": "tsx scripts/ensure-blog-posts.ts",
     "db:baseline": "tsx scripts/db-baseline.ts",
     "db:diagnose": "tsx scripts/diagnose-migrations.ts",
     "db:studio": "drizzle-kit studio",

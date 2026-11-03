@@ -67,7 +67,7 @@ async function main() {
     env: process.env,
   });
 
-  child.on('exit', (code, signal) => {
+  child.on('exit', async (code, signal) => {
     if (signal) {
       console.error(`drizzle-kit migrate killed by signal ${signal}`);
       process.exit(1);
@@ -81,6 +81,23 @@ async function main() {
           `Then retry: npm run db:migrate`
       );
       process.exit(code ?? 1);
+    }
+
+    // Safety net: 0027 was briefly generated with conflicting visa_listings
+    // statements; ensure blog_posts exists even if that migration was skipped.
+    try {
+      const { spawnSync } = await import('child_process');
+      const ensure = spawnSync('npx tsx scripts/ensure-blog-posts.ts', {
+        stdio: 'inherit',
+        shell: true,
+        env: process.env,
+      });
+      if (ensure.status !== 0) {
+        process.exit(ensure.status ?? 1);
+      }
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : error);
+      process.exit(1);
     }
   });
 }

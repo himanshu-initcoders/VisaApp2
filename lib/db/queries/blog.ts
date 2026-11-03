@@ -4,47 +4,96 @@ import { blogPosts, type BlogPost } from '@/lib/db/schema-extended';
 
 export type { BlogPost };
 
+function isMissingRelationError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const maybe = error as {
+    code?: string;
+    message?: string;
+    cause?: { code?: string; message?: string };
+  };
+  const code = maybe.code ?? maybe.cause?.code;
+  const message = `${maybe.message ?? ''} ${maybe.cause?.message ?? ''}`;
+  return code === '42P01' || /relation ["']?blog_posts["']? does not exist/i.test(message);
+}
+
 /** All posts for admin list (newest first). */
 export async function getAllBlogPosts(): Promise<BlogPost[]> {
-  return db.query.blogPosts.findMany({
-    orderBy: [desc(blogPosts.updatedAt)],
-  });
+  try {
+    return await db.query.blogPosts.findMany({
+      orderBy: [desc(blogPosts.updatedAt)],
+    });
+  } catch (error) {
+    if (isMissingRelationError(error)) {
+      console.warn('blog_posts table missing — run npm run db:migrate');
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function getBlogPostById(id: string): Promise<BlogPost | undefined> {
-  return db.query.blogPosts.findFirst({
-    where: eq(blogPosts.id, id),
-  });
+  try {
+    return await db.query.blogPosts.findFirst({
+      where: eq(blogPosts.id, id),
+    });
+  } catch (error) {
+    if (isMissingRelationError(error)) return undefined;
+    throw error;
+  }
 }
 
 export async function getBlogPostBySlug(
   slug: string
 ): Promise<BlogPost | undefined> {
-  return db.query.blogPosts.findFirst({
-    where: eq(blogPosts.slug, slug),
-  });
+  try {
+    return await db.query.blogPosts.findFirst({
+      where: eq(blogPosts.slug, slug),
+    });
+  } catch (error) {
+    if (isMissingRelationError(error)) return undefined;
+    throw error;
+  }
 }
 
 /** Published posts for public index and sitemap. */
 export async function getPublishedPosts(): Promise<BlogPost[]> {
-  return db.query.blogPosts.findMany({
-    where: eq(blogPosts.status, 'published'),
-    orderBy: [desc(blogPosts.publishedAt), desc(blogPosts.updatedAt)],
-  });
+  try {
+    return await db.query.blogPosts.findMany({
+      where: eq(blogPosts.status, 'published'),
+      orderBy: [desc(blogPosts.publishedAt), desc(blogPosts.updatedAt)],
+    });
+  } catch (error) {
+    // Build/SSR must not fail if migrate has not run on this database yet.
+    if (isMissingRelationError(error)) {
+      console.warn('blog_posts table missing — run npm run db:migrate');
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function getPublishedPostBySlug(
   slug: string
 ): Promise<BlogPost | undefined> {
-  return db.query.blogPosts.findFirst({
-    where: and(eq(blogPosts.slug, slug), eq(blogPosts.status, 'published')),
-  });
+  try {
+    return await db.query.blogPosts.findFirst({
+      where: and(eq(blogPosts.slug, slug), eq(blogPosts.status, 'published')),
+    });
+  } catch (error) {
+    if (isMissingRelationError(error)) return undefined;
+    throw error;
+  }
 }
 
 export async function getPublishedPostSlugs(): Promise<string[]> {
-  const rows = await db.query.blogPosts.findMany({
-    where: eq(blogPosts.status, 'published'),
-    columns: { slug: true },
-  });
-  return rows.map((row) => row.slug);
+  try {
+    const rows = await db.query.blogPosts.findMany({
+      where: eq(blogPosts.status, 'published'),
+      columns: { slug: true },
+    });
+    return rows.map((row) => row.slug);
+  } catch (error) {
+    if (isMissingRelationError(error)) return [];
+    throw error;
+  }
 }

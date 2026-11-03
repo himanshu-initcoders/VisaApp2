@@ -197,6 +197,13 @@
       "when": 1793699582134,
       "tag": "0027_fresh_ghost_rider",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794000000000,
+      "tag": "0028_ensure_blog_posts",
+      "breakpoints": true
     }
   ]
 }
