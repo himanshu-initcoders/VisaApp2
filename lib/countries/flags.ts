@@ -5,6 +5,7 @@
 import { inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { countries } from '@/lib/db/schema-extended';
+import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 function normalizeCodes(
   codes: Iterable<string | null | undefined>
@@ -40,7 +41,7 @@ export async function getCountryFlagMap(
   }
   for (const row of rows) {
     const url = row.images?.flag?.url?.trim() || null;
-    map[row.iso2Code.toUpperCase()] = url;
+    map[row.iso2Code.toUpperCase()] = toAppMediaUrl(url);
   }
   return map;
 }

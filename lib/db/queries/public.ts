@@ -29,6 +29,7 @@ import {
 import { buildApplyFormConfig, formatDocumentTitle } from '@/lib/apply/applicationForm';
 import { getDocumentTypeSamplesByValues } from '@/lib/db/queries/config';
 import { PUBLIC_VISA_CATALOG_TAG } from '@/lib/revalidate-public-catalog';
+import { rewriteCountryImages, toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 /**
  * Public-facing database queries for landing pages
@@ -158,6 +159,7 @@ export const getEnabledCountriesWithProcesses = unstable_cache(
     return enabledCountries
       .map((country) => ({
         ...country,
+        images: rewriteCountryImages(country.images),
         visaListings: country.visaListings
           .filter((process) => !process.unsupported)
           .map((process) => ({
@@ -198,6 +200,7 @@ export async function getCountryWithProcesses(iso2Code: string) {
 
   return {
     ...country,
+    images: rewriteCountryImages(country.images),
     flag: getFlagEmoji(country.iso2Code),
     visaListings: country.visaListings
       .filter((process) => !process.unsupported)
@@ -318,7 +321,7 @@ const getCachedPublicProcessPageData = unstable_cache(
             id: country.id,
             name: country.name,
             iso2Code: country.iso2Code,
-            images: country.images,
+            images: rewriteCountryImages(country.images),
           },
         }))
       )
@@ -383,6 +386,7 @@ const getCachedPublicProcessPageData = unstable_cache(
       href: buildProcessHref(process.country.iso2Code, process.slug),
       country: {
         ...process.country,
+        images: rewriteCountryImages(process.country.images),
         flag: getFlagEmoji(process.country.iso2Code),
       },
       process: mappedProcess,

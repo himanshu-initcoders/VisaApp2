@@ -1,3 +1,5 @@
+import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
+
 export function formatDuration(
   duration: number | null | undefined,
   unit: string | null | undefined
@@ -127,14 +129,14 @@ export function getCountryCardImage(
 ) {
   if (images?.banner?.url) {
     return {
-      url: images.banner.url,
+      url: toAppMediaUrl(images.banner.url) || images.banner.url,
       alt: images.banner.alt,
     };
   }
 
   if (images?.hero?.url) {
     return {
-      url: images.hero.url,
+      url: toAppMediaUrl(images.hero.url) || images.hero.url,
       alt: images.hero.alt,
     };
   }

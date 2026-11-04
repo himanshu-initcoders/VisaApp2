@@ -16,6 +16,7 @@ import {
   buildBreadcrumbJsonLd,
   buildWebPageJsonLd,
 } from '@/lib/seo/jsonld';
+import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 export const revalidate = 3600;
 
@@ -151,7 +152,9 @@ export default async function BlogPostPage({ params }: PageProps) {
             <div className="relative mb-10 aspect-[16/9] w-full overflow-hidden rounded-[24px] bg-sky-wash">
               {/* eslint-disable-next-line @next/next/no-img-element -- CMS covers may be local or arbitrary hosts */}
               <img
-                src={post.coverImageUrl}
+                src={
+                  toAppMediaUrl(post.coverImageUrl) || post.coverImageUrl
+                }
                 alt={post.coverImageAlt || post.title}
                 className="h-full w-full object-cover"
               />

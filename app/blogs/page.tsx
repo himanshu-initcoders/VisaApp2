@@ -9,6 +9,7 @@ import {
   buildBreadcrumbJsonLd,
   buildWebPageJsonLd,
 } from '@/lib/seo/jsonld';
+import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 export const revalidate = 3600;
 
@@ -84,7 +85,10 @@ export default async function BlogIndexPage() {
                       {post.coverImageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element -- CMS covers may be local or arbitrary hosts
                         <img
-                          src={post.coverImageUrl}
+                          src={
+                            toAppMediaUrl(post.coverImageUrl) ||
+                            post.coverImageUrl
+                          }
                           alt={post.coverImageAlt || post.title}
                           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                         />

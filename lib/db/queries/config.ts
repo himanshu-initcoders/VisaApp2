@@ -14,6 +14,7 @@ import {
   visaRisks,
   documentTypes,
 } from '@/lib/db/schema-extended';
+import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 /**
  * Database query helpers for admin configuration
@@ -567,7 +568,7 @@ export async function getDocumentTypeSamplesByValues(values: string[]) {
       row.value,
       {
         label: row.label,
-        sampleDocumentUrl: row.sampleDocumentUrl,
+        sampleDocumentUrl: toAppMediaUrl(row.sampleDocumentUrl) || row.sampleDocumentUrl,
         sampleDocumentFilename: row.sampleDocumentFilename,
       },
     ])

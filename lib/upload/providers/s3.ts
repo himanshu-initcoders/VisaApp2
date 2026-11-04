@@ -119,7 +119,9 @@ export class S3UploadProvider implements IUploadProvider {
   }
 
   getUrl(key: string): string {
-    return `https://${this.bucket}.s3.${this.region}.amazonaws.com/${key}`;
+    // Serve via same-origin proxy so private buckets work with next/image.
+    const normalized = key.replace(/^\/+/, '');
+    return `/api/media?key=${encodeURIComponent(normalized)}`;
   }
 
   async exists(key: string): Promise<boolean> {

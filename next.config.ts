@@ -4,6 +4,13 @@ const nextConfig: NextConfig = {
   /* config options here */
   reactStrictMode: true,
   images: {
+    // Private S3 is served via /api/media?key=... (query required in Next 16)
+    localPatterns: [
+      {
+        pathname: '/api/media',
+        // omit `search` to allow any ?key=... value
+      },
+    ],
     remotePatterns: [
       {
         protocol: 'https',
