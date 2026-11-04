@@ -4,11 +4,17 @@ const nextConfig: NextConfig = {
   /* config options here */
   reactStrictMode: true,
   images: {
-    // Private S3 is served via /api/media?key=... (query required in Next 16)
+    // Next 16: local Image src with query strings need an allowlist.
+    // - /api/media?key=... (private S3 proxy)
+    // - static files under /public (logo, icons, etc.) — no query string
     localPatterns: [
       {
         pathname: '/api/media',
         // omit `search` to allow any ?key=... value
+      },
+      {
+        pathname: '/**',
+        search: '',
       },
     ],
     remotePatterns: [
