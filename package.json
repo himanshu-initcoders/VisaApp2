@@ -20,7 +20,8 @@
     "db:seed": "tsx lib/db/seed.ts",
     "db:seed:occupations": "tsx lib/db/seeds/seedOccupations.ts",
     "db:seed:document-types": "tsx lib/db/seeds/seedDocumentTypes.ts",
-    "db:backfill-visa-refs": "tsx scripts/backfill-visa-reference-numbers.ts"
+    "db:backfill-visa-refs": "tsx scripts/backfill-visa-reference-numbers.ts",
+    "storage:migrate-cloudinary-to-s3": "tsx scripts/migrate-cloudinary-to-s3.ts"
   },
   "keywords": [
     "visa",

@@ -35,8 +35,13 @@ function slotAlreadySynced(traveller: ApplyTraveller, slotKey: string): boolean 
     return !ref?.storageKey || ref.storageKey === doc.storageKey;
   }
 
-  // Passport (and similar) slots tracked only via draftFileRefs.
-  return Boolean(ref?.storageKey);
+  // Passport / photo slots live in draftFileRefs. A missing ref means local-only
+  // (replaced or never synced) and must upload.
+  if (!ref?.storageKey) return false;
+
+  // Stale refs without a matching document storageKey on known doc slots were
+  // already handled above. Passport slots only have refs — treat as synced.
+  return true;
 }
 
 function mergeDraftFileRefs(
@@ -187,6 +192,17 @@ export async function syncDraftFilesToServer(input: {
     form.set('passengerId', file.passengerId);
     form.set('slotKey', file.slotKey);
     if (input.ownerUserId) form.set('ownerUserId', input.ownerUserId);
+    const previousRef = input.travellers
+      .find((t) => t.id === file.passengerId)
+      ?.draftFileRefs?.find((r) => r.slotKey === file.slotKey);
+    const previousDoc = input.travellers
+      .find((t) => t.id === file.passengerId)
+      ?.documents?.find((d) => d.key === file.slotKey);
+    const previousStorageKey =
+      previousDoc?.storageKey || previousRef?.storageKey;
+    if (previousStorageKey) {
+      form.set('previousStorageKey', previousStorageKey);
+    }
     form.set(
       'file',
       new File([file.blob], file.filename, { type: file.mimeType })

@@ -46,6 +46,8 @@ import {
   isIdbAvailable,
   putFile,
 } from '@/lib/apply/idbDraftStorage';
+import { deleteServerDraftFile } from '@/lib/apply/deleteDraftFileClient';
+import type { DraftFileRef } from '@/lib/apply/types';
 import { formatProfileName } from '@/lib/apply/travellerProfiles';
 import type { IndianPassportFields } from '@/lib/passport/types';
 import { isReviewComplete } from '@/lib/passport/schema';
@@ -57,6 +59,8 @@ export interface PassportApplicationPayload {
   documents: TravellerDocumentUpload[];
   frontPreviewUrl: string;
   backPreviewUrl?: string;
+  /** Draft slots whose server keys were invalidated by a local replace/remove. */
+  invalidateDraftSlots?: string[];
 }
 
 interface PassportReviewStageProps {
@@ -73,6 +77,8 @@ interface PassportReviewStageProps {
   formConfig?: ApplyFormConfig;
   savedTrip?: TravellerTripDetails;
   savedDocuments?: TravellerDocumentUpload[];
+  /** Existing server draft refs — used to delete cloud objects on passport replace. */
+  draftFileRefs?: DraftFileRef[];
   arrivalPrefill?: string;
   tripSources?: TripCopySource[];
   onBack: () => void;
@@ -98,6 +104,7 @@ export function PassportReviewStage({
   formConfig: formConfigProp,
   savedTrip,
   savedDocuments,
+  draftFileRefs: draftFileRefsProp,
   arrivalPrefill,
   tripSources,
   onBack,
@@ -165,6 +172,11 @@ export function PassportReviewStage({
   const [backFilename, setBackFilename] = useState<string | undefined>();
   const [replaceBusy, setReplaceBusy] = useState<'front' | 'back' | null>(null);
   const [replaceError, setReplaceError] = useState<string | null>(null);
+  const [invalidateDraftSlots, setInvalidateDraftSlots] = useState<string[]>(
+    []
+  );
+  const draftFileRefsRef = useRef(draftFileRefsProp);
+  draftFileRefsRef.current = draftFileRefsProp;
 
   const frontInputRef = useRef<HTMLInputElement>(null);
   const backInputRef = useRef<HTMLInputElement>(null);
@@ -187,6 +199,8 @@ export function PassportReviewStage({
     documents,
     frontPreviewUrl,
     backPreviewUrl,
+    invalidateDraftSlots:
+      invalidateDraftSlots.length > 0 ? invalidateDraftSlots : undefined,
   });
 
   // Persist in-progress form so reload can resume (not only final Continue)
@@ -251,6 +265,20 @@ export function PassportReviewStage({
           mimeType,
           filename,
         });
+
+        const previousRef = draftFileRefsRef.current?.find(
+          (ref) => ref.slotKey === slotKey
+        );
+        if (previousRef?.storageKey) {
+          void deleteServerDraftFile({
+            storageKey: previousRef.storageKey,
+            ownerUserId,
+          });
+        }
+        setInvalidateDraftSlots((prev) =>
+          prev.includes(slotKey) ? prev : [...prev, slotKey]
+        );
+
         const nextUrl = URL.createObjectURL(file);
         if (which === 'front') {
           setFrontPreviewUrl((prev) => {
@@ -281,6 +309,8 @@ export function PassportReviewStage({
                     mimeType,
                     size: file.size,
                     storedInIdb: true,
+                    storageKey: undefined,
+                    storageUrl: undefined,
                   }
                 : item
             );
@@ -292,7 +322,13 @@ export function PassportReviewStage({
         setReplaceBusy(null);
       }
     },
-    [draftScope, travellerId, initial.frontPreviewUrl, initial.backPreviewUrl]
+    [
+      draftScope,
+      travellerId,
+      ownerUserId,
+      initial.frontPreviewUrl,
+      initial.backPreviewUrl,
+    ]
   );
 
   const generalComplete = useMemo(
@@ -546,6 +582,7 @@ export function PassportReviewStage({
             ownerUserId={ownerUserId}
             slots={visibleDocumentSlots}
             uploads={documents}
+            draftFileRefs={draftFileRefsProp}
             passportPreviewUrl={
               formConfig.showGeneralInfo ? frontPreviewUrl : undefined
             }

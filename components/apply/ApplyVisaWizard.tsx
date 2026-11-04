@@ -1005,9 +1005,30 @@ export function ApplyVisaWizard({
 
     const photoUploaded = documents.some((item) => item.key === 'photo');
     const currentTravellers = travellersRef.current;
+    const invalidateSlots = new Set(payload.invalidateDraftSlots ?? []);
+    for (const doc of documents) {
+      if (!doc.storageKey) invalidateSlots.add(doc.key);
+    }
 
     const nextTravellers = currentTravellers.map((item) => {
       if (item.id !== id) return item;
+      const nextDocuments =
+        documents.length > 0 ? documents : item.documents;
+      const nextDocKeys = new Set((nextDocuments ?? []).map((doc) => doc.key));
+      const draftFileRefs = (item.draftFileRefs ?? []).filter((ref) => {
+        if (invalidateSlots.has(ref.slotKey)) return false;
+        if (
+          ref.slotKey !== PASSPORT_FRONT_SLOT &&
+          ref.slotKey !== PASSPORT_BACK_SLOT &&
+          !nextDocKeys.has(ref.slotKey)
+        ) {
+          // Document removed from the form — drop its draft ref.
+          return false;
+        }
+        const doc = nextDocuments?.find((d) => d.key === ref.slotKey);
+        if (doc && !doc.storageKey) return false;
+        return true;
+      });
       return {
         ...item,
         passportUploaded: true,
@@ -1019,8 +1040,8 @@ export function ApplyVisaWizard({
         passportFrontUrl: frontUrl || item.passportFrontUrl,
         passportBackUrl: backUrl || item.passportBackUrl,
         tripDetails: payload.tripDetails,
-        documents:
-          documents.length > 0 ? documents : item.documents,
+        documents: nextDocuments,
+        draftFileRefs,
         name: fullName || item.name,
       };
     });
@@ -1398,6 +1419,7 @@ export function ApplyVisaWizard({
                   backPreviewUrl: activePassportTraveller?.passportBackUrl,
                   tripDetails: activePassportTraveller?.tripDetails,
                   documents: activePassportTraveller?.documents,
+                  draftFileRefs: activePassportTraveller?.draftFileRefs,
                 }
               : undefined
           }

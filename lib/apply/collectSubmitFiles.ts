@@ -43,6 +43,9 @@ export function collectDraftStorageKeysForSubmit(
   const seen = new Set<string>();
 
   for (const traveller of travellers) {
+    const documentKeys = new Set(
+      (traveller.documents ?? []).map((doc) => doc.key)
+    );
     const refs: Array<{
       slotKey: string;
       storageKey: string;
@@ -50,7 +53,17 @@ export function collectDraftStorageKeysForSubmit(
       mimeType?: string;
       size?: number;
     }> = [
-      ...(traveller.draftFileRefs ?? []),
+      ...(traveller.draftFileRefs ?? []).filter((ref) => {
+        const isPassport =
+          ref.slotKey === PASSPORT_FRONT_SLOT ||
+          ref.slotKey === PASSPORT_BACK_SLOT;
+        if (isPassport) return true;
+        const doc = traveller.documents?.find((d) => d.key === ref.slotKey);
+        // Drop refs for removed slots or locally replaced docs (no storageKey yet).
+        if (!doc || !documentKeys.has(ref.slotKey)) return false;
+        if (!doc.storageKey) return false;
+        return true;
+      }),
       ...(traveller.documents ?? [])
         .filter((d) => d.storageKey)
         .map((d) => ({

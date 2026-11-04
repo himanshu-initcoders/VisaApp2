@@ -19,6 +19,8 @@ import {
   isIdbAvailable,
   putFile,
 } from '@/lib/apply/idbDraftStorage';
+import { deleteServerDraftFile } from '@/lib/apply/deleteDraftFileClient';
+import type { DraftFileRef } from '@/lib/apply/types';
 import { trackEvent } from '@/lib/analytics/gtm';
 
 interface DocumentsTabProps {
@@ -26,6 +28,8 @@ interface DocumentsTabProps {
   passengerId: string;
   slots: ApplyDocumentSlot[];
   uploads: TravellerDocumentUpload[];
+  /** Fallback server keys when uploads were not yet stamped with storageKey. */
+  draftFileRefs?: DraftFileRef[];
   passportPreviewUrl?: string;
   /** When OCR already captured the back page, show it as uploaded. */
   passportBackPreviewUrl?: string;
@@ -302,6 +306,7 @@ export function DocumentsTab({
   passengerId,
   slots,
   uploads,
+  draftFileRefs,
   passportPreviewUrl,
   passportBackPreviewUrl,
   passportFrontMimeType,
@@ -333,6 +338,10 @@ export function DocumentsTab({
       setStorageError(new IdbUnavailableError().message);
     }
   }, [storage]);
+
+  const resolveServerDraftKey = (slotKey: string, upload?: TravellerDocumentUpload) =>
+    upload?.storageKey ||
+    draftFileRefs?.find((ref) => ref.slotKey === slotKey)?.storageKey;
 
   const handleFile = async (slot: ApplyDocumentSlot, file: File) => {
     if (editableKeys && !editableKeys.has(slot.key)) return;
@@ -368,6 +377,14 @@ export function DocumentsTab({
         mimeType: file.type || 'application/octet-stream',
         filename: file.name,
       });
+      // Drop the previous server draft object so re-sync uploads the new file.
+      const previousKey = resolveServerDraftKey(slot.key, previous);
+      if (previousKey) {
+        void deleteServerDraftFile({
+          storageKey: previousKey,
+          ownerUserId,
+        });
+      }
       const previewUrl = URL.createObjectURL(file);
       revokeIfObjectUrl(previous?.previewUrl);
       const next: TravellerDocumentUpload = {
@@ -377,6 +394,7 @@ export function DocumentsTab({
         mimeType: file.type || 'application/octet-stream',
         size: file.size,
         storedInIdb: true,
+        // Intentionally omit storageKey so draft sync re-uploads.
       };
       onChange([...uploads.filter((item) => item.key !== slot.key), next]);
       trackEvent('visa_document_upload_success', {
@@ -403,6 +421,13 @@ export function DocumentsTab({
     try {
       if (isIdbAvailable()) {
         await deleteFile(scope, passengerId, slot.key);
+      }
+      const previousKey = resolveServerDraftKey(slot.key, previous);
+      if (previousKey) {
+        void deleteServerDraftFile({
+          storageKey: previousKey,
+          ownerUserId,
+        });
       }
       revokeIfObjectUrl(previous?.previewUrl);
       onChange(uploads.filter((item) => item.key !== slot.key));

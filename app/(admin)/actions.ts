@@ -60,6 +60,11 @@ import {
 import { uploadService } from '@/lib/upload';
 import { uploadApplicationDocuments } from '@/lib/upload/application-actions';
 import {
+  deleteOtherSlotExtensionKeys,
+  deleteReplacedObjectKey,
+} from '@/lib/upload/deleteSlotSiblings';
+import { upsertApplicationDocumentRow } from '@/lib/upload/upsertApplicationDocumentRow';
+import {
   reviewerOwnsDocument,
   reviewerOwnsVisa,
 } from '@/lib/reviewer-access';
@@ -1356,6 +1361,7 @@ export async function applyStaffFieldEdit(
       filename: string;
       mimeType: string;
       size: number;
+      previousKey?: string | null;
     } | null = null;
 
     if (target.kind === 'field') {
@@ -1391,6 +1397,7 @@ export async function applyStaffFieldEdit(
       const currentDoc = (nextTraveller.documents ?? []).find(
         (item) => item.slotKey === targetKey
       );
+      const previousStorageKey = currentDoc?.key ?? null;
       previousValue = currentDoc
         ? {
             filename: currentDoc.filename ?? null,
@@ -1424,6 +1431,8 @@ export async function applyStaffFieldEdit(
       if (!uploadedDoc) {
         return { success: false, message: 'Document upload failed' };
       }
+      await deleteReplacedObjectKey(previousStorageKey, uploadedDoc.key);
+      await deleteOtherSlotExtensionKeys(uploadedDoc.key);
       nextTraveller = replaceTravellerDocument(nextTraveller, targetKey, {
         slotKey: uploadedDoc.slotKey,
         key: uploadedDoc.key,
@@ -1438,7 +1447,7 @@ export async function applyStaffFieldEdit(
         url: uploadedDoc.url,
         mimeType: uploadedDoc.mimeType,
       };
-      uploaded = uploadedDoc;
+      uploaded = { ...uploadedDoc, previousKey: previousStorageKey };
     }
 
     const nextTravellers = storedTravellers.map((item, index) =>
@@ -1486,16 +1495,16 @@ export async function applyStaffFieldEdit(
         .where(eq(visaApplications.id, applicationId));
 
       if (uploaded) {
-        await tx.insert(documents).values({
+        await upsertApplicationDocumentRow(tx, {
           applicationId,
-          applicationType: 'visa' as const,
-          documentType: uploaded.slotKey,
-          s3Key: uploaded.key,
+          passengerId: uploaded.passengerId,
+          slotKey: uploaded.slotKey,
+          previousKey: uploaded.previousKey,
+          key: uploaded.key,
           filename: uploaded.filename,
-          fileSize: uploaded.size,
+          size: uploaded.size,
           mimeType: uploaded.mimeType,
-          verified: null,
-          uploadedAt: now,
+          now,
         });
       }
 

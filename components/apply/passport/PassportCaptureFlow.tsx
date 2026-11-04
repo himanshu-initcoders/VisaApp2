@@ -23,6 +23,7 @@ import type {
   TravellerTripDetails,
   TripCopySource,
 } from '@/lib/apply/applicationForm';
+import type { DraftFileRef } from '@/lib/apply/types';
 import { trackEvent } from '@/lib/analytics/gtm';
 
 interface PassportCaptureFlowProps {
@@ -42,6 +43,7 @@ interface PassportCaptureFlowProps {
     backPreviewUrl?: string;
     tripDetails?: TravellerTripDetails;
     documents?: TravellerDocumentUpload[];
+    draftFileRefs?: DraftFileRef[];
   };
   onClose: () => void;
   onProgress?: (payload: PassportApplicationPayload) => void;
@@ -353,6 +355,7 @@ export function PassportCaptureFlow({
           formConfig={formConfig}
           savedTrip={resume?.tripDetails}
           savedDocuments={resume?.documents}
+          draftFileRefs={resume?.draftFileRefs}
           arrivalPrefill={arrivalPrefill}
           tripSources={tripSources}
           onBack={onClose}

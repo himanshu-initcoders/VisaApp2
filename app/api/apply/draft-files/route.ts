@@ -22,6 +22,7 @@ import {
   UPLOADS_ROOT,
   assertSafeStorageKey,
 } from '@/lib/upload/safeStorageKey';
+import { deleteOtherSlotExtensionKeys } from '@/lib/upload/deleteSlotSiblings';
 
 const ALLOWED_TYPES = [
   'image/jpeg',
@@ -104,6 +105,12 @@ export async function POST(request: NextRequest) {
       ext,
     });
 
+    const previousStorageKeyRaw = form.get('previousStorageKey');
+    const previousStorageKey =
+      typeof previousStorageKeyRaw === 'string'
+        ? previousStorageKeyRaw.trim()
+        : '';
+
     const result = await uploadService.upload(buffer, {
       folder: APPLICATION_UPLOAD_FOLDER,
       filename: file.name || `${slotKey}.${ext}`,
@@ -118,6 +125,26 @@ export async function POST(request: NextRequest) {
         ownerUserId: owner.ownerUserId,
       },
     });
+
+    // Drop prior key when extension/MIME changed; also purge sibling extensions on S3/local.
+    if (
+      previousStorageKey &&
+      previousStorageKey !== result.key &&
+      isDraftObjectKey(previousStorageKey, owner.ownerUserId)
+    ) {
+      try {
+        await uploadService.delete({
+          key: assertSafeStorageKey(previousStorageKey),
+        });
+      } catch (error) {
+        console.warn(
+          '[Draft] Failed to delete previous draft key:',
+          previousStorageKey,
+          error
+        );
+      }
+    }
+    await deleteOtherSlotExtensionKeys(result.key);
 
     return NextResponse.json({
       success: true,

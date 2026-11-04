@@ -31,6 +31,8 @@ const loginSchema = z.object({
 });
 
 export const authConfig: NextAuthConfig = {
+  // Required for Auth.js when running `next start` / non-Vercel hosts.
+  trustHost: true,
   providers: [
     CredentialsProvider({
       id: 'credentials',

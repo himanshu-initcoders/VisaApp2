@@ -17,6 +17,11 @@ import {
 } from '@/lib/db/schema';
 import { uploadService } from '@/lib/upload';
 import { uploadApplicationDocuments } from '@/lib/upload/application-actions';
+import {
+  deleteOtherSlotExtensionKeys,
+  deleteReplacedObjectKey,
+} from '@/lib/upload/deleteSlotSiblings';
+import { upsertApplicationDocumentRow } from '@/lib/upload/upsertApplicationDocumentRow';
 import { updateProfileSchema } from '@/lib/validations/auth';
 import type { ActionResponse } from '@/types/admin';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
@@ -441,6 +446,14 @@ export async function submitCorrection(
       return { success: false, message: 'This application cannot accept new files' };
     }
 
+    const previousKeys = new Map<string, string>();
+    for (const file of files) {
+      const current = (nextTraveller.documents ?? []).find(
+        (item) => item.slotKey === file.slotKey
+      );
+      if (current?.key) previousKeys.set(file.slotKey, current.key);
+    }
+
     const uploadResult = files.length
       ? await uploadApplicationDocuments({
           countryCode: application.countryCode,
@@ -465,6 +478,11 @@ export async function submitCorrection(
 
     const now = new Date();
     for (const uploaded of uploadResult.results) {
+      await deleteReplacedObjectKey(
+        previousKeys.get(uploaded.slotKey),
+        uploaded.key
+      );
+      await deleteOtherSlotExtensionKeys(uploaded.key);
       nextTraveller = replaceTravellerDocument(nextTraveller, uploaded.slotKey, {
         slotKey: uploaded.slotKey,
         key: uploaded.key,
@@ -518,20 +536,18 @@ export async function submitCorrection(
         })
         .where(eq(visaApplications.id, applicationId));
 
-      if (uploadResult.results.length > 0) {
-        await tx.insert(documents).values(
-          uploadResult.results.map((uploaded) => ({
-            applicationId,
-            applicationType: 'visa' as const,
-            documentType: uploaded.slotKey,
-            s3Key: uploaded.key,
-            filename: uploaded.filename,
-            fileSize: uploaded.size,
-            mimeType: uploaded.mimeType,
-            verified: null,
-            uploadedAt: now,
-          }))
-        );
+      for (const uploaded of uploadResult.results) {
+        await upsertApplicationDocumentRow(tx, {
+          applicationId,
+          passengerId: uploaded.passengerId,
+          slotKey: uploaded.slotKey,
+          previousKey: previousKeys.get(uploaded.slotKey),
+          key: uploaded.key,
+          filename: uploaded.filename,
+          size: uploaded.size,
+          mimeType: uploaded.mimeType,
+          now,
+        });
       }
 
       for (const item of open.items) {

@@ -24,6 +24,7 @@ import {
   UPLOADS_ROOT,
   assertSafeStorageKey,
 } from '@/lib/upload/safeStorageKey';
+import { deleteOtherSlotExtensionKeys } from '@/lib/upload/deleteSlotSiblings';
 
 export interface ApplicationDocumentUploadItem {
   passengerId: string;
@@ -127,6 +128,9 @@ export async function uploadApplicationDocuments(
           filename: result.filename,
           size: result.size,
         });
+
+        // Same slot + different extension would otherwise orphan the prior object.
+        await deleteOtherSlotExtensionKeys(result.key);
       }
 
       return { success: true, results };
@@ -249,6 +253,7 @@ export async function uploadDraftDocuments(
           filename: result.filename,
           size: result.size,
         });
+        await deleteOtherSlotExtensionKeys(result.key);
       }
 
       return { success: true, results };
