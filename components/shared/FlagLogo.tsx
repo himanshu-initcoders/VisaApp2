@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import { getFlagEmoji } from '@/lib/public';
-import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
+import { isSvgMediaUrl, toAppMediaUrl } from '@/lib/upload/mediaUrl';
 import { cn } from '@/lib/utils';
 
 export type FlagLogoSize = 'sm' | 'md' | 'lg';
@@ -70,6 +70,19 @@ export function FlagLogo({
 
   const resolvedFlagUrl = toAppMediaUrl(flagUrl) || flagUrl;
   if (resolvedFlagUrl) {
+    // next/image rejects SVG (400). Countries upload preview uses <img>, so match that.
+    if (isSvgMediaUrl(resolvedFlagUrl) || isSvgMediaUrl(flagUrl)) {
+      return (
+        <span className={cn(box, className)} aria-hidden={!alt}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={resolvedFlagUrl}
+            alt={alt}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </span>
+      );
+    }
     return (
       <span className={cn(box, className)} aria-hidden={!alt}>
         <Image

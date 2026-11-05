@@ -178,6 +178,26 @@ export function toAppMediaUrl(
   return value;
 }
 
+/** True when the URL/key points at an SVG (next/image cannot optimize these). */
+export function isSvgMediaUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  const value = url.trim();
+  if (!value) return false;
+  try {
+    if (value.includes('/api/media')) {
+      const absolute =
+        value.startsWith('http://') || value.startsWith('https://')
+          ? value
+          : `http://local.invalid${value.startsWith('/') ? '' : '/'}${value}`;
+      const key = new URL(absolute).searchParams.get('key') || '';
+      return /\.svg$/i.test(key);
+    }
+  } catch {
+    // fall through
+  }
+  return /\.svg(?:\?|#|$)/i.test(value);
+}
+
 export function rewriteCountryImages<
   T extends {
     banner?: { url?: string; alt?: string; width?: number; height?: number };
