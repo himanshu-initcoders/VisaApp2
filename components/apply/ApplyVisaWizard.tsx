@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import Image from 'next/image';
 import { ArrowLeft } from 'lucide-react';
+import { MediaImage } from '@/components/shared/MediaImage';
 import { ApplyStepper } from '@/components/apply/ApplyStepper';
 import { BasicInformationStep } from '@/components/apply/BasicInformationStep';
 import { ReviewStep } from '@/components/apply/review/ReviewStep';
@@ -1176,7 +1176,7 @@ export function ApplyVisaWizard({
               <span className="inline-flex max-w-full items-center justify-end gap-2">
                 <span className="relative flex h-5 w-5 shrink-0 overflow-hidden rounded-full bg-sky-wash sm:h-6 sm:w-6">
                   {flagUrl ? (
-                    <Image
+                    <MediaImage
                       src={flagUrl}
                       alt=""
                       fill

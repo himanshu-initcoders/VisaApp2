@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import { Badge, Card, CardContent } from '@/components/ui';
+import { MediaImage } from '@/components/shared/MediaImage';
 
 /**
  * VisaCard Component
@@ -48,7 +48,7 @@ export function VisaCard({ listing }: VisaCardProps) {
       <Card className="group hover:shadow-elevated transition-all duration-200 cursor-pointer overflow-hidden h-full">
         <div className="relative w-full h-64 overflow-hidden">
           {listing.imageUrl ? (
-            <Image
+            <MediaImage
               src={listing.imageUrl}
               alt={listing.imageAlt || listing.countryName || listing.processName}
               fill

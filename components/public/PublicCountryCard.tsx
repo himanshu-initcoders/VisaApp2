@@ -1,9 +1,9 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { Badge } from '@/components/ui';
+import { MediaImage } from '@/components/shared/MediaImage';
 import { cn } from '@/lib/utils';
 import { formatPrice, getCountryCardImage, getFlagEmoji } from '@/lib/public';
 
@@ -58,7 +58,7 @@ export function PublicCountryCard({ country, className }: PublicCountryCardProps
         className="relative block aspect-[4/5] overflow-hidden sm:aspect-[3/4]"
       >
         {cardImage ? (
-          <Image
+          <MediaImage
             src={cardImage.url}
             alt={cardImage.alt || country.name}
             fill

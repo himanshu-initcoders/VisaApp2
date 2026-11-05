@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import {
   ArrowRight,
   CalendarDays,
@@ -7,7 +6,9 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { HeroWave } from '@/components/public/HeroWave';
+import { MediaImage } from '@/components/shared/MediaImage';
 import { formatVisaKindLabel } from '@/lib/public';
+import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 const TRUST_ITEMS = [
   {
@@ -95,7 +96,7 @@ function InfoPills({
       <div className="flex min-w-0 shrink-0 items-center gap-2.5 rounded-full border border-[#B7C9DC]/50 bg-[#FFFFFF] px-3 py-2 text-[#102B4E] shadow-[0_8px_24px_rgba(16,43,78,0.08)] sm:gap-3 sm:px-4 sm:py-3">
         <span className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full bg-[#E8F1FF] sm:h-10 sm:w-10">
           {flagUrl ? (
-            <Image
+            <MediaImage
               src={flagUrl}
               alt=""
               fill
@@ -185,12 +186,14 @@ export function ListingHero({
   const description = heroDescription(countryName, purpose, overview);
   const scriptLine =
     SCRIPT_BY_PURPOSE[purpose] || 'Your Global Journey Starts Here';
+  const resolvedFlagUrl = toAppMediaUrl(flagUrl) || flagUrl;
+  const resolvedHeroUrl = toAppMediaUrl(heroImageUrl) || heroImageUrl;
 
   const pills = (
     <InfoPills
       countryName={countryName}
       countryFlag={countryFlag}
-      flagUrl={flagUrl}
+      flagUrl={resolvedFlagUrl}
       pillVisaLabel={pillVisaLabel}
       processingEta={processingEta}
       withFreeInsurance={withFreeInsurance}
@@ -199,10 +202,10 @@ export function ListingHero({
 
   return (
     <section className="relative isolate overflow-hidden bg-[#F3F8FF] text-[#102B4E]">
-      {heroImageUrl && (
+      {resolvedHeroUrl && (
         <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[58%] lg:block">
-          <Image
-            src={heroImageUrl}
+          <MediaImage
+            src={resolvedHeroUrl}
             alt={heroImageAlt || countryName}
             fill
             priority
@@ -217,9 +220,9 @@ export function ListingHero({
       {/* Mobile / tablet: photo first, pills in flow so they never collide with the sticky header. */}
       <div className="lg:hidden">
         <div className="relative h-[34vh] min-h-[200px] max-h-[280px]">
-          {heroImageUrl ? (
-            <Image
-              src={heroImageUrl}
+          {resolvedHeroUrl ? (
+            <MediaImage
+              src={resolvedHeroUrl}
               alt={heroImageAlt || countryName}
               fill
               priority

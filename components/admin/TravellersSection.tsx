@@ -28,6 +28,7 @@ import {
   travellerKey,
   useTravellerSelectionOptional,
 } from '@/components/admin/TravellerSelectionContext';
+import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 import { StaffFieldEditDialog } from '@/components/admin/StaffFieldEditDialog';
 import type { StaffEditableTarget } from '@/lib/visa/staffFields';
 
@@ -534,9 +535,13 @@ export function TravellersSection({
                         ) : null}
                       </span>
                       <span className="flex items-center gap-2">
-                        {doc?.url ? (
+                        {doc?.url || doc?.key ? (
                           <a
-                            href={doc.url}
+                            href={
+                              toAppMediaUrl(doc.url || doc.key) ||
+                              doc.url ||
+                              '#'
+                            }
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-sm text-nautical-teal hover:text-portrait-ink"
@@ -580,9 +585,11 @@ export function TravellersSection({
                       {labelForDocSlot(snapshot, doc.slotKey || 'document')}
                       {doc.filename ? ` · ${doc.filename}` : ''}
                     </span>
-                    {doc.url ? (
+                    {doc.url || doc.key ? (
                       <a
-                        href={doc.url}
+                        href={
+                          toAppMediaUrl(doc.url || doc.key) || doc.url || '#'
+                        }
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-sm text-nautical-teal hover:text-portrait-ink"

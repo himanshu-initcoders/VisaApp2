@@ -1,10 +1,14 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Camera, Upload, X } from 'lucide-react';
 import { replaceFileByUrlFromFormData } from '@/lib/upload/server-actions';
 import type { UploadFolder } from '@/lib/upload';
 import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
+
+function resolvePreview(url?: string | null): string | null {
+  return toAppMediaUrl(url) || url || null;
+}
 
 interface LinkedInStyleImageUploadProps {
   type: 'banner' | 'profile' | 'flag';
@@ -26,9 +30,13 @@ export function LinkedInStyleImageUpload({
   const [isHovering, setIsHovering] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(
-    toAppMediaUrl(currentImageUrl) || currentImageUrl
+    resolvePreview(currentImageUrl)
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setPreviewUrl(resolvePreview(currentImageUrl));
+  }, [currentImageUrl]);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

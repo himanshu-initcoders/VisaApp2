@@ -1,7 +1,7 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowUpRight, Clock3, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui';
+import { MediaImage } from '@/components/shared/MediaImage';
 import { cn } from '@/lib/utils';
 import { formatProcessType, getCountryCardImage, getFlagEmoji } from '@/lib/public';
 
@@ -56,7 +56,7 @@ export function PublicProcessCard({
       <div className="hidden sm:block">
         <div className="relative h-72 overflow-hidden">
           {cardImage ? (
-            <Image
+            <MediaImage
               src={cardImage.url}
               alt={cardImage.alt || process.country.name}
               fill
@@ -128,7 +128,7 @@ export function PublicProcessCard({
       <div className="flex items-center gap-3 p-3 sm:hidden">
         <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl">
           {cardImage ? (
-            <Image
+            <MediaImage
               src={cardImage.url}
               alt={cardImage.alt || process.country.name}
               fill

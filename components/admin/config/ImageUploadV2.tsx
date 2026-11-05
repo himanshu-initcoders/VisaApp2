@@ -1,10 +1,14 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Upload, X, Image as ImageIcon, Check } from 'lucide-react';
 import { replaceFileByUrlFromFormData } from '@/lib/upload/server-actions';
 import type { UploadFolder } from '@/lib/upload';
 import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
+
+function resolvePreview(url?: string | null): string | null {
+  return toAppMediaUrl(url) || url || null;
+}
 
 interface ImageUploadV2Props {
   label: string;
@@ -32,7 +36,7 @@ export function ImageUploadV2({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadComplete, setUploadComplete] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(
-    toAppMediaUrl(currentImageUrl) || currentImageUrl || null
+    resolvePreview(currentImageUrl)
   );
   const [altText, setAltText] = useState(initialAltText);
   const [dimensions, setDimensions] = useState<{ width?: number; height?: number }>({
@@ -41,6 +45,12 @@ export function ImageUploadV2({
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!selectedFile) {
+      setPreviewUrl(resolvePreview(currentImageUrl));
+    }
+  }, [currentImageUrl, selectedFile]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -109,7 +119,7 @@ export function ImageUploadV2({
   };
 
   const handleClear = () => {
-    setPreviewUrl(currentImageUrl || null);
+    setPreviewUrl(resolvePreview(currentImageUrl));
     setSelectedFile(null);
     setAltText(initialAltText);
     setDimensions({

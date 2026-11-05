@@ -15,12 +15,6 @@ const UPLOAD_ROOT = path.join(process.cwd(), 'public', 'uploads');
 
 export class LocalUploadProvider implements IUploadProvider {
   readonly name = 'local' as const;
-  private publicUrl: string;
-
-  constructor() {
-    // Public URL base (how files are served)
-    this.publicUrl = process.env.LOCAL_UPLOAD_URL || '/uploads';
-  }
 
   private async ensureDir(dirPath: string): Promise<void> {
     try {
@@ -134,8 +128,10 @@ export class LocalUploadProvider implements IUploadProvider {
   }
 
   getUrl(key: string): string {
-    // Return public URL path
-    return `${this.publicUrl}/${key}`;
+    // Same-origin proxy so Content-Type is sniffed (extensionless AVIF etc.)
+    // and S3 fallback works if files were migrated.
+    const normalized = key.replace(/^\/+/, '');
+    return `/api/media?key=${encodeURIComponent(normalized)}`;
   }
 
   async exists(key: string): Promise<boolean> {

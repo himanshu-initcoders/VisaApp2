@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import Image from 'next/image';
+import { MediaImage } from '@/components/shared/MediaImage';
 import Link from 'next/link';
 import { ChevronLeft, Sparkles } from 'lucide-react';
 import { DestinationSearchBar } from '@/components/public/DestinationSearchBar';
@@ -205,7 +205,7 @@ export function CountrySearchOverlay({
                   <div className="flex items-center gap-4 sm:gap-5">
                     <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl sm:h-24 sm:w-24">
                       {country.imageUrl ? (
-                        <Image
+                        <MediaImage
                           src={country.imageUrl}
                           alt={country.imageAlt || country.name}
                           fill
@@ -222,7 +222,7 @@ export function CountrySearchOverlay({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         {country.flagUrl ? (
-                          <Image
+                          <MediaImage
                             src={country.flagUrl}
                             alt=""
                             width={20}

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { documents, visaApplications } from '@/lib/db/schema';
 import { formatDocumentTitle } from '@/lib/apply/applicationForm';
 import { uploadService } from '@/lib/upload';
+import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 type StoredTravellerDoc = {
   slotKey?: string;
@@ -308,7 +309,7 @@ export async function getPassengerProfilesForUser(
         const key = tdoc.key || null;
         const previewUrl = key
           ? uploadService.getUrl(key)
-          : tdoc.url || null;
+          : toAppMediaUrl(tdoc.url) || tdoc.url || null;
         addDocument(profile, {
           id: key || `${app.id}:${slotKey}:${tdoc.filename || 'file'}`,
           documentDbId: null,

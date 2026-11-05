@@ -15,6 +15,7 @@ import {
   assertSafeMediaKey,
   isApplicationMediaKey,
   isPublicMediaKey,
+  sniffMediaContentType,
 } from '@/lib/upload/mediaUrl';
 import { UPLOADS_ROOT } from '@/lib/upload/safeStorageKey';
 
@@ -26,10 +27,18 @@ function guessMime(key: string): string {
   if (lower.endsWith('.webp')) return 'image/webp';
   if (lower.endsWith('.gif')) return 'image/gif';
   if (lower.endsWith('.avif')) return 'image/avif';
+  if (lower.endsWith('.heic') || lower.endsWith('.heif')) return 'image/heic';
   if (lower.endsWith('.svg')) return 'image/svg+xml';
   if (lower.endsWith('.pdf')) return 'application/pdf';
   if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
   return 'application/octet-stream';
+}
+
+function resolveContentType(key: string, buffer: Buffer, stored?: string): string {
+  const sniffed = sniffMediaContentType(buffer);
+  if (sniffed) return sniffed;
+  if (stored && stored !== 'application/octet-stream') return stored;
+  return guessMime(key);
 }
 
 function getS3Client(): { client: S3Client; bucket: string } | null {
@@ -99,13 +108,13 @@ export async function GET(request: NextRequest) {
     const provider = (process.env.UPLOAD_PROVIDER || 'local').toLowerCase();
 
     let buffer: Buffer | null = null;
-    let contentType = guessMime(key);
+    let storedType: string | undefined;
 
     if (provider === 's3') {
       const fromS3 = await readS3(key);
       if (fromS3) {
         buffer = fromS3.buffer;
-        contentType = fromS3.contentType;
+        storedType = fromS3.contentType;
       }
     }
 
@@ -118,7 +127,7 @@ export async function GET(request: NextRequest) {
       const fromS3 = await readS3(key);
       if (fromS3) {
         buffer = fromS3.buffer;
-        contentType = fromS3.contentType;
+        storedType = fromS3.contentType;
       }
     }
 
@@ -126,6 +135,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
+    const contentType = resolveContentType(key, buffer, storedType);
     const cacheControl = isPublicMediaKey(key)
       ? 'public, max-age=86400, stale-while-revalidate=604800'
       : 'private, no-store';

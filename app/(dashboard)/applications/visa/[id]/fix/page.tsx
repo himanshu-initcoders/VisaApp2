@@ -18,6 +18,7 @@ import {
   type StoredTraveller,
 } from '@/lib/visa/corrections';
 import type { IndianPassportFields } from '@/lib/passport/types';
+import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -131,7 +132,7 @@ export default async function FixVisaApplicationPage({
     .map((doc) => ({
       key: doc.slotKey || '',
       name: doc.filename || doc.slotKey || 'document',
-      previewUrl: doc.url,
+      previewUrl: toAppMediaUrl(doc.url || doc.key) || doc.url,
       mimeType: doc.mimeType || 'application/octet-stream',
       size: doc.size,
     }));
