@@ -284,7 +284,7 @@ export function PricingPanel({
   const applyPathTabsId = useId();
   const [internalSelectedId, setInternalSelectedId] = useState(priceOptions[0]?.id);
   const [travellers, setTravellers] = useState(MIN_TRAVELLERS);
-  const [internalApplyPath, setInternalApplyPath] = useState<ApplyPath>('portal');
+  const [internalApplyPath, setInternalApplyPath] = useState<ApplyPath>('viserv');
   const selectedId = selectedIdProp ?? internalSelectedId;
   const applyPath = applyPathProp ?? internalApplyPath;
   const selected =
