@@ -67,10 +67,37 @@ import {
   saveTravellerProfile,
   type TravellerProfile,
 } from '@/lib/apply/travellerProfiles';
-import { getMyPassengerAutofill } from '@/app/visa/actions';
-import { restoreAutofillDocumentsToIdb } from '@/lib/apply/restoreAutofillDocuments';
+import {
+  getMyPassengerAutofill,
+  listMyApplyPreviousProfiles,
+} from '@/app/visa/actions';
+import type { TravellerDocumentUpload } from '@/lib/apply/applicationForm';
+import type { DraftFileRef } from '@/lib/apply/types';
 import { getFlagEmoji } from '@/lib/public';
 import { trackEvent } from '@/lib/analytics/gtm';
+
+function toServerTravellerProfiles(
+  rows: Array<{
+    id: string;
+    name: string;
+    nationality: string;
+    countryCode: string;
+    visaType: string;
+    avatarVariant: number;
+    applicationCount?: number;
+  }>
+): TravellerProfile[] {
+  return rows.map((p) => ({
+    id: p.id,
+    name: p.name,
+    nationality: p.nationality,
+    countryCode: p.countryCode,
+    visaType: p.visaType,
+    avatarVariant: p.avatarVariant,
+    isServerProfile: true,
+    applicationCount: p.applicationCount,
+  }));
+}
 
 export type { ApplyStep, ApplyTraveller };
 
@@ -190,7 +217,8 @@ export function ApplyVisaWizard({
     createInitialTravellers(initialTravellerCount)
   );
   const [profiles, setProfiles] = useState<TravellerProfile[]>(() =>
-    isAuthenticated ? previousProfiles : []
+    // SSR may pass DB profiles for applicant or staff; prefer those immediately.
+    previousProfiles.length > 0 ? previousProfiles : []
   );
   const [selectingProfile, setSelectingProfile] = useState(false);
   const [autofillWarning, setAutofillWarning] = useState<string | null>(null);
@@ -221,6 +249,10 @@ export function ApplyVisaWizard({
     session?.user?.id && sessionStatus === 'authenticated' && !isStaffSession
   );
   const sessionUserId = session?.user?.id ?? null;
+  /** Any signed-in apply user (applicant or staff) — previous profiles are DB-backed. */
+  const canUseDbPreviousProfiles = Boolean(
+    sessionUserId && sessionStatus === 'authenticated'
+  );
   const draftScope = (): DraftScopeInput => ({
     listingId,
     sessionUserId,
@@ -517,7 +549,8 @@ export function ApplyVisaWizard({
         if (local && !resume && !onBehalfOfUserId) {
           setResumeChoiceDraft(local);
           setLifecycle('ready');
-          if (!isAuthenticated) {
+          // LocalStorage profiles only for guests — never for signed-in applicants.
+          if (sessionStatus === 'unauthenticated') {
             setProfiles(listTravellerProfiles({ includeSamples: false }));
           }
           return;
@@ -533,7 +566,7 @@ export function ApplyVisaWizard({
         }
 
         if (cancelled) return;
-        if (!isAuthenticated) {
+        if (sessionStatus === 'unauthenticated') {
           setProfiles(listTravellerProfiles({ includeSamples: false }));
         }
       } catch (error) {
@@ -561,11 +594,38 @@ export function ApplyVisaWizard({
     isAuthenticated,
   ]);
 
+  // Signed-in apply users: previous profiles from Postgres only (never localStorage).
   useEffect(() => {
-    if (isAuthenticated) {
-      setProfiles(previousProfiles);
+    if (!canUseDbPreviousProfiles && !isAuthenticated) return;
+
+    let cancelled = false;
+
+    async function loadServerProfiles() {
+      if (previousProfiles.length > 0) {
+        setProfiles(previousProfiles);
+        return;
+      }
+      const result = await listMyApplyPreviousProfiles({
+        ownerUserId: onBehalfOfUserId,
+      });
+      if (cancelled) return;
+      if (result.success && result.data) {
+        setProfiles(toServerTravellerProfiles(result.data));
+      } else {
+        setProfiles([]);
+      }
     }
-  }, [isAuthenticated, previousProfiles]);
+
+    void loadServerProfiles();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    canUseDbPreviousProfiles,
+    isAuthenticated,
+    previousProfiles,
+    onBehalfOfUserId,
+  ]);
 
   // After OTP login from Save as draft modal, push to server
   useEffect(() => {
@@ -627,10 +687,36 @@ export function ApplyVisaWizard({
   const persistNamedProfile = (traveller: ApplyTraveller, visaType = processName) => {
     const profile = profileFromTraveller(traveller, visaType);
     if (!profile) return;
+    // Cache name locally for guests only; signed-in carousel stays DB-backed.
     saveTravellerProfile(profile);
-    if (!isAuthenticated) {
+    if (sessionStatus === 'unauthenticated') {
       setProfiles(listTravellerProfiles({ includeSamples: false }));
     }
+  };
+
+  /** Resolve a DB profile id even if the carousel card came from localStorage. */
+  const resolveServerProfileId = async (
+    profile: TravellerProfile
+  ): Promise<string | null> => {
+    if (profile.isServerProfile && profile.id) return profile.id;
+
+    const token = profile.name.trim().toUpperCase();
+    const fromState = profiles.find(
+      (item) =>
+        item.isServerProfile && item.name.trim().toUpperCase() === token
+    );
+    if (fromState?.id) return fromState.id;
+
+    const result = await listMyApplyPreviousProfiles({
+      ownerUserId: onBehalfOfUserId,
+    });
+    if (!result.success || !result.data) return null;
+    const mapped = toServerTravellerProfiles(result.data);
+    setProfiles(mapped);
+    return (
+      mapped.find((item) => item.name.trim().toUpperCase() === token)?.id ??
+      null
+    );
   };
 
   const handlePrimaryContinue = () => {
@@ -656,84 +742,146 @@ export function ApplyVisaWizard({
     setStep('documents');
   };
 
+  const buildAutofilledTraveller = async (
+    profile: TravellerProfile,
+    base: ApplyTraveller,
+    profileId: string
+  ): Promise<{ traveller: ApplyTraveller; warning: string | null } | null> => {
+    const result = await getMyPassengerAutofill({
+      profileId,
+      formConfig,
+      listingId,
+      countryCode,
+      travellerId: base.id,
+      ownerUserId: onBehalfOfUserId,
+    });
+
+    if (!result.success || !result.data) {
+      console.warn('Autofill failed', result.message, result.error);
+      return null;
+    }
+
+    const payload = result.data;
+    const displayName = formatProfileName(payload.name || profile.name);
+    const documents: TravellerDocumentUpload[] = (payload.documents ?? []).map(
+      (doc) => ({
+        key: doc.slotKey,
+        name: doc.filename,
+        mimeType: doc.mimeType || 'application/octet-stream',
+        size: doc.size,
+        storageKey: doc.storageKey || undefined,
+        storageUrl: doc.storageUrl || undefined,
+        previewUrl: doc.storageUrl || undefined,
+      })
+    );
+    const draftFileRefs: DraftFileRef[] = (payload.draftFileRefs ?? []).map(
+      (ref) => ({
+        slotKey: ref.slotKey,
+        storageKey: ref.storageKey,
+        url: ref.url,
+        mimeType: ref.mimeType,
+        filename: ref.filename,
+        size: ref.size,
+      })
+    );
+    const hasPhoto = draftFileRefs.some(
+      (ref) =>
+        ref.slotKey === 'photo' ||
+        formConfig.documentSlots.some(
+          (slot) =>
+            slot.key === ref.slotKey &&
+            (slot.captureFace || slot.documentType === 'photo')
+        )
+    );
+    const hasPassport =
+      Boolean(payload.passportFrontUrl) ||
+      draftFileRefs.some(
+        (ref) =>
+          ref.slotKey === PASSPORT_FRONT_SLOT ||
+          ref.slotKey === PASSPORT_BACK_SLOT
+      ) ||
+      Boolean(payload.passportData);
+
+    const draftTraveller: ApplyTraveller = {
+      ...base,
+      name: displayName.toUpperCase(),
+      passportData: payload.passportData ?? undefined,
+      tripDetails: payload.tripDetails ?? undefined,
+      passportUploaded: hasPassport,
+      photoUploaded: hasPhoto,
+      passportFrontUrl: payload.passportFrontUrl || undefined,
+      passportBackUrl: payload.passportBackUrl || undefined,
+      documents,
+      draftFileRefs,
+      applicationComplete: false,
+      editing: false,
+    };
+
+    const applicationComplete = isListingApplicationComplete(
+      draftTraveller,
+      formConfig
+    );
+
+    const failed = payload.failedSlots?.length ?? 0;
+    return {
+      traveller: { ...draftTraveller, applicationComplete },
+      warning:
+        failed > 0
+          ? `Some documents could not be restored (${failed}). You can re-upload them.`
+          : null,
+    };
+  };
+
   const handleSelectProfile = async (profile: TravellerProfile) => {
     const name = profile.name.trim().toUpperCase();
     if (!name) return;
 
     setAutofillWarning(null);
 
-    // Server profile: hydrate passport / trip / docs from past applications
-    if (profile.isServerProfile && isAuthenticated) {
+    // Logged-in (applicant or staff): always fill from Postgres.
+    if (canUseDbPreviousProfiles || isAuthenticated) {
       setSelectingProfile(true);
       try {
-        const result = await getMyPassengerAutofill({
-          profileId: profile.id,
-          formConfig,
-        });
+        const serverProfileId = await resolveServerProfileId(profile);
+        const nextTraveller = createTraveller(1, name);
 
-        if (!result.success || !result.data) {
+        if (!serverProfileId) {
           setAutofillWarning(
-            result.message || 'Could not load previous answers. Continuing with name only.'
+            'No past application found for this traveller yet. Continuing with name only.'
           );
           setPrimaryName(formatProfileName(profile.name));
-          const fallback = createTraveller(1, name);
-          setTravellers([fallback]);
+          setTravellers([nextTraveller]);
           setStep('documents');
           return;
         }
 
-        const payload = result.data;
-        const nextTraveller = createTraveller(1, name);
-        const displayName = formatProfileName(payload.name || profile.name);
-        setPrimaryName(displayName);
-
-        const restored = await restoreAutofillDocumentsToIdb({
-          listingId,
-          travellerId: nextTraveller.id,
-          refs: payload.documents,
-          sessionUserId,
-          ownerUserId: onBehalfOfUserId,
-        });
-
-        const draftTraveller: ApplyTraveller = {
-          ...nextTraveller,
-          name: displayName.toUpperCase(),
-          passportData: payload.passportData ?? undefined,
-          tripDetails: payload.tripDetails ?? undefined,
-          passportUploaded:
-            restored.passportUploaded || Boolean(payload.passportData),
-          photoUploaded: restored.photoUploaded,
-          passportFrontUrl: restored.passportFrontUrl,
-          passportBackUrl: restored.passportBackUrl,
-          documents: restored.documents,
-          applicationComplete: false,
-          editing: false,
-        };
-        const applicationComplete = isListingApplicationComplete(
-          draftTraveller,
-          formConfig
+        const filled = await buildAutofilledTraveller(
+          profile,
+          nextTraveller,
+          serverProfileId
         );
-        const filled: ApplyTraveller = {
-          ...draftTraveller,
-          applicationComplete,
-        };
 
-        setTravellers([filled]);
-        persistNamedProfile(filled);
-
-        if (restored.failedSlots.length > 0) {
+        if (!filled) {
           setAutofillWarning(
-            `Some documents could not be restored (${restored.failedSlots.length}). You can re-upload them.`
+            'Could not load previous answers. Continuing with name only.'
           );
+          setPrimaryName(formatProfileName(profile.name));
+          setTravellers([nextTraveller]);
+          setStep('documents');
+          return;
         }
 
+        setPrimaryName(formatProfileName(filled.traveller.name));
+        setTravellers([filled.traveller]);
+        persistNamedProfile(filled.traveller);
+        if (filled.warning) setAutofillWarning(filled.warning);
+
         setStep('documents');
-        // Required tabs still empty (e.g. extra questions from another form):
-        // open Complete application on the first unfilled tab.
-        if (!applicationComplete) {
+        // Required tabs still empty (e.g. trip dates): open Complete application.
+        if (!filled.traveller.applicationComplete) {
           setPassportFile(null);
           setPassportResume(true);
-          setPassportTravellerId(filled.id);
+          setPassportTravellerId(filled.traveller.id);
         }
       } catch (error) {
         console.error('Profile autofill failed', error);
@@ -749,7 +897,7 @@ export function ApplyVisaWizard({
       return;
     }
 
-    // Local / logged-out: name-only (existing behaviour)
+    // Guest: name-only (localStorage cards)
     setPrimaryName(formatProfileName(profile.name));
     setTravellers((current) => {
       const next: ApplyTraveller = {
@@ -813,74 +961,44 @@ export function ApplyVisaWizard({
 
     setAutofillWarning(null);
 
-    if (profile.isServerProfile && isAuthenticated) {
+    if (canUseDbPreviousProfiles || isAuthenticated) {
       setSelectingProfile(true);
       try {
-        const result = await getMyPassengerAutofill({
-          profileId: profile.id,
-          formConfig,
-        });
-
         const newbie = createTraveller(
           travellersRef.current.length + 1,
           name
         );
-
-        if (!result.success || !result.data) {
+        const serverProfileId = await resolveServerProfileId(profile);
+        if (!serverProfileId) {
           setAutofillWarning(
-            result.message ||
-              'Could not load previous answers. Added the name only.'
+            'No past application found for this traveller yet. Added the name only.'
           );
           appendTraveller(newbie);
           return;
         }
 
-        const payload = result.data;
-        const displayName = formatProfileName(payload.name || profile.name);
-        const restored = await restoreAutofillDocumentsToIdb({
-          listingId,
-          travellerId: newbie.id,
-          refs: payload.documents,
-          sessionUserId,
-          ownerUserId: onBehalfOfUserId,
-        });
-
-        const draftTraveller: ApplyTraveller = {
-          ...newbie,
-          name: displayName.toUpperCase(),
-          passportData: payload.passportData ?? undefined,
-          tripDetails: payload.tripDetails ?? undefined,
-          passportUploaded:
-            restored.passportUploaded || Boolean(payload.passportData),
-          photoUploaded: restored.photoUploaded,
-          passportFrontUrl: restored.passportFrontUrl,
-          passportBackUrl: restored.passportBackUrl,
-          documents: restored.documents,
-          applicationComplete: false,
-          editing: false,
-        };
-        const applicationComplete = isListingApplicationComplete(
-          draftTraveller,
-          formConfig
+        const filled = await buildAutofilledTraveller(
+          profile,
+          newbie,
+          serverProfileId
         );
-        const filled: ApplyTraveller = {
-          ...draftTraveller,
-          applicationComplete,
-        };
 
-        const added = appendTraveller(filled);
-        if (!added) return;
-
-        if (restored.failedSlots.length > 0) {
+        if (!filled) {
           setAutofillWarning(
-            `Some documents could not be restored (${restored.failedSlots.length}). You can re-upload them.`
+            'Could not load previous answers. Added the name only.'
           );
+          appendTraveller(newbie);
+          return;
         }
 
-        if (!applicationComplete) {
+        const added = appendTraveller(filled.traveller);
+        if (!added) return;
+        if (filled.warning) setAutofillWarning(filled.warning);
+
+        if (!filled.traveller.applicationComplete) {
           setPassportFile(null);
           setPassportResume(true);
-          setPassportTravellerId(filled.id);
+          setPassportTravellerId(filled.traveller.id);
         }
       } catch (error) {
         console.error('Profile autofill failed', error);
@@ -1246,7 +1364,9 @@ export function ApplyVisaWizard({
                 void handleSelectProfile(profile);
               }}
               profiles={profiles}
-              isAuthenticated={isAuthenticated}
+              isAuthenticated={
+                canUseDbPreviousProfiles || isAuthenticated
+              }
               selectingProfile={selectingProfile}
             />
             {autofillWarning && (
@@ -1281,7 +1401,9 @@ export function ApplyVisaWizard({
               canAdd={travellers.length < MAX_TRAVELLERS}
               profiles={availableProfiles}
               allProfilesAdded={allProfilesAdded}
-              showEmptyProfiles={isAuthenticated}
+              showEmptyProfiles={
+                canUseDbPreviousProfiles || isAuthenticated
+              }
               selectingProfile={selectingProfile}
               extraQuestions={formConfig.extraQuestions}
               documentSlots={formConfig.documentSlots}

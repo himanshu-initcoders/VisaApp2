@@ -1,5 +1,7 @@
 /**
- * Restore autofilled document blobs into the current listing's IndexedDB.
+ * Stage DB-sourced autofill document blobs into the current listing's IndexedDB
+ * so the apply wizard can preview / sync them like a fresh upload.
+ * Source of truth for which files to pull remains past applications in Postgres.
  */
 
 import {
@@ -84,17 +86,23 @@ export async function restoreAutofillDocumentsToIdb(input: {
 
       const previewUrl = URL.createObjectURL(blob);
 
-      if (ref.slotKey === PASSPORT_FRONT_SLOT) {
+      if (
+        ref.role === 'passport-front' ||
+        ref.slotKey === PASSPORT_FRONT_SLOT
+      ) {
         result.passportFrontUrl = previewUrl;
         result.passportUploaded = true;
         continue;
       }
-      if (ref.slotKey === PASSPORT_BACK_SLOT) {
+      if (
+        ref.role === 'passport-back' ||
+        ref.slotKey === PASSPORT_BACK_SLOT
+      ) {
         result.passportBackUrl = previewUrl;
         result.passportUploaded = true;
         continue;
       }
-      if (ref.slotKey === 'photo') {
+      if (ref.role === 'photo' || ref.slotKey === 'photo') {
         result.photoUploaded = true;
       }
 

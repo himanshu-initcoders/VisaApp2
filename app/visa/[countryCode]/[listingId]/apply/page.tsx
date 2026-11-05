@@ -103,22 +103,8 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
   const session = await auth();
   const isStaff =
     session?.user?.role === 'admin' || session?.user?.role === 'reviewer';
+  // Applicant-only flag (OTP user). Staff can still apply; profiles use session user.
   const isAuthenticated = Boolean(session?.user?.id && !isStaff);
-
-  let previousProfiles: TravellerProfile[] = [];
-  if (isAuthenticated && session?.user?.id) {
-    const serverProfiles = await getApplyPreviousProfiles(session.user.id);
-    previousProfiles = serverProfiles.map((p) => ({
-      id: p.id,
-      name: p.name,
-      nationality: p.nationality,
-      countryCode: p.countryCode,
-      visaType: p.visaType,
-      avatarVariant: p.avatarVariant,
-      isServerProfile: true,
-      applicationCount: p.applicationCount,
-    }));
-  }
 
   let onBehalfOfUserId: string | null = null;
   let onBehalfOfLabel: string | null = null;
@@ -130,6 +116,24 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
         summary.user.name ||
         (summary.user.phone ? `+91 ${summary.user.phone}` : summary.user.email);
     }
+  }
+
+  // Previous profiles always come from Postgres for the acting user
+  // (applicant, staff testing as themselves, or staff on-behalf-of).
+  let previousProfiles: TravellerProfile[] = [];
+  const profilesUserId = onBehalfOfUserId || session?.user?.id || null;
+  if (profilesUserId) {
+    const serverProfiles = await getApplyPreviousProfiles(profilesUserId);
+    previousProfiles = serverProfiles.map((p) => ({
+      id: p.id,
+      name: p.name,
+      nationality: p.nationality,
+      countryCode: p.countryCode,
+      visaType: p.visaType,
+      avatarVariant: p.avatarVariant,
+      isServerProfile: true,
+      applicationCount: p.applicationCount,
+    }));
   }
 
   const parsedCount = Number.parseInt(query.travellers || '1', 10);

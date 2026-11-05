@@ -109,22 +109,32 @@ export class LocalUploadProvider implements IUploadProvider {
   }
 
   async delete(key: string): Promise<boolean> {
+    const filePath = this.getFilePath(key);
+
     try {
-      const filePath = this.getFilePath(key);
       await fs.unlink(filePath);
-
-      // Also delete metadata file if exists
-      try {
-        await fs.unlink(`${filePath}.meta.json`);
-      } catch {
-        // Ignore if metadata file doesn't exist
-      }
-
-      return true;
     } catch (error) {
+      // Missing files are expected (slot sibling cleanup tries every extension).
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ) {
+        return true;
+      }
       console.error('Local delete error:', error);
       return false;
     }
+
+    // Also delete metadata file if exists
+    try {
+      await fs.unlink(`${filePath}.meta.json`);
+    } catch {
+      // Ignore if metadata file doesn't exist
+    }
+
+    return true;
   }
 
   getUrl(key: string): string {

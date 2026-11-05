@@ -1,6 +1,9 @@
 /**
- * Apply-step previous profiles + autofill from past visa applications.
- * Matches by stable question/document keys (not DB UUIDs).
+ * Apply-step previous profiles + autofill from past visa applications (Postgres).
+ * Per-listing component/question keys are random UUIDs, so we remap via:
+ * - documents: catalog `documentType` (+ passport-front/back constants)
+ * - extra answers: exact key when same listing, else normalized question label
+ * IndexedDB is only used later to stage downloaded blobs for the new draft.
  */
 
 import { and, desc, eq, inArray } from 'drizzle-orm';
@@ -56,8 +59,13 @@ export type AutofillDocumentRef = {
   slotKey: string;
   documentDbId: string | null;
   storageKey: string | null;
+  /** Same-origin media URL after server stages the file into the current draft. */
+  storageUrl?: string | null;
   filename: string;
   mimeType: string | null;
+  size?: number;
+  /** Helps client restore set passport/photo flags when slot keys are UUIDs. */
+  role?: 'passport-front' | 'passport-back' | 'photo' | 'document';
 };
 
 export type PassengerAutofillPayload = {
@@ -66,6 +74,18 @@ export type PassengerAutofillPayload = {
   passportData: IndianPassportFields | null;
   tripDetails: TravellerTripDetails | null;
   documents: AutofillDocumentRef[];
+  /** Draft refs ready for submit sync (no IndexedDB required). */
+  draftFileRefs?: Array<{
+    slotKey: string;
+    storageKey: string;
+    url?: string;
+    mimeType: string;
+    filename: string;
+    size?: number;
+  }>;
+  passportFrontUrl?: string | null;
+  passportBackUrl?: string | null;
+  failedSlots?: string[];
 };
 
 function str(value: unknown): string {
@@ -133,6 +153,18 @@ type AppRow = {
   visaType: string | null;
   travellers: unknown;
   applicantName: string | null;
+  formSnapshot: unknown;
+};
+
+type SnapshotQuestion = {
+  key?: string;
+  label?: string;
+  type?: string;
+};
+
+type SnapshotSlot = {
+  key?: string;
+  documentType?: string | null;
 };
 
 async function loadUserVisaApps(userId: string): Promise<AppRow[]> {
@@ -144,10 +176,108 @@ async function loadUserVisaApps(userId: string): Promise<AppRow[]> {
       visaType: visaApplications.visaType,
       travellers: visaApplications.travellers,
       applicantName: visaApplications.applicantName,
+      formSnapshot: visaApplications.formSnapshot,
     })
     .from(visaApplications)
     .where(eq(visaApplications.userId, userId))
     .orderBy(desc(visaApplications.createdAt));
+}
+
+function normalizeQuestionLabel(label: string): string {
+  return label.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function parseFormSnapshot(raw: unknown): {
+  extraQuestions: SnapshotQuestion[];
+  documentSlots: SnapshotSlot[];
+} {
+  if (!raw || typeof raw !== 'object') {
+    return { extraQuestions: [], documentSlots: [] };
+  }
+  const snap = raw as {
+    extraQuestions?: SnapshotQuestion[];
+    documentSlots?: SnapshotSlot[];
+  };
+  return {
+    extraQuestions: Array.isArray(snap.extraQuestions)
+      ? snap.extraQuestions
+      : [],
+    documentSlots: Array.isArray(snap.documentSlots) ? snap.documentSlots : [],
+  };
+}
+
+/**
+ * Map a past application slot key (often a per-listing UUID) onto the current
+ * listing's slot key using catalog documentType + stable passport slots.
+ */
+function resolveCurrentDocSlotKey(input: {
+  pastSlotKey: string;
+  pastSlots: SnapshotSlot[];
+  currentSlotKeys: Set<string>;
+  currentSlotByDocType: Map<string, string>;
+}): string | null {
+  const pastSlotKey = input.pastSlotKey.trim();
+  if (!pastSlotKey) return null;
+
+  // Same listing (or already-stable keys like passport-front / photo).
+  if (input.currentSlotKeys.has(pastSlotKey)) return pastSlotKey;
+
+  // Past row already stored a catalog type (or passport constant).
+  const byTypeDirect = input.currentSlotByDocType.get(pastSlotKey);
+  if (byTypeDirect) return byTypeDirect;
+
+  const pastMeta = input.pastSlots.find((slot) => slot.key === pastSlotKey);
+  const docType = str(pastMeta?.documentType);
+  if (!docType) return null;
+
+  if (input.currentSlotKeys.has(docType)) return docType;
+  return input.currentSlotByDocType.get(docType) ?? null;
+}
+
+/**
+ * Remap past extra answers onto current question keys.
+ * Prefer exact key (same listing); otherwise match normalized labels.
+ */
+function mergeExtraAnswers(input: {
+  currentExtra: Record<string, string>;
+  incomingExtra: Record<string, unknown>;
+  currentQuestions: ApplyFormConfig['extraQuestions'];
+  pastQuestions: SnapshotQuestion[];
+}): Record<string, string> {
+  const next = { ...input.currentExtra };
+  const currentKeys = new Set(input.currentQuestions.map((q) => q.key));
+  const currentKeyByLabel = new Map<string, string>();
+  for (const question of input.currentQuestions) {
+    const label = normalizeQuestionLabel(question.label || '');
+    if (label && !currentKeyByLabel.has(label)) {
+      currentKeyByLabel.set(label, question.key);
+    }
+  }
+
+  const pastLabelByKey = new Map<string, string>();
+  for (const question of input.pastQuestions) {
+    const key = str(question.key);
+    const label = normalizeQuestionLabel(str(question.label));
+    if (key && label) pastLabelByKey.set(key, label);
+  }
+
+  for (const [pastKey, rawValue] of Object.entries(input.incomingExtra)) {
+    const value = str(rawValue);
+    if (!value) continue;
+
+    if (currentKeys.has(pastKey)) {
+      if (!next[pastKey]?.trim()) next[pastKey] = value;
+      continue;
+    }
+
+    const pastLabel = pastLabelByKey.get(pastKey);
+    if (!pastLabel) continue;
+    const currentKey = currentKeyByLabel.get(pastLabel);
+    if (!currentKey || next[currentKey]?.trim()) continue;
+    next[currentKey] = value;
+  }
+
+  return next;
 }
 
 type MutableApplyProfile = {
@@ -226,10 +356,16 @@ export async function getApplyPreviousProfiles(
 function mergeTripDetails(
   current: TravellerTripDetails | null,
   incoming: Partial<TravellerTripDetails> | null | undefined,
-  allowedExtraKeys: Set<string>
+  currentQuestions: ApplyFormConfig['extraQuestions'],
+  pastQuestions: SnapshotQuestion[]
 ): TravellerTripDetails {
   const base = current ?? emptyTripDetails();
   if (!incoming) return base;
+
+  const incomingExtra =
+    incoming.extra && typeof incoming.extra === 'object'
+      ? (incoming.extra as Record<string, unknown>)
+      : {};
 
   const next = emptyTripDetails({
     purpose: base.purpose || str(incoming.purpose),
@@ -258,26 +394,55 @@ function mergeTripDetails(
     returnFlights: base.returnFlightNumber.trim()
       ? base.returnFlights
       : incoming.returnFlights,
-    extra: { ...base.extra },
+    extra: mergeExtraAnswers({
+      currentExtra: { ...base.extra },
+      incomingExtra,
+      currentQuestions,
+      pastQuestions,
+    }),
   });
-
-  const incomingExtra =
-    incoming.extra && typeof incoming.extra === 'object'
-      ? incoming.extra
-      : {};
-
-  for (const key of allowedExtraKeys) {
-    if (next.extra[key]?.trim()) continue;
-    const value = str(incomingExtra[key as keyof typeof incomingExtra]);
-    if (value) next.extra[key] = value;
-  }
 
   return next;
 }
 
+function docRoleForSlotKey(
+  slotKey: string,
+  formConfig: ApplyFormConfig
+): AutofillDocumentRef['role'] {
+  if (slotKey === PASSPORT_FRONT_SLOT) return 'passport-front';
+  if (slotKey === PASSPORT_BACK_SLOT) return 'passport-back';
+  if (slotKey === 'photo') return 'photo';
+  const slot = formConfig.documentSlots.find((item) => item.key === slotKey);
+  if (
+    slot?.captureFace ||
+    slot?.documentType === 'photo' ||
+    slot?.key === 'photo'
+  ) {
+    return 'photo';
+  }
+  return 'document';
+}
+
+function rememberDoc(
+  docsBySlot: Map<string, AutofillDocumentRef>,
+  ref: AutofillDocumentRef
+) {
+  const existing = docsBySlot.get(ref.slotKey);
+  if (!existing) {
+    docsBySlot.set(ref.slotKey, ref);
+    return;
+  }
+  // Prefer a documents-table row id when we only had traveller JSON before.
+  if (!existing.documentDbId && ref.documentDbId) {
+    docsBySlot.set(ref.slotKey, { ...existing, ...ref, role: ref.role || existing.role });
+  }
+}
+
 /**
  * Build autofill payload for a passenger profile against the current listing form.
+ * Source of truth: past visa applications in Postgres (not IndexedDB).
  * Newest applications win; older apps only fill gaps.
+ * Docs/questions match by stable documentType / question label across listings.
  */
 export async function getPassengerAutofillForListing(input: {
   userId: string;
@@ -288,14 +453,39 @@ export async function getPassengerAutofillForListing(input: {
   const apps = await loadUserVisaApps(userId);
   if (apps.length === 0) return null;
 
-  const allowedExtraKeys = new Set(
-    formConfig.extraQuestions.map((q) => q.key)
-  );
-  const allowedDocSlots = new Set([
+  const currentSlotKeys = new Set([
     ...formConfig.documentSlots.map((s) => s.key),
     PASSPORT_FRONT_SLOT,
     PASSPORT_BACK_SLOT,
   ]);
+
+  /** Catalog documentType → first current slot key that needs that type. */
+  const currentSlotByDocType = new Map<string, string>();
+
+  for (const slot of formConfig.documentSlots) {
+    const docType = str(slot.documentType);
+    if (docType && !currentSlotByDocType.has(docType)) {
+      currentSlotByDocType.set(docType, slot.key);
+    }
+    // Face-capture slots are the listing's passport photo even if type differs.
+    if (slot.captureFace && !currentSlotByDocType.has('photo')) {
+      currentSlotByDocType.set('photo', slot.key);
+    }
+  }
+
+  // Stable passport / photo fallbacks when the listing has no matching slot row.
+  const passportFallbacks: Array<[string, string]> = [
+    [PASSPORT_FRONT_SLOT, PASSPORT_FRONT_SLOT],
+    [PASSPORT_BACK_SLOT, PASSPORT_BACK_SLOT],
+    ['passport', PASSPORT_FRONT_SLOT],
+    ['passport_back', PASSPORT_BACK_SLOT],
+    ['photo', 'photo'],
+  ];
+  for (const [docType, slotKey] of passportFallbacks) {
+    if (!currentSlotByDocType.has(docType)) {
+      currentSlotByDocType.set(docType, slotKey);
+    }
+  }
 
   const appIds = apps.map((a) => a.id);
   const dbDocs =
@@ -326,9 +516,18 @@ export async function getPassengerAutofillForListing(input: {
   let matched = false;
 
   for (const app of apps) {
+    const snapshot = parseFormSnapshot(app.formSnapshot);
     const travellers: StoredTraveller[] = Array.isArray(app.travellers)
       ? (app.travellers as StoredTraveller[])
       : [];
+
+    const resolveSlot = (pastSlotKey: string) =>
+      resolveCurrentDocSlotKey({
+        pastSlotKey,
+        pastSlots: snapshot.documentSlots,
+        currentSlotKeys,
+        currentSlotByDocType,
+      });
 
     if (travellers.length === 0) {
       const legacyKey = passengerProfileKey({
@@ -340,14 +539,15 @@ export async function getPassengerAutofillForListing(input: {
       if (!name) name = app.applicantName || 'Applicant';
 
       for (const doc of docsByApp.get(app.id) ?? []) {
-        if (!allowedDocSlots.has(doc.documentType)) continue;
-        if (docsBySlot.has(doc.documentType)) continue;
-        docsBySlot.set(doc.documentType, {
-          slotKey: doc.documentType,
+        const slotKey = resolveSlot(doc.documentType);
+        if (!slotKey || docsBySlot.has(slotKey)) continue;
+        rememberDoc(docsBySlot, {
+          slotKey,
           documentDbId: doc.id,
           storageKey: doc.s3Key,
           filename: doc.filename,
           mimeType: doc.mimeType,
+          role: docRoleForSlotKey(slotKey, formConfig),
         });
       }
       continue;
@@ -363,25 +563,28 @@ export async function getPassengerAutofillForListing(input: {
       tripDetails = mergeTripDetails(
         tripDetails,
         traveller.tripDetails,
-        allowedExtraKeys
+        formConfig.extraQuestions,
+        snapshot.extraQuestions
       );
 
       for (const tdoc of traveller.documents ?? []) {
-        const slotKey = tdoc.slotKey || '';
-        if (!slotKey || !allowedDocSlots.has(slotKey)) continue;
-        if (docsBySlot.has(slotKey)) continue;
+        const pastKey = tdoc.slotKey || '';
+        const slotKey = resolveSlot(pastKey);
+        if (!slotKey || docsBySlot.has(slotKey)) continue;
         if (!tdoc.key && !tdoc.url) continue;
-        docsBySlot.set(slotKey, {
+        rememberDoc(docsBySlot, {
           slotKey,
           documentDbId: null,
           storageKey: tdoc.key || null,
           filename: tdoc.filename || `${slotKey}.bin`,
           mimeType: tdoc.mimeType || null,
+          role: docRoleForSlotKey(slotKey, formConfig),
         });
       }
 
       for (const doc of docsByApp.get(app.id) ?? []) {
-        if (!allowedDocSlots.has(doc.documentType)) continue;
+        const slotKey = resolveSlot(doc.documentType);
+        if (!slotKey) continue;
         const passengerId = extractPassengerIdFromKey(doc.s3Key);
         if (
           traveller.passengerId &&
@@ -390,14 +593,13 @@ export async function getPassengerAutofillForListing(input: {
         ) {
           continue;
         }
-        const existing = docsBySlot.get(doc.documentType);
-        if (existing?.documentDbId) continue;
-        docsBySlot.set(doc.documentType, {
-          slotKey: doc.documentType,
+        rememberDoc(docsBySlot, {
+          slotKey,
           documentDbId: doc.id,
           storageKey: doc.s3Key,
           filename: doc.filename,
           mimeType: doc.mimeType,
+          role: docRoleForSlotKey(slotKey, formConfig),
         });
       }
     }

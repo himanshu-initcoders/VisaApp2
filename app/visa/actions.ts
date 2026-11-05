@@ -17,6 +17,7 @@ import {
   type ApplyPreviousProfile,
   type PassengerAutofillPayload,
 } from '@/lib/apply/previousProfilesAutofill';
+import { stageAutofillDocumentsToDraft } from '@/lib/apply/stageAutofillDocuments';
 import { uploadService } from '@/lib/upload';
 import type { ActionResponse } from '@/types/admin';
 
@@ -54,24 +55,31 @@ async function assertDocumentOwnedByUser(
 }
 
 /**
- * List previous passenger profiles for the signed-in applicant (apply carousel).
+ * List previous passenger profiles for the signed-in apply user (DB only).
+ * Works for applicants and staff testing apply with their own applications.
  */
-export async function listMyApplyPreviousProfiles(): Promise<
-  ActionResponse<ApplyPreviousProfile[]>
-> {
+export async function listMyApplyPreviousProfiles(input?: {
+  ownerUserId?: string | null;
+}): Promise<ActionResponse<ApplyPreviousProfile[]>> {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return { success: false, message: 'Unauthorized' };
     }
-    if (
-      session.user.role === 'admin' ||
-      session.user.role === 'reviewer'
-    ) {
-      return { success: false, message: 'Unauthorized' };
+
+    const isStaff =
+      session.user.role === 'admin' || session.user.role === 'reviewer';
+    const requestedOwner = input?.ownerUserId?.trim() || null;
+    let userId = session.user.id;
+
+    if (requestedOwner && requestedOwner !== session.user.id) {
+      if (!isStaff) {
+        return { success: false, message: 'Unauthorized' };
+      }
+      userId = requestedOwner;
     }
 
-    const profiles = await getApplyPreviousProfiles(session.user.id);
+    const profiles = await getApplyPreviousProfiles(userId);
     return { success: true, message: 'OK', data: profiles };
   } catch (error) {
     return {
@@ -83,31 +91,45 @@ export async function listMyApplyPreviousProfiles(): Promise<
 }
 
 /**
- * Autofill answers + document refs for a passenger against the current listing form.
+ * Autofill answers from past applications (Postgres), then stage matching
+ * documents into this listing's draft storage. No IndexedDB / base64 round-trip.
  */
 export async function getMyPassengerAutofill(input: {
   profileId: string;
   formConfig: ApplyFormConfig;
+  listingId: string;
+  countryCode: string;
+  travellerId: string;
+  ownerUserId?: string | null;
 }): Promise<ActionResponse<PassengerAutofillPayload>> {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return { success: false, message: 'Unauthorized' };
     }
-    if (
-      session.user.role === 'admin' ||
-      session.user.role === 'reviewer'
-    ) {
-      return { success: false, message: 'Unauthorized' };
+
+    const isStaff =
+      session.user.role === 'admin' || session.user.role === 'reviewer';
+    const requestedOwner = input.ownerUserId?.trim() || null;
+    let userId = session.user.id;
+
+    if (requestedOwner && requestedOwner !== session.user.id) {
+      if (!isStaff) {
+        return { success: false, message: 'Unauthorized' };
+      }
+      userId = requestedOwner;
     }
 
     const profileId = String(input.profileId || '').trim();
-    if (!profileId || !input.formConfig) {
-      return { success: false, message: 'Missing profile or form config' };
+    const listingId = String(input.listingId || '').trim();
+    const countryCode = String(input.countryCode || '').trim();
+    const travellerId = String(input.travellerId || '').trim();
+    if (!profileId || !input.formConfig || !listingId || !countryCode || !travellerId) {
+      return { success: false, message: 'Missing profile or draft target' };
     }
 
     const payload = await getPassengerAutofillForListing({
-      userId: session.user.id,
+      userId,
       profileId,
       formConfig: input.formConfig,
     });
@@ -116,7 +138,15 @@ export async function getMyPassengerAutofill(input: {
       return { success: false, message: 'Profile not found' };
     }
 
-    return { success: true, message: 'OK', data: payload };
+    const staged = await stageAutofillDocumentsToDraft({
+      userId,
+      countryCode,
+      listingId,
+      travellerId,
+      payload,
+    });
+
+    return { success: true, message: 'OK', data: staged };
   } catch (error) {
     return {
       success: false,
