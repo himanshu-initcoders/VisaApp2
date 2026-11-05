@@ -85,6 +85,11 @@ interface PassportReviewStageProps {
   onClose: () => void;
   /** Autosave while the user fills tabs (debounced). */
   onProgress?: (data: PassportApplicationPayload) => void;
+  /**
+   * Fired when Continue advances past a tab (not Review submit).
+   * Awaited before switching tabs so draft persistence can flush.
+   */
+  onStepCommit?: (data: PassportApplicationPayload) => void | Promise<void>;
   onContinue: (data: PassportApplicationPayload) => void;
 }
 
@@ -110,6 +115,7 @@ export function PassportReviewStage({
   onBack,
   onClose,
   onProgress,
+  onStepCommit,
   onContinue,
 }: PassportReviewStageProps) {
   const formConfig = formConfigProp ?? defaultApplyFormConfig();
@@ -183,6 +189,9 @@ export function PassportReviewStage({
   const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onProgressRef = useRef(onProgress);
   onProgressRef.current = onProgress;
+  const onStepCommitRef = useRef(onStepCommit);
+  onStepCommitRef.current = onStepCommit;
+  const [stepCommitting, setStepCommitting] = useState(false);
 
   const draftScope: DraftScopeInput = useMemo(
     () => ({
@@ -430,6 +439,7 @@ export function PassportReviewStage({
   });
 
   const goNext = () => {
+    if (stepCommitting) return;
     const index = visibleTabs.indexOf(tab);
     if (tab === 'general' && !generalComplete) return;
     if (tab === 'trip' && !tripComplete) return;
@@ -439,8 +449,35 @@ export function PassportReviewStage({
       onContinue(buildPayload());
       return;
     }
+
     const next = visibleTabs[index + 1];
-    if (next) setTab(next);
+    if (!next) return;
+
+    // Flush debounced progress so the last field edits are in the draft
+    // before the tab advances.
+    if (progressTimer.current) {
+      clearTimeout(progressTimer.current);
+      progressTimer.current = null;
+    }
+    const payload = buildPayload();
+
+    const advance = () => setTab(next);
+    const commit = onStepCommitRef.current;
+    if (!commit) {
+      onProgressRef.current?.(payload);
+      advance();
+      return;
+    }
+
+    setStepCommitting(true);
+    void Promise.resolve(commit(payload))
+      .catch((error) => {
+        console.warn('[Draft] step commit failed', error);
+      })
+      .finally(() => {
+        setStepCommitting(false);
+        advance();
+      });
   };
 
   const goBack = () => {
@@ -453,8 +490,13 @@ export function PassportReviewStage({
   };
 
   const continueLabel =
-    tab === 'review' ? 'Submit application' : 'Continue';
+    tab === 'review'
+      ? 'Submit application'
+      : stepCommitting
+        ? 'Saving…'
+        : 'Continue';
   const continueDisabled =
+    stepCommitting ||
     (tab === 'general' && !generalComplete) ||
     (tab === 'trip' && !tripComplete) ||
     (tab === 'additional' && !additionalComplete) ||

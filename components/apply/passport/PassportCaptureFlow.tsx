@@ -47,6 +47,8 @@ interface PassportCaptureFlowProps {
   };
   onClose: () => void;
   onProgress?: (payload: PassportApplicationPayload) => void;
+  /** Persist draft when Continue advances a traveller form tab. */
+  onStepCommit?: (payload: PassportApplicationPayload) => void | Promise<void>;
   onComplete: (payload: PassportApplicationPayload) => void;
 }
 
@@ -151,6 +153,7 @@ export function PassportCaptureFlow({
   resume,
   onClose,
   onProgress,
+  onStepCommit,
   onComplete,
 }: PassportCaptureFlowProps) {
   const canResume = Boolean(resume);
@@ -361,6 +364,7 @@ export function PassportCaptureFlow({
           onBack={onClose}
           onClose={onClose}
           onProgress={onProgress}
+          onStepCommit={onStepCommit}
           onContinue={onComplete}
         />
       </div>

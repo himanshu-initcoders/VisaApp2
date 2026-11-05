@@ -241,6 +241,9 @@ export function ApplyVisaWizard({
   const [saveDraftError, setSaveDraftError] = useState<string | null>(null);
   const [loginForDraftOpen, setLoginForDraftOpen] = useState(false);
   const saveAfterLoginRef = useRef(false);
+  /** Serializes quiet server draft sync from traveller tab Continue. */
+  const quietServerSyncInFlightRef = useRef(false);
+  const quietServerSyncQueuedRef = useRef(false);
 
   const sessionRole = session?.user?.role;
   const isStaffSession =
@@ -345,26 +348,39 @@ export function ApplyVisaWizard({
     return payload;
   };
 
-  const pushDraftToServer = async (): Promise<boolean> => {
+  const pushDraftToServer = async (options?: {
+    /** Background sync from tab Continue — no login modal, toasts, or lifecycle flip. */
+    quiet?: boolean;
+  }): Promise<boolean> => {
+    const quiet = Boolean(options?.quiet);
+
     if (lifecycle === 'submitted' || lifecycle === 'submitting') {
-      setSaveDraftError(
-        'This application was already submitted. Start a new application to save a draft.'
-      );
+      if (!quiet) {
+        setSaveDraftError(
+          'This application was already submitted. Start a new application to save a draft.'
+        );
+      }
       return false;
     }
-    setSavingDraft(true);
-    setLifecycle((current) => (current === 'ready' ? 'syncing' : current));
-    setSaveDraftError(null);
-    setSaveDraftMessage(null);
+
+    if (!quiet) {
+      setSavingDraft(true);
+      setLifecycle((current) => (current === 'ready' ? 'syncing' : current));
+      setSaveDraftError(null);
+      setSaveDraftMessage(null);
+    }
+
     try {
       if (sessionStatus === 'loading') {
-        setSaveDraftError('Checking sign-in…');
+        if (!quiet) setSaveDraftError('Checking sign-in…');
         return false;
       }
 
       const savingOnBehalf = Boolean(onBehalfOfUserId && isStaffSession);
 
       if (!savingOnBehalf && sessionStatus !== 'authenticated') {
+        // Quiet tab saves stay local only — never interrupt with login.
+        if (quiet) return false;
         await persistLocalDraft();
         trackEvent('visa_apply_login_prompt', {
           source: 'save_draft',
@@ -375,7 +391,7 @@ export function ApplyVisaWizard({
         return false;
       }
 
-      setSaveDraftMessage('Uploading documents…');
+      if (!quiet) setSaveDraftMessage('Uploading documents…');
       const fileSync = await syncDraftFilesToServer({
         listingId,
         countryCode,
@@ -385,7 +401,11 @@ export function ApplyVisaWizard({
       });
 
       if (!fileSync.success) {
-        setSaveDraftError(fileSync.error);
+        if (quiet) {
+          console.warn('[Draft] quiet sync files failed:', fileSync.error);
+        } else {
+          setSaveDraftError(fileSync.error);
+        }
         return false;
       }
 
@@ -404,14 +424,20 @@ export function ApplyVisaWizard({
           payload,
         });
         if (!result.success) {
-          setSaveDraftError(result.error);
+          if (quiet) {
+            console.warn('[Draft] quiet sync failed:', result.error);
+          } else {
+            setSaveDraftError(result.error);
+          }
           return false;
         }
-        setSaveDraftMessage(
-          fileSync.uploadedCount > 0
-            ? `Draft saved for applicant (${fileSync.uploadedCount} file${fileSync.uploadedCount === 1 ? '' : 's'})`
-            : 'Draft saved for applicant'
-        );
+        if (!quiet) {
+          setSaveDraftMessage(
+            fileSync.uploadedCount > 0
+              ? `Draft saved for applicant (${fileSync.uploadedCount} file${fileSync.uploadedCount === 1 ? '' : 's'})`
+              : 'Draft saved for applicant'
+          );
+        }
         return true;
       }
 
@@ -421,29 +447,71 @@ export function ApplyVisaWizard({
         payload,
       });
       if (!result.success) {
-        setSaveDraftError(result.error);
+        if (quiet) {
+          console.warn('[Draft] quiet sync failed:', result.error);
+        } else {
+          setSaveDraftError(result.error);
+        }
         return false;
       }
-      const base = isStaffSession
-        ? 'Draft saved to your staff account'
-        : 'Draft saved to your account';
-      setSaveDraftMessage(
-        fileSync.uploadedCount > 0
-          ? `${base} (${fileSync.uploadedCount} file${fileSync.uploadedCount === 1 ? '' : 's'})`
-          : base
-      );
+      if (!quiet) {
+        const base = isStaffSession
+          ? 'Draft saved to your staff account'
+          : 'Draft saved to your account';
+        setSaveDraftMessage(
+          fileSync.uploadedCount > 0
+            ? `${base} (${fileSync.uploadedCount} file${fileSync.uploadedCount === 1 ? '' : 's'})`
+            : base
+        );
+      }
       return true;
     } catch (error) {
-      setSaveDraftError(
-        error instanceof Error ? error.message : 'Could not save draft'
-      );
+      if (quiet) {
+        console.warn('[Draft] quiet sync failed:', error);
+      } else {
+        setSaveDraftError(
+          error instanceof Error ? error.message : 'Could not save draft'
+        );
+      }
       return false;
     } finally {
-      setSavingDraft(false);
-      setLifecycle((current) =>
-        current === 'submitted' || current === 'submitting' ? current : 'ready'
-      );
+      if (!quiet) {
+        setSavingDraft(false);
+        setLifecycle((current) =>
+          current === 'submitted' || current === 'submitting' ? current : 'ready'
+        );
+      }
     }
+  };
+
+  /**
+   * Non-blocking server draft sync after a traveller tab Continue.
+   * Skips guests (local draft already written). Never opens login or flips lifecycle.
+   */
+  const quietPushDraftToServer = () => {
+    if (lifecycle === 'submitted' || lifecycle === 'submitting') return;
+
+    const canServerSync =
+      Boolean(onBehalfOfUserId && isStaffSession) ||
+      sessionStatus === 'authenticated';
+    if (!canServerSync) return;
+
+    if (quietServerSyncInFlightRef.current) {
+      quietServerSyncQueuedRef.current = true;
+      return;
+    }
+
+    quietServerSyncInFlightRef.current = true;
+    void (async () => {
+      try {
+        do {
+          quietServerSyncQueuedRef.current = false;
+          await pushDraftToServer({ quiet: true });
+        } while (quietServerSyncQueuedRef.current);
+      } finally {
+        quietServerSyncInFlightRef.current = false;
+      }
+    })();
   };
 
   const handleSaveAsDraft = () => {
@@ -1234,6 +1302,18 @@ export function ApplyVisaWizard({
     });
   };
 
+  /** Local draft flush on tab Continue, then quiet account draft sync when signed in. */
+  const commitPassportStep = async (
+    id: string,
+    payload: PassportApplicationPayload
+  ) => {
+    await persistTravellerApplication(id, payload, {
+      complete: false,
+      closeOverlay: false,
+    });
+    quietPushDraftToServer();
+  };
+
   const savePassport = async (
     id: string,
     payload: PassportApplicationPayload
@@ -1242,6 +1322,7 @@ export function ApplyVisaWizard({
       complete: true,
       closeOverlay: true,
     });
+    quietPushDraftToServer();
   };
 
   if (lifecycle === 'initializing') {
@@ -1553,6 +1634,9 @@ export function ApplyVisaWizard({
           onProgress={(payload) => {
             savePassportProgress(passportTravellerId, payload);
           }}
+          onStepCommit={(payload) =>
+            commitPassportStep(passportTravellerId, payload)
+          }
           onComplete={(payload) => {
             void savePassport(passportTravellerId, payload);
           }}
