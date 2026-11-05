@@ -75,7 +75,7 @@ export function ListingOverviewSection({
   onVisaKindSelect,
 }: ListingOverviewSectionProps) {
   const [selectedId, setSelectedId] = useState(priceOptions[0]?.id);
-  const [applyPath, setApplyPath] = useState<ApplyPath>('portal');
+  const [applyPath, setApplyPath] = useState<ApplyPath>('viserv');
   const selected = useMemo(
     () => priceOptions.find((option) => option.id === selectedId) || priceOptions[0],
     [priceOptions, selectedId]
