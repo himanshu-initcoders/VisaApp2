@@ -9,14 +9,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui';
-import { MobileOtpSignIn } from '@/components/auth/MobileOtpSignIn';
+import { ApplicantAuthPanel } from '@/components/auth/ApplicantAuthPanel';
 
 function SignInForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
 
   return (
-    <MobileOtpSignIn
+    <ApplicantAuthPanel
       variant="page"
       redirectTo={callbackUrl}
       analyticsContext="signin"
@@ -35,7 +35,8 @@ export default function SignInPage() {
           </span>
         </CardTitle>
         <CardDescription>
-          Enter your Indian mobile number to receive an OTP
+          Sign in with your email, or create an account with your name, email,
+          and mobile number.
         </CardDescription>
       </CardHeader>
       <CardContent>

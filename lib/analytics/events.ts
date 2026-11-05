@@ -139,15 +139,19 @@ export type AnalyticsEventMap = {
   };
   auth_otp_requested: {
     context: 'signin' | 'apply_modal' | 'checkout' | 'save_draft';
+    method?: 'phone_otp' | 'email_otp';
+    intent?: 'login' | 'register';
   };
   login: {
-    method: 'phone_otp';
+    method: 'phone_otp' | 'email_otp';
     context?: 'signin' | 'apply_modal' | 'checkout' | 'save_draft';
+    intent?: 'login' | 'register';
   };
   login_failed: {
-    method: 'phone_otp';
-    error_code?: 'deactivated' | 'invalid_otp' | 'unknown';
+    method: 'phone_otp' | 'email_otp';
+    error_code?: 'deactivated' | 'invalid_otp' | 'no_account' | 'unknown';
     context?: 'signin' | 'apply_modal' | 'checkout' | 'save_draft';
+    intent?: 'login' | 'register';
   };
   visa_submission_confirmation_view: {
     application_id: string;

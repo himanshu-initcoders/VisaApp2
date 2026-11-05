@@ -1,7 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
-import { MobileOtpSignIn } from '@/components/auth/MobileOtpSignIn';
+import { ApplicantAuthPanel } from '@/components/auth/ApplicantAuthPanel';
 
 interface ApplyLoginModalProps {
   open: boolean;
@@ -11,7 +11,7 @@ interface ApplyLoginModalProps {
 }
 
 /**
- * OTP sign-in modal before starting a visa application from the listing page.
+ * Email OTP sign-in / create-account modal before starting a visa application.
  */
 export function ApplyLoginModal({
   open,
@@ -47,8 +47,8 @@ export function ApplyLoginModal({
               Continue to apply
             </h2>
             <p className="mt-1 font-switzer text-sm text-slate-helper">
-              Sign in with your mobile number to start or resume this visa
-              application.
+              Sign in or create an account with your email to start or resume
+              this visa application.
             </p>
           </div>
           <button
@@ -61,8 +61,8 @@ export function ApplyLoginModal({
           </button>
         </div>
         <div className="px-5 py-5">
-          <MobileOtpSignIn
-            variant="checkout-embed"
+          <ApplicantAuthPanel
+            variant="modal-embed"
             analyticsContext={analyticsContext}
             onVerified={() => {
               onVerified();

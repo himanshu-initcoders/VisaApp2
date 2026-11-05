@@ -41,11 +41,15 @@ Authenticated Request
 **File**: `lib/auth.ts`
 
 **Features**:
-- Credentials provider for email/password
+- Credentials provider for email/password (staff)
+- Email OTP provider for applicant login + create account (`email-otp`)
+- Legacy phone OTP provider kept for compatibility
 - JWT session strategy (30-day expiry)
 - Custom callbacks for user data
-- Email verification check on login
+- Email verification check on password login
 - Secure password verification with bcrypt
+
+**Applicant auth UI**: `components/auth/ApplicantAuthPanel.tsx` — Login (email OTP) and Create Account (name, email, mobile + email OTP). Used by start-application modal, save-draft modal, checkout, and `/signin`.
 
 **Exported Functions**:
 - `auth()` - Get current session (Server Components)

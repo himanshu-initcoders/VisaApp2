@@ -287,3 +287,33 @@ export async function notifyStatusChanged(input: {
     }),
   });
 }
+
+/** One-time email code for applicant login or create-account. */
+export async function notifyEmailOtp(input: {
+  to: string;
+  name: string;
+  code: string;
+  purpose: 'login' | 'register';
+}): Promise<boolean> {
+  if (!isDeliverableEmail(input.to)) return false;
+
+  const isRegister = input.purpose === 'register';
+  const code = input.code.trim();
+  return sendEmail({
+    to: input.to.trim(),
+    subject: isRegister
+      ? `Your Viserv code: ${code}`
+      : `Your Viserv sign-in code: ${code}`,
+    html: renderEmail({
+      preheader: `Your Viserv code is ${code}. It expires in 10 minutes.`,
+      heading: isRegister ? 'Verify your email' : 'Sign in to Viserv',
+      paragraphs: [
+        `Hi ${input.name.trim() || 'Traveller'}, use this one-time code to ${
+          isRegister ? 'finish creating your account' : 'sign in'
+        }.`,
+        'Enter only these 5 digits in the app. This code expires in 10 minutes. If you did not request it, you can ignore this email.',
+      ],
+      details: [{ label: 'Verification code', value: code }],
+    }),
+  });
+}

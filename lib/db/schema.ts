@@ -51,6 +51,22 @@ export const phoneOtpChallenges = pgTable('phone_otp_challenges', {
 });
 
 /**
+ * Active email OTP challenges (one row per normalized email).
+ * Code is stored hashed; expires after 10 minutes.
+ * Register challenges also store pending name + phone until verified.
+ */
+export const emailOtpChallenges = pgTable('email_otp_challenges', {
+  email: varchar('email', { length: 255 }).primaryKey(),
+  codeHash: varchar('code_hash', { length: 128 }).notNull(),
+  purpose: varchar('purpose', { length: 20 }).notNull(), // login | register
+  pendingName: varchar('pending_name', { length: 255 }),
+  pendingPhone: varchar('pending_phone', { length: 20 }),
+  expiresAt: timestamp('expires_at').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+/**
  * Client apply drafts synced after applicant OTP login (JSON only; files stay in IndexedDB).
  */
 export const applicationDrafts = pgTable(

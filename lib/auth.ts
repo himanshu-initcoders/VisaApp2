@@ -8,8 +8,17 @@ import { z } from 'zod';
 import { normalizeIndianPhone } from '@/lib/auth/phone';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { verifyOtpAndEnsureUser } from '@/lib/auth/otp-core';
+import { verifyEmailOtpProof } from '@/lib/auth/email-otp-proof';
 
 class PhoneOtpSignInError extends CredentialsSignin {
+  code: string;
+  constructor(code: string) {
+    super();
+    this.code = code;
+  }
+}
+
+class EmailOtpSignInError extends CredentialsSignin {
   code: string;
   constructor(code: string) {
     super();
@@ -20,9 +29,9 @@ class PhoneOtpSignInError extends CredentialsSignin {
 /**
  * NextAuth Configuration
  *
- * - Email/password credentials (admins)
- * - Phone OTP credentials (applicants + staff with a saved phone)
- *   mock accepts any 5 digits; whatsapp verifies challenge
+ * - Email/password credentials (admins / staff)
+ * - Email OTP credentials (applicants login + create account)
+ * - Phone OTP credentials (legacy; kept for compatibility)
  */
 
 const loginSchema = z.object({
@@ -78,6 +87,55 @@ export const authConfig: NextAuthConfig = {
           };
         } catch (error) {
           console.error('Auth error:', error);
+          return null;
+        }
+      },
+    }),
+
+    CredentialsProvider({
+      id: 'email-otp',
+      name: 'Email OTP',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        proof: { label: 'Proof', type: 'text' },
+      },
+      async authorize(credentials) {
+        try {
+          const email = String(credentials?.email ?? '')
+            .trim()
+            .toLowerCase();
+          const proof = String(credentials?.proof ?? '').trim();
+          if (!email || !proof) return null;
+
+          const result = verifyEmailOtpProof({ email, proof });
+          if (!result.success) {
+            console.warn('[auth] email-otp proof failed:', result.error);
+            throw new EmailOtpSignInError('invalid_otp');
+          }
+
+          const [user] = await db
+            .select()
+            .from(users)
+            .where(eq(users.id, result.userId))
+            .limit(1);
+
+          if (!user) return null;
+
+          if (user.deactivatedAt) {
+            throw new EmailOtpSignInError('deactivated');
+          }
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            phone: user.phone ?? undefined,
+            emailVerified: Boolean(user.emailVerified),
+          };
+        } catch (error) {
+          if (error instanceof CredentialsSignin) throw error;
+          console.error('Email OTP auth error:', error);
           return null;
         }
       },

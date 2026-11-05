@@ -27,6 +27,41 @@ export const verifyOtpSchema = z.object({
 export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 
+const authEmailSchema = z
+  .string()
+  .email('Invalid email address')
+  .toLowerCase()
+  .trim();
+
+export const requestEmailLoginOtpSchema = z.object({
+  email: authEmailSchema,
+});
+
+export const requestEmailRegisterOtpSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, 'Name must be at least 2 characters')
+    .max(100, 'Name must be less than 100 characters')
+    .regex(/^[a-zA-Z\s]+$/, 'Name can only contain letters and spaces'),
+  email: authEmailSchema,
+  phone: indianMobileSchema,
+});
+
+export const verifyEmailOtpSchema = z.object({
+  email: authEmailSchema,
+  otp: mobileOtpSchema,
+  intent: z.enum(['login', 'register']),
+});
+
+export type RequestEmailLoginOtpInput = z.infer<
+  typeof requestEmailLoginOtpSchema
+>;
+export type RequestEmailRegisterOtpInput = z.infer<
+  typeof requestEmailRegisterOtpSchema
+>;
+export type VerifyEmailOtpInput = z.infer<typeof verifyEmailOtpSchema>;
+
 export const registerSchema = z.object({
   name: z
     .string()

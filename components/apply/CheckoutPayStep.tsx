@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { MobileOtpSignIn } from '@/components/auth/MobileOtpSignIn';
+import { ApplicantAuthPanel } from '@/components/auth/ApplicantAuthPanel';
 import { readApplyDraftAsync } from '@/lib/apply/draftStorage';
 import type { DraftScopeInput } from '@/lib/apply/draftScope';
 import { clearLocalDraftAfterSubmit } from '@/lib/apply/collectSubmitFiles';
@@ -513,18 +513,24 @@ export function CheckoutPayStep({
           {filledCount === 1 ? '' : 's'} to {countryName}
           {isAuthed
             ? ' — you are signed in and ready to submit.'
-            : ' — sign in with your mobile to unlock payment.'}
+            : ' — sign in with your email to unlock payment.'}
         </p>
-        {session?.user?.phone && (
+        {isAuthed && (session?.user?.email || session?.user?.phone) && (
           <p className="mt-2 text-xs text-slate-helper">
-            Signed in as +91 {session.user.phone}
+            Signed in as{' '}
+            {session?.user?.email &&
+            !session.user.email.toLowerCase().endsWith('@users.local')
+              ? session.user.email
+              : session?.user?.phone
+                ? `+91 ${session.user.phone}`
+                : session?.user?.email}
           </p>
         )}
       </div>
 
       {!isAuthed && status !== 'loading' && (
         <div className="mt-8">
-          <MobileOtpSignIn
+          <ApplicantAuthPanel
             variant="checkout-embed"
             analyticsContext="checkout"
           />

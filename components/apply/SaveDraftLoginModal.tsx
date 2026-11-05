@@ -1,7 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
-import { MobileOtpSignIn } from '@/components/auth/MobileOtpSignIn';
+import { ApplicantAuthPanel } from '@/components/auth/ApplicantAuthPanel';
 
 interface SaveDraftLoginModalProps {
   open: boolean;
@@ -10,7 +10,7 @@ interface SaveDraftLoginModalProps {
 }
 
 /**
- * OTP sign-in modal so applicants can unlock Save as draft.
+ * Email OTP sign-in / create-account modal so applicants can unlock Save as draft.
  */
 export function SaveDraftLoginModal({
   open,
@@ -45,8 +45,8 @@ export function SaveDraftLoginModal({
               Save as draft
             </h2>
             <p className="mt-1 font-switzer text-sm text-slate-helper">
-              Sign in with your mobile number to save this application to your
-              account.
+              Sign in or create an account with your email to save this
+              application to your account.
             </p>
           </div>
           <button
@@ -59,8 +59,8 @@ export function SaveDraftLoginModal({
           </button>
         </div>
         <div className="px-5 py-5">
-          <MobileOtpSignIn
-            variant="checkout-embed"
+          <ApplicantAuthPanel
+            variant="modal-embed"
             analyticsContext="save_draft"
             onVerified={() => {
               onVerified();
