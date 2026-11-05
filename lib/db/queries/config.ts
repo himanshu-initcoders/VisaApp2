@@ -14,7 +14,7 @@ import {
   visaRisks,
   documentTypes,
 } from '@/lib/db/schema-extended';
-import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
+import { rewriteCountryImages, toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 /**
  * Database query helpers for admin configuration
@@ -30,7 +30,7 @@ import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
  * Sorted by enabled status (enabled first), then alphabetically
  */
 export async function getCountriesWithProcessCounts() {
-  return await db.query.countries.findMany({
+  const rows = await db.query.countries.findMany({
     with: {
       visaListings: {
         columns: { id: true }
@@ -38,6 +38,10 @@ export async function getCountriesWithProcessCounts() {
     },
     orderBy: [desc(countries.enabled), countries.name]
   });
+  return rows.map((country) => ({
+    ...country,
+    images: rewriteCountryImages(country.images),
+  }));
 }
 
 export type CountryFilterOption = {
@@ -74,7 +78,7 @@ export async function getCountryFilterOptions(): Promise<CountryFilterOption[]> 
  * Get single country with all related data
  */
 export async function getCountryDetails(iso2Code: string) {
-  return await db.query.countries.findFirst({
+  const country = await db.query.countries.findFirst({
     where: eq(countries.iso2Code, iso2Code),
     with: {
       visaListings: {
@@ -91,15 +95,25 @@ export async function getCountryDetails(iso2Code: string) {
       visaRisks: true
     }
   });
+  if (!country) return country;
+  return {
+    ...country,
+    images: rewriteCountryImages(country.images),
+  };
 }
 
 /**
  * Get country by ID
  */
 export async function getCountryById(id: string) {
-  return await db.query.countries.findFirst({
+  const country = await db.query.countries.findFirst({
     where: eq(countries.id, id)
   });
+  if (!country) return country;
+  return {
+    ...country,
+    images: rewriteCountryImages(country.images),
+  };
 }
 
 // ============================================================================
@@ -111,7 +125,7 @@ export async function getCountryById(id: string) {
  * Used for the processes list page
  */
 export async function getAllProcessesWithCountries() {
-  return await db.query.visaListings.findMany({
+  const rows = await db.query.visaListings.findMany({
     with: {
       country: {
         columns: {
@@ -137,6 +151,15 @@ export async function getAllProcessesWithCountries() {
     },
     orderBy: [visaListings.processName]
   });
+  return rows.map((row) => ({
+    ...row,
+    country: row.country
+      ? {
+          ...row.country,
+          images: rewriteCountryImages(row.country.images),
+        }
+      : row.country,
+  }));
 }
 
 /**
@@ -212,7 +235,7 @@ export async function getFilteredProcesses(filters: {
     conditions.push(like(visaListings.processName, `%${filters.search}%`));
   }
 
-  return await db.query.visaListings.findMany({
+  const rows = await db.query.visaListings.findMany({
     where: conditions.length > 0 ? and(...conditions) : undefined,
     with: {
       country: {
@@ -239,6 +262,15 @@ export async function getFilteredProcesses(filters: {
     },
     orderBy: [visaListings.processName]
   });
+  return rows.map((row) => ({
+    ...row,
+    country: row.country
+      ? {
+          ...row.country,
+          images: rewriteCountryImages(row.country.images),
+        }
+      : row.country,
+  }));
 }
 
 // ============================================================================
@@ -516,10 +548,15 @@ export async function getMaxStepSortOrder(processId: string) {
  * List all document types (global catalog), ordered for admin pickers.
  */
 export async function listDocumentTypes() {
-  return await db
+  const rows = await db
     .select()
     .from(documentTypes)
     .orderBy(asc(documentTypes.sortOrder), asc(documentTypes.label));
+  return rows.map((row) => ({
+    ...row,
+    sampleDocumentUrl:
+      toAppMediaUrl(row.sampleDocumentUrl) || row.sampleDocumentUrl,
+  }));
 }
 
 /**

@@ -67,6 +67,22 @@ class UploadService {
    */
   private parseUrl(url: string): { provider: UploadProvider; key: string } | null {
     try {
+      // Same-origin media proxy: /api/media?key=folder%2Ffile.jpg
+      if (url.includes('/api/media')) {
+        const absolute =
+          url.startsWith('http://') || url.startsWith('https://')
+            ? url
+            : `http://local.invalid${url.startsWith('/') ? '' : '/'}${url}`;
+        const urlObj = new URL(absolute);
+        const key = urlObj.searchParams.get('key');
+        if (key) {
+          return {
+            provider: this.defaultProvider,
+            key: decodeURIComponent(key),
+          };
+        }
+      }
+
       // S3 URL patterns
       if (url.includes('.s3.') && url.includes('.amazonaws.com')) {
         const urlObj = new URL(url);

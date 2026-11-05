@@ -167,7 +167,14 @@ export async function getCountryForEdit(iso2Code: string) {
       return { error: 'Country not found' };
     }
 
-    return { success: true, country };
+    const { rewriteCountryImages } = await import('@/lib/upload/mediaUrl');
+    return {
+      success: true,
+      country: {
+        ...country,
+        images: rewriteCountryImages(country.images),
+      },
+    };
   } catch (error) {
     console.error('Error fetching country:', error);
     return { error: 'Failed to fetch country details' };

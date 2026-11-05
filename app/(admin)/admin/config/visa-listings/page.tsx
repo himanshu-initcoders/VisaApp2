@@ -9,6 +9,7 @@ import { db } from '@/lib/db';
 import { countries } from '@/lib/db/schema-extended';
 import { eq } from 'drizzle-orm';
 import { Settings } from 'lucide-react';
+import { rewriteCountryImages } from '@/lib/upload/mediaUrl';
 
 /**
  * Visa Listings Configuration Page
@@ -40,9 +41,15 @@ export default async function VisaListingsPage({
 
   let country = null;
   if (countryFilter) {
-    country = await db.query.countries.findFirst({
+    const row = await db.query.countries.findFirst({
       where: eq(countries.iso2Code, countryFilter),
     });
+    if (row) {
+      country = {
+        ...row,
+        images: rewriteCountryImages(row.images),
+      };
+    }
   }
 
   const addVisaHref = countryFilter

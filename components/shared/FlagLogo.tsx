@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import { getFlagEmoji } from '@/lib/public';
+import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 import { cn } from '@/lib/utils';
 
 export type FlagLogoSize = 'sm' | 'md' | 'lg';
@@ -67,11 +68,12 @@ export function FlagLogo({
           tokens.rect
         );
 
-  if (flagUrl) {
+  const resolvedFlagUrl = toAppMediaUrl(flagUrl) || flagUrl;
+  if (resolvedFlagUrl) {
     return (
       <span className={cn(box, className)} aria-hidden={!alt}>
         <Image
-          src={flagUrl}
+          src={resolvedFlagUrl}
           alt={alt}
           fill
           sizes={tokens.sizes}

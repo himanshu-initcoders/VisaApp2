@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { Upload, X, Image as ImageIcon, Check } from 'lucide-react';
 import { replaceFileByUrlFromFormData } from '@/lib/upload/server-actions';
 import type { UploadFolder } from '@/lib/upload';
+import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 interface ImageUploadV2Props {
   label: string;
@@ -30,7 +31,9 @@ export function ImageUploadV2({
 }: ImageUploadV2Props) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadComplete, setUploadComplete] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(currentImageUrl || null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(
+    toAppMediaUrl(currentImageUrl) || currentImageUrl || null
+  );
   const [altText, setAltText] = useState(initialAltText);
   const [dimensions, setDimensions] = useState<{ width?: number; height?: number }>({
     width: initialDimensions?.width ?? undefined,

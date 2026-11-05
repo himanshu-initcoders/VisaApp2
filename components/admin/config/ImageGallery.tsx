@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Maximize2, Edit, Image as ImageIcon } from 'lucide-react';
 import { LinkedInStyleImageUpload } from './LinkedInStyleImageUpload';
+import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 interface CountryImages {
   banner?: {
@@ -36,7 +37,8 @@ export function ImageGallery({ images, onImageUpdate }: ImageGalleryProps) {
       type: 'hero' as const,
       title: 'Banner Image',
       description: 'Wide landscape image shown at the top of this country card (21:9 ratio)',
-      url: images?.hero?.url,
+      url: toAppMediaUrl(images?.hero?.url) || images?.hero?.url,
+      storageUrl: images?.hero?.url,
       folder: 'country-heroes' as const,
       aspectRatio: '21/9',
       maxSize: 5,
@@ -45,7 +47,8 @@ export function ImageGallery({ images, onImageUpdate }: ImageGalleryProps) {
       type: 'banner' as const,
       title: 'Card Image',
       description: 'Portrait image used on destination and listing cards (3:4 ratio)',
-      url: images?.banner?.url,
+      url: toAppMediaUrl(images?.banner?.url) || images?.banner?.url,
+      storageUrl: images?.banner?.url,
       folder: 'country-banners' as const,
       aspectRatio: '3/4',
       maxSize: 5,
@@ -54,7 +57,8 @@ export function ImageGallery({ images, onImageUpdate }: ImageGalleryProps) {
       type: 'flag' as const,
       title: 'Flag Logo',
       description: 'Square flag icon (1:1 ratio)',
-      url: images?.flag?.url,
+      url: toAppMediaUrl(images?.flag?.url) || images?.flag?.url,
+      storageUrl: images?.flag?.url,
       folder: 'country-flags' as const,
       aspectRatio: '1/1',
       maxSize: 1,
