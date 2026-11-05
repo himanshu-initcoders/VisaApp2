@@ -144,6 +144,42 @@ export function getCountryCardImage(
   return null;
 }
 
+/**
+ * Prefer the wide country banner (admin "Banner Image" / `hero`) for OG 1.91:1,
+ * then fall back to the portrait card image.
+ */
+export function getCountryOgImage(
+  images?: {
+    banner?: {
+      url?: string;
+      alt?: string;
+      width?: number;
+      height?: number;
+    };
+    hero?: {
+      url?: string;
+      alt?: string;
+      width?: number;
+      height?: number;
+    };
+  } | null
+) {
+  const source = images?.hero?.url
+    ? images.hero
+    : images?.banner?.url
+      ? images.banner
+      : null;
+
+  if (!source?.url) return null;
+
+  return {
+    url: toAppMediaUrl(source.url) || source.url,
+    alt: source.alt,
+    width: source.width,
+    height: source.height,
+  };
+}
+
 export function getFlagEmoji(iso2Code: string) {
   const codePoints = iso2Code
     .toUpperCase()

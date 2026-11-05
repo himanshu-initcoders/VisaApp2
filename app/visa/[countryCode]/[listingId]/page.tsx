@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { PublicListingExperience } from '@/components/public/PublicListingExperience';
 import { JsonLd } from '@/components/seo/JsonLd';
@@ -5,6 +6,7 @@ import {
   getEnabledCountriesWithProcesses,
   getPublicProcessPageData,
 } from '@/lib/db/queries/public';
+import { getCountryOgImage } from '@/lib/public';
 import {
   buildBreadcrumbJsonLd,
   buildFaqPageJsonLd,
@@ -34,16 +36,45 @@ export async function generateStaticParams() {
   );
 }
 
-export async function generateMetadata({ params }: PageProps) {
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
   const { countryCode, listingId } = await params;
   const data = await getPublicProcessPageData(countryCode, listingId);
 
   if (!data) return {};
 
+  const title = `${data.process.processName} for ${data.country.name}`;
+  const description = `${data.process.processName} for Indian travelers. See pricing, timeline, and document requirements before you start.`;
+  const ogImage = getCountryOgImage(data.country.images);
+  const ogImages = ogImage
+    ? [
+        {
+          url: ogImage.url,
+          alt: ogImage.alt || `${data.country.name} visa`,
+          ...(ogImage.width ? { width: ogImage.width } : {}),
+          ...(ogImage.height ? { height: ogImage.height } : {}),
+        },
+      ]
+    : [{ url: '/logo.png', alt: 'Viserv' }];
+
   return {
-    title: `${data.process.processName} for ${data.country.name}`,
-    description: `${data.process.processName} for Indian travelers. See pricing, timeline, and document requirements before you start.`,
+    title,
+    description,
     alternates: { canonical: data.href },
+    openGraph: {
+      title,
+      description,
+      url: data.href,
+      type: 'website',
+      images: ogImages,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: ogImages.map((image) => image.url),
+    },
   };
 }
 

@@ -25,11 +25,28 @@ const instrumentSerif = Instrument_Serif({
   display: 'swap',
 });
 
+const DEFAULT_TITLE = 'Viserv — Visa & Passport Services';
+const DEFAULT_DESCRIPTION =
+  'Get your visa and passport services done quickly and easily with Viserv. We help Indian citizens with visa applications and passport services.';
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: 'Viserv — Visa & Passport Services',
-  description:
-    'Get your visa and passport services done quickly and easily with Viserv. We help Indian citizens with visa applications and passport services.',
+  title: DEFAULT_TITLE,
+  description: DEFAULT_DESCRIPTION,
+  openGraph: {
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    url: '/',
+    siteName: 'Viserv',
+    type: 'website',
+    images: [{ url: '/logo.png', alt: 'Viserv' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    images: ['/logo.png'],
+  },
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },

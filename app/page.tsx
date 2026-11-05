@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Footer } from '@/components/layout/Footer';
@@ -14,6 +15,29 @@ import {
 
 /** Static at build; refresh hourly or when admin emits catalog revalidation. */
 export const revalidate = 3600;
+
+const HOME_TITLE = 'Viserv — Visa & Passport Services';
+const HOME_DESCRIPTION =
+  'Get your visa and passport services done quickly and easily with Viserv. We help Indian citizens with visa applications and passport services.';
+
+export const metadata: Metadata = {
+  title: HOME_TITLE,
+  description: HOME_DESCRIPTION,
+  alternates: { canonical: '/' },
+  openGraph: {
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    url: '/',
+    type: 'website',
+    images: [{ url: '/logo.png', alt: 'Viserv' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    images: ['/logo.png'],
+  },
+};
 
 const HOW_IT_WORKS_STEPS = [
   {
