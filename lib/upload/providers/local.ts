@@ -8,6 +8,7 @@
 import fs from 'fs/promises';
 import type { Stats } from 'fs';
 import path from 'path';
+import { mimeTypeForBufferUpload } from '../bufferMime';
 import { IUploadProvider, UploadResult, UploadOptions } from '../types';
 
 /** Statically scoped so Turbopack does not trace the whole project root. */
@@ -45,7 +46,7 @@ export class LocalUploadProvider implements IUploadProvider {
     } else {
       buffer = file;
       originalFilename = customFilename || 'upload';
-      mimeType = options.allowedTypes?.[0] || 'application/octet-stream';
+      mimeType = mimeTypeForBufferUpload(options, originalFilename);
       size = buffer.length;
     }
 

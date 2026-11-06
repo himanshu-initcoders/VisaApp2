@@ -3,8 +3,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
 import { eq } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
@@ -18,10 +16,8 @@ import {
   extensionFromMime,
   isDraftObjectKey,
 } from '@/lib/upload/applicationKey';
-import {
-  UPLOADS_ROOT,
-  assertSafeStorageKey,
-} from '@/lib/upload/safeStorageKey';
+import { readStoredObject } from '@/lib/upload/readStoredObject';
+import { assertSafeStorageKey } from '@/lib/upload/safeStorageKey';
 import { deleteOtherSlotExtensionKeys } from '@/lib/upload/deleteSlotSiblings';
 
 const ALLOWED_TYPES = [
@@ -114,6 +110,7 @@ export async function POST(request: NextRequest) {
     const result = await uploadService.upload(buffer, {
       folder: APPLICATION_UPLOAD_FOLDER,
       filename: file.name || `${slotKey}.${ext}`,
+      mimeType,
       explicitKey,
       maxSizeMB: mimeType === 'application/pdf' ? 10 : 5,
       allowedTypes: [...ALLOWED_TYPES],
@@ -208,31 +205,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    let buffer: Buffer | null = null;
-    let mimeType = 'application/octet-stream';
     const filename = storageKey.split('/').pop() || 'document.bin';
-
-    if (uploadService.getProviderName() === 'local') {
-      try {
-        buffer = await fs.readFile(path.join(UPLOADS_ROOT, storageKey));
-      } catch {
-        buffer = null;
-      }
+    const stored = await readStoredObject(storageKey);
+    if (!stored) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
-
-    if (!buffer) {
-      const url = uploadService.getUrl(storageKey);
-      const absolute =
-        url.startsWith('http') || url.startsWith('//')
-          ? url
-          : `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}${url.startsWith('/') ? '' : '/'}${url}`;
-      const response = await fetch(absolute);
-      if (!response.ok) {
-        return NextResponse.json({ error: 'Not found' }, { status: 404 });
-      }
-      buffer = Buffer.from(await response.arrayBuffer());
-      mimeType = response.headers.get('content-type') || mimeType;
-    }
+    let mimeType = stored.mimeType || 'application/octet-stream';
+    const buffer = stored.buffer;
 
     if (filename.endsWith('.pdf')) mimeType = 'application/pdf';
     else if (filename.endsWith('.png')) mimeType = 'image/png';

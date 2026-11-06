@@ -11,47 +11,8 @@ import {
 } from '@/lib/upload/applicationKey';
 import { deleteOtherSlotExtensionKeys } from '@/lib/upload/deleteSlotSiblings';
 import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
-import { assertSafeStorageKey, UPLOADS_ROOT } from '@/lib/upload/safeStorageKey';
-import { promises as fs } from 'fs';
-import path from 'path';
-
-async function readOwnedBuffer(
-  storageKey: string
-): Promise<{ buffer: Buffer; mimeType: string } | null> {
-  const safeKey = assertSafeStorageKey(storageKey);
-
-  if (uploadService.getProviderName() === 'local') {
-    try {
-      const buffer = await fs.readFile(path.join(UPLOADS_ROOT, safeKey));
-      return { buffer, mimeType: guessMime(safeKey) };
-    } catch {
-      // fall through to URL fetch
-    }
-  }
-
-  const url = uploadService.getUrl(safeKey);
-  const absolute =
-    url.startsWith('http') || url.startsWith('//')
-      ? url
-      : `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}${url.startsWith('/') ? '' : '/'}${url}`;
-  const response = await fetch(absolute);
-  if (!response.ok) return null;
-  const arrayBuffer = await response.arrayBuffer();
-  return {
-    buffer: Buffer.from(arrayBuffer),
-    mimeType:
-      response.headers.get('content-type') || guessMime(safeKey),
-  };
-}
-
-function guessMime(key: string): string {
-  const lower = key.toLowerCase();
-  if (lower.endsWith('.pdf')) return 'application/pdf';
-  if (lower.endsWith('.png')) return 'image/png';
-  if (lower.endsWith('.webp')) return 'image/webp';
-  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
-  return 'application/octet-stream';
-}
+import { readStoredObject } from '@/lib/upload/readStoredObject';
+import { assertSafeStorageKey } from '@/lib/upload/safeStorageKey';
 
 export type CopiedDraftFile = {
   storageKey: string;
@@ -72,7 +33,7 @@ export async function copyOwnedFileToDraft(input: {
   mimeType?: string | null;
 }): Promise<CopiedDraftFile | null> {
   const sourceKey = assertSafeStorageKey(input.sourceStorageKey);
-  const read = await readOwnedBuffer(sourceKey);
+  const read = await readStoredObject(sourceKey);
   if (!read) return null;
 
   const mimeType =
@@ -96,6 +57,7 @@ export async function copyOwnedFileToDraft(input: {
   const uploaded = await uploadService.upload(read.buffer, {
     folder: APPLICATION_UPLOAD_FOLDER,
     filename,
+    mimeType,
     explicitKey,
     maxSizeMB: mimeType === 'application/pdf' ? 10 : 5,
     allowedTypes: [

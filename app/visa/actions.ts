@@ -1,7 +1,5 @@
 'use server';
 
-import fs from 'fs/promises';
-import path from 'path';
 import { and, eq } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -18,7 +16,7 @@ import {
   type PassengerAutofillPayload,
 } from '@/lib/apply/previousProfilesAutofill';
 import { stageAutofillDocumentsToDraft } from '@/lib/apply/stageAutofillDocuments';
-import { uploadService } from '@/lib/upload';
+import { readStoredObject } from '@/lib/upload/readStoredObject';
 import type { ActionResponse } from '@/types/admin';
 
 export type { ApplyPreviousProfile, PassengerAutofillPayload };
@@ -233,33 +231,12 @@ export async function fetchMyDocumentBlob(input: {
       return { success: false, message: 'Document key missing' };
     }
 
-    let buffer: Buffer | null = null;
-
-    if (uploadService.getProviderName() === 'local') {
-      try {
-        const filePath = path.join(process.cwd(), 'public', 'uploads', s3Key);
-        buffer = await fs.readFile(filePath);
-      } catch {
-        buffer = null;
-      }
+    const stored = await readStoredObject(s3Key);
+    if (!stored) {
+      return { success: false, message: 'Failed to download document' };
     }
-
-    if (!buffer) {
-      const url = uploadService.getUrl(s3Key);
-      const absolute =
-        url.startsWith('http://') || url.startsWith('https://')
-          ? url
-          : `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}${url.startsWith('/') ? '' : '/'}${url}`;
-
-      const response = await fetch(absolute);
-      if (!response.ok) {
-        return { success: false, message: 'Failed to download document' };
-      }
-      const arrayBuffer = await response.arrayBuffer();
-      buffer = Buffer.from(arrayBuffer);
-      const contentType = response.headers.get('content-type');
-      if (contentType) mimeType = contentType;
-    }
+    const buffer = stored.buffer;
+    if (stored.mimeType) mimeType = stored.mimeType;
 
     void applicationId;
 

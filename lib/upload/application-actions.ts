@@ -4,8 +4,6 @@
 
 'use server';
 
-import { promises as fs } from 'fs';
-import path from 'path';
 import { auth } from '@/lib/auth';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { canAccessAdmin } from '@/lib/auth-utils';
@@ -20,10 +18,8 @@ import {
   extensionFromMime,
   isDraftObjectKey,
 } from '@/lib/upload/applicationKey';
-import {
-  UPLOADS_ROOT,
-  assertSafeStorageKey,
-} from '@/lib/upload/safeStorageKey';
+import { readStoredObject } from '@/lib/upload/readStoredObject';
+import { assertSafeStorageKey } from '@/lib/upload/safeStorageKey';
 import { deleteOtherSlotExtensionKeys } from '@/lib/upload/deleteSlotSiblings';
 
 export interface ApplicationDocumentUploadItem {
@@ -325,33 +321,13 @@ export async function fetchDraftDocumentBlob(input: {
       return { success: false, error: 'Unauthorized' };
     }
 
-    let buffer: Buffer | null = null;
-    let mimeType = 'application/octet-stream';
     const filename = storageKey.split('/').pop() || 'document.bin';
-
-    if (uploadService.getProviderName() === 'local') {
-      try {
-        const filePath = path.join(UPLOADS_ROOT, storageKey);
-        buffer = await fs.readFile(filePath);
-      } catch {
-        buffer = null;
-      }
+    const stored = await readStoredObject(storageKey);
+    if (!stored) {
+      return { success: false, error: 'Could not download draft file' };
     }
-
-    if (!buffer) {
-      const url = uploadService.getUrl(storageKey);
-      const absolute =
-        url.startsWith('http') || url.startsWith('//')
-          ? url
-          : `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}${url.startsWith('/') ? '' : '/'}${url}`;
-      const response = await fetch(absolute);
-      if (!response.ok) {
-        return { success: false, error: 'Could not download draft file' };
-      }
-      const arrayBuffer = await response.arrayBuffer();
-      buffer = Buffer.from(arrayBuffer);
-      mimeType = response.headers.get('content-type') || mimeType;
-    }
+    let mimeType = stored.mimeType || 'application/octet-stream';
+    const buffer = stored.buffer;
 
     if (filename.endsWith('.pdf')) mimeType = 'application/pdf';
     else if (filename.endsWith('.png')) mimeType = 'image/png';

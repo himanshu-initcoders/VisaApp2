@@ -6,6 +6,7 @@
 
 import { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { mimeTypeForBufferUpload } from '../bufferMime';
 import { IUploadProvider, UploadResult, UploadOptions } from '../types';
 
 export class S3UploadProvider implements IUploadProvider {
@@ -48,7 +49,7 @@ export class S3UploadProvider implements IUploadProvider {
     } else {
       buffer = file;
       originalFilename = customFilename || 'upload';
-      mimeType = options.allowedTypes?.[0] || 'application/octet-stream';
+      mimeType = mimeTypeForBufferUpload(options, originalFilename);
       size = buffer.length;
     }
 

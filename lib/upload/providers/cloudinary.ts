@@ -5,6 +5,7 @@
  * Requires: npm install cloudinary
  */
 
+import { mimeTypeForBufferUpload } from '../bufferMime';
 import { IUploadProvider, UploadResult, UploadOptions } from '../types';
 
 export class CloudinaryUploadProvider implements IUploadProvider {
@@ -56,7 +57,7 @@ export class CloudinaryUploadProvider implements IUploadProvider {
     } else {
       buffer = file;
       originalFilename = customFilename || 'upload';
-      mimeType = options.allowedTypes?.[0] || 'application/octet-stream';
+      mimeType = mimeTypeForBufferUpload(options, originalFilename);
       size = buffer.length;
     }
 

@@ -11,6 +11,8 @@ import {
   extensionFromMime,
   isDraftObjectKey,
 } from '@/lib/upload/applicationKey';
+import { mimeTypeForBufferUpload } from '@/lib/upload/bufferMime';
+import { readStoredObject } from '@/lib/upload/readStoredObject';
 import {
   UPLOADS_ROOT,
   assertSafeStorageKey,
@@ -36,35 +38,6 @@ export interface PromoteDraftFileResult {
   size: number;
 }
 
-async function readObjectBuffer(
-  storageKey: string
-): Promise<{ buffer: Buffer; mimeType: string } | null> {
-  const safeKey = assertSafeStorageKey(storageKey);
-
-  if (uploadService.getProviderName() === 'local') {
-    try {
-      const filePath = path.join(UPLOADS_ROOT, safeKey);
-      const buffer = await fs.readFile(filePath);
-      return { buffer, mimeType: 'application/octet-stream' };
-    } catch {
-      return null;
-    }
-  }
-
-  const url = uploadService.getUrl(safeKey);
-  const absolute =
-    url.startsWith('http') || url.startsWith('//')
-      ? url
-      : `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}${url.startsWith('/') ? '' : '/'}${url}`;
-  const response = await fetch(absolute);
-  if (!response.ok) return null;
-  const arrayBuffer = await response.arrayBuffer();
-  return {
-    buffer: Buffer.from(arrayBuffer),
-    mimeType: response.headers.get('content-type') || 'application/octet-stream',
-  };
-}
-
 /**
  * Copy/rename a draft key into the application path. Deletes the draft object on success.
  */
@@ -78,14 +51,13 @@ export async function promoteDraftFileToApplication(
 
   const filename =
     input.filename || draftKey.split('/').pop() || `${input.slotKey}.bin`;
-  let mimeType = input.mimeType || 'application/octet-stream';
-  if (!input.mimeType) {
-    if (filename.endsWith('.pdf')) mimeType = 'application/pdf';
-    else if (filename.endsWith('.png')) mimeType = 'image/png';
-    else if (filename.endsWith('.webp')) mimeType = 'image/webp';
-    else if (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) {
-      mimeType = 'image/jpeg';
-    }
+  const fromFilename = mimeTypeForBufferUpload({}, filename);
+  let mimeType = input.mimeType || fromFilename;
+  if (
+    fromFilename !== 'application/octet-stream' &&
+    mimeType !== fromFilename
+  ) {
+    mimeType = fromFilename;
   }
 
   const ext = extensionFromMime(mimeType, filename);
@@ -124,7 +96,7 @@ export async function promoteDraftFileToApplication(
     }
   }
 
-  const read = await readObjectBuffer(draftKey);
+  const read = await readStoredObject(draftKey);
   if (!read) {
     throw new Error('Draft file not found');
   }
@@ -135,6 +107,7 @@ export async function promoteDraftFileToApplication(
   const result = await uploadService.upload(read.buffer, {
     folder: APPLICATION_UPLOAD_FOLDER,
     filename,
+    mimeType,
     explicitKey,
     maxSizeMB: mimeType === 'application/pdf' ? 10 : 5,
     allowedTypes: [

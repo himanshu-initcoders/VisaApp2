@@ -36,6 +36,8 @@ export interface UploadResult {
 export interface UploadOptions {
   folder: UploadFolder;
   filename?: string;     // Optional custom filename
+  /** MIME for Buffer uploads. File uploads use the File type. */
+  mimeType?: string;
   /** When set, providers use this exact object key / public_id path instead of generating one. */
   explicitKey?: string;
   maxSizeMB?: number;    // Max file size in MB
