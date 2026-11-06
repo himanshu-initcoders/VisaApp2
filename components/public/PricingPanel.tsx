@@ -16,7 +16,7 @@ export type ApplyPath = 'portal' | 'viserv';
 
 const APPLY_PATH_TABS = [
   { id: 'viserv' as const, label: 'Apply with Viserv' },
-  { id: 'portal' as const, label: 'DIY - FREE' },
+  { id: 'portal' as const, label: 'Do It Yourself - FREE' },
 ];
 
 function safeHttpUrl(value: string | null | undefined): string | null {
