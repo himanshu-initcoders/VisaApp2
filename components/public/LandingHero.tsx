@@ -213,7 +213,7 @@ export function LandingHero({
         </div>
       </div>
 
-      <div className="relative z-10 mx-auto mt-6 max-w-3xl border-b border-ash/80 px-4 sm:mt-7 sm:px-6">
+      {/* <div className="relative z-10 mx-auto mt-6 max-w-3xl border-b border-ash/80 px-4 sm:mt-7 sm:px-6">
         <div
           role="tablist"
           aria-label="Visa categories"
@@ -244,7 +244,7 @@ export function LandingHero({
             );
           })}
         </div>
-      </div>
+      </div> */}
     </section>
   );
 }
