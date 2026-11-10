@@ -86,6 +86,9 @@ export default async function DashboardPage({
         paymentMethod: payments.paymentMethod,
         razorpayPaymentId: payments.razorpayPaymentId,
         razorpayOrderId: payments.razorpayOrderId,
+        razorpayRefundId: payments.razorpayRefundId,
+        kind: payments.kind,
+        parentPaymentId: payments.parentPaymentId,
         createdAt: payments.createdAt,
         completedAt: payments.completedAt,
         applicationId: payments.applicationId,
@@ -368,9 +371,17 @@ export default async function DashboardPage({
               paymentMethod: payment.paymentMethod,
               razorpayPaymentId: payment.razorpayPaymentId,
               razorpayOrderId: payment.razorpayOrderId,
+              razorpayRefundId: payment.razorpayRefundId,
+              kind: payment.kind,
+              parentPaymentId: payment.parentPaymentId,
               createdAt: payment.createdAt,
               completedAt: payment.completedAt,
-              label,
+              label:
+                payment.kind === 'refund'
+                  ? label
+                    ? `Refund · ${label}`
+                    : 'Refund'
+                  : label,
               href,
             };
           })}

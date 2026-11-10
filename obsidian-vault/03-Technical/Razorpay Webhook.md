@@ -1,4 +1,4 @@
-# Razorpay Webhook (Phase 1 — payment confirmation)
+# Razorpay Webhook (payment confirmation + refunds)
 
 ## Purpose
 
@@ -8,7 +8,12 @@ Two-way money confirmation:
 - **Webhook** (`POST /api/razorpay/webhook`) confirms payment only. It never calls `submitApplication`.
 - Paid-but-no-app recovery: user retries Pay → `createVisaCheckoutOrder` returns `kind: 'resume'` → verify submits.
 
-Shared money write: `confirmCapturedPaymentFromGateway` in `lib/payments/record.ts`.
+Refunds (admin reject flow):
+
+- Admin reject creates a `payments` row with `kind=refund`, `status=proceed`, then calls Razorpay `payments.refund`.
+- Webhook `refund.processed` / `refund.failed` completes the local refund row.
+
+Shared helpers: `lib/payments/record.ts`, `lib/payments/refund.ts`.
 
 ## Dashboard setup
 
@@ -19,6 +24,8 @@ Shared money write: `confirmCapturedPaymentFromGateway` in `lib/payments/record.
    - `payment.captured`
    - `payment.failed`
    - `order.paid` (backup confirmation path)
+   - `refund.processed`
+   - `refund.failed`
 
 ## Local development
 
@@ -36,7 +43,7 @@ After a valid signature:
 
 | Outcome | HTTP | Why |
 |---|---|---|
-| Local order not found / Razorpay fetch failure / unexpected throw | `500` | Razorpay retries (early race before `razorpay_order_id` is saved) |
+| Local order/refund row not found / Razorpay fetch failure / unexpected throw | `500` | Razorpay retries |
 | Amount / currency / status mismatch / different payment already completed | `200` | Permanent; do not retry forever |
 | Unknown event | `200` | Acknowledge and ignore |
 | Invalid signature / invalid JSON | `400` | Reject |
@@ -46,7 +53,7 @@ After a valid signature:
 Look for `razorpay_webhook` log lines with:
 
 - `event`, `orderId`, `paymentId`, `localPaymentId`
-- `outcome`: `completed` | `already_completed` | `failed` | `rejected` | `not_found` | `gateway_error` | `ignored` | `invalid_signature`
+- `outcome`: `completed` | `already_completed` | `refunded` | `already_refunded` | `failed` | `rejected` | `not_found` | `gateway_error` | `ignored` | `invalid_signature`
 - `error` when applicable
 
 ## Manual test matrix
@@ -55,23 +62,26 @@ Look for `razorpay_webhook` log lines with:
 2. **Webhook first (tab still open):** webhook marks `completed` → verify still submits app.
 3. **Tab close:** pay, kill before verify → webhook completes → retry Pay → `resume` → app created, no second charge.
 4. **Failed payment:** decline → `payment.failed` → local `failed`, not `completed`.
-5. **Bad signature:** `400`.
-6. **Unknown event:** `200`.
+5. **Reject + refund:** admin rejects → local refund `proceed` → Razorpay refund → `refund.processed` → local `refunded`.
+6. **Bad signature:** `400`.
+7. **Unknown event:** `200`.
 
 Smoke (signature / ack / retriable-500 paths, no live Razorpay charge):  
 `npx tsx lib/payments/__smoke__/webhook.smoke.ts`
 
-## Deferred (Phase 2+)
+## Deferred
 
-- Refund webhooks (`refund.processed`) and `refunded` status writes
 - `webhook_events` dedupe table
 - Cron for orphaned `completed` payments with null `applicationId`
 - Auto-submit from draft on webhook
+- Admin retry-refund button for `failed` refund rows
 
 ## Related code
 
 - `app/api/razorpay/webhook/route.ts`
 - `lib/payments/record.ts`
+- `lib/payments/refund.ts`
 - `lib/payments/actions.ts`
 - `lib/payments/razorpay.ts`
 - `components/apply/CheckoutPayStep.tsx`
+- `components/admin/StatusUpdateModal.tsx`

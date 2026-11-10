@@ -18,6 +18,7 @@ import {
   correctionItems,
   correctionRequests,
   staffFieldEdits,
+  payments,
 } from '@/lib/db/schema';
 import { and, asc, eq, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 import { signOut } from '@/lib/auth';
@@ -80,6 +81,15 @@ import {
   revealApplicationCredentialSchema,
   saveApplicationCredentialSchema,
 } from '@/lib/credentials/schema';
+import {
+  OPEN_TRAVELLER_STATUSES,
+  attachRazorpayRefundId,
+  callRazorpayRefund,
+  loadCompletedChargeForApplication,
+  markLocalRefundFailed,
+  remainingRefundablePaise,
+} from '@/lib/payments/refund';
+import { formatInrFromPaise } from '@/lib/payments/money';
 import type {
   ActionResponse,
   AttachVisaOutcomeRequest,
@@ -250,6 +260,8 @@ export async function updateApplicationStatus(
       deliveryMimeType,
       deliveryFileSize,
       sendDeliveryToChannels,
+      refundAmountPaise,
+      rejectAllTravellers,
     } = request;
 
     // Validation
@@ -338,8 +350,12 @@ export async function updateApplicationStatus(
       currentStatus = result[0].status;
     }
 
-    // Validate status transition
-    if (!isValidStatusTransition(currentStatus, newStatus)) {
+    // Validate status transition (allow rejected→rejected only to retry a refund)
+    const isRefundRetry =
+      applicationType === 'visa' &&
+      newStatus === 'rejected' &&
+      currentStatus === 'rejected';
+    if (!isRefundRetry && !isValidStatusTransition(currentStatus, newStatus)) {
       return {
         success: false,
         message: 'Invalid status transition',
@@ -427,10 +443,221 @@ export async function updateApplicationStatus(
       }
     }
 
-    const now = new Date();
+    type RejectTarget = { id: string; name: string; oldStatus: string };
+    let rejectTargets: RejectTarget[] = [];
+    let refundPlan: {
+      parentId: string;
+      razorpayPaymentId: string;
+      amountPaise: number;
+    } | null = null;
 
-    // Update application status
-    if (applicationType === 'visa') {
+    if (applicationType === 'visa' && newStatus === 'rejected') {
+      const siblingRows = await db
+        .select({
+          id: visaApplicationTravellers.id,
+          name: visaApplicationTravellers.name,
+          status: visaApplicationTravellers.status,
+        })
+        .from(visaApplicationTravellers)
+        .where(eq(visaApplicationTravellers.applicationId, applicationId));
+
+      const currentRow = siblingRows.find((row) => row.id === travellerId);
+      if (!currentRow) {
+        return {
+          success: false,
+          message: 'Traveller not found',
+          error: 'Visa traveller does not exist on this application',
+        };
+      }
+
+      rejectTargets = [
+        {
+          id: currentRow.id,
+          name: currentRow.name,
+          oldStatus: currentRow.status,
+        },
+      ];
+
+      if (rejectAllTravellers) {
+        for (const row of siblingRows) {
+          if (row.id === travellerId) continue;
+          if (
+            !(OPEN_TRAVELLER_STATUSES as readonly string[]).includes(row.status)
+          ) {
+            continue;
+          }
+          rejectTargets.push({
+            id: row.id,
+            name: row.name,
+            oldStatus: row.status,
+          });
+        }
+      }
+
+      const charge = await loadCompletedChargeForApplication(applicationId);
+      if (charge?.razorpayPaymentId) {
+        if (
+          refundAmountPaise == null ||
+          !Number.isInteger(refundAmountPaise) ||
+          refundAmountPaise < 0
+        ) {
+          return {
+            success: false,
+            message: 'Enter a valid refund amount',
+            error: 'refundAmountPaise must be a non-negative integer (paise)',
+          };
+        }
+        if (refundAmountPaise > charge.amount) {
+          return {
+            success: false,
+            message: `Refund cannot exceed the original amount of ${formatInrFromPaise(charge.amount)}`,
+            error: 'refundAmountPaise exceeds original payment',
+          };
+        }
+        const remaining = await remainingRefundablePaise(charge.id);
+        if (!remaining) {
+          return {
+            success: false,
+            message: 'Could not verify refundable balance',
+            error: 'Parent payment missing',
+          };
+        }
+        if (refundAmountPaise > remaining.remainingPaise) {
+          return {
+            success: false,
+            message: `Refund cannot exceed the remaining refundable amount of ${formatInrFromPaise(remaining.remainingPaise)} (original ${formatInrFromPaise(charge.amount)})`,
+            error: 'refundAmountPaise exceeds remaining refundable',
+          };
+        }
+        if (refundAmountPaise > 0) {
+          refundPlan = {
+            parentId: charge.id,
+            razorpayPaymentId: charge.razorpayPaymentId,
+            amountPaise: refundAmountPaise,
+          };
+        }
+      } else if (
+        refundAmountPaise != null &&
+        refundAmountPaise > 0
+      ) {
+        return {
+          success: false,
+          message: 'No captured payment is available to refund',
+          error: 'Missing razorpay payment for refund',
+        };
+      }
+    }
+
+    const now = new Date();
+    let refundPaymentId: string | null = null;
+    let recipientNameOverride: string | null = null;
+
+    if (applicationType === 'visa' && newStatus === 'rejected') {
+      const parentCharge = refundPlan
+        ? await loadCompletedChargeForApplication(applicationId)
+        : null;
+
+      await db.transaction(async (tx) => {
+        for (const target of rejectTargets) {
+          if (target.oldStatus === 'rejected') continue;
+          await tx
+            .update(visaApplicationTravellers)
+            .set({
+              status: 'rejected',
+              updatedAt: now,
+              completedAt: now,
+            })
+            .where(eq(visaApplicationTravellers.id, target.id));
+
+          await tx.insert(statusHistory).values({
+            applicationId,
+            applicationType,
+            travellerId: target.id,
+            oldStatus: target.oldStatus,
+            newStatus: 'rejected',
+            changedBy: session.user.id,
+            notes: notes || null,
+            createdAt: now,
+          });
+        }
+
+        if (refundPlan && parentCharge) {
+          // Same transaction as status writes so constraint failures roll back.
+          const [created] = await tx
+            .insert(payments)
+            .values({
+              userId: parentCharge.userId,
+              applicationId: parentCharge.applicationId,
+              applicationType: parentCharge.applicationType,
+              amount: refundPlan.amountPaise,
+              currency: parentCharge.currency || 'INR',
+              status: 'proceed',
+              kind: 'refund',
+              parentPaymentId: parentCharge.id,
+              razorpayPaymentId: parentCharge.razorpayPaymentId,
+              submitId: parentCharge.submitId,
+              priceOptionId: parentCharge.priceOptionId,
+              travellerCount: parentCharge.travellerCount,
+              metadata: {
+                travellerIds: rejectTargets.map((t) => t.id),
+                initiatedBy: session.user.id,
+                parentPaymentId: parentCharge.id,
+                parentRazorpayOrderId: parentCharge.razorpayOrderId,
+                parentRazorpayPaymentId: parentCharge.razorpayPaymentId,
+              },
+            })
+            .returning({ id: payments.id });
+
+          if (!created) {
+            throw new Error('Could not create refund payment row.');
+          }
+          refundPaymentId = created.id;
+        }
+      });
+
+      recipientNameOverride =
+        rejectTargets.length > 1
+          ? rejectTargets
+              .map((t) => t.name.trim())
+              .filter(Boolean)
+              .join(', ')
+          : null;
+
+      await recomputeVisaCaseStatus(applicationId);
+
+      if (refundPlan && refundPaymentId) {
+        const gateway = await callRazorpayRefund({
+          razorpayPaymentId: refundPlan.razorpayPaymentId,
+          amountPaise: refundPlan.amountPaise,
+          refundPaymentId,
+          notes: {
+            application_id: applicationId,
+            traveller_ids: rejectTargets.map((t) => t.id).join(','),
+          },
+        });
+        if (!gateway.ok) {
+          await markLocalRefundFailed({
+            refundPaymentId,
+            error: gateway.error,
+          });
+          revalidatePath('/admin/applications');
+          revalidatePath(
+            `/admin/applications/${applicationType}/${applicationId}`
+          );
+          revalidatePath(`/applications/visa/${applicationId}`);
+          return {
+            success: false,
+            message: `Travellers rejected, but refund failed: ${gateway.error}`,
+            error: gateway.error,
+          };
+        }
+        await attachRazorpayRefundId({
+          refundPaymentId,
+          razorpayRefundId: gateway.razorpayRefundId,
+          raw: gateway.raw,
+        });
+      }
+    } else if (applicationType === 'visa') {
       await db
         .update(visaApplicationTravellers)
         .set({
@@ -439,12 +666,23 @@ export async function updateApplicationStatus(
           ...(newStatus === 'under_review' && !travellerReviewedAt
             ? { reviewedAt: now }
             : {}),
-          ...(newStatus === 'approved' || newStatus === 'rejected'
-            ? { completedAt: now }
-            : {}),
+          ...(newStatus === 'approved' ? { completedAt: now } : {}),
           ...(newStatus === 'submitted' ? { completedAt: null } : {}),
         })
         .where(eq(visaApplicationTravellers.id, travellerId!));
+
+      await db.insert(statusHistory).values({
+        applicationId,
+        applicationType,
+        travellerId,
+        oldStatus: currentStatus,
+        newStatus,
+        changedBy: session.user.id,
+        notes: notes || null,
+        createdAt: now,
+      });
+
+      await recomputeVisaCaseStatus(applicationId);
     } else {
       await db
         .update(passportServices)
@@ -456,22 +694,17 @@ export async function updateApplicationStatus(
             : {}),
         })
         .where(eq(passportServices.id, applicationId));
-    }
 
-    // Insert status history for audit trail
-    await db.insert(statusHistory).values({
-      applicationId,
-      applicationType,
-      travellerId: applicationType === 'visa' ? travellerId : null,
-      oldStatus: currentStatus,
-      newStatus,
-      changedBy: session.user.id,
-      notes: notes || null,
-      createdAt: now,
-    });
-
-    if (applicationType === 'visa') {
-      await recomputeVisaCaseStatus(applicationId);
+      await db.insert(statusHistory).values({
+        applicationId,
+        applicationType,
+        travellerId: null,
+        oldStatus: currentStatus,
+        newStatus,
+        changedBy: session.user.id,
+        notes: notes || null,
+        createdAt: now,
+      });
     }
 
     // Revalidate pages
@@ -488,6 +721,7 @@ export async function updateApplicationStatus(
           newStatus,
           notes,
           travellerId,
+          recipientNameOverride,
           delivery: deliveryPayload,
         });
       } catch (notifyError) {
@@ -497,7 +731,10 @@ export async function updateApplicationStatus(
 
     return {
       success: true,
-      message: `Status updated to ${newStatus}`,
+      message:
+        refundPaymentId != null
+          ? `Status updated to ${newStatus}; refund initiated`
+          : `Status updated to ${newStatus}`,
     };
   } catch (error) {
     console.error('Error updating application status:', error);

@@ -211,6 +211,20 @@
       "when": 1794100000000,
       "tag": "0029_mature_forgotten_one",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1794200000000,
+      "tag": "0030_payment_refunds",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1794300000000,
+      "tag": "0031_refund_order_id_unique",
+      "breakpoints": true
     }
   ]
 }

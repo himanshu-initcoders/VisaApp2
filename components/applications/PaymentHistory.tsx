@@ -39,7 +39,9 @@ export function PaymentHistory({
           </p>
         ) : (
           <ul className="space-y-4">
-            {payments.map((payment) => (
+            {payments.map((payment) => {
+              const isRefund = payment.kind === 'refund';
+              return (
               <li
                 key={payment.id}
                 className="rounded-2xl border border-ash px-4 py-3"
@@ -47,6 +49,7 @@ export function PaymentHistory({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-switzer text-sm font-medium text-portrait-ink">
+                      {isRefund ? 'Refund · ' : ''}
                       {formatInrFromPaise(payment.amount)}
                     </p>
                     {payment.label && (
@@ -78,20 +81,29 @@ export function PaymentHistory({
                   <div>
                     <dt className="font-switzer text-xs text-slate-helper">Method</dt>
                     <dd className="font-switzer text-sm text-portrait-ink">
-                      {formatMethod(payment.paymentMethod)}
+                      {isRefund ? 'Refund' : formatMethod(payment.paymentMethod)}
                     </dd>
                   </div>
                   <div className="sm:col-span-2">
                     <dt className="font-switzer text-xs text-slate-helper">
-                      Razorpay payment id
+                      {isRefund ? 'Razorpay refund id' : 'Razorpay payment id'}
                     </dt>
                     <dd className="break-all font-switzer text-sm text-portrait-ink">
-                      {payment.razorpayPaymentId || '—'}
+                      {isRefund
+                        ? payment.razorpayRefundId || '—'
+                        : payment.razorpayPaymentId || '—'}
                     </dd>
                   </div>
                 </dl>
+                {payment.status === 'proceed' ? (
+                  <p className="mt-3 font-switzer text-xs text-slate-helper">
+                    Amount will be credited to customer&apos;s bank account
+                    within 5-7 working days after the refund has processed
+                  </p>
+                ) : null}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </CardContent>

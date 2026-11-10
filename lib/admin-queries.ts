@@ -616,6 +616,10 @@ export async function getApplicationDetails(
       paymentMethod: payments.paymentMethod,
       razorpayPaymentId: payments.razorpayPaymentId,
       razorpayOrderId: payments.razorpayOrderId,
+      razorpayRefundId: payments.razorpayRefundId,
+      kind: payments.kind,
+      parentPaymentId: payments.parentPaymentId,
+      travellerCount: payments.travellerCount,
       createdAt: payments.createdAt,
       completedAt: payments.completedAt,
     })

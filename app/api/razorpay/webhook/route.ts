@@ -5,7 +5,14 @@ import {
   linkCapturedPaymentIfApplicationExists,
   markPaymentFailed,
 } from '@/lib/payments/record';
-import { verifyWebhookSignature } from '@/lib/payments/razorpay';
+import {
+  markRefundFailed,
+  markRefundProcessed,
+} from '@/lib/payments/refund';
+import {
+  normalizePaise,
+  verifyWebhookSignature,
+} from '@/lib/payments/razorpay';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,6 +29,13 @@ interface WebhookOrderEntity {
   status?: string;
 }
 
+interface WebhookRefundEntity {
+  id?: string;
+  payment_id?: string;
+  amount?: number | string;
+  status?: string;
+}
+
 interface WebhookBody {
   event?: string;
   payload?: {
@@ -30,6 +44,9 @@ interface WebhookBody {
     };
     order?: {
       entity?: WebhookOrderEntity;
+    };
+    refund?: {
+      entity?: WebhookRefundEntity;
     };
   };
 }
@@ -182,6 +199,73 @@ export async function POST(request: Request) {
         orderId,
         paymentId: listed.paymentId,
       });
+    }
+
+    if (event === 'refund.processed') {
+      const entity = body.payload?.refund?.entity;
+      const refundId = entity?.id;
+      if (!refundId) {
+        logWebhook({
+          event,
+          outcome: 'rejected',
+          error: 'Missing refund id.',
+        });
+        return NextResponse.json({ received: true });
+      }
+      const amountPaise = normalizePaise(entity?.amount);
+      const result = await markRefundProcessed({
+        razorpayRefundId: refundId,
+        amountPaise,
+        razorpayPaymentId: entity?.payment_id ?? null,
+      });
+      if (!result.ok) {
+        logWebhook({
+          event,
+          paymentId: entity?.payment_id ?? null,
+          outcome: result.outcome,
+          error: result.error,
+        });
+        if (result.retryable) {
+          return NextResponse.json({ error: result.error }, { status: 500 });
+        }
+        return NextResponse.json({ received: true });
+      }
+      logWebhook({
+        event,
+        paymentId: entity?.payment_id ?? null,
+        localPaymentId: result.payment.id,
+        outcome: result.outcome,
+      });
+      return NextResponse.json({ received: true });
+    }
+
+    if (event === 'refund.failed') {
+      const entity = body.payload?.refund?.entity;
+      const amountPaise = normalizePaise(entity?.amount);
+      const result = await markRefundFailed({
+        razorpayRefundId: entity?.id ?? null,
+        razorpayPaymentId: entity?.payment_id ?? null,
+        amountPaise,
+      });
+      if (!result.ok) {
+        logWebhook({
+          event,
+          paymentId: entity?.payment_id ?? null,
+          outcome: result.outcome,
+          error: result.error,
+        });
+        if (result.retryable) {
+          return NextResponse.json({ error: result.error }, { status: 500 });
+        }
+        return NextResponse.json({ received: true });
+      }
+      logWebhook({
+        event,
+        paymentId: entity?.payment_id ?? null,
+        localPaymentId: result.payment.id,
+        outcome: 'failed',
+      });
+      return NextResponse.json({ received: true });
     }
 
     logWebhook({ event, outcome: 'ignored' });

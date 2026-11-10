@@ -80,6 +80,8 @@ export function getStatusVariant(
       return 'rejected';
     case 'refunded':
       return 'review';
+    case 'proceed':
+      return 'pending';
     default:
       return 'default';
   }

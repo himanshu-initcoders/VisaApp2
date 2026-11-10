@@ -97,7 +97,7 @@
 - [x] Pricing calculation (server-side quote from listing prices)
 - [x] Payment gateway integration (Razorpay Checkout + dual confirmation)
 - [x] Webhook Phase 1: `payment.captured` / `payment.failed` / `order.paid` (money only; browser submits app)
-- [ ] Refund webhooks + admin refund flow (Phase 2)
+- [x] Reject + refund: admin modal, `proceed` refund row, Razorpay refund, `refund.processed` / `refund.failed` webhook
 - [ ] Receipt generation
 - [x] Payment history
 

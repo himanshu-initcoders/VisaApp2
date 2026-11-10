@@ -11,6 +11,7 @@ import {
   char,
   uniqueIndex,
   index,
+  foreignKey,
 } from 'drizzle-orm/pg-core';
 import { countries, visaListings } from './schema-extended';
 
@@ -284,7 +285,8 @@ export const payments = pgTable(
     applicationType: varchar('application_type', { length: 50 }).notNull(), // 'visa' or 'passport'
     amount: integer('amount').notNull(), // in paise (smallest currency unit)
     currency: varchar('currency', { length: 10 }).notNull().default('INR'),
-    status: varchar('status', { length: 50 }).notNull().default('pending'), // pending, completed, failed, refunded
+    /** pending | completed | failed | proceed | refunded */
+    status: varchar('status', { length: 50 }).notNull().default('pending'),
     paymentMethod: varchar('payment_method', { length: 50 }), // upi, card, netbanking
     transactionId: varchar('transaction_id', { length: 255 }),
     metadata: jsonb('metadata'), // payment gateway response
@@ -292,6 +294,11 @@ export const payments = pgTable(
     completedAt: timestamp('completed_at'),
     razorpayOrderId: varchar('razorpay_order_id', { length: 255 }),
     razorpayPaymentId: varchar('razorpay_payment_id', { length: 255 }),
+    /** charge (checkout capture) | refund (Razorpay refund row) */
+    kind: varchar('kind', { length: 50 }).notNull().default('charge'),
+    /** For kind=refund: points at the original capture payment. */
+    parentPaymentId: uuid('parent_payment_id'),
+    razorpayRefundId: varchar('razorpay_refund_id', { length: 255 }),
     /** Same client idempotency key as visa_applications.submit_id */
     submitId: uuid('submit_id'),
     priceOptionId: uuid('price_option_id'),
@@ -301,14 +308,29 @@ export const payments = pgTable(
     travellerCount: integer('traveller_count'),
   },
   (table) => [
-    uniqueIndex('payments_razorpay_order_id_unique').on(table.razorpayOrderId),
-    uniqueIndex('payments_razorpay_payment_id_unique').on(table.razorpayPaymentId),
+    foreignKey({
+      columns: [table.parentPaymentId],
+      foreignColumns: [table.id],
+      name: 'payments_parent_payment_id_payments_id_fk',
+    }),
+    uniqueIndex('payments_razorpay_order_id_unique')
+      .on(table.razorpayOrderId)
+      .where(
+        sql`${table.razorpayOrderId} IS NOT NULL AND ${table.kind} = 'charge'`
+      ),
+    uniqueIndex('payments_razorpay_payment_id_unique')
+      .on(table.razorpayPaymentId)
+      .where(
+        sql`${table.razorpayPaymentId} IS NOT NULL AND ${table.kind} = 'charge'`
+      ),
+    uniqueIndex('payments_razorpay_refund_id_unique').on(table.razorpayRefundId),
     uniqueIndex('payments_one_pending_per_submit')
       .on(table.submitId)
       .where(sql`${table.status} = 'pending'`),
     index('payments_user_created_at_idx').on(table.userId, table.createdAt),
     index('payments_application_id_idx').on(table.applicationId),
     index('payments_submit_id_idx').on(table.submitId),
+    index('payments_parent_payment_id_idx').on(table.parentPaymentId),
   ]
 );
 

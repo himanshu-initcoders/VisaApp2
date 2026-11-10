@@ -434,6 +434,8 @@ export async function notifyStatusChangedEvent(input: {
   newStatus: string;
   notes?: string | null;
   travellerId?: string | null;
+  /** When rejecting multiple travellers, comma-separated names for WhatsApp/email. */
+  recipientNameOverride?: string | null;
   delivery?: StatusDeliveryPayload | null;
 }): Promise<void> {
   if (!STATUS_EMAILS.has(input.newStatus)) return;
@@ -443,11 +445,16 @@ export async function notifyStatusChangedEvent(input: {
     visa.id,
     input.travellerId
   );
-  const recipientName = travellerName || applicantLabel(visa);
+  const recipientName =
+    input.recipientNameOverride?.trim() ||
+    travellerName ||
+    applicantLabel(visa);
   const readable = input.newStatus.replace(/_/g, ' ');
-  const title = travellerName
-    ? `${travellerName}'s visa is ${readable}`
-    : `Visa application is ${readable}`;
+  const title = input.recipientNameOverride?.trim()
+    ? `Visa update for ${input.recipientNameOverride.trim()}: ${readable}`
+    : travellerName
+      ? `${travellerName}'s visa is ${readable}`
+      : `Visa application is ${readable}`;
   const body = input.notes?.trim() || `${countryOf(visa)} · ${visa.visaType}`;
   const sendDelivery =
     input.newStatus === 'approved' &&

@@ -177,6 +177,29 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
         ]
       : []
   );
+  const rejectTravellers = details.travellers.map((row) => ({
+    id: row.id,
+    name: row.name?.trim() || 'Traveller',
+    status: row.status,
+  }));
+  const completedCharge = details.payments.find(
+    (payment) =>
+      payment.status === 'completed' &&
+      (payment.kind == null || payment.kind === 'charge') &&
+      Boolean(payment.razorpayPaymentId)
+  );
+  const capturedPayment =
+    completedCharge?.razorpayPaymentId
+      ? {
+          id: completedCharge.id,
+          amountPaise: completedCharge.amount,
+          travellerCount: Math.max(
+            1,
+            completedCharge.travellerCount ?? details.travellers.length ?? 1
+          ),
+          razorpayPaymentId: completedCharge.razorpayPaymentId,
+        }
+      : null;
 
   return (
     <div className="space-y-6">
@@ -411,6 +434,8 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
               documents={details.documents}
               statusHistory={details.statusHistory}
               travellers={correctionTravellers}
+              rejectTravellers={rejectTravellers}
+              capturedPayment={capturedPayment}
               correctionTargets={buildCorrectableTargets(snapshot)}
               documentLabels={documentLabels}
               passportPhotoKeys={passportPhotoKeys}
