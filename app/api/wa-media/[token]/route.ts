@@ -1,3 +1,5 @@
+import { readFile } from 'fs/promises';
+import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
@@ -8,9 +10,26 @@ import { verifyWaMediaToken } from '@/lib/wa-media/token';
 
 export const runtime = 'nodejs';
 
+/** Fixed path for Meta/Twilio template sample approval only. */
+const DEMO_MEDIA_TOKENS = new Set(['demo', 'sample']);
+
+async function serveDemoPdf(): Promise<NextResponse> {
+  const filePath = path.join(process.cwd(), 'public', 'wa-media-sample.pdf');
+  const buffer = await readFile(filePath);
+  return new NextResponse(buffer, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="wa-media-sample.pdf"',
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
+}
+
 /**
  * Public short-TTL media fetch for Twilio WhatsApp document templates.
  * Token is signed; only visa_outcome PDFs are served.
+ * Special tokens `demo` / `sample` serve public/wa-media-sample.pdf for template approval.
  */
 export async function GET(
   _request: NextRequest,
@@ -21,6 +40,10 @@ export async function GET(
     const token = decodeURIComponent(rawToken || '').trim();
     if (!token) {
       return new NextResponse('Not found', { status: 404 });
+    }
+
+    if (DEMO_MEDIA_TOKENS.has(token.toLowerCase())) {
+      return serveDemoPdf();
     }
 
     const verified = verifyWaMediaToken(token);
