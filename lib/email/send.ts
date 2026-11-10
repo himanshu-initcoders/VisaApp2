@@ -9,15 +9,35 @@ import {
 
 export const LOGO_CID = 'viserv-logo';
 
+export type EmailFileAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+};
+
 export async function sendEmail(input: {
   to: string;
   subject: string;
   html: string;
+  fileAttachments?: EmailFileAttachment[];
 }): Promise<boolean> {
   if (!isEmailConfigured()) {
     console.warn('[email] Zoho CPaaS is not configured; skipping:', input.subject);
     return false;
   }
+
+  const attachments = [
+    {
+      filename: 'logo.png',
+      path: path.join(process.cwd(), 'public', 'logo.png'),
+      cid: LOGO_CID,
+    },
+    ...(input.fileAttachments ?? []).map((file) => ({
+      filename: file.filename,
+      content: file.content,
+      contentType: file.contentType,
+    })),
+  ];
 
   // The first SMTP handshake on a cold connection often fails; retry once
   // on a new session so signup does not depend on the user clicking again.
@@ -31,13 +51,7 @@ export async function sendEmail(input: {
         to: input.to,
         subject: input.subject,
         html: input.html,
-        attachments: [
-          {
-            filename: 'logo.png',
-            path: path.join(process.cwd(), 'public', 'logo.png'),
-            cid: LOGO_CID,
-          },
-        ],
+        attachments,
       });
       return true;
     } catch (error) {

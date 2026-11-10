@@ -264,18 +264,31 @@ export async function notifyStatusChanged(input: {
   newStatus: string;
   href: string;
   notes?: string | null;
+  fileAttachment?: {
+    filename: string;
+    content: Buffer;
+    contentType?: string;
+  } | null;
 }): Promise<void> {
   if (!isDeliverableEmail(input.to)) return;
   const readable = input.newStatus.replace(/_/g, ' ');
+  const hasFile = Boolean(input.fileAttachment);
   await sendEmail({
     to: input.to.trim(),
-    subject: `Visa application ${readable} — ${input.country}`,
+    subject: hasFile
+      ? `Visa approved — document attached — ${input.country}`
+      : `Visa application ${readable} — ${input.country}`,
     html: renderEmail({
-      preheader: `Status is now ${readable}.`,
+      preheader: hasFile
+        ? `Your visa is approved. Document attached.`
+        : `Status is now ${readable}.`,
       heading: `Status: ${readable}`,
       paragraphs: [
         `Hi ${input.recipientName}, a visa application status changed to ${readable}.`,
         ...(input.notes?.trim() ? [input.notes.trim()] : []),
+        ...(hasFile
+          ? ['Your visa document is attached to this email.']
+          : []),
       ],
       details: [
         { label: 'Destination', value: input.country },
@@ -285,6 +298,45 @@ export async function notifyStatusChanged(input: {
       buttonLabel: 'View application',
       buttonHref: input.href,
     }),
+    fileAttachments: input.fileAttachment
+      ? [input.fileAttachment]
+      : undefined,
+  });
+}
+
+/** Delivery-only email when attaching an outcome after approval. */
+export async function notifyVisaOutcomeDelivered(input: {
+  to: string;
+  recipientName: string;
+  country: string;
+  visaType: string;
+  referenceNumber: string;
+  href: string;
+  fileAttachment: {
+    filename: string;
+    content: Buffer;
+    contentType?: string;
+  };
+}): Promise<void> {
+  if (!isDeliverableEmail(input.to)) return;
+  await sendEmail({
+    to: input.to.trim(),
+    subject: `Your visa document — ${input.country}`,
+    html: renderEmail({
+      preheader: 'Your visa document is attached.',
+      heading: 'Visa document ready',
+      paragraphs: [
+        `Hi ${input.recipientName}, your visa document is ready and attached to this email.`,
+      ],
+      details: [
+        { label: 'Destination', value: input.country },
+        { label: 'Visa', value: input.visaType },
+        { label: 'Reference', value: input.referenceNumber },
+      ],
+      buttonLabel: 'View application',
+      buttonHref: input.href,
+    }),
+    fileAttachments: [input.fileAttachment],
   });
 }
 

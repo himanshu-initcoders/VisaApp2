@@ -21,6 +21,7 @@ import { FlagLogo } from '@/components/shared/FlagLogo';
 import { SubmissionConfirmationTracker } from '@/components/analytics/SubmissionConfirmationTracker';
 import { listMyApplicationDrafts } from '@/lib/apply/serverDraft';
 import { flagUrlFor, getCountryFlagMap } from '@/lib/countries/flags';
+import { loadVisaOutcomePresence } from '@/lib/visa/outcomeDocument';
 import Link from 'next/link';
 
 /**
@@ -108,9 +109,12 @@ export default async function DashboardPage({
   ]);
 
   const draftSlice = drafts.slice(0, 4);
-  const flagUrls = await getCountryFlagMap([
-    ...draftSlice.map((d) => d.countryCode || d.payload.countryCode),
-    ...visaApps.map((app) => app.countryCode),
+  const [flagUrls, outcomePresence] = await Promise.all([
+    getCountryFlagMap([
+      ...draftSlice.map((d) => d.countryCode || d.payload.countryCode),
+      ...visaApps.map((app) => app.countryCode),
+    ]),
+    loadVisaOutcomePresence(visaApps.map((app) => app.id)),
   ]);
 
   const recent = [
@@ -125,7 +129,8 @@ export default async function DashboardPage({
         travellerCount: summary?.travellerCount ?? 0,
         approvedTravellerCount: summary?.approvedCount ?? 0,
         date: app.submittedAt || app.createdAt,
-        href: `/applications`,
+        href: `/applications/visa/${app.referenceNumber || app.id}`,
+        hasVisaDocument: outcomePresence.has(app.id),
       };
     }),
     ...passportApps.map((app) => ({
@@ -137,7 +142,8 @@ export default async function DashboardPage({
       travellerCount: 0,
       approvedTravellerCount: 0,
       date: app.submittedAt || app.createdAt,
-      href: `/applications`,
+      href: `/applications/passport/${app.id}`,
+      hasVisaDocument: false,
     })),
   ]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -312,12 +318,19 @@ export default async function DashboardPage({
                       </p>
                     </div>
                   </div>
-                  <ApplicationStatusCell
-                    status={item.status}
-                    travellerCount={item.travellerCount}
-                    approvedTravellerCount={item.approvedTravellerCount}
-                    readable
-                  />
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <ApplicationStatusCell
+                      status={item.status}
+                      travellerCount={item.travellerCount}
+                      approvedTravellerCount={item.approvedTravellerCount}
+                      readable
+                    />
+                    {item.hasVisaDocument ? (
+                      <span className="font-switzer text-xs text-nautical-teal">
+                        Document ready
+                      </span>
+                    ) : null}
+                  </div>
                 </Link>
               </li>
             ))}

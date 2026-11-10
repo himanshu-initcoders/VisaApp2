@@ -21,6 +21,7 @@ import {
 import { ApplicationSidebar } from '@/components/dashboard/ApplicationSidebar';
 import { ApplicantActivityTabs } from '@/components/dashboard/ApplicantActivityTabs';
 import { ActionRequiredBanner } from '@/components/dashboard/ActionRequiredBanner';
+import { VisaOutcomeDocumentsCard } from '@/components/dashboard/VisaOutcomeDocumentsCard';
 import { postApplicantComment } from '@/app/(dashboard)/actions';
 import {
   buildStaffEditors,
@@ -28,6 +29,10 @@ import {
   listComments,
 } from '@/lib/visa/corrections';
 import { hasUnreadStaffComment } from '@/lib/notifications';
+import {
+  VISA_OUTCOME_SLOT,
+  visaOutcomeLabel,
+} from '@/lib/visa/outcomeDocumentShared';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -94,7 +99,10 @@ export default async function UserVisaApplicationDetailPage({
   };
 
   const snapshot = (app.formSnapshot as ApplyFormConfig | null) ?? null;
-  const documentLabels = buildDocumentSlotLabelMap(snapshot);
+  const documentLabels = {
+    ...buildDocumentSlotLabelMap(snapshot),
+    [VISA_OUTCOME_SLOT]: visaOutcomeLabel(),
+  };
   const editors = buildStaffEditors(snapshot);
   const storedTravellers: StoredTraveller[] = Array.isArray(app.travellers)
     ? app.travellers
@@ -140,6 +148,8 @@ export default async function UserVisaApplicationDetailPage({
       <ActionRequiredBanner items={openForThis} />
 
       <TravellerSelectionProvider travellers={travellers}>
+        <VisaOutcomeDocumentsCard documents={details.documents} />
+
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <ApplicantActivityTabs

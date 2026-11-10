@@ -7,6 +7,10 @@ import { StatusHistoryCard } from '@/components/admin/Timeline';
 import { useTravellerSelectionOptional } from '@/components/admin/TravellerSelectionContext';
 import { historyForSelectedTraveller } from '@/lib/visa/caseStatus';
 import { getMyDocumentPreviewUrl } from '@/app/(dashboard)/actions';
+import {
+  VISA_OUTCOME_SLOT,
+  visaOutcomeLabel,
+} from '@/lib/visa/outcomeDocumentShared';
 import type {
   DocumentWithVerification,
   StatusHistoryItem,
@@ -28,6 +32,14 @@ export function ApplicationSidebar({
   documentLabels,
 }: ApplicationSidebarProps) {
   const selection = useTravellerSelectionOptional();
+
+  const mergedLabels = useMemo(
+    () => ({
+      ...(documentLabels || {}),
+      [VISA_OUTCOME_SLOT]: visaOutcomeLabel(),
+    }),
+    [documentLabels]
+  );
 
   const visibleDocuments = useMemo(() => {
     if (!selection) return documents;
@@ -76,7 +88,7 @@ export function ApplicationSidebar({
           <DocumentViewer
             documents={visibleDocuments}
             getPreviewUrl={getMyDocumentPreviewUrl}
-            labelBySlotKey={documentLabels}
+            labelBySlotKey={mergedLabels}
           />
         </CardContent>
       </Card>

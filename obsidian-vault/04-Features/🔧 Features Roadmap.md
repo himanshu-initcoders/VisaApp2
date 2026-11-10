@@ -168,6 +168,13 @@
 - [x] Two-way conversation, in-app notifications, and email on comments, resubmits, and status changes
 - [ ] Passport services reuse the same correction tables later
 
+### Approved visa delivery documents
+- [x] Optional per-traveller `visa_outcome` upload on approve (passenger-scoped storage path)
+- [x] Post-approve attach modal for already-approved travellers
+- [x] Optional send PDF on WhatsApp + email; skip plain applicant status WhatsApp when media send runs
+- [x] Applicant detail card, sidebar label, and list “Document ready” hint
+- [ ] Meta-approve `viserv_status_approved_with_document` and set `TWILIO_WA_SID_STATUS_APPROVED_WITH_DOCUMENT`
+
 ---
 
 ## Feature Details

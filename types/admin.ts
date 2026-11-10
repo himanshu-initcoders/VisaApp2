@@ -254,6 +254,23 @@ export interface StatusUpdateRequest {
   travellerId?: string;
   newStatus: string;
   notes?: string;
+  /** Optional approved-visa delivery file (already uploaded to storage). */
+  deliveryDocumentKey?: string;
+  deliveryFilename?: string;
+  deliveryMimeType?: string;
+  deliveryFileSize?: number;
+  /** When true, send PDF on WhatsApp + email (PDF required). */
+  sendDeliveryToChannels?: boolean;
+}
+
+export interface AttachVisaOutcomeRequest {
+  applicationId: string;
+  travellerId: string;
+  deliveryDocumentKey: string;
+  deliveryFilename: string;
+  deliveryMimeType: string;
+  deliveryFileSize: number;
+  sendDeliveryToChannels?: boolean;
 }
 
 /**

@@ -2,21 +2,31 @@ import 'server-only';
 
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { notifications, users, visaApplications } from '@/lib/db/schema';
+import {
+  notifications,
+  users,
+  visaApplicationTravellers,
+  visaApplications,
+} from '@/lib/db/schema';
 import {
   isDeliverableEmail,
   notifyCorrectionRequested,
   notifyCorrectionResubmitted,
   notifyNewComment,
   notifyStatusChanged,
+  notifyVisaOutcomeDelivered,
   resolveApplicantEmail,
 } from '@/lib/email/notify';
 import {
   notifyCorrectionRequestedWhatsApp,
   notifyCorrectionResubmittedWhatsApp,
   notifyNewCommentWhatsApp,
+  notifyStatusApprovedWithDocumentWhatsApp,
   notifyStatusChangedWhatsApp,
 } from '@/lib/whatsapp/notify';
+import { readStoredObject } from '@/lib/upload/readStoredObject';
+import { buildWaMediaPublicUrl } from '@/lib/wa-media/token';
+import { isPdfMime } from '@/lib/visa/outcomeDocumentShared';
 
 const STATUS_EMAILS = new Set(['approved', 'rejected', 'under_review']);
 
@@ -173,6 +183,26 @@ function countryOf(visa: VisaContext) {
 
 function applicantLabel(visa: VisaContext) {
   return visa.applicantName || visa.accountName || 'Applicant';
+}
+
+/** Prefer the traveller whose status changed; fall back to case applicant. */
+async function resolveStatusRecipientName(
+  applicationId: string,
+  travellerId?: string | null
+): Promise<string | null> {
+  if (!travellerId) return null;
+  const [row] = await db
+    .select({ name: visaApplicationTravellers.name })
+    .from(visaApplicationTravellers)
+    .where(
+      and(
+        eq(visaApplicationTravellers.id, travellerId),
+        eq(visaApplicationTravellers.applicationId, applicationId)
+      )
+    )
+    .limit(1);
+  const name = row?.name?.trim();
+  return name || null;
 }
 
 export async function notifyCorrectionRequestedEvent(input: {
@@ -369,18 +399,68 @@ export async function notifyCommentEvent(input: {
   ]);
 }
 
+export type StatusDeliveryPayload = {
+  documentId: string;
+  s3Key: string;
+  filename: string;
+  mimeType: string;
+  sendToChannels: boolean;
+};
+
+async function loadPdfAttachment(delivery: StatusDeliveryPayload): Promise<{
+  filename: string;
+  content: Buffer;
+  contentType: string;
+} | null> {
+  if (!delivery.sendToChannels || !isPdfMime(delivery.mimeType)) return null;
+  const stored = await readStoredObject(delivery.s3Key);
+  if (!stored) {
+    console.error('[email] Could not read delivery PDF', delivery.s3Key);
+    return null;
+  }
+  const filename = delivery.filename?.endsWith('.pdf')
+    ? delivery.filename
+    : `${delivery.filename || 'visa-document'}.pdf`;
+  return {
+    filename,
+    content: stored.buffer,
+    contentType: 'application/pdf',
+  };
+}
+
 export async function notifyStatusChangedEvent(input: {
   applicationId: string;
   actorId: string;
   newStatus: string;
   notes?: string | null;
+  travellerId?: string | null;
+  delivery?: StatusDeliveryPayload | null;
 }): Promise<void> {
   if (!STATUS_EMAILS.has(input.newStatus)) return;
   const visa = await loadVisaContext(input.applicationId);
   if (!visa) return;
+  const travellerName = await resolveStatusRecipientName(
+    visa.id,
+    input.travellerId
+  );
+  const recipientName = travellerName || applicantLabel(visa);
   const readable = input.newStatus.replace(/_/g, ' ');
-  const title = `Visa application is ${readable}`;
+  const title = travellerName
+    ? `${travellerName}'s visa is ${readable}`
+    : `Visa application is ${readable}`;
   const body = input.notes?.trim() || `${countryOf(visa)} · ${visa.visaType}`;
+  const sendDelivery =
+    input.newStatus === 'approved' &&
+    Boolean(input.delivery?.sendToChannels) &&
+    isPdfMime(input.delivery?.mimeType);
+  const fileAttachment =
+    sendDelivery && input.delivery
+      ? await loadPdfAttachment(input.delivery)
+      : null;
+  const mediaUrl =
+    sendDelivery && input.delivery
+      ? buildWaMediaPublicUrl(input.delivery.documentId)
+      : null;
 
   if (visa.userId !== input.actorId) {
     const href = `/applications/visa/${visa.referenceNumber}`;
@@ -400,30 +480,49 @@ export async function notifyStatusChangedEvent(input: {
       await sendSafely(
         notifyStatusChanged({
           to,
-          recipientName: applicantLabel(visa),
+          recipientName,
           country: countryOf(visa),
           visaType: visa.visaType,
           referenceNumber: visa.referenceNumber,
           newStatus: input.newStatus,
           href,
           notes: input.notes,
+          fileAttachment,
         }),
         'status to applicant'
       );
     }
-    await sendSafely(
-      notifyStatusChangedWhatsApp({
-        recipientUserId: visa.userId,
-        recipientName: applicantLabel(visa),
-        country: countryOf(visa),
-        visaType: visa.visaType,
-        referenceNumber: visa.referenceNumber,
-        newStatus: input.newStatus,
-        notes: input.notes,
-        audience: 'applicant',
-      }),
-      'status to applicant whatsapp'
-    );
+    let sentMediaWhatsApp = false;
+    if (sendDelivery && mediaUrl) {
+      try {
+        sentMediaWhatsApp = await notifyStatusApprovedWithDocumentWhatsApp({
+          recipientUserId: visa.userId,
+          recipientName,
+          country: countryOf(visa),
+          visaType: visa.visaType,
+          referenceNumber: visa.referenceNumber,
+          notes: input.notes,
+          mediaPathVariable: mediaUrl.pathVariable,
+        });
+      } catch (error) {
+        console.error('[email] status approved with document whatsapp failed', error);
+      }
+    }
+    if (!sentMediaWhatsApp) {
+      await sendSafely(
+        notifyStatusChangedWhatsApp({
+          recipientUserId: visa.userId,
+          recipientName,
+          country: countryOf(visa),
+          visaType: visa.visaType,
+          referenceNumber: visa.referenceNumber,
+          newStatus: input.newStatus,
+          notes: input.notes,
+          audience: 'applicant',
+        }),
+        'status to applicant whatsapp'
+      );
+    }
   }
 
   const audience = await staffAudience(visa, input.actorId);
@@ -468,6 +567,74 @@ export async function notifyStatusChangedEvent(input: {
       )
     ),
   ]);
+}
+
+/** Post-approve attach: email + media WA only (no plain status notify). */
+export async function notifyVisaOutcomeDeliveredEvent(input: {
+  applicationId: string;
+  travellerId?: string | null;
+  delivery: StatusDeliveryPayload;
+}): Promise<void> {
+  if (!input.delivery.sendToChannels || !isPdfMime(input.delivery.mimeType)) {
+    return;
+  }
+  const visa = await loadVisaContext(input.applicationId);
+  if (!visa) return;
+  const travellerName = await resolveStatusRecipientName(
+    visa.id,
+    input.travellerId
+  );
+  const recipientName = travellerName || applicantLabel(visa);
+
+  const href = `/applications/visa/${visa.referenceNumber}`;
+  await insertNotifications({
+    userIds: [visa.userId],
+    applicationId: visa.id,
+    type: 'visa_outcome_delivered',
+    title: travellerName
+      ? `${travellerName}'s visa document is ready`
+      : 'Your visa document is ready',
+    body: `${countryOf(visa)} · ${visa.visaType}`,
+    href,
+  });
+
+  const fileAttachment = await loadPdfAttachment(input.delivery);
+  const mediaUrl = buildWaMediaPublicUrl(input.delivery.documentId);
+  const to = resolveApplicantEmail({
+    accountEmail: visa.accountEmail,
+    passportEmail: visa.passportEmail,
+  });
+
+  if (to && fileAttachment) {
+    await sendSafely(
+      notifyVisaOutcomeDelivered({
+        to,
+        recipientName,
+        country: countryOf(visa),
+        visaType: visa.visaType,
+        referenceNumber: visa.referenceNumber,
+        href,
+        fileAttachment,
+      }),
+      'visa outcome email'
+    );
+  }
+
+  if (mediaUrl) {
+    try {
+      await notifyStatusApprovedWithDocumentWhatsApp({
+        recipientUserId: visa.userId,
+        recipientName,
+        country: countryOf(visa),
+        visaType: visa.visaType,
+        referenceNumber: visa.referenceNumber,
+        notes: 'Your visa document is attached.',
+        mediaPathVariable: mediaUrl.pathVariable,
+      });
+    } catch (error) {
+      console.error('[email] visa outcome whatsapp failed', error);
+    }
+  }
 }
 
 export async function listNotifications(

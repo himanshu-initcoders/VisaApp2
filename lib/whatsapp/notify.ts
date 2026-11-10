@@ -341,6 +341,58 @@ export async function notifyStatusChangedWhatsApp(input: {
 }
 
 /**
+ * Applicant-only: same body as status_changed plus document media (var 7 = path token).
+ * Call instead of plain status WhatsApp when a PDF is delivered with the approve notify.
+ */
+/**
+ * Returns true when the media template message was accepted by Twilio.
+ * False when SID/config is missing or the API fails (caller may fall back).
+ */
+export async function notifyStatusApprovedWithDocumentWhatsApp(input: {
+  recipientUserId: string;
+  recipientName: string;
+  country: string;
+  visaType: string;
+  referenceNumber: string;
+  notes?: string | null;
+  /** Path variable for Twilio media URL (token after /api/wa-media/). */
+  mediaPathVariable: string;
+}): Promise<boolean> {
+  const recipient = await resolveUserWhatsApp(input.recipientUserId);
+  if (!recipient) return false;
+
+  const contentSid = sid('TWILIO_WA_SID_STATUS_APPROVED_WITH_DOCUMENT');
+  if (!contentSid) {
+    console.warn(
+      '[whatsapp] TWILIO_WA_SID_STATUS_APPROVED_WITH_DOCUMENT missing; skipping media status'
+    );
+    return false;
+  }
+
+  const notes = input.notes?.trim() || '—';
+
+  try {
+    return await sendWhatsAppContent({
+      to: recipient.to,
+      contentSid,
+      variables: vars([
+        input.recipientName || recipient.name,
+        'approved',
+        notes,
+        input.country,
+        input.visaType,
+        input.referenceNumber,
+        input.mediaPathVariable,
+      ]),
+      label: 'status approved with document',
+    });
+  } catch (error) {
+    console.error('[whatsapp] status approved with document failed', error);
+    return false;
+  }
+}
+
+/**
  * Login OTP — sends to the requested mobile even if no users row exists yet.
  * Returns false when Twilio/SID is missing or the API fails (caller must fail the request).
  */

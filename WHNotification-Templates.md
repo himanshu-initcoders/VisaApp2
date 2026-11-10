@@ -193,6 +193,18 @@ Also: `viserv_status_changed_applicant` · `viserv_status_changed_staff` (same b
 
 ---
 
+## `viserv_status_approved_with_document`
+
+Same body as `viserv_status_changed`, plus Document media:
+
+- Media URL: `https://app.viserv.com/api/wa-media/{{7}}`
+- Env: `TWILIO_WA_SID_STATUS_APPROVED_WITH_DOCUMENT`
+- Applicant only; skips plain status WhatsApp when PDF is delivered
+
+**Samples:** Priya Sharma / approved / Your e-visa is attached. / United Arab Emirates / Tourist Visa / VI234567898765 / sample-token.pdf-path
+
+---
+
 ## `viserv_status_under_review` (optional)
 
 ```

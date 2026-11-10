@@ -4,12 +4,17 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent, Button } from '@/components/ui';
 import { StatusUpdateModal } from '@/components/admin/StatusUpdateModal';
+import { AttachVisaOutcomeModal } from '@/components/admin/AttachVisaOutcomeModal';
 import { NotesModal } from '@/components/admin/NotesModal';
 import { RequestCorrectionModal } from '@/components/admin/RequestCorrectionModal';
 import { DocumentViewer } from '@/components/admin/DocumentViewer';
 import { StatusHistoryCard } from '@/components/admin/Timeline';
 import { useTravellerSelectionOptional } from '@/components/admin/TravellerSelectionContext';
 import { historyForSelectedTraveller } from '@/lib/visa/caseStatus';
+import {
+  VISA_OUTCOME_SLOT,
+  visaOutcomeLabel,
+} from '@/lib/visa/outcomeDocumentShared';
 import type { DocumentWithVerification, StatusHistoryItem } from '@/types/admin';
 import type { CorrectableTarget } from '@/lib/visa/corrections';
 
@@ -43,9 +48,18 @@ export function VisaApplicationActions({
   const router = useRouter();
   const selection = useTravellerSelectionOptional();
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showAttachModal, setShowAttachModal] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [prefillSlot, setPrefillSlot] = useState<string | undefined>();
+
+  const mergedLabels = useMemo(
+    () => ({
+      ...(documentLabels || {}),
+      [VISA_OUTCOME_SLOT]: visaOutcomeLabel(),
+    }),
+    [documentLabels]
+  );
 
   const visibleDocuments = useMemo(() => {
     if (!selection) return documents;
@@ -54,6 +68,9 @@ export function VisaApplicationActions({
 
   const activeTraveller = selection?.activeTraveller ?? null;
   const statusForUpdate = activeTraveller?.status || currentStatus;
+  const canAttachOutcome =
+    Boolean(activeTraveller?.travellerRowId) &&
+    (activeTraveller?.status || currentStatus) === 'approved';
   const visibleHistory = useMemo(
     () =>
       historyForSelectedTraveller(
@@ -96,6 +113,15 @@ export function VisaApplicationActions({
           >
             Update Status
           </Button>
+          {canAttachOutcome ? (
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => setShowAttachModal(true)}
+            >
+              Attach visa document
+            </Button>
+          ) : null}
           <Button
             variant="secondary"
             className="w-full"
@@ -137,7 +163,7 @@ export function VisaApplicationActions({
           <DocumentViewer
             documents={visibleDocuments}
             onDocumentVerified={handleSuccess}
-            labelBySlotKey={documentLabels}
+            labelBySlotKey={mergedLabels}
             passportPhotoKeys={passportPhotoKeys}
             onRequestReupload={(slotKey) => {
               setPrefillSlot(slotKey);
@@ -157,6 +183,17 @@ export function VisaApplicationActions({
         currentStatus={statusForUpdate}
         onSuccess={handleSuccess}
       />
+
+      {activeTraveller?.travellerRowId ? (
+        <AttachVisaOutcomeModal
+          isOpen={showAttachModal}
+          onClose={() => setShowAttachModal(false)}
+          applicationId={applicationId}
+          travellerId={activeTraveller.travellerRowId}
+          travellerName={travellerLabel}
+          onSuccess={handleSuccess}
+        />
+      ) : null}
 
       <NotesModal
         isOpen={showNotesModal}

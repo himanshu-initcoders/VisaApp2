@@ -10,6 +10,7 @@ import { DraftApplicationsList } from '@/components/dashboard/DraftApplicationsL
 import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
 import { listMyApplicationDrafts } from '@/lib/apply/serverDraft';
 import { flagUrlFor, getCountryFlagMap } from '@/lib/countries/flags';
+import { loadVisaOutcomePresence } from '@/lib/visa/outcomeDocument';
 import Link from 'next/link';
 
 export default async function ApplicationsPage() {
@@ -32,12 +33,13 @@ export default async function ApplicationsPage() {
 
   const drafts = draftsResult.success ? draftsResult.drafts : [];
 
-  const [summaries, flagUrls] = await Promise.all([
+  const [summaries, flagUrls, outcomePresence] = await Promise.all([
     loadTravellerSummaries(visaApps.map((app) => app.id)),
     getCountryFlagMap([
       ...drafts.map((d) => d.countryCode || d.payload.countryCode),
       ...visaApps.map((app) => app.countryCode),
     ]),
+    loadVisaOutcomePresence(visaApps.map((app) => app.id)),
   ]);
 
   const rows = [
@@ -53,6 +55,7 @@ export default async function ApplicationsPage() {
         date: app.submittedAt || app.createdAt,
         kind: 'visa' as const,
         href: `/applications/visa/${app.referenceNumber || app.id}`,
+        hasVisaDocument: outcomePresence.has(app.id),
       };
     }),
     ...passportApps.map((app) => ({
@@ -65,6 +68,7 @@ export default async function ApplicationsPage() {
       date: app.submittedAt || app.createdAt,
       kind: 'passport' as const,
       href: `/applications/passport/${app.id}`,
+      hasVisaDocument: false,
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -136,12 +140,19 @@ export default async function ApplicationsPage() {
                     </p>
                   </div>
                 </div>
-                <ApplicationStatusCell
-                  status={row.status}
-                  travellerCount={row.travellerCount}
-                  approvedTravellerCount={row.approvedTravellerCount}
-                  readable
-                />
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <ApplicationStatusCell
+                    status={row.status}
+                    travellerCount={row.travellerCount}
+                    approvedTravellerCount={row.approvedTravellerCount}
+                    readable
+                  />
+                  {row.hasVisaDocument ? (
+                    <span className="font-switzer text-xs text-nautical-teal">
+                      Document ready
+                    </span>
+                  ) : null}
+                </div>
               </Link>
             </li>
           ))}

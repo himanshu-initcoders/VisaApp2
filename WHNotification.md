@@ -34,6 +34,7 @@ Copy each block into **Twilio Console → Messaging → Content Template Builder
 | 7 | `viserv_correction_resubmitted` | `notifyCorrectionResubmitted` | Reviewer / Admin | Submit |
 | 8 | `viserv_new_comment` | `notifyNewComment` | Applicant or Staff | Submit |
 | 9 | `viserv_status_changed` | `notifyStatusChanged` | Applicant + Staff | Submit |
+| 9f | `viserv_status_approved_with_document` | `notifyStatusApprovedWithDocumentWhatsApp` · `TWILIO_WA_SID_STATUS_APPROVED_WITH_DOCUMENT` | Applicant | **Submit (Document media)** |
 | 10 | `viserv_login_otp` | `requestOtp` (later) · `TWILIO_WA_SID_LOGIN_OTP` | Applicant | **Submit (Utility — full sentences)** |
 
 ---
@@ -476,6 +477,59 @@ Thank you for choosing Viserv.
 
 ---
 
+## 9f. Status approved with document (applicant)
+
+**Template name:** `viserv_status_approved_with_document`  
+**Category:** Utility  
+**Language:** English (`en`)  
+**Content type:** `twilio/media` (Document header — submit a **PDF** sample)  
+**Maps to:** Approve / attach outcome with “Send on WhatsApp and email” → `notifyStatusApprovedWithDocumentWhatsApp`  
+**Env after approval:** `TWILIO_WA_SID_STATUS_APPROVED_WITH_DOCUMENT`  
+**Replaces plain applicant** `viserv_status_changed` WhatsApp when a PDF is sent with the status (or post-approve attach). Staff still get plain status WhatsApp.
+
+### Body (copy) — same text as `viserv_status_changed`
+
+```
+Dear {{1}},
+
+We're writing to confirm that your visa application status is now {{2}}.
+
+{{3}}
+
+Destination: {{4}}
+Visa: {{5}}
+Reference: {{6}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+### Media
+
+| Field | Value |
+|---|---|
+| Media URL | `https://app.viserv.com/api/wa-media/{{7}}` |
+| Sample for `{{7}}` | A short public path token that resolves to a real PDF during approval (e.g. a test token from `/api/wa-media/...`) |
+
+WhatsApp locks this template to **Document** after PDF sample approval — do not send images on this SID.
+
+### Variables
+
+| Var | Meaning | Sample value |
+|---|---|---|
+| `{{1}}` | Recipient name | Priya Sharma |
+| `{{2}}` | Readable status | approved |
+| `{{3}}` | Notes (or `—` if empty) | Your e-visa is attached. |
+| `{{4}}` | Country | United Arab Emirates |
+| `{{5}}` | Visa type | Tourist Visa |
+| `{{6}}` | Reference number | VI234567898765 |
+| `{{7}}` | Media path token (after `/api/wa-media/`) | signed short-TTL token |
+
+**Runtime:** `NEXT_PUBLIC_APP_URL` (or `NEXTAUTH_URL`) must be a public HTTPS host Twilio can fetch. Local `UPLOAD_PROVIDER=local` still works when the app URL is reachable (tunnel/prod).
+
+---
+
 ## Optional: status-specific templates (higher approval clarity)
 
 If Meta rejects a generic status template, submit these three instead of #9.
@@ -608,6 +662,7 @@ When the button URL uses `{{1}}`, body variables must still be numbered sequenti
 8. [ ] `viserv_new_comment_applicant` + `viserv_new_comment_staff`
 9. [ ] `viserv_status_changed_applicant` + `viserv_status_changed_staff`  
    *(or optional 9c–9e if generic status is rejected)*
+9f. [ ] `viserv_status_approved_with_document` — Document media + same body as status changed
 10. [ ] `viserv_login_otp` — Utility with full sentences (OTP as `{{2}}`, not code-only)
 
 ---
@@ -625,12 +680,13 @@ When the button URL uses `{{1}}`, body variables must still be numbered sequenti
 | Correction resubmitted | `viserv_correction_resubmitted` | `TWILIO_WA_SID_CORRECTION_RESUBMITTED` | Assigned reviewer (else admins) |
 | New comment | `viserv_new_comment_*` | `TWILIO_WA_SID_NEW_COMMENT_*` | Opposite party |
 | Status changed | `viserv_status_changed_*` | `TWILIO_WA_SID_STATUS_CHANGED_*` | Applicant + staff audience |
+| Approved + PDF delivery | `viserv_status_approved_with_document` | `TWILIO_WA_SID_STATUS_APPROVED_WITH_DOCUMENT` | Applicant phone (skips plain status WA) |
 | Applicant login OTP | `viserv_login_otp` | `TWILIO_WA_SID_LOGIN_OTP` | Applicant phone (requested number) |
 
 Phone format for Twilio: `whatsapp:+91XXXXXXXXXX`
 
 ---
 
-**Last updated:** 2026-10-27  
+**Last updated:** 2026-11-10  
 **Voice reference:** TravelFirst booking confirmations (Dear / delighted to confirm / Thank you for choosing)  
 **Source of truth for events:** `lib/email/notify.ts` + `lib/notifications.ts` + `lib/whatsapp/notify.ts`

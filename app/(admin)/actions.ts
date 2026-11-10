@@ -56,6 +56,7 @@ import {
   notifyCommentEvent,
   notifyCorrectionRequestedEvent,
   notifyStatusChangedEvent,
+  notifyVisaOutcomeDeliveredEvent,
 } from '@/lib/notifications';
 import { uploadService } from '@/lib/upload';
 import { uploadApplicationDocuments } from '@/lib/upload/application-actions';
@@ -64,6 +65,12 @@ import {
   deleteReplacedObjectKey,
 } from '@/lib/upload/deleteSlotSiblings';
 import { upsertApplicationDocumentRow } from '@/lib/upload/upsertApplicationDocumentRow';
+import {
+  assertVisaOutcomeKeyForPassenger,
+  cleanupVisaOutcomeUpload,
+  upsertVisaOutcomeDocumentRow,
+} from '@/lib/visa/outcomeDocument';
+import { isPdfMime } from '@/lib/visa/outcomeDocumentShared';
 import {
   reviewerOwnsDocument,
   reviewerOwnsVisa,
@@ -75,6 +82,7 @@ import {
 } from '@/lib/credentials/schema';
 import type {
   ActionResponse,
+  AttachVisaOutcomeRequest,
   StatusUpdateRequest,
   DocumentVerificationRequest,
   AddNoteRequest,
@@ -231,8 +239,18 @@ export async function updateApplicationStatus(
     // Authorization check
     const session = await requireRole(['admin', 'reviewer']);
 
-    const { applicationId, applicationType, newStatus, notes, travellerId } =
-      request;
+    const {
+      applicationId,
+      applicationType,
+      newStatus,
+      notes,
+      travellerId,
+      deliveryDocumentKey,
+      deliveryFilename,
+      deliveryMimeType,
+      deliveryFileSize,
+      sendDeliveryToChannels,
+    } = request;
 
     // Validation
     if (!applicationId || !applicationType || !newStatus) {
@@ -251,6 +269,23 @@ export async function updateApplicationStatus(
       };
     }
 
+    if (sendDeliveryToChannels) {
+      if (!deliveryDocumentKey) {
+        return {
+          success: false,
+          message: 'Attach a PDF to send on WhatsApp and email',
+          error: 'deliveryDocumentKey required when sendDeliveryToChannels is set',
+        };
+      }
+      if (!isPdfMime(deliveryMimeType)) {
+        return {
+          success: false,
+          message: 'Only PDF files can be sent on WhatsApp and email',
+          error: 'PDF required when sendDeliveryToChannels is set',
+        };
+      }
+    }
+
     const denied = await denyReviewerUnlessAssigned(
       session,
       applicationId,
@@ -261,6 +296,7 @@ export async function updateApplicationStatus(
     // Get current application
     let currentStatus: string;
     let travellerReviewedAt: Date | null = null;
+    let travellerPassengerId: string | null = null;
     if (applicationType === 'visa') {
       const result = await db
         .select()
@@ -283,6 +319,7 @@ export async function updateApplicationStatus(
 
       currentStatus = result[0].status;
       travellerReviewedAt = result[0].reviewedAt;
+      travellerPassengerId = result[0].passengerId;
     } else {
       const result = await db
         .select()
@@ -317,6 +354,77 @@ export async function updateApplicationStatus(
         message: 'Notes required for rejection',
         error: 'Please provide a reason for rejecting this application',
       };
+    }
+
+    if (
+      deliveryDocumentKey &&
+      (applicationType !== 'visa' || newStatus !== 'approved')
+    ) {
+      return {
+        success: false,
+        message: 'Delivery files are only allowed when approving a visa',
+        error: 'Invalid delivery document for this status change',
+      };
+    }
+
+    let deliveryPayload: {
+      documentId: string;
+      s3Key: string;
+      filename: string;
+      mimeType: string;
+      sendToChannels: boolean;
+    } | null = null;
+
+    if (
+      applicationType === 'visa' &&
+      newStatus === 'approved' &&
+      deliveryDocumentKey &&
+      travellerPassengerId
+    ) {
+      const [appOwner] = await db
+        .select({ userId: visaApplications.userId })
+        .from(visaApplications)
+        .where(eq(visaApplications.id, applicationId))
+        .limit(1);
+      if (!appOwner) {
+        return {
+          success: false,
+          message: 'Application not found',
+          error: 'Visa application missing',
+        };
+      }
+      try {
+        const safeKey = assertVisaOutcomeKeyForPassenger(deliveryDocumentKey, {
+          applicationId,
+          passengerId: travellerPassengerId,
+          userId: appOwner.userId,
+        });
+        const row = await upsertVisaOutcomeDocumentRow({
+          applicationId,
+          passengerId: travellerPassengerId,
+          key: safeKey,
+          filename: deliveryFilename || 'visa-document.pdf',
+          size: deliveryFileSize || 0,
+          mimeType: deliveryMimeType || 'application/pdf',
+        });
+        deliveryPayload = {
+          documentId: row.id,
+          s3Key: row.s3Key,
+          filename: row.filename,
+          mimeType: row.mimeType,
+          sendToChannels: Boolean(sendDeliveryToChannels),
+        };
+      } catch (deliveryError) {
+        await cleanupVisaOutcomeUpload(deliveryDocumentKey);
+        return {
+          success: false,
+          message:
+            deliveryError instanceof Error
+              ? deliveryError.message
+              : 'Invalid delivery document',
+          error: 'deliveryDocumentKey validation failed',
+        };
+      }
     }
 
     const now = new Date();
@@ -379,6 +487,8 @@ export async function updateApplicationStatus(
           actorId: session.user.id,
           newStatus,
           notes,
+          travellerId,
+          delivery: deliveryPayload,
         });
       } catch (notifyError) {
         console.error('Status notification failed', notifyError);
@@ -394,6 +504,175 @@ export async function updateApplicationStatus(
     return {
       success: false,
       message: 'Failed to update status',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Attach (or replace) a visa outcome document on an already-approved traveller.
+ */
+export async function attachVisaOutcomeDocument(
+  request: AttachVisaOutcomeRequest
+): Promise<ActionResponse> {
+  try {
+    const session = await requireRole(['admin', 'reviewer']);
+    const {
+      applicationId,
+      travellerId,
+      deliveryDocumentKey,
+      deliveryFilename,
+      deliveryMimeType,
+      deliveryFileSize,
+      sendDeliveryToChannels,
+    } = request;
+
+    if (!applicationId || !travellerId || !deliveryDocumentKey) {
+      return {
+        success: false,
+        message: 'Missing required fields',
+        error: 'applicationId, travellerId, and deliveryDocumentKey are required',
+      };
+    }
+
+    if (sendDeliveryToChannels && !isPdfMime(deliveryMimeType)) {
+      await cleanupVisaOutcomeUpload(deliveryDocumentKey);
+      return {
+        success: false,
+        message: 'Only PDF files can be sent on WhatsApp and email',
+        error: 'PDF required when sendDeliveryToChannels is set',
+      };
+    }
+
+    const denied = await denyReviewerUnlessAssigned(
+      session,
+      applicationId,
+      'visa'
+    );
+    if (denied) {
+      await cleanupVisaOutcomeUpload(deliveryDocumentKey);
+      return denied;
+    }
+
+    const [traveller] = await db
+      .select()
+      .from(visaApplicationTravellers)
+      .where(
+        and(
+          eq(visaApplicationTravellers.id, travellerId),
+          eq(visaApplicationTravellers.applicationId, applicationId)
+        )
+      )
+      .limit(1);
+
+    if (!traveller) {
+      await cleanupVisaOutcomeUpload(deliveryDocumentKey);
+      return {
+        success: false,
+        message: 'Traveller not found',
+        error: 'Visa traveller does not exist on this application',
+      };
+    }
+
+    if (traveller.status !== 'approved') {
+      await cleanupVisaOutcomeUpload(deliveryDocumentKey);
+      return {
+        success: false,
+        message: 'Traveller must be approved before attaching a visa document',
+        error: `Current status is ${traveller.status}`,
+      };
+    }
+
+    const [appOwner] = await db
+      .select({
+        userId: visaApplications.userId,
+        referenceNumber: visaApplications.referenceNumber,
+      })
+      .from(visaApplications)
+      .where(eq(visaApplications.id, applicationId))
+      .limit(1);
+
+    if (!appOwner) {
+      await cleanupVisaOutcomeUpload(deliveryDocumentKey);
+      return {
+        success: false,
+        message: 'Application not found',
+        error: 'Visa application missing',
+      };
+    }
+
+    let deliveryPayload: {
+      documentId: string;
+      s3Key: string;
+      filename: string;
+      mimeType: string;
+      sendToChannels: boolean;
+    };
+
+    try {
+      const safeKey = assertVisaOutcomeKeyForPassenger(deliveryDocumentKey, {
+        applicationId,
+        passengerId: traveller.passengerId,
+        userId: appOwner.userId,
+      });
+      const row = await upsertVisaOutcomeDocumentRow({
+        applicationId,
+        passengerId: traveller.passengerId,
+        key: safeKey,
+        filename: deliveryFilename || 'visa-document.pdf',
+        size: deliveryFileSize || 0,
+        mimeType: deliveryMimeType || 'application/pdf',
+      });
+      deliveryPayload = {
+        documentId: row.id,
+        s3Key: row.s3Key,
+        filename: row.filename,
+        mimeType: row.mimeType,
+        sendToChannels: Boolean(sendDeliveryToChannels),
+      };
+    } catch (deliveryError) {
+      await cleanupVisaOutcomeUpload(deliveryDocumentKey);
+      return {
+        success: false,
+        message:
+          deliveryError instanceof Error
+            ? deliveryError.message
+            : 'Invalid delivery document',
+        error: 'deliveryDocumentKey validation failed',
+      };
+    }
+
+    revalidatePath('/admin/applications');
+    revalidatePath(`/admin/applications/visa/${applicationId}`);
+    revalidatePath(`/admin/applications/visa/${appOwner.referenceNumber}`);
+    revalidatePath(`/applications/visa/${applicationId}`);
+    revalidatePath(`/applications/visa/${appOwner.referenceNumber}`);
+    revalidatePath('/applications');
+    revalidatePath('/dashboard');
+
+    if (deliveryPayload.sendToChannels) {
+      try {
+        await notifyVisaOutcomeDeliveredEvent({
+          applicationId,
+          travellerId,
+          delivery: deliveryPayload,
+        });
+      } catch (notifyError) {
+        console.error('Visa outcome delivery notification failed', notifyError);
+      }
+    }
+
+    return {
+      success: true,
+      message: deliveryPayload.sendToChannels
+        ? 'Visa document attached and sent'
+        : 'Visa document attached',
+    };
+  } catch (error) {
+    console.error('Error attaching visa outcome document:', error);
+    return {
+      success: false,
+      message: 'Failed to attach visa document',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
