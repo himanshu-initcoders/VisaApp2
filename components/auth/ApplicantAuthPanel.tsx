@@ -60,12 +60,16 @@ export function ApplicantAuthPanel({
   const [otp, setOtp] = useState<string[]>(() => Array(otpLength).fill(''));
   const [otpComplete, setOtpComplete] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const verifyingRef = useRef(false);
+  const sendingRef = useRef(false);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const clearMessages = () => {
     setError(null);
+    setNotice(null);
     setFieldErrors({});
   };
 
@@ -90,7 +94,7 @@ export function ApplicantAuthPanel({
 
   const handleGetOtp = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (loading || verifyingRef.current) return;
+    if (loading || verifyingRef.current || sendingRef.current) return;
     clearMessages();
 
     if (tab === 'login') {
@@ -103,6 +107,7 @@ export function ApplicantAuthPanel({
         return;
       }
 
+      sendingRef.current = true;
       setLoading(true);
       try {
         const response = await requestEmailLoginOtp({ email: parsed.data.email });
@@ -123,6 +128,7 @@ export function ApplicantAuthPanel({
       } catch {
         setError('Could not send OTP. Please try again.');
       } finally {
+        sendingRef.current = false;
         setLoading(false);
       }
       return;
@@ -153,6 +159,7 @@ export function ApplicantAuthPanel({
       return;
     }
 
+    sendingRef.current = true;
     setLoading(true);
     try {
       const response = await requestEmailRegisterOtp(parsed.data);
@@ -175,6 +182,51 @@ export function ApplicantAuthPanel({
     } catch {
       setError('Could not send OTP. Please try again.');
     } finally {
+      sendingRef.current = false;
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (loading || verifyingRef.current || sendingRef.current) return;
+    sendingRef.current = true;
+    setResending(true);
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+    setOtp(Array(otpLength).fill(''));
+    setOtpComplete(false);
+
+    try {
+      const response =
+        tab === 'login'
+          ? await requestEmailLoginOtp({ email, resend: true })
+          : await requestEmailRegisterOtp({
+              name,
+              email,
+              phone,
+              resend: true,
+            });
+      if (!response.success) {
+        setError(response.error);
+        return;
+      }
+      trackEvent('auth_otp_requested', {
+        context: authContext,
+        method: 'email_otp',
+        intent: tab === 'register' ? 'register' : 'login',
+      });
+      setNotice(
+        response.sent
+          ? 'New code sent. Use the newest email.'
+          : 'That code is still valid. Check your inbox and spam.'
+      );
+      requestAnimationFrame(() => otpRefs.current[0]?.focus());
+    } catch {
+      setError('Could not send OTP. Please try again.');
+    } finally {
+      sendingRef.current = false;
+      setResending(false);
       setLoading(false);
     }
   };
@@ -182,8 +234,10 @@ export function ApplicantAuthPanel({
   const verifyAndSignIn = async (otpValue: string) => {
     if (verifyingRef.current) return;
     verifyingRef.current = true;
+    setResending(false);
     setLoading(true);
     setError(null);
+    setNotice(null);
 
     const intent = tab === 'register' ? 'register' : 'login';
     const digits = otpValue.replace(/\D/g, '');
@@ -366,6 +420,7 @@ export function ApplicantAuthPanel({
     setOtp(Array(otpLength).fill(''));
     setOtpComplete(false);
     setError(null);
+    setNotice(null);
   };
 
   const shellClass =
@@ -467,8 +522,15 @@ export function ApplicantAuthPanel({
 
         {loading && (
           <p className="font-switzer text-sm text-slate-helper">
-            {tab === 'register' ? 'Creating your account…' : 'Signing you in…'}
+            {resending
+              ? 'Sending a new code…'
+              : tab === 'register'
+                ? 'Creating your account…'
+                : 'Signing you in…'}
           </p>
+        )}
+        {notice && (
+          <p className="font-switzer text-sm text-portrait-ink">{notice}</p>
         )}
         {error && (
           <p className="font-switzer text-sm text-red-600">{error}</p>
@@ -487,10 +549,7 @@ export function ApplicantAuthPanel({
             type="button"
             disabled={loading}
             onClick={() => {
-              setStep('form');
-              setOtp(Array(otpLength).fill(''));
-              setOtpComplete(false);
-              setError(null);
+              void handleResend();
             }}
             className="font-switzer text-sm text-slate-helper hover:text-portrait-ink disabled:opacity-50"
           >

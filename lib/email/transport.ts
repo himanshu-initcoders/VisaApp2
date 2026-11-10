@@ -43,6 +43,11 @@ export function getMailer(): Transporter | null {
   return transporter;
 }
 
+/** Drop the cached connection so the next send opens a fresh SMTP session. */
+export function resetMailer(): void {
+  transporter = null;
+}
+
 /** `Viserv <address>`. Requires a verified domain address in EMAIL_FROM. */
 export function getFromAddress(): string {
   return `${BRAND_NAME} <${envValue('EMAIL_FROM')}>`;

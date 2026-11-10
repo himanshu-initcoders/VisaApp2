@@ -15,7 +15,10 @@ import { createEmailOtpProof } from '@/lib/auth/email-otp-proof';
 export async function requestEmailLoginOtp(input: {
   email: string;
   ip?: string;
-}): Promise<{ success: true } | { success: false; error: string }> {
+  resend?: boolean;
+}): Promise<
+  { success: true; sent: boolean } | { success: false; error: string }
+> {
   return requestEmailLoginOtpCore(input);
 }
 
@@ -24,7 +27,10 @@ export async function requestEmailRegisterOtp(input: {
   email: string;
   phone: string;
   ip?: string;
-}): Promise<{ success: true } | { success: false; error: string }> {
+  resend?: boolean;
+}): Promise<
+  { success: true; sent: boolean } | { success: false; error: string }
+> {
   return requestEmailRegisterOtpCore(input);
 }
 

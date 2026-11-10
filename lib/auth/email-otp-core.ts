@@ -5,8 +5,8 @@
  */
 
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
-import { eq } from 'drizzle-orm';
-import { db } from '@/lib/db';
+import { eq, sql } from 'drizzle-orm';
+import { db, type Database } from '@/lib/db';
 import { emailOtpChallenges, users } from '@/lib/db/schema';
 import { normalizeIndianPhone } from '@/lib/auth/phone';
 import {
@@ -24,18 +24,54 @@ const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
+type OtpRequestResult =
+  | { success: true; sent: boolean }
+  | { success: false; error: string };
+
 /** Collapse duplicate Send OTP clicks / React Strict Mode double-invokes. */
-const inflightOtpRequests = new Map<
-  string,
-  Promise<{ success: true } | { success: false; error: string }>
->();
-/** Skip regenerating a code if one was just issued (prevents two different emails). */
+const inflightOtpRequests = new Map<string, Promise<OtpRequestResult>>();
+/**
+ * After a code is actually emailed, ignore an immediate duplicate request.
+ * A deliberate Resend uses the shorter window so the button sends a new code.
+ */
 const OTP_RESEND_COOLDOWN_MS = 20_000;
+const OTP_EXPLICIT_RESEND_COOLDOWN_MS = 2_000;
+
+class OtpSendFailed extends Error {
+  constructor() {
+    super('OTP_EMAIL_FAILED');
+    this.name = 'OtpSendFailed';
+  }
+}
+
+function isOtpSendFailed(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current; depth += 1) {
+    if (
+      current instanceof OtpSendFailed ||
+      (current instanceof Error && current.message === 'OTP_EMAIL_FAILED')
+    ) {
+      return true;
+    }
+    current = current instanceof Error ? current.cause : undefined;
+  }
+  return false;
+}
+
+function duplicateWindowMs(resend: boolean | undefined): number {
+  return resend ? OTP_EXPLICIT_RESEND_COOLDOWN_MS : OTP_RESEND_COOLDOWN_MS;
+}
+
+/** True only for a clock-sane timestamp inside the window. A future timestamp must not suppress send. */
+function issuedWithin(createdAt: Date, windowMs: number): boolean {
+  const ageMs = Date.now() - createdAt.getTime();
+  return ageMs >= 0 && ageMs < windowMs;
+}
 
 async function singleFlightOtpRequest(
   key: string,
-  run: () => Promise<{ success: true } | { success: false; error: string }>
-): Promise<{ success: true } | { success: false; error: string }> {
+  run: () => Promise<OtpRequestResult>
+): Promise<OtpRequestResult> {
   const existing = inflightOtpRequests.get(key);
   if (existing) return existing;
 
@@ -97,17 +133,20 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-async function upsertChallenge(input: {
-  email: string;
-  codeHash: string;
-  purpose: 'login' | 'register';
-  pendingName?: string | null;
-  pendingPhone?: string | null;
-}): Promise<void> {
+async function upsertChallenge(
+  executor: Pick<Database, 'insert'>,
+  input: {
+    email: string;
+    codeHash: string;
+    purpose: 'login' | 'register';
+    pendingName?: string | null;
+    pendingPhone?: string | null;
+  }
+): Promise<void> {
   const expiresAt = new Date(Date.now() + OTP_TTL_MS);
   const now = new Date();
 
-  await db
+  await executor
     .insert(emailOtpChallenges)
     .values({
       email: input.email,
@@ -136,7 +175,8 @@ async function upsertChallenge(input: {
 export async function requestEmailLoginOtp(input: {
   email: string;
   ip?: string;
-}): Promise<{ success: true } | { success: false; error: string }> {
+  resend?: boolean;
+}): Promise<OtpRequestResult> {
   const parsed = requestEmailLoginOtpSchema.safeParse({
     email: normalizeEmail(input.email),
   });
@@ -156,7 +196,8 @@ export async function requestEmailLoginOtp(input: {
 async function requestEmailLoginOtpInner(input: {
   email: string;
   ip?: string;
-}): Promise<{ success: true } | { success: false; error: string }> {
+  resend?: boolean;
+}): Promise<OtpRequestResult> {
   const email = input.email;
   if (!isDeliverableEmail(email)) {
     return {
@@ -203,58 +244,15 @@ async function requestEmailLoginOtpInner(input: {
     console.info(
       `[email-otp] mock login for ${email}: any 5-digit code works (e.g. 11111)`
     );
-    return { success: true };
+    return { success: true, sent: false };
   }
 
-  const [recent] = await db
-    .select({
-      purpose: emailOtpChallenges.purpose,
-      attempts: emailOtpChallenges.attempts,
-      createdAt: emailOtpChallenges.createdAt,
-    })
-    .from(emailOtpChallenges)
-    .where(eq(emailOtpChallenges.email, email))
-    .limit(1);
-
-  if (
-    recent &&
-    recent.purpose === 'login' &&
-    recent.attempts === 0 &&
-    Date.now() - recent.createdAt.getTime() < OTP_RESEND_COOLDOWN_MS
-  ) {
-    console.info(
-      `[email-otp] login cooldown — keeping existing code for ${email}`
-    );
-    return { success: true };
-  }
-
-  const code = generateOtpCode();
-
-  await upsertChallenge({
+  return deliverEmailOtp({
     email,
-    codeHash: hashOtp(code),
+    resend: input.resend,
     purpose: 'login',
+    recipientName: existingUser.name,
   });
-
-  const sent = await notifyEmailOtp({
-    to: email,
-    name: existingUser.name,
-    code,
-    purpose: 'login',
-  });
-
-  if (!sent) {
-    await db
-      .delete(emailOtpChallenges)
-      .where(eq(emailOtpChallenges.email, email));
-    return {
-      success: false,
-      error: 'Could not send OTP email. Please try again shortly.',
-    };
-  }
-
-  console.info(`[email-otp] login OTP emailed to ${email}`);
-  return { success: true };
 }
 
 export async function requestEmailRegisterOtp(input: {
@@ -262,7 +260,8 @@ export async function requestEmailRegisterOtp(input: {
   email: string;
   phone: string;
   ip?: string;
-}): Promise<{ success: true } | { success: false; error: string }> {
+  resend?: boolean;
+}): Promise<OtpRequestResult> {
   const phoneNorm = normalizeIndianPhone(input.phone);
   const parsed = requestEmailRegisterOtpSchema.safeParse({
     name: input.name,
@@ -283,6 +282,7 @@ export async function requestEmailRegisterOtp(input: {
       email,
       phone,
       ip: input.ip,
+      resend: input.resend,
     })
   );
 }
@@ -292,7 +292,8 @@ async function requestEmailRegisterOtpInner(input: {
   email: string;
   phone: string;
   ip?: string;
-}): Promise<{ success: true } | { success: false; error: string }> {
+  resend?: boolean;
+}): Promise<OtpRequestResult> {
   const { name, email, phone } = input;
   if (!isDeliverableEmail(email)) {
     return {
@@ -348,69 +349,102 @@ async function requestEmailRegisterOtpInner(input: {
     }
   }
 
-  const mode = otpMode();
-
-  const [recent] = await db
-    .select({
-      purpose: emailOtpChallenges.purpose,
-      attempts: emailOtpChallenges.attempts,
-      createdAt: emailOtpChallenges.createdAt,
-      pendingPhone: emailOtpChallenges.pendingPhone,
-    })
-    .from(emailOtpChallenges)
-    .where(eq(emailOtpChallenges.email, email))
-    .limit(1);
-
-  if (
-    recent &&
-    recent.purpose === 'register' &&
-    recent.attempts === 0 &&
-    recent.pendingPhone === phone &&
-    Date.now() - recent.createdAt.getTime() < OTP_RESEND_COOLDOWN_MS
-  ) {
-    console.info(
-      `[email-otp] register cooldown — keeping existing code for ${email}`
-    );
-    return { success: true };
-  }
-
-  const code = generateOtpCode();
-  const codeHash = hashOtp(code);
-
-  await upsertChallenge({
+  return deliverEmailOtp({
     email,
-    codeHash,
+    resend: input.resend,
     purpose: 'register',
+    recipientName: name,
     pendingName: name,
     pendingPhone: phone,
   });
+}
 
-  if (mode === 'mock') {
-    console.info(
-      `[email-otp] mock register for ${email}: any 5-digit code works (e.g. 11111)`
-    );
-    return { success: true };
+/**
+ * Store the code and email it in one database transaction.
+ * The row commits only after the provider accepts the message, and a duplicate
+ * request waits on the lock instead of treating an unsent row as success.
+ */
+async function deliverEmailOtp(input: {
+  email: string;
+  resend?: boolean;
+  purpose: 'login' | 'register';
+  recipientName: string;
+  pendingName?: string | null;
+  pendingPhone?: string | null;
+}): Promise<OtpRequestResult> {
+  const mode = otpMode();
+
+  try {
+    return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`email-otp:${input.email}`}), 0)`
+      );
+
+      const [recent] = await tx
+        .select({
+          purpose: emailOtpChallenges.purpose,
+          attempts: emailOtpChallenges.attempts,
+          createdAt: emailOtpChallenges.createdAt,
+          pendingPhone: emailOtpChallenges.pendingPhone,
+        })
+        .from(emailOtpChallenges)
+        .where(eq(emailOtpChallenges.email, input.email))
+        .limit(1);
+
+      const sameRequest =
+        recent &&
+        recent.purpose === input.purpose &&
+        recent.attempts === 0 &&
+        (input.purpose === 'login' ||
+          recent.pendingPhone === (input.pendingPhone ?? null)) &&
+        issuedWithin(recent.createdAt, duplicateWindowMs(input.resend));
+
+      if (sameRequest) {
+        console.info(
+          `[email-otp] ${input.purpose} cooldown — keeping existing code for ${input.email}`
+        );
+        return { success: true, sent: false };
+      }
+
+      const code = generateOtpCode();
+      await upsertChallenge(tx, {
+        email: input.email,
+        codeHash: hashOtp(code),
+        purpose: input.purpose,
+        pendingName: input.pendingName,
+        pendingPhone: input.pendingPhone,
+      });
+
+      if (mode === 'mock') {
+        console.info(
+          `[email-otp] mock ${input.purpose} for ${input.email}: any 5-digit code works (e.g. 11111)`
+        );
+        return { success: true, sent: false };
+      }
+
+      const sent = await notifyEmailOtp({
+        to: input.email,
+        name: input.recipientName,
+        code,
+        purpose: input.purpose,
+      });
+
+      if (!sent) throw new OtpSendFailed();
+
+      console.info(
+        `[email-otp] ${input.purpose} OTP emailed to ${input.email}`
+      );
+      return { success: true, sent: true };
+    });
+  } catch (error) {
+    if (isOtpSendFailed(error)) {
+      return {
+        success: false,
+        error: 'Could not send OTP email. Please try again shortly.',
+      };
+    }
+    throw error;
   }
-
-  const sent = await notifyEmailOtp({
-    to: email,
-    name,
-    code,
-    purpose: 'register',
-  });
-
-  if (!sent) {
-    await db
-      .delete(emailOtpChallenges)
-      .where(eq(emailOtpChallenges.email, email));
-    return {
-      success: false,
-      error: 'Could not send OTP email. Please try again shortly.',
-    };
-  }
-
-  console.info(`[email-otp] register OTP emailed to ${email}`);
-  return { success: true };
 }
 
 /**
