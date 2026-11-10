@@ -91,7 +91,10 @@ export function publicAppBaseUrl(): string {
   return raw.replace(/\/$/, '');
 }
 
-/** Full URL Twilio fetches: {base}/api/wa-media/{token} */
+/**
+ * Full URL Twilio fetches: {base}/api/wa-media/{token}.pdf
+ * Path ends with `.pdf` because WhatsApp/Twilio media samples require a file suffix.
+ */
 export function buildWaMediaPublicUrl(documentId: string): {
   fullUrl: string;
   pathVariable: string;
@@ -99,8 +102,9 @@ export function buildWaMediaPublicUrl(documentId: string): {
   const base = publicAppBaseUrl();
   if (!base) return null;
   const token = signWaMediaToken(documentId);
+  const pathVariable = `${token}.pdf`;
   return {
-    fullUrl: `${base}/api/wa-media/${token}`,
-    pathVariable: token,
+    fullUrl: `${base}/api/wa-media/${pathVariable}`,
+    pathVariable,
   };
 }

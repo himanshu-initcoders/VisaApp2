@@ -509,9 +509,9 @@ Thank you for choosing Viserv.
 
 | Field | Value |
 |---|---|
-| Media URL | `https://viserv.in/api/wa-media/{{7}}` |
-| Sample for `{{7}}` | `demo` |
-| Full sample URL | `https://viserv.in/api/wa-media/demo` → serves `public/wa-media-sample.pdf` |
+| Media URL | `https://www.viserv.in/api/wa-media/{{7}}` |
+| Sample for `{{7}}` | `demo.pdf` (must include `.pdf` suffix — Twilio rejects bare `demo`) |
+| Full sample URL | `https://www.viserv.in/api/wa-media/demo.pdf` → downloadable `application/pdf` |
 
 WhatsApp locks this template to **Document** after PDF sample approval — do not send images on this SID.
 
@@ -525,7 +525,7 @@ WhatsApp locks this template to **Document** after PDF sample approval — do no
 | `{{4}}` | Country | United Arab Emirates |
 | `{{5}}` | Visa type | Tourist Visa |
 | `{{6}}` | Reference number | VI234567898765 |
-| `{{7}}` | Media path token (after `/api/wa-media/`) | `demo` (approval) · signed token at runtime |
+| `{{7}}` | Media path token (after `/api/wa-media/`) | `demo.pdf` (approval) · `{signedToken}.pdf` at runtime |
 
 **Runtime:** `NEXT_PUBLIC_APP_URL` (or `NEXTAUTH_URL`) must be a public HTTPS host Twilio can fetch. Local `UPLOAD_PROVIDER=local` still works when the app URL is reachable (tunnel/prod).
 

@@ -10,8 +10,22 @@ import { verifyWaMediaToken } from '@/lib/wa-media/token';
 
 export const runtime = 'nodejs';
 
-/** Fixed path for Meta/Twilio template sample approval only. */
-const DEMO_MEDIA_TOKENS = new Set(['demo', 'sample']);
+/**
+ * Fixed tokens for Meta/Twilio template sample approval.
+ * Twilio requires the sample path to end with a file extension (e.g. .pdf).
+ */
+const DEMO_MEDIA_TOKENS = new Set(['demo', 'demo.pdf', 'sample', 'sample.pdf']);
+
+function normalizeMediaToken(raw: string): string {
+  return decodeURIComponent(raw || '').trim();
+}
+
+/** Tokens may be submitted as `…/token.pdf` so Twilio sees a PDF suffix. */
+function tokenWithoutPdfSuffix(token: string): string {
+  return token.toLowerCase().endsWith('.pdf')
+    ? token.slice(0, -4)
+    : token;
+}
 
 async function serveDemoPdf(): Promise<NextResponse> {
   const filePath = path.join(process.cwd(), 'public', 'wa-media-sample.pdf');
@@ -20,8 +34,12 @@ async function serveDemoPdf(): Promise<NextResponse> {
     status: 200,
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': 'inline; filename="wa-media-sample.pdf"',
+      'Content-Length': String(buffer.byteLength),
+      'Content-Disposition':
+        'attachment; filename="wa-media-sample.pdf"; filename*=UTF-8\'\'wa-media-sample.pdf',
       'Cache-Control': 'public, max-age=3600',
+      'Accept-Ranges': 'bytes',
+      'X-Content-Type-Options': 'nosniff',
     },
   });
 }
@@ -29,7 +47,7 @@ async function serveDemoPdf(): Promise<NextResponse> {
 /**
  * Public short-TTL media fetch for Twilio WhatsApp document templates.
  * Token is signed; only visa_outcome PDFs are served.
- * Special tokens `demo` / `sample` serve public/wa-media-sample.pdf for template approval.
+ * Special tokens `demo` / `demo.pdf` serve public/wa-media-sample.pdf for template approval.
  */
 export async function GET(
   _request: NextRequest,
@@ -37,7 +55,7 @@ export async function GET(
 ) {
   try {
     const { token: rawToken } = await context.params;
-    const token = decodeURIComponent(rawToken || '').trim();
+    const token = normalizeMediaToken(rawToken);
     if (!token) {
       return new NextResponse('Not found', { status: 404 });
     }
@@ -46,7 +64,8 @@ export async function GET(
       return serveDemoPdf();
     }
 
-    const verified = verifyWaMediaToken(token);
+    const signedToken = tokenWithoutPdfSuffix(token);
+    const verified = verifyWaMediaToken(signedToken);
     if (!verified) {
       return new NextResponse('Not found', { status: 404 });
     }
@@ -78,13 +97,18 @@ export async function GET(
     const filename = doc.filename?.endsWith('.pdf')
       ? doc.filename
       : `${doc.filename || 'visa-document'}.pdf`;
+    const safeName = filename.replace(/"/g, '');
+    const body = new Uint8Array(stored.buffer);
 
-    return new NextResponse(new Uint8Array(stored.buffer), {
+    return new NextResponse(body, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${filename.replace(/"/g, '')}"`,
+        'Content-Length': String(body.byteLength),
+        'Content-Disposition': `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`,
         'Cache-Control': 'private, no-store',
+        'Accept-Ranges': 'bytes',
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch (error) {

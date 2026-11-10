@@ -197,8 +197,8 @@ Also: `viserv_status_changed_applicant` · `viserv_status_changed_staff` (same b
 
 Same body as `viserv_status_changed`, plus Document media:
 
-- Media URL: `https://viserv.in/api/wa-media/{{7}}`
-- Sample `{{7}}`: `demo` → `https://viserv.in/api/wa-media/demo`
+- Media URL: `https://www.viserv.in/api/wa-media/{{7}}`
+- Sample `{{7}}`: `demo.pdf` → `https://www.viserv.in/api/wa-media/demo.pdf`
 - Env: `TWILIO_WA_SID_STATUS_APPROVED_WITH_DOCUMENT`
 - Applicant only; skips plain status WhatsApp when PDF is delivered
 
