@@ -94,10 +94,12 @@
 - [ ] Status notifications (email)
 
 ### Payments
-- [ ] Pricing calculation
-- [ ] Payment gateway integration
+- [x] Pricing calculation (server-side quote from listing prices)
+- [x] Payment gateway integration (Razorpay Checkout + dual confirmation)
+- [x] Webhook Phase 1: `payment.captured` / `payment.failed` / `order.paid` (money only; browser submits app)
+- [ ] Refund webhooks + admin refund flow (Phase 2)
 - [ ] Receipt generation
-- [ ] Payment history
+- [x] Payment history
 
 ### Admin Panel (Basic)
 - [ ] View all applications

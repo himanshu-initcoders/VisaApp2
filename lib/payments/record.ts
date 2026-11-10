@@ -90,7 +90,7 @@ export async function markPaymentCaptured(input: {
   }
 
   if (row.status === 'completed' && row.razorpayPaymentId === input.gateway.id) {
-    return { ok: true as const, payment: row };
+    return { ok: true as const, payment: row, alreadyCompleted: true as const };
   }
 
   const now = new Date();
@@ -110,7 +110,127 @@ export async function markPaymentCaptured(input: {
   if (!updated) {
     return { ok: false as const, error: 'Could not record the payment.' };
   }
-  return { ok: true as const, payment: updated };
+  return { ok: true as const, payment: updated, alreadyCompleted: false as const };
+}
+
+const RETRYABLE_CAPTURE_ERRORS = new Set([
+  'Payment order not found.',
+  'Could not record the payment.',
+]);
+
+export type ConfirmCapturedPaymentResult =
+  | {
+      ok: true;
+      outcome: 'completed' | 'already_completed';
+      payment: typeof payments.$inferSelect;
+      retryable: false;
+    }
+  | {
+      ok: false;
+      outcome: 'not_found' | 'gateway_error' | 'rejected';
+      error: string;
+      retryable: boolean;
+      paymentId?: string | null;
+    };
+
+/**
+ * Shared money-confirmation path for browser verify helpers and Razorpay webhooks.
+ * Does not submit visa applications.
+ */
+export async function confirmCapturedPaymentFromGateway(input: {
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+}): Promise<ConfirmCapturedPaymentResult> {
+  let gateway: CapturedGatewayPayment | null;
+  try {
+    gateway = await fetchGatewayPayment(input.razorpayPaymentId);
+  } catch (error) {
+    console.error('confirmCapturedPaymentFromGateway fetch failed:', error);
+    return {
+      ok: false,
+      outcome: 'gateway_error',
+      error: 'Could not confirm the payment with Razorpay.',
+      retryable: true,
+      paymentId: input.razorpayPaymentId,
+    };
+  }
+
+  if (!gateway) {
+    return {
+      ok: false,
+      outcome: 'gateway_error',
+      error: 'Could not confirm the payment with Razorpay.',
+      retryable: true,
+      paymentId: input.razorpayPaymentId,
+    };
+  }
+
+  if (gateway.orderId !== input.razorpayOrderId) {
+    return {
+      ok: false,
+      outcome: 'rejected',
+      error: 'Payment does not match this order.',
+      retryable: false,
+      paymentId: input.razorpayPaymentId,
+    };
+  }
+
+  const recorded = await markPaymentCaptured({
+    razorpayOrderId: input.razorpayOrderId,
+    gateway,
+  });
+
+  if (!recorded.ok) {
+    const retryable = RETRYABLE_CAPTURE_ERRORS.has(recorded.error);
+    return {
+      ok: false,
+      outcome: retryable ? 'not_found' : 'rejected',
+      error: recorded.error,
+      retryable,
+      paymentId: input.razorpayPaymentId,
+    };
+  }
+
+  return {
+    ok: true,
+    outcome: recorded.alreadyCompleted ? 'already_completed' : 'completed',
+    payment: recorded.payment,
+    retryable: false,
+  };
+}
+
+/** Resolve a captured/authorized payment id for an order.paid webhook. */
+export async function findCapturedOrAuthorizedPaymentIdForOrder(
+  orderId: string
+): Promise<
+  | { ok: true; paymentId: string }
+  | { ok: false; error: string; retryable: boolean }
+> {
+  try {
+    const listed = (await getRazorpay().orders.fetchPayments(orderId)) as {
+      items?: Array<{ id?: string; status?: string }>;
+    };
+    const match = listed.items?.find(
+      (item) =>
+        item.id &&
+        (item.status === 'captured' || item.status === 'authorized')
+    );
+    if (!match?.id) {
+      return {
+        ok: false,
+        error: 'No captured payment on order yet.',
+        retryable: true,
+      };
+    }
+    return { ok: true, paymentId: match.id };
+  } catch (error) {
+    console.error('findCapturedOrAuthorizedPaymentIdForOrder failed:', error);
+    return {
+      ok: false,
+      error: 'Could not list payments for the order.',
+      retryable: true,
+    };
+  }
 }
 
 export async function linkCapturedPaymentIfApplicationExists(payment: {

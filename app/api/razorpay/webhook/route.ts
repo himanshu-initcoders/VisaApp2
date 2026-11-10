@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import {
+  confirmCapturedPaymentFromGateway,
+  findCapturedOrAuthorizedPaymentIdForOrder,
   linkCapturedPaymentIfApplicationExists,
-  markPaymentCaptured,
   markPaymentFailed,
-  fetchGatewayPayment,
 } from '@/lib/payments/record';
 import { verifyWebhookSignature } from '@/lib/payments/razorpay';
 
@@ -17,13 +17,76 @@ interface WebhookPaymentEntity {
   method?: string;
 }
 
+interface WebhookOrderEntity {
+  id?: string;
+  status?: string;
+}
+
 interface WebhookBody {
   event?: string;
   payload?: {
     payment?: {
       entity?: WebhookPaymentEntity;
     };
+    order?: {
+      entity?: WebhookOrderEntity;
+    };
   };
+}
+
+function logWebhook(fields: {
+  event: string | undefined;
+  orderId?: string | null;
+  paymentId?: string | null;
+  localPaymentId?: string | null;
+  outcome: string;
+  error?: string;
+}) {
+  console.info('razorpay_webhook', {
+    event: fields.event ?? null,
+    orderId: fields.orderId ?? null,
+    paymentId: fields.paymentId ?? null,
+    localPaymentId: fields.localPaymentId ?? null,
+    outcome: fields.outcome,
+    error: fields.error ?? null,
+  });
+}
+
+async function confirmAndLink(input: {
+  event: string;
+  orderId: string;
+  paymentId: string;
+}) {
+  const result = await confirmCapturedPaymentFromGateway({
+    razorpayOrderId: input.orderId,
+    razorpayPaymentId: input.paymentId,
+  });
+
+  if (!result.ok) {
+    logWebhook({
+      event: input.event,
+      orderId: input.orderId,
+      paymentId: input.paymentId,
+      outcome: result.outcome,
+      error: result.error,
+    });
+    if (result.retryable) {
+      return NextResponse.json({ error: result.error }, { status: 500 });
+    }
+    return NextResponse.json({ received: true });
+  }
+
+  await linkCapturedPaymentIfApplicationExists(result.payment);
+
+  logWebhook({
+    event: input.event,
+    orderId: input.orderId,
+    paymentId: input.paymentId,
+    localPaymentId: result.payment.id,
+    outcome: result.outcome,
+  });
+
+  return NextResponse.json({ received: true });
 }
 
 export async function POST(request: Request) {
@@ -31,6 +94,7 @@ export async function POST(request: Request) {
   const signature = request.headers.get('x-razorpay-signature') || '';
 
   if (!verifyWebhookSignature(rawBody, signature)) {
+    logWebhook({ event: undefined, outcome: 'invalid_signature' });
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
@@ -41,50 +105,97 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const entity = body.payload?.payment?.entity;
-  const orderId = entity?.order_id;
-  const paymentId = entity?.id;
+  const event = body.event;
 
-  if (body.event === 'payment.failed' && orderId) {
-    await markPaymentFailed({
-      razorpayOrderId: orderId,
-      razorpayPaymentId: paymentId,
-      method: entity?.method ?? null,
-      metadata: {
-        event: body.event,
-        paymentId: paymentId ?? null,
-        status: entity?.status ?? null,
-      },
-    });
-    return NextResponse.json({ received: true });
-  }
-
-  if (body.event === 'payment.captured' && orderId && paymentId) {
-    try {
-      const gateway = await fetchGatewayPayment(paymentId);
-      if (!gateway || gateway.orderId !== orderId) {
-        console.error('razorpay webhook payment did not match the order');
-        return NextResponse.json({ received: true });
+  try {
+    if (event === 'payment.failed') {
+      const entity = body.payload?.payment?.entity;
+      const orderId = entity?.order_id;
+      const paymentId = entity?.id;
+      if (orderId) {
+        await markPaymentFailed({
+          razorpayOrderId: orderId,
+          razorpayPaymentId: paymentId,
+          method: entity?.method ?? null,
+          metadata: {
+            event,
+            paymentId: paymentId ?? null,
+            status: entity?.status ?? null,
+          },
+        });
+        logWebhook({
+          event,
+          orderId,
+          paymentId: paymentId ?? null,
+          outcome: 'failed',
+        });
+      } else {
+        logWebhook({ event, outcome: 'failed_missing_order' });
       }
-
-      const recorded = await markPaymentCaptured({
-        razorpayOrderId: orderId,
-        gateway,
-      });
-      if (!recorded.ok) {
-        console.error('razorpay webhook capture rejected:', recorded.error);
-        return NextResponse.json({ received: true });
-      }
-
-      await linkCapturedPaymentIfApplicationExists(recorded.payment);
-    } catch (error) {
-      console.error('razorpay webhook error:', error);
-      return NextResponse.json(
-        { error: 'Webhook processing failed' },
-        { status: 500 }
-      );
+      return NextResponse.json({ received: true });
     }
-  }
 
-  return NextResponse.json({ received: true });
+    if (event === 'payment.captured') {
+      const entity = body.payload?.payment?.entity;
+      const orderId = entity?.order_id;
+      const paymentId = entity?.id;
+      if (!orderId || !paymentId) {
+        logWebhook({
+          event,
+          orderId: orderId ?? null,
+          paymentId: paymentId ?? null,
+          outcome: 'rejected',
+          error: 'Missing order_id or payment id.',
+        });
+        return NextResponse.json({ received: true });
+      }
+      return await confirmAndLink({ event, orderId, paymentId });
+    }
+
+    if (event === 'order.paid') {
+      const orderId = body.payload?.order?.entity?.id;
+      if (!orderId) {
+        logWebhook({
+          event,
+          outcome: 'rejected',
+          error: 'Missing order id.',
+        });
+        return NextResponse.json({ received: true });
+      }
+
+      const listed = await findCapturedOrAuthorizedPaymentIdForOrder(orderId);
+      if (!listed.ok) {
+        logWebhook({
+          event,
+          orderId,
+          outcome: listed.retryable ? 'gateway_error' : 'rejected',
+          error: listed.error,
+        });
+        if (listed.retryable) {
+          return NextResponse.json({ error: listed.error }, { status: 500 });
+        }
+        return NextResponse.json({ received: true });
+      }
+
+      return await confirmAndLink({
+        event,
+        orderId,
+        paymentId: listed.paymentId,
+      });
+    }
+
+    logWebhook({ event, outcome: 'ignored' });
+    return NextResponse.json({ received: true });
+  } catch (error) {
+    console.error('razorpay webhook error:', error);
+    logWebhook({
+      event,
+      outcome: 'gateway_error',
+      error: error instanceof Error ? error.message : 'Webhook processing failed',
+    });
+    return NextResponse.json(
+      { error: 'Webhook processing failed' },
+      { status: 500 }
+    );
+  }
 }
