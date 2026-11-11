@@ -1,10 +1,12 @@
 'use client';
 
-import { type ReactNode, useState, useEffect } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { Menu, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Logo } from '@/components/shared/Logo';
+import { UserAccountMenu } from '@/components/shared/UserAccountMenu';
 import { cn } from '@/lib/utils';
 
 interface HeaderProps {
@@ -22,6 +24,7 @@ export function Header({
   center,
   cta = 'apply',
 }: HeaderProps) {
+  const { data: session, status } = useSession();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -36,6 +39,13 @@ export function Header({
 
   const showSolidBar = isScrolled || Boolean(center);
   const inverted = overlay && theme === 'dark' && !showSolidBar;
+  const sessionReady = status !== 'loading';
+  const isAuthenticated = status === 'authenticated' && Boolean(session?.user);
+  const showGuestAccount =
+    sessionReady && cta === 'account' && !isAuthenticated;
+  const showApplyCta = sessionReady && cta === 'apply' && !isAuthenticated;
+  const showAccountMenu =
+    isAuthenticated && (cta === 'account' || cta === 'apply' || cta === 'none');
 
   return (
     <>
@@ -69,7 +79,23 @@ export function Header({
             )}
 
             <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-4">
-              {cta === 'none' ? null : cta === 'account' ? (
+              {(showApplyCta || (isAuthenticated && cta === 'apply')) && (
+                <Link
+                  href="/blogs"
+                  className={cn(
+                    'pointer-events-auto hidden text-sm font-medium transition-colors md:inline',
+                    inverted
+                      ? 'text-white/90 hover:text-white'
+                      : 'text-portrait-ink hover:text-nautical-teal'
+                  )}
+                >
+                  Blog
+                </Link>
+              )}
+
+              {showAccountMenu ? (
+                <UserAccountMenu inverted={inverted} />
+              ) : showGuestAccount ? (
                 <Link
                   href="/signin"
                   aria-label="Sign in"
@@ -82,19 +108,8 @@ export function Header({
                 >
                   <User className="h-6 w-6" />
                 </Link>
-              ) : (
+              ) : showApplyCta ? (
                 <>
-                  <Link
-                    href="/blogs"
-                    className={cn(
-                      'pointer-events-auto hidden text-sm font-medium transition-colors md:inline',
-                      inverted
-                        ? 'text-white/90 hover:text-white'
-                        : 'text-portrait-ink hover:text-nautical-teal'
-                    )}
-                  >
-                    Blog
-                  </Link>
                   <Link
                     href="/"
                     className={cn(
@@ -131,13 +146,13 @@ export function Header({
                     )}
                   </button>
                 </>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
       </header>
 
-      {cta === 'apply' && isMobileMenuOpen && (
+      {showApplyCta && isMobileMenuOpen && (
         <div className="fixed inset-0 z-[60] lg:hidden">
           <div
             className="absolute inset-0 bg-black/40"

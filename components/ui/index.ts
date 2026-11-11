@@ -9,6 +9,19 @@ export { Button } from './Button';
 export type { ButtonProps } from './Button';
 
 export {
+  Dropdown,
+  DropdownItem,
+  DropdownLinkItem,
+  DropdownSeparator,
+  DropdownHeader,
+} from './Dropdown';
+export type {
+  DropdownProps,
+  DropdownItemProps,
+  DropdownLinkItemProps,
+} from './Dropdown';
+
+export {
   Card,
   CardHeader,
   CardTitle,

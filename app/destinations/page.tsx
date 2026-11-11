@@ -33,11 +33,11 @@ export default async function DestinationsPage() {
             title: 'Visa destinations — Viserv',
             description:
               'Browse every live visa and arrival-card page. Pricing, documents, and timelines stay aligned with what operations has enabled.',
-            path: '/destinations',
+            path: '/',
           }),
           buildBreadcrumbJsonLd([
             { name: 'Home', path: '/' },
-            { name: 'Destinations', path: '/destinations' },
+            { name: 'Destinations', path: '/' },
           ]),
         ]}
       />

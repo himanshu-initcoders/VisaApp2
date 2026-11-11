@@ -99,7 +99,7 @@ export function UserSidebar({
   return (
     <>
       <div className="fixed left-0 right-0 top-0 z-50 flex items-center justify-between border-b border-ash bg-white px-4 py-3 lg:hidden">
-        <Logo href="/dashboard" size="lg" subtitle="" />
+        <Logo href="/" size="lg" subtitle="" />
         <button
           type="button"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -146,14 +146,14 @@ export function UserSidebar({
             )}
           >
             {!collapsed ? (
-              <Logo href="/dashboard" size="lg" subtitle="" onNavigate={closeMobile} />
+              <Logo href="/" size="lg" subtitle="" onNavigate={closeMobile} />
             ) : (
               <Link
-                href="/dashboard"
+                href="/"
                 onClick={closeMobile}
                 className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl"
-                title="Dashboard"
-                aria-label="Dashboard"
+                title="Home"
+                aria-label="Home"
               >
                 <Image
                   src="/favicon.png"
@@ -222,7 +222,7 @@ export function UserSidebar({
             })}
 
             <Link
-              href="/destinations"
+              href="/"
               onClick={closeMobile}
               title={collapsed ? 'Browse visas' : undefined}
               className={cn(

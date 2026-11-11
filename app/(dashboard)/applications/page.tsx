@@ -83,7 +83,7 @@ export default async function ApplicationsPage() {
             All of your visa and passport applications
           </p>
         </div>
-        <Link href="/destinations">
+        <Link href="/">
           <Button variant="primary" size="md">
             New application
           </Button>

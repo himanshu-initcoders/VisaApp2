@@ -41,7 +41,7 @@ export default async function DocumentsPage() {
             uploaded documents.
           </p>
           <div className="mt-6">
-            <Link href="/destinations">
+            <Link href="/">
               <Button variant="primary" size="md">
                 Browse destinations
               </Button>

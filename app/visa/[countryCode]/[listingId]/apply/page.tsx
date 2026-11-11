@@ -174,7 +174,7 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
           }),
           buildBreadcrumbJsonLd([
             { name: 'Home', path: '/' },
-            { name: 'Destinations', path: '/destinations' },
+            { name: 'Destinations', path: '/' },
             { name: data.country.name, path: data.href },
             { name: 'Apply', path: applyPath },
           ]),

@@ -188,7 +188,7 @@ export default async function DashboardPage({
             trip whenever you&apos;re ready.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link href="/destinations">
+            <Link href="/">
               <Button variant="primary" size="md">
                 Browse destinations
               </Button>
@@ -281,7 +281,7 @@ export default async function DashboardPage({
                 Start with a destination to create your first visa application.
               </p>
               <div className="mt-6">
-                <Link href="/destinations">
+                <Link href="/">
                   <Button variant="primary" size="md">
                     Explore destinations
                   </Button>

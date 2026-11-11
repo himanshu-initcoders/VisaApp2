@@ -109,7 +109,7 @@ export default async function PublicProcessPage({ params, searchParams }: PagePr
     }),
     buildBreadcrumbJsonLd([
       { name: 'Home', path: '/' },
-      { name: 'Destinations', path: '/destinations' },
+      { name: 'Destinations', path: '/' },
       { name: data.country.name, path: data.href },
       { name: data.process.processName, path: data.href },
     ]),

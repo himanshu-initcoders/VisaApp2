@@ -15,7 +15,7 @@ export function revalidatePublicVisaCatalog(options?: {
 }) {
   revalidateTag(PUBLIC_VISA_CATALOG_TAG, 'max');
   revalidatePath('/');
-  revalidatePath('/destinations');
+  revalidatePath('/');
 
   const countryCode = options?.countryCode?.toLowerCase();
   const segments = [

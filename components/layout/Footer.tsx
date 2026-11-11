@@ -8,7 +8,7 @@ export function Footer() {
       title: 'Company',
       links: [ 
         { href: '/', label: 'Home' },
-        { href: '/destinations', label: 'Destinations' },
+        { href: '/', label: 'Destinations' },
         { href: '/blogs', label: 'Blogs' },
         { href: '/how-it-works', label: 'How it works' },
       ],
@@ -16,19 +16,11 @@ export function Footer() {
     {
       title: 'Products',
       links: [
-        { href: '/destinations', label: 'Visa services' },
-        { href: '/destinations', label: 'Arrival cards' },
+        { href: '/', label: 'Visa services' },
+        { href: '/', label: 'Arrival cards' },
         { href: '/dashboard', label: 'Track application' },
       ],
-    },
-    {
-      title: 'Support',
-      links: [
-        { href: '/how-it-works', label: 'Application guide' },
-        { href: '/login', label: 'Sign in' },
-        { href: '/register', label: 'Create account' },
-      ],
-    },
+    }
   ];
 
   return (
