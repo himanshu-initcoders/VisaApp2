@@ -285,13 +285,14 @@ export async function markRefundProcessed(input: {
 
   const now = new Date();
   const completedAt = row.completedAt ?? now;
+  // postgres.js raw params need ISO strings for timestamps (Date objects throw).
   await db.execute(sql`
     update payments
     set
       status = 'refunded',
       razorpay_refund_id = ${input.razorpayRefundId},
       transaction_id = ${input.razorpayRefundId},
-      completed_at = ${completedAt}
+      completed_at = ${completedAt.toISOString()}::timestamp
     where id = ${row.id}::uuid
   `);
 
