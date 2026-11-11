@@ -11,6 +11,11 @@ interface ReviewFieldGridProps {
   hideTitles?: string[];
 }
 
+const FULL_WIDTH_KEYS = new Set<keyof IndianPassportFields>([
+  'address',
+  'email',
+]);
+
 export function ReviewFieldGrid({
   groups,
   data,
@@ -37,15 +42,28 @@ export function ReviewFieldGrid({
                 {group.title}
               </h4>
             )}
-            <dl className={showTitle ? 'mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2' : 'grid gap-x-6 gap-y-2 sm:grid-cols-2'}>
-              {rows.map((field) => (
-                <div key={field.key} className="min-w-0">
-                  <dt className="text-xs text-slate-helper">{field.label}</dt>
-                  <dd className="truncate text-sm font-medium text-portrait-ink">
-                    {field.value}
-                  </dd>
-                </div>
-              ))}
+            <dl
+              className={
+                showTitle
+                  ? 'mt-2 grid gap-x-6 gap-y-3 sm:grid-cols-2'
+                  : 'grid gap-x-6 gap-y-3 sm:grid-cols-2'
+              }
+            >
+              {rows.map((field) => {
+                const fullWidth =
+                  FULL_WIDTH_KEYS.has(field.key) || field.value.length > 48;
+                return (
+                  <div
+                    key={field.key}
+                    className={fullWidth ? 'min-w-0 sm:col-span-2' : 'min-w-0'}
+                  >
+                    <dt className="text-xs text-slate-helper">{field.label}</dt>
+                    <dd className="whitespace-pre-wrap break-words text-sm font-medium text-portrait-ink">
+                      {field.value}
+                    </dd>
+                  </div>
+                );
+              })}
             </dl>
           </div>
         );

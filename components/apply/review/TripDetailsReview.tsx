@@ -22,18 +22,21 @@ function Row({
   label,
   value,
   showEmpty,
+  fullWidth,
 }: {
   label: string;
   value?: string;
   showEmpty?: boolean;
+  fullWidth?: boolean;
 }) {
   const display = value?.trim() || (showEmpty ? 'Not provided' : '');
   if (!display) return null;
+  const longText = display.length > 48 || display.includes('\n');
   return (
-    <div className="min-w-0">
+    <div className={fullWidth || longText ? 'min-w-0 sm:col-span-2' : 'min-w-0'}>
       <dt className="text-xs text-slate-helper">{label}</dt>
       <dd
-        className={`truncate text-sm font-medium ${
+        className={`whitespace-pre-wrap break-words text-sm font-medium ${
           value?.trim()
             ? 'text-portrait-ink'
             : 'text-slate-helper italic'
@@ -61,7 +64,7 @@ export function TripDetailsReview({
   return (
     <div className="space-y-4">
       {includeCore && (
-        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+        <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
           <Row label="Arrival city" value={trip.arrivalCity} showEmpty={showEmpty} />
           <Row
             label="Arrival date"
@@ -114,6 +117,7 @@ export function TripDetailsReview({
             label="Stay address"
             value={trip.accommodationAddress}
             showEmpty={showEmpty}
+            fullWidth
           />
         </dl>
       )}
@@ -121,7 +125,7 @@ export function TripDetailsReview({
       {questionGroups.map((group) => (
         <div key={group.category}>
           <h4 className="mb-2 text-sm font-medium text-portrait-ink">{group.label}</h4>
-          <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+          <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
             {group.questions.map((question) => (
               <Row
                 key={question.id}

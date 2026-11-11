@@ -94,12 +94,6 @@ function isIndianGateError(err: unknown): boolean {
   );
 }
 
-function isManualAutofillResult(result: IndianPassportExtraction): boolean {
-  return result.warnings.some((warning) =>
-    /could not auto-fill/i.test(warning)
-  );
-}
-
 function revokeBlobUrl(url: string | undefined) {
   if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
 }
@@ -263,7 +257,6 @@ export function PassportCaptureFlow({
         country_code: countryCode,
         confidence: result.confidence,
         warnings_count: result.warnings?.length ?? 0,
-        manual_autofill: isManualAutofillResult(result),
       });
       setStage('review');
     } catch (err) {
