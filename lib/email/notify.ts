@@ -363,9 +363,11 @@ export async function notifyEmailOtp(input: {
         `Hi ${input.name.trim() || 'Traveller'}, use this one-time code to ${
           isRegister ? 'finish creating your account' : 'sign in'
         }.`,
+      ],
+      otpCode: code,
+      paragraphsAfterOtp: [
         'Enter only these 5 digits in the app. This code expires in 10 minutes. If you did not request it, you can ignore this email.',
       ],
-      details: [{ label: 'Verification code', value: code }],
     }),
   });
 }

@@ -19,20 +19,45 @@ export function absoluteUrl(path: string): string {
   return `${appBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
-export function renderEmail(input: {
-  preheader: string;
-  heading: string;
-  paragraphs: string[];
-  details?: Array<{ label: string; value: string }>;
-  buttonLabel?: string;
-  buttonHref?: string;
-}): string {
-  const paragraphs = input.paragraphs
+/** Logo PNG is 1367×535 — keep email size proportional (~2.55:1). */
+const LOGO_WIDTH = 160;
+const LOGO_HEIGHT = 63;
+
+function renderParagraphs(paragraphs: string[] | undefined): string {
+  if (!paragraphs?.length) return '';
+  return paragraphs
     .map(
       (paragraph) =>
         `<p style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:${INK};">${escapeHtml(paragraph)}</p>`
     )
     .join('');
+}
+
+export function renderEmail(input: {
+  preheader: string;
+  heading: string;
+  paragraphs: string[];
+  /** Large centered one-time code (OTP emails). */
+  otpCode?: string;
+  /** Shown under the OTP block when present. */
+  paragraphsAfterOtp?: string[];
+  details?: Array<{ label: string; value: string }>;
+  buttonLabel?: string;
+  buttonHref?: string;
+}): string {
+  const paragraphs = renderParagraphs(input.paragraphs);
+  const paragraphsAfterOtp = renderParagraphs(input.paragraphsAfterOtp);
+
+  const otpCode = input.otpCode?.trim()
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:8px 0 24px;">
+        <tr>
+          <td align="center" style="background:#f4f7fb;border-radius:16px;padding:28px 16px;">
+            <p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#5c6b7a;text-align:center;">Verification code</p>
+            <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:40px;line-height:1.2;letter-spacing:0.28em;font-weight:700;color:${INK};text-align:center;">${escapeHtml(input.otpCode.trim())}</p>
+          </td>
+        </tr>
+      </table>`
+    : '';
 
   const details = input.details?.length
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;width:100%;">
@@ -67,9 +92,11 @@ export function renderEmail(input: {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:24px;padding:32px 28px;">
             <tr>
               <td>
-                <img src="cid:${LOGO_CID}" alt="Viserv" width="144" height="36" style="display:block;margin:0 0 24px;border:0;" />
+                <img src="cid:${LOGO_CID}" alt="Viserv" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" style="display:block;width:${LOGO_WIDTH}px;height:${LOGO_HEIGHT}px;max-width:100%;margin:0 0 24px;border:0;outline:none;text-decoration:none;" />
                 <h1 style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:26px;line-height:1.2;color:${INK};font-weight:600;">${escapeHtml(input.heading)}</h1>
                 ${paragraphs}
+                ${otpCode}
+                ${paragraphsAfterOtp}
                 ${details}
                 ${button}
               </td>

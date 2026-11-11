@@ -31,6 +31,8 @@ export async function sendEmail(input: {
       filename: 'logo.png',
       path: path.join(process.cwd(), 'public', 'logo.png'),
       cid: LOGO_CID,
+      contentDisposition: 'inline' as const,
+      contentType: 'image/png',
     },
     ...(input.fileAttachments ?? []).map((file) => ({
       filename: file.filename,
