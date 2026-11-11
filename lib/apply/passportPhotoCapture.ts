@@ -15,11 +15,16 @@ const GLASSES_MODEL =
 const ORT_WASM = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/';
 
 const FACE_MIN_WIDTH = 0.18;
-const FACE_MAX_WIDTH = 0.62;
+const FACE_MIN_HEIGHT = 0.22;
+/** Face must stay inside the on-screen oval (~66% × 70%) with breathing room. */
+const FACE_MAX_WIDTH = 0.48;
+const FACE_MAX_HEIGHT = 0.55;
 const FACE_CENTER_X = 0.5;
 const FACE_CENTER_Y = 0.46;
-const CENTER_TOLERANCE_X = 0.16;
-const CENTER_TOLERANCE_Y = 0.18;
+const CENTER_TOLERANCE_X = 0.14;
+const CENTER_TOLERANCE_Y = 0.16;
+/** Landmark box touching the frame edge means the face is cropped / too close. */
+const FRAME_EDGE_MARGIN = 0.03;
 const GLASSES_THRESHOLD = 0.35;
 
 const OUTPUT_WIDTH = 700;
@@ -98,7 +103,7 @@ export function passportPhotoStatusMessage(status: PhotoCaptureStatus) {
     case 'multiple-faces':
       return 'Only one person should be in the photo.';
     case 'too-close':
-      return 'Move a little farther from the camera.';
+      return 'Too close — move back so your whole face fits inside the oval.';
     case 'too-far':
       return 'Move closer so your face fills the oval.';
     case 'off-center':
@@ -209,8 +214,24 @@ function faceBox(landmarks: Landmark[]): FaceBox {
 }
 
 function framingStatus(box: FaceBox): PhotoCaptureStatus | null {
-  if (box.width < FACE_MIN_WIDTH) return 'too-far';
-  if (box.width > FACE_MAX_WIDTH) return 'too-close';
+  // When the face is pressed against the lens, MediaPipe only sees the visible
+  // landmarks — width alone may look fine while the head is clipped by the frame.
+  const clippedByFrame =
+    box.minX <= FRAME_EDGE_MARGIN ||
+    box.maxX >= 1 - FRAME_EDGE_MARGIN ||
+    box.minY <= FRAME_EDGE_MARGIN ||
+    box.maxY >= 1 - FRAME_EDGE_MARGIN;
+
+  if (
+    clippedByFrame ||
+    box.width > FACE_MAX_WIDTH ||
+    box.height > FACE_MAX_HEIGHT
+  ) {
+    return 'too-close';
+  }
+  if (box.width < FACE_MIN_WIDTH || box.height < FACE_MIN_HEIGHT) {
+    return 'too-far';
+  }
   if (
     Math.abs(box.cx - FACE_CENTER_X) > CENTER_TOLERANCE_X ||
     Math.abs(box.cy - FACE_CENTER_Y) > CENTER_TOLERANCE_Y
@@ -402,9 +423,10 @@ async function createPassportPhotoEngineInner(): Promise<PassportPhotoEngine> {
 
       const landmarks = faces[0];
       const framing = framingStatus(faceBox(landmarks));
-      if (framing === 'too-far') {
+      // Block capture framing before glasses — too-close must never pass as ready.
+      if (framing === 'too-far' || framing === 'too-close' || framing === 'off-center') {
         glasses.resetHistory();
-        return readStatus('too-far');
+        return readStatus(framing);
       }
 
       const verdict = await glasses.detectFromVideoFrame(
@@ -414,7 +436,6 @@ async function createPassportPhotoEngineInner(): Promise<PassportPhotoEngine> {
       );
       if (disposed) return readStatus('no-face');
       if (verdict.glasses) return readStatus('glasses');
-      if (framing) return readStatus(framing);
       return readStatus('ready');
     },
 

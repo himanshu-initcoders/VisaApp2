@@ -158,12 +158,20 @@ export function PassportPhotoCaptureDialog({
   };
 
   const glasses = read?.status === 'glasses';
+  const framingBlocked =
+    read?.status === 'too-close' ||
+    read?.status === 'too-far' ||
+    read?.status === 'off-center' ||
+    read?.status === 'no-face' ||
+    read?.status === 'multiple-faces';
   const canCapture = ready && !fatal && read?.status === 'ready' && !capturing;
-  const ovalClass = glasses
+  const ovalClass = glasses || read?.status === 'too-close'
     ? 'border-[#ff4940]'
     : read?.status === 'ready'
       ? 'border-[#00a32a]'
-      : 'border-white/85';
+      : framingBlocked
+        ? 'border-[#ffb020]'
+        : 'border-white/85';
 
   if (typeof document === 'undefined') return null;
 
@@ -190,8 +198,8 @@ export function PassportPhotoCaptureDialog({
               Capture passport photo
             </h2>
             <p className="mt-1 text-sm text-slate-helper">
-              Look straight ahead with your face in the oval. Glasses are not
-              allowed.
+              Keep your whole face inside the oval — not too close. Glasses are
+              not allowed.
             </p>
           </div>
           <button
@@ -230,7 +238,7 @@ export function PassportPhotoCaptureDialog({
               {fatal}
             </p>
           )}
-          {!fatal && glasses && (
+          {!fatal && (glasses || read?.status === 'too-close') && (
             <p
               role="alert"
               className="rounded-2xl border border-[#ffd0cc] bg-[#fff5f4] px-4 py-3 text-sm text-[#ff4940]"
@@ -238,7 +246,7 @@ export function PassportPhotoCaptureDialog({
               {read.message}
             </p>
           )}
-          {!fatal && !glasses && (
+          {!fatal && !glasses && read?.status !== 'too-close' && (
             <p aria-live="polite" className="text-center text-sm text-slate-helper">
               {ready
                 ? (read?.message ?? 'Position your face inside the oval.')
