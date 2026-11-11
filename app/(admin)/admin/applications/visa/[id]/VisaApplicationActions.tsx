@@ -16,9 +16,7 @@ import {
   visaOutcomeLabel,
 } from '@/lib/visa/outcomeDocumentShared';
 import type {
-  CapturedPaymentForReject,
   DocumentWithVerification,
-  RejectTravellerOption,
   StatusHistoryItem,
 } from '@/types/admin';
 import type { CorrectableTarget } from '@/lib/visa/corrections';
@@ -33,8 +31,6 @@ interface VisaApplicationActionsProps {
   documents: DocumentWithVerification[];
   statusHistory: StatusHistoryItem[];
   travellers: Array<{ id: string; name: string }>;
-  rejectTravellers?: RejectTravellerOption[];
-  capturedPayment?: CapturedPaymentForReject | null;
   correctionTargets: CorrectableTarget[];
   /** Slot key → human document name (from form snapshot). */
   documentLabels?: Record<string, string>;
@@ -48,8 +44,6 @@ export function VisaApplicationActions({
   documents,
   statusHistory,
   travellers,
-  rejectTravellers = [],
-  capturedPayment = null,
   correctionTargets,
   documentLabels,
   passportPhotoKeys,
@@ -191,16 +185,6 @@ export function VisaApplicationActions({
         travellerName={travellerLabel}
         currentStatus={statusForUpdate}
         onSuccess={handleSuccess}
-        capturedPayment={capturedPayment}
-        travellers={
-          rejectTravellers.length > 0
-            ? rejectTravellers
-            : travellers.map((t) => ({
-                id: t.id,
-                name: t.name,
-                status: 'submitted',
-              }))
-        }
       />
 
       {activeTraveller?.travellerRowId ? (

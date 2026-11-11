@@ -113,19 +113,6 @@ export interface ApplicationPaymentItem {
   href?: string | null;
 }
 
-export interface CapturedPaymentForReject {
-  id: string;
-  amountPaise: number;
-  travellerCount: number;
-  razorpayPaymentId: string;
-}
-
-export interface RejectTravellerOption {
-  id: string;
-  name: string;
-  status: string;
-}
-
 /**
  * Full application details with all related data
  */
@@ -279,10 +266,13 @@ export interface StatusUpdateRequest {
   deliveryFileSize?: number;
   /** When true, send PDF on WhatsApp + email (PDF required). */
   sendDeliveryToChannels?: boolean;
-  /** Visa reject: refund amount in paise (optional if no captured payment). */
-  refundAmountPaise?: number;
-  /** Visa reject: also reject every open sibling traveller. */
-  rejectAllTravellers?: boolean;
+}
+
+export interface InitiateVisaRefundRequest {
+  applicationId: string;
+  parentPaymentId: string;
+  amountPaise: number;
+  reason: string;
 }
 
 export interface AttachVisaOutcomeRequest {

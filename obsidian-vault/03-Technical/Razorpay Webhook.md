@@ -8,9 +8,11 @@ Two-way money confirmation:
 - **Webhook** (`POST /api/razorpay/webhook`) confirms payment only. It never calls `submitApplication`.
 - Paid-but-no-app recovery: user retries Pay → `createVisaCheckoutOrder` returns `kind: 'resume'` → verify submits.
 
-Refunds (admin reject flow):
+Refunds (Payments tab — separate from status reject):
 
-- Admin reject creates a `payments` row with `kind=refund`, `status=proceed`, then calls Razorpay `payments.refund`.
+- Admin opens **Payments** on a visa application → **Refund** on a completed charge → amount + reason dialog.
+- `initiateVisaRefund` creates a `payments` row with `kind=refund`, `status=proceed`, then calls Razorpay `payments.refund`.
+- Status update / reject never initiates money movement.
 - Webhook `refund.processed` / `refund.failed` completes the local refund row.
 
 Shared helpers: `lib/payments/record.ts`, `lib/payments/refund.ts`.
@@ -62,7 +64,7 @@ Look for `razorpay_webhook` log lines with:
 2. **Webhook first (tab still open):** webhook marks `completed` → verify still submits app.
 3. **Tab close:** pay, kill before verify → webhook completes → retry Pay → `resume` → app created, no second charge.
 4. **Failed payment:** decline → `payment.failed` → local `failed`, not `completed`.
-5. **Reject + refund:** admin rejects → local refund `proceed` → Razorpay refund → `refund.processed` → local `refunded`.
+5. **Payments-tab refund:** admin Refund dialog → local `proceed` → Razorpay refund → `refund.processed` → local `refunded`.
 6. **Bad signature:** `400`.
 7. **Unknown event:** `200`.
 
@@ -84,4 +86,6 @@ Smoke (signature / ack / retriable-500 paths, no live Razorpay charge):
 - `lib/payments/actions.ts`
 - `lib/payments/razorpay.ts`
 - `components/apply/CheckoutPayStep.tsx`
-- `components/admin/StatusUpdateModal.tsx`
+- `components/admin/RefundPaymentDialog.tsx`
+- `components/applications/PaymentHistory.tsx` (`canRefund`)
+- `initiateVisaRefund` in `app/(admin)/actions.ts`
