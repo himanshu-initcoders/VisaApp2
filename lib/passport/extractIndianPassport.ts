@@ -1650,10 +1650,22 @@ export async function extractIndianPassport(
         ? frontText
         : '';
 
-    const frontPreviewUrl = URL.createObjectURL(await canvasToBlob(front));
-    const backPreviewUrl = backRead
-      ? URL.createObjectURL(await canvasToBlob(backRead.canvas))
-      : undefined;
+    // Preview/storage must be the full uploaded page, never the OCR crop.
+    const frontPreviewCanvas =
+      search.page?.sourcePageCanvas ?? front;
+    const frontPreviewUrl = URL.createObjectURL(
+      await canvasToBlob(frontPreviewCanvas)
+    );
+    // Only keep a back image when it comes from a different source page.
+    // Same-page region crops must not be saved as passport-back.
+    const backSourcePage = backRead?.candidate.sourcePageCanvas;
+    const backIsSeparatePage =
+      Boolean(backRead) &&
+      (backRead?.candidate.pageNumber ?? dataPageNumber) !== dataPageNumber;
+    const backPreviewUrl =
+      backIsSeparatePage && backSourcePage
+        ? URL.createObjectURL(await canvasToBlob(backSourcePage))
+        : undefined;
 
     const visual = extractVisualZoneIdentity(frontText);
 

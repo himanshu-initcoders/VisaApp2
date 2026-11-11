@@ -100,12 +100,34 @@ function isManualAutofillResult(result: IndianPassportExtraction): boolean {
   );
 }
 
-/** Prefer the exact file the user uploaded over OCR crops when autofill fails. */
-function withOriginalPreview(
+function revokeBlobUrl(url: string | undefined) {
+  if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
+}
+
+/**
+ * Store/show the uploaded file (or full PDF pages), never OCR document crops.
+ * Image uploads keep the exact bytes; PDF keeps extractor full-page rasters.
+ */
+function withUploadPreviews(
   result: IndianPassportExtraction,
-  originalPreviewUrl: string | null
+  originalPreviewUrl: string | null,
+  input: File | Blob
 ): IndianPassportExtraction {
+  if (isPdfFile(input)) {
+    // Extractor already emits full source pages for PDF front/back.
+    return result;
+  }
+
   if (!originalPreviewUrl) return result;
+
+  if (result.frontPreviewUrl !== originalPreviewUrl) {
+    revokeBlobUrl(result.frontPreviewUrl);
+  }
+  // A single image upload must not invent a cropped "passport back".
+  if (result.backPreviewUrl) {
+    revokeBlobUrl(result.backPreviewUrl);
+  }
+
   return {
     ...result,
     frontPreviewUrl: originalPreviewUrl,
@@ -177,6 +199,7 @@ export function PassportCaptureFlow({
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = previous;
+      // Only revoke previews that never transferred to review/draft state.
       if (originalPreviewRef.current) {
         URL.revokeObjectURL(originalPreviewRef.current);
         originalPreviewRef.current = null;
@@ -221,24 +244,26 @@ export function PassportCaptureFlow({
         );
       }
 
-      const originalPreview = originalPreviewRef.current;
-      if (isManualAutofillResult(result)) {
-        const next = withOriginalPreview(result, originalPreview);
-        setExtraction(next);
-        setPreviewUrl(next.frontPreviewUrl);
-      } else {
-        if (originalPreviewRef.current) {
-          URL.revokeObjectURL(originalPreviewRef.current);
-          originalPreviewRef.current = null;
-        }
-        setExtraction(result);
-        setPreviewUrl(result.frontPreviewUrl);
+      const next = withUploadPreviews(
+        result,
+        originalPreviewRef.current,
+        input
+      );
+      // Hand ownership of the upload preview to review/draft (do not revoke).
+      if (originalPreviewRef.current === next.frontPreviewUrl) {
+        originalPreviewRef.current = null;
+      } else if (originalPreviewRef.current) {
+        URL.revokeObjectURL(originalPreviewRef.current);
+        originalPreviewRef.current = null;
       }
+      setExtraction(next);
+      setPreviewUrl(next.frontPreviewUrl);
       trackEvent('visa_passport_scan_complete', {
         listing_id: listingId,
         country_code: countryCode,
         confidence: result.confidence,
         warnings_count: result.warnings?.length ?? 0,
+        manual_autofill: isManualAutofillResult(result),
       });
       setStage('review');
     } catch (err) {
@@ -258,6 +283,8 @@ export function PassportCaptureFlow({
       // Soft India-gate / OCR misses: open blank application form for manual entry
       if (isIndianGateError(err)) {
         const preview = originalPreviewRef.current ?? '';
+        // Transfer ownership to the manual review form.
+        originalPreviewRef.current = null;
         setExtraction(emptyManualExtraction(preview));
         setPreviewUrl(preview || null);
         setError(null);

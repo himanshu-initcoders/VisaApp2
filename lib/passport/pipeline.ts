@@ -49,6 +49,11 @@ export interface CandidatePage {
   sourcePageCount: number;
   /** Upright, deskewed crop ready for OCR. */
   canvas: HTMLCanvasElement;
+  /**
+   * Full source page before document-region cropping.
+   * Used for preview/storage so travellers keep the uploaded page, not OCR crops.
+   */
+  sourcePageCanvas: HTMLCanvasElement;
   /** Quarter turn applied to get here. */
   rotation: Rotation;
   /** Remaining rotations to try if the MRZ does not read at `rotation`. */
@@ -127,6 +132,7 @@ function cropsFromPage(
       pageNumber: page.pageNumber,
       sourcePageCount,
       canvas,
+      sourcePageCanvas: page.canvas,
       rotation,
       fallbackRotations,
       mrzBand,
