@@ -31,12 +31,10 @@ const PASSPORT_FRONT_SLOT = 'passport-front';
 const PASSPORT_BACK_SLOT = 'passport-back';
 
 const TRIP_FIELDS: Array<{ key: string; label: string }> = [
-  { key: 'arrivalDate', label: 'Intended arrival date' },
-  { key: 'returnDate', label: 'Intended return date' },
   { key: 'flightNumber', label: 'Arrival flight number' },
-  { key: 'arrivalFlightDate', label: 'Arrival flight date' },
+  { key: 'arrivalFlightDate', label: 'Arrival date' },
   { key: 'returnFlightNumber', label: 'Return flight number' },
-  { key: 'returnFlightDate', label: 'Return flight date' },
+  { key: 'returnFlightDate', label: 'Departure date' },
   { key: 'arrivalCity', label: 'Arrival city' },
   { key: 'accommodationName', label: 'Hotel / accommodation name' },
   { key: 'accommodationAddress', label: 'Stay address' },
@@ -305,17 +303,23 @@ export function writeFieldValue(
       arrivalFlights[0] = { ...arrivalFlights[0], flightNumber: value };
       trip.arrivalFlights = arrivalFlights;
     }
-    if (field === 'arrivalFlightDate' && arrivalFlights[0]) {
-      arrivalFlights[0] = { ...arrivalFlights[0], date: value };
-      trip.arrivalFlights = arrivalFlights;
+    if (field === 'arrivalFlightDate') {
+      trip.arrivalDate = value;
+      if (arrivalFlights[0]) {
+        arrivalFlights[0] = { ...arrivalFlights[0], date: value };
+        trip.arrivalFlights = arrivalFlights;
+      }
     }
     if (field === 'returnFlightNumber' && returnFlights[0]) {
       returnFlights[0] = { ...returnFlights[0], flightNumber: value };
       trip.returnFlights = returnFlights;
     }
-    if (field === 'returnFlightDate' && returnFlights[0]) {
-      returnFlights[0] = { ...returnFlights[0], date: value };
-      trip.returnFlights = returnFlights;
+    if (field === 'returnFlightDate') {
+      trip.returnDate = value;
+      if (returnFlights[0]) {
+        returnFlights[0] = { ...returnFlights[0], date: value };
+        trip.returnFlights = returnFlights;
+      }
     }
     next.tripDetails = trip;
     return next;

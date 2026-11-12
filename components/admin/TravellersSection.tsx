@@ -423,16 +423,22 @@ export function TravellersSection({
                     <Field
                       label="Arrival"
                       value={
-                        trip.arrivalDate
-                          ? formatReviewDate(String(trip.arrivalDate))
+                        trip.arrivalFlightDate || trip.arrivalDate
+                          ? formatReviewDate(
+                              String(
+                                trip.arrivalFlightDate || trip.arrivalDate
+                              )
+                            )
                           : '—'
                       }
                     />
                     <Field
                       label="Return"
                       value={
-                        trip.returnDate
-                          ? formatReviewDate(String(trip.returnDate))
+                        trip.returnFlightDate || trip.returnDate
+                          ? formatReviewDate(
+                              String(trip.returnFlightDate || trip.returnDate)
+                            )
                           : '—'
                       }
                     />

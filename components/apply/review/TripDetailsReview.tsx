@@ -67,16 +67,6 @@ export function TripDetailsReview({
         <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
           <Row label="Arrival city" value={trip.arrivalCity} showEmpty={showEmpty} />
           <Row
-            label="Arrival date"
-            value={trip.arrivalDate ? formatReviewDate(trip.arrivalDate) : ''}
-            showEmpty={showEmpty}
-          />
-          <Row
-            label="Return date"
-            value={trip.returnDate ? formatReviewDate(trip.returnDate) : ''}
-            showEmpty={showEmpty}
-          />
-          <Row
             label="Arrival flight"
             value={
               [

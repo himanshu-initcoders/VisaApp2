@@ -118,7 +118,6 @@ export function TripDetailsTab({
   editableKeys,
   comments,
 }: TripDetailsTabProps) {
-  const futureMin = earliestFutureDateIso();
   const normalized = emptyTripDetails(trip);
 
   return (
@@ -152,57 +151,6 @@ export function TripDetailsTab({
             </div>
           )}
         </div>
-        <div className="grid gap-5 sm:grid-cols-2">
-          <CorrectionGate
-            targetKey="trip.arrivalDate"
-            editableKeys={editableKeys}
-            comment={comments?.['trip.arrivalDate']}
-          >
-            <UnderlineField
-              label="Intended arrival date"
-              required
-              type="date"
-              min={futureMin}
-              value={normalized.arrivalDate}
-              error={futureDateError(normalized.arrivalDate || undefined)}
-              onChange={(value) =>
-                onChange(
-                  updateTrip(normalized, {
-                    arrivalDate: toIsoDate(value) || value,
-                  })
-                )
-              }
-            />
-          </CorrectionGate>
-          <CorrectionGate
-            targetKey="trip.returnDate"
-            editableKeys={editableKeys}
-            comment={comments?.['trip.returnDate']}
-          >
-            <UnderlineField
-              label="Intended return date"
-              required
-              type="date"
-              min={futureMin}
-              value={normalized.returnDate}
-              error={
-                futureDateError(normalized.returnDate || undefined) ||
-                (normalized.arrivalDate &&
-                normalized.returnDate &&
-                normalized.returnDate < normalized.arrivalDate
-                  ? 'Return date should be on or after arrival'
-                  : null)
-              }
-              onChange={(value) =>
-                onChange(
-                  updateTrip(normalized, {
-                    returnDate: toIsoDate(value) || value,
-                  })
-                )
-              }
-            />
-          </CorrectionGate>
-        </div>
       </div>
 
       <FlightRouteSection
@@ -221,6 +169,7 @@ export function TripDetailsTab({
               arrivalFlightMode: 'direct',
               flightNumber,
               arrivalFlightDate: date,
+              arrivalDate: date,
               arrivalFlights: [{ flightNumber, date }],
             })
           )
@@ -243,6 +192,7 @@ export function TripDetailsTab({
               returnFlightMode: 'direct',
               returnFlightNumber: flightNumber,
               returnFlightDate: date,
+              returnDate: date,
               returnFlights: [{ flightNumber, date }],
             })
           )

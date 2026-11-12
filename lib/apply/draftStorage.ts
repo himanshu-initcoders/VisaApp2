@@ -102,7 +102,12 @@ export function draftSubstanceScore(
   for (const t of draft.travellers ?? []) {
     if (t.name?.trim()) score += 1;
     if (t.passportData) score += 5;
-    if (t.tripDetails?.purpose || t.tripDetails?.arrivalDate) score += 3;
+    if (
+      t.tripDetails?.purpose ||
+      t.tripDetails?.arrivalFlightDate ||
+      t.tripDetails?.arrivalDate
+    )
+      score += 3;
     if (t.applicationComplete) score += 4;
     if (t.passportUploaded) score += 2;
     score += t.documents?.length ?? 0;

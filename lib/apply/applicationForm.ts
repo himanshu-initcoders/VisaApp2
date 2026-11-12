@@ -347,8 +347,10 @@ const flightLegSchema = z.object({
 export const tripDetailsSchema = z
   .object({
     purpose: z.string().optional().default(''),
-    arrivalDate: isoDate,
-    returnDate: isoDate,
+    /** Kept in sync with arrivalFlightDate for admin/export compatibility. */
+    arrivalDate: z.string().optional().default(''),
+    /** Kept in sync with returnFlightDate for admin/export compatibility. */
+    returnDate: z.string().optional().default(''),
     arrivalCity: z.string().optional().default(''),
     accommodationName: z.string().optional().default(''),
     accommodationAddress: z.string().optional().default(''),
@@ -362,32 +364,29 @@ export const tripDetailsSchema = z
     returnFlights: z.array(flightLegSchema).min(1),
     extra: z.record(z.string(), z.string()).default({}),
   })
-  .refine((value) => isFutureIsoDate(value.arrivalDate), {
-    message: 'Arrival date must be in the future',
-    path: ['arrivalDate'],
-  })
-  .refine((value) => isFutureIsoDate(value.returnDate), {
-    message: 'Return date must be in the future',
-    path: ['returnDate'],
-  })
-  .refine(
-    (value) =>
-      !value.arrivalDate ||
-      !value.returnDate ||
-      value.returnDate >= value.arrivalDate,
-    {
-      message: 'Return date should be on or after arrival',
-      path: ['returnDate'],
-    }
-  )
+  .transform((value) => ({
+    ...value,
+    arrivalDate: value.arrivalFlightDate || value.arrivalDate,
+    returnDate: value.returnFlightDate || value.returnDate,
+  }))
   .refine((value) => isFutureIsoDate(value.arrivalFlightDate), {
-    message: 'Arrival flight date must be in the future',
+    message: 'Arrival date must be in the future',
     path: ['arrivalFlightDate'],
   })
   .refine((value) => isFutureIsoDate(value.returnFlightDate), {
-    message: 'Return flight date must be in the future',
+    message: 'Departure date must be in the future',
     path: ['returnFlightDate'],
-  });
+  })
+  .refine(
+    (value) =>
+      !value.arrivalFlightDate ||
+      !value.returnFlightDate ||
+      value.returnFlightDate >= value.arrivalFlightDate,
+    {
+      message: 'Return departure date should be on or after arrival',
+      path: ['returnFlightDate'],
+    }
+  );
 
 export function emptyTripDetails(
   partial?: Partial<TravellerTripDetails>
@@ -403,17 +402,22 @@ export function emptyTripDetails(
     date: partial?.returnFlightDate ?? '',
   });
 
+  // Flight dates are the source of truth; keep arrivalDate/returnDate in sync
+  // for admin export, corrections, and legacy drafts.
+  const arrivalFlightDate = arrivalFlights[0]?.date ?? '';
+  const returnFlightDate = returnFlights[0]?.date ?? '';
+
   return {
     purpose: normalizePurpose(partial?.purpose),
-    arrivalDate: toIsoDate(partial?.arrivalDate),
-    returnDate: toIsoDate(partial?.returnDate),
+    arrivalDate: arrivalFlightDate || toIsoDate(partial?.arrivalDate),
+    returnDate: returnFlightDate || toIsoDate(partial?.returnDate),
     arrivalCity: partial?.arrivalCity ?? '',
     accommodationName: partial?.accommodationName ?? '',
     accommodationAddress: partial?.accommodationAddress ?? '',
     flightNumber: arrivalFlights[0]?.flightNumber ?? '',
-    arrivalFlightDate: arrivalFlights[0]?.date ?? '',
+    arrivalFlightDate,
     returnFlightNumber: returnFlights[0]?.flightNumber ?? '',
-    returnFlightDate: returnFlights[0]?.date ?? '',
+    returnFlightDate,
     arrivalFlightMode,
     returnFlightMode,
     arrivalFlights,
@@ -750,25 +754,17 @@ export function buildApplyFormConfig(input: {
 export function getCoreTripIssues(trip: TravellerTripDetails | undefined) {
   const normalized = normalizeTripDetails(trip);
   const issues: string[] = [];
+  const arrival = normalized.arrivalFlightDate || normalized.arrivalDate;
+  const returnDate = normalized.returnFlightDate || normalized.returnDate;
 
-  if (!normalized.arrivalDate) {
-    issues.push('Enter the intended arrival date');
-  } else if (!isFutureIsoDate(normalized.arrivalDate)) {
-    issues.push('Intended arrival date must be in the future');
-  }
-  if (!normalized.returnDate) {
-    issues.push('Enter the intended return date');
-  } else if (!isFutureIsoDate(normalized.returnDate)) {
-    issues.push('Intended return date must be in the future');
-  }
   if (
-    normalized.arrivalDate &&
-    normalized.returnDate &&
-    isFutureIsoDate(normalized.arrivalDate) &&
-    isFutureIsoDate(normalized.returnDate) &&
-    normalized.returnDate < normalized.arrivalDate
+    arrival &&
+    returnDate &&
+    isFutureIsoDate(arrival) &&
+    isFutureIsoDate(returnDate) &&
+    returnDate < arrival
   ) {
-    issues.push('Return date should be on or after arrival');
+    issues.push('Return departure date should be on or after arrival');
   }
 
   return issues;
