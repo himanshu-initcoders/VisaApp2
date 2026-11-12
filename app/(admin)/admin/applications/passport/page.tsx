@@ -1,4 +1,3 @@
-import { notFound } from 'next/navigation';
 import { requireRole } from '@/lib/auth-utils';
 import { ApplicationsList } from '../_lib/ApplicationsList';
 
@@ -20,10 +19,6 @@ export default async function PassportApplicationsPage({
   searchParams,
 }: PageProps) {
   const session = await requireRole(['admin', 'reviewer']);
-  if (session.user.role === 'reviewer') {
-    notFound();
-  }
-
   const params = await searchParams;
 
   return (

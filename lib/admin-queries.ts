@@ -247,7 +247,6 @@ export async function getApplicationsWithFilters(
   let passportApps: ApplicationListItem[] = [];
   if (
     (type === 'all' || type === 'passport') &&
-    !assignedReviewerId &&
     !hasDestinationFilter &&
     !passenger &&
     !phoneDigits
@@ -259,6 +258,11 @@ export async function getApplicationsWithFilters(
     }
     if (userId) {
       passportConditions.push(eq(passportServices.userId, userId));
+    }
+    if (assignedReviewerId) {
+      passportConditions.push(
+        eq(passportServices.assignedReviewerId, assignedReviewerId)
+      );
     }
     if (dateFrom) {
       passportConditions.push(
@@ -300,9 +304,15 @@ export async function getApplicationsWithFilters(
         status: passportServices.status,
         submittedAt: passportServices.submittedAt,
         createdAt: passportServices.createdAt,
+        assignedReviewerId: passportServices.assignedReviewerId,
+        assignedReviewerName: assignedReviewers.name,
       })
       .from(passportServices)
       .innerJoin(users, eq(passportServices.userId, users.id))
+      .leftJoin(
+        assignedReviewers,
+        eq(passportServices.assignedReviewerId, assignedReviewers.id)
+      )
       .where(
         passportConditions.length > 0 ? and(...passportConditions) : undefined
       );
@@ -319,6 +329,8 @@ export async function getApplicationsWithFilters(
       submittedAt: p.submittedAt,
       createdAt: p.createdAt,
       serviceType: p.serviceType,
+      assignedReviewerId: p.assignedReviewerId,
+      assignedReviewerName: p.assignedReviewerName,
     }));
   }
 
@@ -600,9 +612,16 @@ export async function getApplicationDetails(
           phone: users.phone,
         },
         formVersionNumber: passportFormVersions.version,
+        assignedReviewerId: assignedReviewers.id,
+        assignedReviewerName: assignedReviewers.name,
+        assignedReviewerEmail: assignedReviewers.email,
       })
       .from(passportServices)
       .innerJoin(users, eq(passportServices.userId, users.id))
+      .leftJoin(
+        assignedReviewers,
+        eq(passportServices.assignedReviewerId, assignedReviewers.id)
+      )
       .leftJoin(
         passportFormVersions,
         eq(passportServices.formVersionId, passportFormVersions.id)
@@ -617,13 +636,22 @@ export async function getApplicationDetails(
     application = passportResult[0].application;
     user = passportResult[0].user;
     formVersionNumber = passportResult[0].formVersionNumber ?? null;
+    if (
+      passportResult[0].assignedReviewerId &&
+      passportResult[0].assignedReviewerName
+    ) {
+      assignedReviewer = {
+        id: passportResult[0].assignedReviewerId,
+        name: passportResult[0].assignedReviewerName,
+        email: passportResult[0].assignedReviewerEmail ?? '',
+      };
+    }
   }
 
   const docs = await getDocumentsByApplicationId(resolvedId, type);
   const history = await getStatusHistoryByApplicationId(resolvedId, type);
-  const notes = await getApplicationNotes(resolvedId);
-  const callLogs =
-    type === 'visa' ? await getApplicationCallLogs(resolvedId) : [];
+  const notes = await getApplicationNotes(resolvedId, type);
+  const callLogs = await getApplicationCallLogs(resolvedId);
   const [credentialRow] = await db
     .select({ username: applicationCredentials.username })
     .from(applicationCredentials)
@@ -698,7 +726,8 @@ export async function getVisaTravellers(applicationId: string) {
 }
 
 export async function getApplicationNotes(
-  applicationId: string
+  applicationId: string,
+  applicationType: 'visa' | 'passport' = 'visa'
 ): Promise<NoteItem[]> {
   const rows = await db
     .select()
@@ -709,7 +738,7 @@ export async function getApplicationNotes(
   return rows.map((r) => ({
     id: r.id,
     applicationId: r.applicationId,
-    applicationType: 'visa',
+    applicationType,
     note: r.body,
     addedBy: r.adminUserId,
     addedByName: r.adminName,

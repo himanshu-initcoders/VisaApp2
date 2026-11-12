@@ -40,13 +40,16 @@ export default async function AdminDashboardPage() {
       .where(visaScope)
       .then((res) => res[0]?.count || 0),
 
-    // Total passport applications (reviewers only see assigned visas)
-    reviewerId
-      ? Promise.resolve(0)
-      : db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(passportServices)
-          .then((res) => res[0]?.count || 0),
+    // Total passport applications (reviewers only see assigned)
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(passportServices)
+      .where(
+        reviewerId
+          ? eq(passportServices.assignedReviewerId, reviewerId)
+          : undefined
+      )
+      .then((res) => res[0]?.count || 0),
 
     // Open reviews: staff queue plus files waiting on the applicant
     Promise.all([
@@ -60,13 +63,18 @@ export default async function AdminDashboardPage() {
           )
         )
         .then((res) => res[0]?.count || 0),
-      reviewerId
-        ? Promise.resolve(0)
-        : db
-            .select({ count: sql<number>`count(*)::int` })
-            .from(passportServices)
-            .where(eq(passportServices.status, 'under_review'))
-            .then((res) => res[0]?.count || 0),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(passportServices)
+        .where(
+          and(
+            inArray(passportServices.status, ['under_review', 'action_required']),
+            reviewerId
+              ? eq(passportServices.assignedReviewerId, reviewerId)
+              : undefined
+          )
+        )
+        .then((res) => res[0]?.count || 0),
     ]).then(([visa, passport]) => visa + passport),
 
     // Unverified documents (null = pending review)

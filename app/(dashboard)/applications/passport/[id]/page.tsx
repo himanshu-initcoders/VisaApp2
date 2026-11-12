@@ -11,11 +11,17 @@ import {
   getStatusVariant,
 } from '@/components/ui';
 import { ApplicationSidebar } from '@/components/dashboard/ApplicationSidebar';
+import { ApplicantActivityTabs } from '@/components/dashboard/ApplicantActivityTabs';
+import { PassportActionRequiredBanner } from '@/components/dashboard/PassportActionRequiredBanner';
 import {
   PassportFormAnswers,
   buildPassportDocumentLabelMap,
 } from '@/components/passport/PassportFormAnswers';
 import type { PassportApplyFormConfig } from '@/lib/apply/passportForm';
+import { postApplicantComment } from '@/app/(dashboard)/actions';
+import { listPassportApplicantActionItems } from '@/lib/passport/corrections';
+import { listComments } from '@/lib/visa/corrections';
+import { hasUnreadStaffComment } from '@/lib/notifications';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -63,6 +69,14 @@ export default async function UserPassportApplicationDetailPage({
 
   const snapshot = (app.formSnapshot as PassportApplyFormConfig | null) ?? null;
   const documentLabels = buildPassportDocumentLabelMap(snapshot);
+  const [comments, actionItems, hasUnreadConversation] = await Promise.all([
+    listComments(app.id),
+    listPassportApplicantActionItems(session.user.id),
+    hasUnreadStaffComment(session.user.id, app.id),
+  ]);
+  const openForThis = actionItems.filter(
+    (item) => item.applicationId === app.id
+  );
 
   return (
     <div className="space-y-6">
@@ -85,45 +99,54 @@ export default async function UserPassportApplicationDetailPage({
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Application Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <dl className="grid grid-cols-2 gap-4">
-                <Field
-                  label="Status"
-                  value={
-                    <Badge variant={getStatusVariant(app.status)}>
-                      {app.status}
-                    </Badge>
-                  }
-                />
-                <Field
-                  label="Reference"
-                  value={app.referenceNumber || app.id}
-                />
-                <Field label="Service Type" value={app.serviceType} />
-                <Field
-                  label="Submitted"
-                  value={
-                    app.submittedAt
-                      ? new Date(app.submittedAt).toLocaleDateString('en-IN', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          timeZone: 'Asia/Kolkata',
-                        })
-                      : 'Not submitted'
-                  }
-                />
-              </dl>
-            </CardContent>
-          </Card>
+      <PassportActionRequiredBanner items={openForThis} />
 
-          <PassportFormAnswers snapshot={snapshot} answers={app.answers} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <ApplicantActivityTabs
+            applicationId={app.id}
+            hasUnreadConversation={hasUnreadConversation}
+            comments={comments}
+            payments={details.payments}
+            postComment={postApplicantComment}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle>Application Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <dl className="grid grid-cols-2 gap-4">
+                  <Field
+                    label="Status"
+                    value={
+                      <Badge variant={getStatusVariant(app.status)}>
+                        {app.status}
+                      </Badge>
+                    }
+                  />
+                  <Field
+                    label="Reference"
+                    value={app.referenceNumber || app.id.slice(0, 8)}
+                  />
+                  <Field label="Service type" value={app.serviceType} />
+                  <Field
+                    label="Submitted"
+                    value={
+                      app.submittedAt
+                        ? new Date(app.submittedAt).toLocaleString('en-IN', {
+                            timeZone: 'Asia/Kolkata',
+                          })
+                        : 'Not submitted'
+                    }
+                  />
+                </dl>
+              </CardContent>
+            </Card>
+
+            <div className="mt-6">
+              <PassportFormAnswers snapshot={snapshot} answers={app.answers} />
+            </div>
+          </ApplicantActivityTabs>
         </div>
 
         <ApplicationSidebar

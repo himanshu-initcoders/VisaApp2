@@ -7,6 +7,7 @@ import type { CallLogItem } from '@/types/admin';
 
 interface CallLogsPanelProps {
   applicationId: string;
+  applicationType?: 'visa' | 'passport';
   logs: CallLogItem[];
   defaultPhone?: string | null;
   /** Hide card title when the parent Tabs label already names this panel. */
@@ -18,6 +19,7 @@ interface CallLogsPanelProps {
  */
 export function CallLogsPanel({
   applicationId,
+  applicationType = 'visa',
   logs,
   defaultPhone,
   hideTitle = false,
@@ -35,6 +37,7 @@ export function CallLogsPanel({
         {isAdding ? (
           <AddCallLogForm
             applicationId={applicationId}
+            applicationType={applicationType}
             defaultPhone={defaultPhone}
             onCancel={() => setIsAdding(false)}
             onSuccess={() => setIsAdding(false)}

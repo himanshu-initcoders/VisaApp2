@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import {
@@ -18,7 +18,7 @@ import {
   type ApplyTripQuestion,
 } from '@/lib/apply/applicationForm';
 import { PASSPORT_REVIEW_GROUPS } from '@/lib/apply/reviewFields';
-import { reviewerOwnsVisa } from '@/lib/reviewer-access';
+import { reviewerOwnsApplication } from '@/lib/reviewer-access';
 import { indianPassportFieldsSchema } from '@/lib/passport/schema';
 import { earliestFutureDateIso, isIsoDate } from '@/lib/passport/schema';
 import {
@@ -429,10 +429,15 @@ export function allowedOpenKeys(
 export async function reviewerAccessDenied(
   userId: string,
   role: string | undefined,
-  applicationId: string
+  applicationId: string,
+  applicationType: 'visa' | 'passport' = 'visa'
 ): Promise<boolean> {
   if (role !== 'reviewer') return false;
-  return !(await reviewerOwnsVisa(userId, applicationId));
+  return !(await reviewerOwnsApplication(
+    userId,
+    applicationId,
+    applicationType
+  ));
 }
 
 export async function getOpenCorrection(
@@ -446,6 +451,7 @@ export async function getOpenCorrection(
       and(
         eq(correctionRequests.applicationId, applicationId),
         eq(correctionRequests.travellerId, travellerId),
+        eq(correctionRequests.applicationType, 'visa'),
         eq(correctionRequests.status, 'open')
       )
     )
@@ -538,21 +544,30 @@ export async function listStaffFieldEdits(
       newValue: staffFieldEdits.newValue,
       createdAt: staffFieldEdits.createdAt,
       actorName: users.name,
-      travellerName: visaApplicationTravellers.name,
+      travellerName: sql<string>`coalesce(${visaApplicationTravellers.name}, 'Applicant')`,
     })
     .from(staffFieldEdits)
-    .innerJoin(
+    .leftJoin(
       visaApplicationTravellers,
       eq(staffFieldEdits.travellerId, visaApplicationTravellers.id)
     )
     .leftJoin(users, eq(staffFieldEdits.actorId, users.id))
-    .where(eq(staffFieldEdits.applicationId, applicationId))
+    .where(
+      and(
+        eq(staffFieldEdits.applicationId, applicationId),
+        or(
+          eq(staffFieldEdits.applicationType, 'visa'),
+          isNotNull(staffFieldEdits.travellerId)
+        )
+      )
+    )
     .orderBy(desc(staffFieldEdits.createdAt));
 
   return rows.map((row) => ({
     ...row,
     label: labelForTarget(config, row.targetKey),
     actorName: row.actorName || 'Unknown',
+    travellerName: row.travellerName || 'Applicant',
   }));
 }
 
@@ -565,17 +580,25 @@ export async function listCorrectionRounds(
       id: correctionRequests.id,
       status: correctionRequests.status,
       message: correctionRequests.message,
-      travellerName: visaApplicationTravellers.name,
+      travellerName: sql<string>`coalesce(${visaApplicationTravellers.name}, 'Applicant')`,
       createdAt: correctionRequests.createdAt,
       resubmittedAt: correctionRequests.resubmittedAt,
       resolvedAt: correctionRequests.resolvedAt,
     })
     .from(correctionRequests)
-    .innerJoin(
+    .leftJoin(
       visaApplicationTravellers,
       eq(correctionRequests.travellerId, visaApplicationTravellers.id)
     )
-    .where(eq(correctionRequests.applicationId, applicationId))
+    .where(
+      and(
+        eq(correctionRequests.applicationId, applicationId),
+        or(
+          eq(correctionRequests.applicationType, 'visa'),
+          isNotNull(correctionRequests.travellerId)
+        )
+      )
+    )
     .orderBy(desc(correctionRequests.createdAt));
 
   if (requests.length === 0) return [];
@@ -658,6 +681,8 @@ export async function listApplicantActionItems(
     .where(
       and(
         eq(visaApplications.userId, userId),
+        eq(correctionRequests.applicationType, 'visa'),
+        isNotNull(correctionRequests.travellerId),
         eq(correctionRequests.status, 'open'),
         eq(correctionItems.status, 'open')
       )
@@ -666,6 +691,7 @@ export async function listApplicantActionItems(
 
   const grouped = new Map<string, ApplicantActionItem>();
   for (const row of rows) {
+    if (!row.travellerId) continue;
     const key = `${row.applicationId}:${row.travellerId}`;
     const config = (row.formSnapshot as ApplyFormConfig | null) ?? null;
     const current = grouped.get(key) ?? {
@@ -699,49 +725,74 @@ export async function listStaffAttention(input: {
   staffUserId: string;
   reviewerId: string | null;
 }): Promise<StaffAttentionItem[]> {
-  const resubmitted = await db
-    .select({
-      applicationId: correctionRequests.applicationId,
-      applicantName: visaApplications.applicantName,
-      country: visaApplications.country,
-      visaType: visaApplications.visaType,
-      travellerName: visaApplicationTravellers.name,
-    })
-    .from(correctionRequests)
-    .innerJoin(
-      visaApplications,
-      eq(correctionRequests.applicationId, visaApplications.id)
-    )
-    .innerJoin(
-      visaApplicationTravellers,
-      eq(correctionRequests.travellerId, visaApplicationTravellers.id)
-    )
-    .where(
-      and(
-        eq(correctionRequests.status, 'resubmitted'),
-        input.reviewerId
-          ? eq(visaApplications.assignedReviewerId, input.reviewerId)
-          : undefined
-      )
-    )
-    .orderBy(desc(correctionRequests.resubmittedAt));
+  const { passportServices } = await import('@/lib/db/schema');
 
-  const unreadComments = await db
-    .select({
-      applicationId: notifications.applicationId,
-      title: notifications.title,
-      body: notifications.body,
-      href: notifications.href,
-    })
-    .from(notifications)
-    .where(
-      and(
-        eq(notifications.userId, input.staffUserId),
-        eq(notifications.type, 'applicant_comment'),
-        isNull(notifications.readAt)
+  const [resubmitted, passportResubmitted, unreadComments] = await Promise.all([
+    db
+      .select({
+        applicationId: correctionRequests.applicationId,
+        applicantName: visaApplications.applicantName,
+        country: visaApplications.country,
+        visaType: visaApplications.visaType,
+        travellerName: visaApplicationTravellers.name,
+      })
+      .from(correctionRequests)
+      .innerJoin(
+        visaApplications,
+        eq(correctionRequests.applicationId, visaApplications.id)
       )
-    )
-    .orderBy(desc(notifications.createdAt));
+      .innerJoin(
+        visaApplicationTravellers,
+        eq(correctionRequests.travellerId, visaApplicationTravellers.id)
+      )
+      .where(
+        and(
+          eq(correctionRequests.applicationType, 'visa'),
+          eq(correctionRequests.status, 'resubmitted'),
+          input.reviewerId
+            ? eq(visaApplications.assignedReviewerId, input.reviewerId)
+            : undefined
+        )
+      )
+      .orderBy(desc(correctionRequests.resubmittedAt)),
+    db
+      .select({
+        applicationId: correctionRequests.applicationId,
+        serviceType: passportServices.serviceType,
+        referenceNumber: passportServices.referenceNumber,
+      })
+      .from(correctionRequests)
+      .innerJoin(
+        passportServices,
+        eq(correctionRequests.applicationId, passportServices.id)
+      )
+      .where(
+        and(
+          eq(correctionRequests.applicationType, 'passport'),
+          eq(correctionRequests.status, 'resubmitted'),
+          input.reviewerId
+            ? eq(passportServices.assignedReviewerId, input.reviewerId)
+            : undefined
+        )
+      )
+      .orderBy(desc(correctionRequests.resubmittedAt)),
+    db
+      .select({
+        applicationId: notifications.applicationId,
+        title: notifications.title,
+        body: notifications.body,
+        href: notifications.href,
+      })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, input.staffUserId),
+          eq(notifications.type, 'applicant_comment'),
+          isNull(notifications.readAt)
+        )
+      )
+      .orderBy(desc(notifications.createdAt)),
+  ]);
 
   const byApplication = new Map<string, StaffAttentionItem>();
   for (const row of resubmitted) {
@@ -750,6 +801,14 @@ export async function listStaffAttention(input: {
       title: `${row.applicantName || row.travellerName} sent updates`,
       body: `${row.country || 'Visa'} · ${row.visaType}. Review the corrected ${row.travellerName} file.`,
       href: `/admin/applications/visa/${row.applicationId}`,
+    });
+  }
+  for (const row of passportResubmitted) {
+    byApplication.set(row.applicationId, {
+      applicationId: row.applicationId,
+      title: 'Passport applicant sent updates',
+      body: `Passport ${row.serviceType}. Review the corrected application.`,
+      href: `/admin/applications/passport/${row.referenceNumber || row.applicationId}`,
     });
   }
   for (const row of unreadComments) {

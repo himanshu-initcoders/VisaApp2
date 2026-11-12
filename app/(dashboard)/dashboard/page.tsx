@@ -15,7 +15,9 @@ import { ApplicationStatusCell } from '@/components/shared/ApplicationStatusCell
 import { PaymentHistory } from '@/components/applications/PaymentHistory';
 import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
 import { listApplicantActionItems } from '@/lib/visa/corrections';
+import { listPassportApplicantActionItems } from '@/lib/passport/corrections';
 import { ActionRequiredBanner } from '@/components/dashboard/ActionRequiredBanner';
+import { PassportActionRequiredBanner } from '@/components/dashboard/PassportActionRequiredBanner';
 import { DraftApplicationsList } from '@/components/dashboard/DraftApplicationsList';
 import { FlagLogo } from '@/components/shared/FlagLogo';
 import { SubmissionConfirmationTracker } from '@/components/analytics/SubmissionConfirmationTracker';
@@ -75,41 +77,43 @@ export default async function DashboardPage({
       ['approved', 'completed'].includes(a.status)
     ).length;
 
-  const [summaries, paymentRows, actionItems] = await Promise.all([
-    loadTravellerSummaries(visaApps.map((app) => app.id)),
-    db
-      .select({
-        id: payments.id,
-        amount: payments.amount,
-        currency: payments.currency,
-        status: payments.status,
-        paymentMethod: payments.paymentMethod,
-        razorpayPaymentId: payments.razorpayPaymentId,
-        razorpayOrderId: payments.razorpayOrderId,
-        razorpayRefundId: payments.razorpayRefundId,
-        kind: payments.kind,
-        parentPaymentId: payments.parentPaymentId,
-        createdAt: payments.createdAt,
-        completedAt: payments.completedAt,
-        applicationId: payments.applicationId,
-        applicationType: payments.applicationType,
-        country: visaApplications.country,
-        countryCode: visaApplications.countryCode,
-        visaType: visaApplications.visaType,
-      })
-      .from(payments)
-      .leftJoin(
-        visaApplications,
-        and(
-          eq(payments.applicationId, visaApplications.id),
-          eq(visaApplications.userId, session.user.id)
+  const [summaries, paymentRows, actionItems, passportActionItems] =
+    await Promise.all([
+      loadTravellerSummaries(visaApps.map((app) => app.id)),
+      db
+        .select({
+          id: payments.id,
+          amount: payments.amount,
+          currency: payments.currency,
+          status: payments.status,
+          paymentMethod: payments.paymentMethod,
+          razorpayPaymentId: payments.razorpayPaymentId,
+          razorpayOrderId: payments.razorpayOrderId,
+          razorpayRefundId: payments.razorpayRefundId,
+          kind: payments.kind,
+          parentPaymentId: payments.parentPaymentId,
+          createdAt: payments.createdAt,
+          completedAt: payments.completedAt,
+          applicationId: payments.applicationId,
+          applicationType: payments.applicationType,
+          country: visaApplications.country,
+          countryCode: visaApplications.countryCode,
+          visaType: visaApplications.visaType,
+        })
+        .from(payments)
+        .leftJoin(
+          visaApplications,
+          and(
+            eq(payments.applicationId, visaApplications.id),
+            eq(visaApplications.userId, session.user.id)
+          )
         )
-      )
-      .where(eq(payments.userId, session.user.id))
-      .orderBy(desc(payments.createdAt))
-      .limit(10),
-    listApplicantActionItems(session.user.id),
-  ]);
+        .where(eq(payments.userId, session.user.id))
+        .orderBy(desc(payments.createdAt))
+        .limit(10),
+      listApplicantActionItems(session.user.id),
+      listPassportApplicantActionItems(session.user.id),
+    ]);
 
   const draftSlice = drafts.slice(0, 4);
   const [flagUrls, outcomePresence] = await Promise.all([
@@ -155,6 +159,7 @@ export default async function DashboardPage({
   return (
     <div className="space-y-8">
       <ActionRequiredBanner items={actionItems} />
+      <PassportActionRequiredBanner items={passportActionItems} />
       {submittedId && (
         <div className="rounded-[24px] border border-ash bg-mint-wash/60 px-6 py-4">
           <SubmissionConfirmationTracker applicationId={submittedId} />

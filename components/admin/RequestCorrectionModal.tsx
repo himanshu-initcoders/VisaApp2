@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui';
-import { requestCorrection } from '@/app/(admin)/actions';
+import {
+  requestCorrection,
+  requestPassportCorrection,
+} from '@/app/(admin)/actions';
 import type { CorrectableTarget } from '@/lib/visa/corrections';
 
 interface TravellerOption {
@@ -15,6 +18,7 @@ interface RequestCorrectionModalProps {
   isOpen: boolean;
   onClose: () => void;
   applicationId: string;
+  applicationType?: 'visa' | 'passport';
   travellers: TravellerOption[];
   targets: CorrectableTarget[];
   initialTravellerId?: string;
@@ -26,6 +30,7 @@ export function RequestCorrectionModal({
   isOpen,
   onClose,
   applicationId,
+  applicationType = 'visa',
   travellers,
   targets,
   initialTravellerId,
@@ -85,10 +90,12 @@ export function RequestCorrectionModal({
     );
   };
 
+  const isPassport = applicationType === 'passport';
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
-    if (!travellerId) {
+    if (!isPassport && !travellerId) {
       setError('Choose a traveller');
       return;
     }
@@ -106,21 +113,29 @@ export function RequestCorrectionModal({
       return;
     }
 
+    const items = selected.map((targetKey) => {
+      const target = targets.find((item) => item.targetKey === targetKey);
+      return {
+        kind: (target?.kind ?? 'field') as 'document' | 'field',
+        targetKey,
+        comment: comments[targetKey].trim(),
+      };
+    });
+
     setSubmitting(true);
     try {
-      const result = await requestCorrection({
-        applicationId,
-        travellerId,
-        message: message.trim(),
-        items: selected.map((targetKey) => {
-          const target = targets.find((item) => item.targetKey === targetKey);
-          return {
-            kind: target?.kind ?? 'field',
-            targetKey,
-            comment: comments[targetKey].trim(),
-          };
-        }),
-      });
+      const result = isPassport
+        ? await requestPassportCorrection({
+            applicationId,
+            message: message.trim(),
+            items,
+          })
+        : await requestCorrection({
+            applicationId,
+            travellerId,
+            message: message.trim(),
+            items,
+          });
       if (!result.success) {
         setError(result.message || 'Could not send the request');
         return;
@@ -143,20 +158,22 @@ export function RequestCorrectionModal({
           The applicant will see the full application, with only these items unlocked.
         </p>
 
-        <label className="mt-5 block font-switzer text-sm text-portrait-ink">
-          Traveller
-          <select
-            value={travellerId}
-            onChange={(event) => setTravellerId(event.target.value)}
-            className="mt-1 w-full rounded-2xl border border-ash bg-white px-3 py-2 text-sm"
-          >
-            {travellers.map((traveller) => (
-              <option key={traveller.id} value={traveller.id}>
-                {traveller.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {!isPassport ? (
+          <label className="mt-5 block font-switzer text-sm text-portrait-ink">
+            Traveller
+            <select
+              value={travellerId}
+              onChange={(event) => setTravellerId(event.target.value)}
+              className="mt-1 w-full rounded-2xl border border-ash bg-white px-3 py-2 text-sm"
+            >
+              {travellers.map((traveller) => (
+                <option key={traveller.id} value={traveller.id}>
+                  {traveller.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         <div className="mt-5 max-h-[40vh] space-y-4 overflow-y-auto pr-1">
           {groups.map(([group, items]) => (

@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui';
-import { initiateVisaRefund } from '@/app/(admin)/actions';
+import {
+  initiatePassportRefund,
+  initiateVisaRefund,
+} from '@/app/(admin)/actions';
 import { formatInrFromPaise } from '@/lib/payments/money';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +15,7 @@ export interface RefundPaymentDialogProps {
   isOpen: boolean;
   onClose: () => void;
   applicationId: string;
+  applicationType?: 'visa' | 'passport';
   parentPaymentId: string;
   originalAmountPaise: number;
   remainingAmountPaise: number;
@@ -35,6 +39,7 @@ export function RefundPaymentDialog({
   isOpen,
   onClose,
   applicationId,
+  applicationType = 'visa',
   parentPaymentId,
   originalAmountPaise,
   remainingAmountPaise,
@@ -101,12 +106,16 @@ export function RefundPaymentDialog({
 
     setIsSubmitting(true);
     try {
-      const result = await initiateVisaRefund({
+      const refundInput = {
         applicationId,
         parentPaymentId,
         amountPaise,
         reason: reason.trim(),
-      });
+      };
+      const result =
+        applicationType === 'passport'
+          ? await initiatePassportRefund(refundInput)
+          : await initiateVisaRefund(refundInput);
       if (!result.success) {
         setError(result.message || 'Failed to initiate refund');
         return;

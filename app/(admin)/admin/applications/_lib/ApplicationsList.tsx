@@ -62,7 +62,7 @@ export async function ApplicationsList({
     dateTo: searchParams.to,
     status: searchParams.status,
     type: scope,
-    assignedReviewerId: isReviewer && isVisa ? userId : undefined,
+    assignedReviewerId: isReviewer ? userId : undefined,
     page: searchParams.page ? parseInt(searchParams.page, 10) : 1,
     limit: searchParams.limit ? parseInt(searchParams.limit, 10) : 20,
     sortBy: 'submittedAt',
@@ -104,7 +104,7 @@ export async function ApplicationsList({
   const listHref = `/admin/applications/${scope}`;
   const title = isVisa ? 'Visa applications' : 'Passport applications';
   const description = isReviewer
-    ? 'Visa applications assigned to you'
+    ? `${isVisa ? 'Visa' : 'Passport'} applications assigned to you`
     : isVisa
       ? 'View and manage visa applications'
       : 'View and manage passport applications';
@@ -154,7 +154,7 @@ export async function ApplicationsList({
 
       <ApplicationsTable
         applications={result.applications}
-        canAssign={role === 'admin' && isVisa}
+        canAssign={role === 'admin'}
         flagUrls={flagUrls}
         hideTypeColumn
       />

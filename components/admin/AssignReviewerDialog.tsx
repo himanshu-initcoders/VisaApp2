@@ -5,7 +5,11 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Button, Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
 import { Pencil, UserPen } from 'lucide-react';
-import { assignVisaReviewer, searchReviewers } from '@/app/(admin)/actions';
+import {
+  assignPassportReviewer,
+  assignVisaReviewer,
+  searchReviewers,
+} from '@/app/(admin)/actions';
 import { cn } from '@/lib/utils';
 import type { ReviewerOption } from '@/types/admin';
 
@@ -13,6 +17,7 @@ interface AssignReviewerDialogProps {
   isOpen: boolean;
   onClose: () => void;
   applicationId: string;
+  applicationType?: 'visa' | 'passport';
   assignedReviewerId?: string | null;
   onSuccess?: () => void;
 }
@@ -21,6 +26,7 @@ export function AssignReviewerDialog({
   isOpen,
   onClose,
   applicationId,
+  applicationType = 'visa',
   assignedReviewerId,
   onSuccess,
 }: AssignReviewerDialogProps) {
@@ -94,7 +100,10 @@ export function AssignReviewerDialog({
     setAssigningId(reviewerId);
     setError('');
     try {
-      const result = await assignVisaReviewer(applicationId, reviewerId);
+      const result =
+        applicationType === 'passport'
+          ? await assignPassportReviewer(applicationId, reviewerId)
+          : await assignVisaReviewer(applicationId, reviewerId);
       if (result.success) {
         onSuccess?.();
         onClose();
@@ -243,6 +252,7 @@ export function AssignReviewerDialog({
 
 interface AssignReviewerButtonProps {
   applicationId: string;
+  applicationType?: 'visa' | 'passport';
   assignedReviewerId?: string | null;
   assignedReviewerName?: string | null;
   /** Icon button for the applications table. Detail page keeps the text label. */
@@ -252,6 +262,7 @@ interface AssignReviewerButtonProps {
 /** Compact trigger used in the applications table. */
 export function AssignReviewerButton({
   applicationId,
+  applicationType = 'visa',
   assignedReviewerId,
   assignedReviewerName,
   iconOnly = false,
@@ -324,6 +335,7 @@ export function AssignReviewerButton({
         isOpen={open}
         onClose={() => setOpen(false)}
         applicationId={applicationId}
+        applicationType={applicationType}
         assignedReviewerId={assignedReviewerId}
         onSuccess={() => router.refresh()}
       />
@@ -333,14 +345,16 @@ export function AssignReviewerButton({
 
 interface AssignReviewerCardProps {
   applicationId: string;
+  applicationType?: 'visa' | 'passport';
   assignedReviewerName?: string | null;
   assignedReviewerId?: string | null;
   canAssign: boolean;
 }
 
-/** Sidebar card on the visa application detail page. */
+/** Sidebar card on the application detail page. */
 export function AssignReviewerCard({
   applicationId,
+  applicationType = 'visa',
   assignedReviewerName,
   assignedReviewerId,
   canAssign,
@@ -374,6 +388,7 @@ export function AssignReviewerCard({
           isOpen={open}
           onClose={() => setOpen(false)}
           applicationId={applicationId}
+          applicationType={applicationType}
           assignedReviewerId={assignedReviewerId}
           onSuccess={() => router.refresh()}
         />

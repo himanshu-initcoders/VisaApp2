@@ -7,6 +7,7 @@ import type { NoteItem } from '@/types/admin';
 
 interface NotesPanelProps {
   applicationId: string;
+  applicationType?: 'visa' | 'passport';
   notes: NoteItem[];
   /** Hide card title when the parent Tabs label already names this panel. */
   hideTitle?: boolean;
@@ -17,6 +18,7 @@ interface NotesPanelProps {
  */
 export function NotesPanel({
   applicationId,
+  applicationType = 'visa',
   notes,
   hideTitle = false,
 }: NotesPanelProps) {
@@ -33,7 +35,7 @@ export function NotesPanel({
         {isAdding ? (
           <AddNoteForm
             applicationId={applicationId}
-            applicationType="visa"
+            applicationType={applicationType}
             onCancel={() => setIsAdding(false)}
             onSuccess={() => setIsAdding(false)}
           />

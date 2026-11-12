@@ -20,7 +20,7 @@ import {
   staffFieldEdits,
   payments,
 } from '@/lib/db/schema';
-import { and, asc, eq, ilike, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { signOut } from '@/lib/auth';
 import { requireRole, isValidStatusTransition, isAdmin } from '@/lib/auth-utils';
 import { normalizeIndianPhone } from '@/lib/auth/phone';
@@ -56,9 +56,28 @@ import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 import {
   notifyCommentEvent,
   notifyCorrectionRequestedEvent,
+  notifyPassportCorrectionRequestedEvent,
   notifyStatusChangedEvent,
   notifyVisaOutcomeDeliveredEvent,
 } from '@/lib/notifications';
+import {
+  buildPassportCorrectableTargets,
+  getOpenPassportCorrection,
+  readPassportAnswerValue,
+  readPassportTargetValue,
+  replacePassportDocument,
+  requestPassportCorrectionSchema,
+  staffPassportFieldEditSchema,
+  validatePassportFieldValue,
+  validatePassportRequestedItems,
+  writePassportAnswerValue,
+  type StoredPassportDocument,
+} from '@/lib/passport/corrections';
+import type { PassportApplyFormConfig } from '@/lib/apply/passportForm';
+import {
+  PASSPORT_DRAFT_COUNTRY_CODE,
+  PASSPORT_DRAFT_PASSENGER_ID,
+} from '@/lib/apply/passportDraftFiles';
 import { uploadService } from '@/lib/upload';
 import { uploadApplicationDocuments } from '@/lib/upload/application-actions';
 import {
@@ -73,6 +92,7 @@ import {
 } from '@/lib/visa/outcomeDocument';
 import { isPdfMime } from '@/lib/visa/outcomeDocumentShared';
 import {
+  reviewerOwnsApplication,
   reviewerOwnsDocument,
   reviewerOwnsVisa,
 } from '@/lib/reviewer-access';
@@ -228,10 +248,11 @@ async function denyReviewerUnlessAssigned(
   applicationType: 'visa' | 'passport'
 ): Promise<ActionResponse | null> {
   if (session.user.role !== 'reviewer') return null;
-  if (applicationType !== 'visa') {
-    return { success: false, message: 'Application not found' };
-  }
-  const allowed = await reviewerOwnsVisa(session.user.id, applicationId);
+  const allowed = await reviewerOwnsApplication(
+    session.user.id,
+    applicationId,
+    applicationType
+  );
   if (!allowed) {
     return { success: false, message: 'Application not found' };
   }
@@ -493,22 +514,22 @@ export async function updateApplicationStatus(
     // Revalidate pages
     revalidatePath('/admin/applications');
     revalidatePath(`/admin/applications/${applicationType}/${applicationId}`);
-    if (applicationType === 'visa') {
-      revalidatePath(`/applications/visa/${applicationId}`);
-      revalidatePath('/applications');
-      revalidatePath('/dashboard');
-      try {
-        await notifyStatusChangedEvent({
-          applicationId,
-          actorId: session.user.id,
-          newStatus,
-          notes,
-          travellerId,
-          delivery: deliveryPayload,
-        });
-      } catch (notifyError) {
-        console.error('Status notification failed', notifyError);
-      }
+    revalidatePath(`/applications/${applicationType}/${applicationId}`);
+    revalidatePath('/applications');
+    revalidatePath('/dashboard');
+    try {
+      await notifyStatusChangedEvent({
+        applicationId,
+        actorId: session.user.id,
+        newStatus,
+        notes,
+        travellerId:
+          applicationType === 'visa' ? travellerId : undefined,
+        delivery: deliveryPayload,
+        applicationType,
+      });
+    } catch (notifyError) {
+      console.error('Status notification failed', notifyError);
     }
 
     return {
@@ -526,14 +547,15 @@ export async function updateApplicationStatus(
 }
 
 /**
- * Initiate a Razorpay refund for a completed visa charge (Payments tab).
+ * Initiate a Razorpay refund for a completed charge (visa or passport).
  */
-export async function initiateVisaRefund(
-  request: InitiateVisaRefundRequest
+export async function initiateApplicationRefund(
+  request: InitiateVisaRefundRequest & { applicationType: 'visa' | 'passport' }
 ): Promise<ActionResponse> {
   try {
     const session = await requireRole(['admin', 'reviewer']);
-    const { applicationId, parentPaymentId, amountPaise, reason } = request;
+    const { applicationId, parentPaymentId, amountPaise, reason, applicationType } =
+      request;
 
     if (!applicationId || !parentPaymentId) {
       return {
@@ -563,7 +585,7 @@ export async function initiateVisaRefund(
     const denied = await denyReviewerUnlessAssigned(
       session,
       applicationId,
-      'visa'
+      applicationType
     );
     if (denied) return denied;
 
@@ -576,7 +598,7 @@ export async function initiateVisaRefund(
     if (
       !parent ||
       parent.applicationId !== applicationId ||
-      parent.applicationType !== 'visa' ||
+      parent.applicationType !== applicationType ||
       parent.kind !== 'charge' ||
       parent.status !== 'completed' ||
       !parent.razorpayPaymentId
@@ -660,8 +682,8 @@ export async function initiateVisaRefund(
         refundPaymentId: created.id,
         error: gateway.error,
       });
-      revalidatePath(`/admin/applications/visa/${applicationId}`);
-      revalidatePath(`/applications/visa/${applicationId}`);
+      revalidatePath(`/admin/applications/${applicationType}/${applicationId}`);
+      revalidatePath(`/applications/${applicationType}/${applicationId}`);
       return {
         success: false,
         message: `Refund failed: ${gateway.error}`,
@@ -676,8 +698,8 @@ export async function initiateVisaRefund(
     });
 
     revalidatePath('/admin/applications');
-    revalidatePath(`/admin/applications/visa/${applicationId}`);
-    revalidatePath(`/applications/visa/${applicationId}`);
+    revalidatePath(`/admin/applications/${applicationType}/${applicationId}`);
+    revalidatePath(`/applications/${applicationType}/${applicationId}`);
     revalidatePath('/dashboard');
 
     return {
@@ -685,13 +707,26 @@ export async function initiateVisaRefund(
       message: 'Refund initiated',
     };
   } catch (error) {
-    console.error('Error initiating visa refund:', error);
+    console.error('Error initiating application refund:', error);
     return {
       success: false,
       message: 'Failed to initiate refund',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
+}
+
+/** @deprecated Name retained for PaymentHistory — prefer initiateApplicationRefund. */
+export async function initiateVisaRefund(
+  request: InitiateVisaRefundRequest
+): Promise<ActionResponse> {
+  return initiateApplicationRefund({ ...request, applicationType: 'visa' });
+}
+
+export async function initiatePassportRefund(
+  request: InitiateVisaRefundRequest
+): Promise<ActionResponse> {
+  return initiateApplicationRefund({ ...request, applicationType: 'passport' });
 }
 
 /**
@@ -1014,7 +1049,7 @@ export async function addApplicationCallLog(
 ): Promise<ActionResponse> {
   try {
     const session = await requireRole(['admin', 'reviewer']);
-    const { applicationId, phone, note } = request;
+    const { applicationId, phone, note, applicationType = 'visa' } = request;
 
     if (!applicationId || !phone?.trim() || !note?.trim()) {
       return {
@@ -1024,21 +1059,32 @@ export async function addApplicationCallLog(
       };
     }
 
+    const type = applicationType === 'passport' ? 'passport' : 'visa';
     const denied = await denyReviewerUnlessAssigned(
       session,
       applicationId,
-      'visa'
+      type
     );
     if (denied) return denied;
 
-    const [app] = await db
-      .select({ id: visaApplications.id })
-      .from(visaApplications)
-      .where(eq(visaApplications.id, applicationId))
-      .limit(1);
-
-    if (!app) {
-      return { success: false, message: 'Application not found' };
+    if (type === 'visa') {
+      const [app] = await db
+        .select({ id: visaApplications.id })
+        .from(visaApplications)
+        .where(eq(visaApplications.id, applicationId))
+        .limit(1);
+      if (!app) {
+        return { success: false, message: 'Application not found' };
+      }
+    } else {
+      const [app] = await db
+        .select({ id: passportServices.id })
+        .from(passportServices)
+        .where(eq(passportServices.id, applicationId))
+        .limit(1);
+      if (!app) {
+        return { success: false, message: 'Application not found' };
+      }
     }
 
     await db.insert(applicationCallLogs).values({
@@ -1050,7 +1096,7 @@ export async function addApplicationCallLog(
       createdAt: new Date(),
     });
 
-    revalidatePath(`/admin/applications/visa/${applicationId}`);
+    revalidatePath(`/admin/applications/${type}/${applicationId}`);
 
     return { success: true, message: 'Call log added' };
   } catch (error) {
@@ -1356,7 +1402,8 @@ export async function createReviewer(input: unknown): Promise<ActionResponse> {
   }
 }
 
-const OPEN_VISA_COUNT = sql<number>`count(${visaApplications.id}) filter (where ${visaApplications.status} not in ('approved', 'rejected', 'partially_approved', 'draft'))`;
+const OPEN_VISA_COUNT = sql<number>`count(distinct ${visaApplications.id}) filter (where ${visaApplications.status} not in ('approved', 'rejected', 'partially_approved', 'draft'))`;
+const OPEN_PASSPORT_COUNT = sql<number>`count(distinct ${passportServices.id}) filter (where ${passportServices.status} not in ('approved', 'rejected', 'draft'))`;
 
 /**
  * Search reviewers and admins for assignment.
@@ -1390,18 +1437,22 @@ export async function searchReviewers(
         name: users.name,
         email: users.email,
         role: users.role,
-        openCount: OPEN_VISA_COUNT,
+        openCount: sql<number>`(${OPEN_VISA_COUNT} + ${OPEN_PASSPORT_COUNT})`,
       })
       .from(users)
       .leftJoin(
         visaApplications,
         eq(visaApplications.assignedReviewerId, users.id)
       )
+      .leftJoin(
+        passportServices,
+        eq(passportServices.assignedReviewerId, users.id)
+      )
       .where(and(...filters))
       .groupBy(users.id, users.name, users.email, users.role)
       .orderBy(
         sql`case when ${users.role} = 'admin' then 0 else 1 end`,
-        asc(OPEN_VISA_COUNT),
+        sql`(${OPEN_VISA_COUNT} + ${OPEN_PASSPORT_COUNT})`,
         asc(users.name)
       )
       .limit(20);
@@ -1536,6 +1587,123 @@ export async function assignVisaReviewer(
   }
 }
 
+/**
+ * Assign or reassign a reviewer on a passport application (admin only).
+ */
+export async function assignPassportReviewer(
+  applicationId: string,
+  reviewerId: string
+): Promise<ActionResponse> {
+  const session = await requireRole(['admin']);
+
+  if (!isAdmin(session.user)) {
+    return {
+      success: false,
+      message: 'Unauthorized',
+      error: 'Only admins can assign reviewers',
+    };
+  }
+
+  if (!applicationId || !reviewerId) {
+    return {
+      success: false,
+      message: 'Missing required fields',
+      error: 'applicationId and reviewerId are required',
+    };
+  }
+
+  try {
+    const [application] = await db
+      .select({
+        id: passportServices.id,
+        referenceNumber: passportServices.referenceNumber,
+        serviceType: passportServices.serviceType,
+        formSnapshot: passportServices.formSnapshot,
+      })
+      .from(passportServices)
+      .where(eq(passportServices.id, applicationId))
+      .limit(1);
+
+    if (!application) {
+      return {
+        success: false,
+        message: 'Application not found',
+        error: 'Passport application does not exist',
+      };
+    }
+
+    const [reviewer] = await db
+      .select({
+        id: users.id,
+        role: users.role,
+        name: users.name,
+        email: users.email,
+      })
+      .from(users)
+      .where(eq(users.id, reviewerId))
+      .limit(1);
+
+    if (!reviewer || (reviewer.role !== 'reviewer' && reviewer.role !== 'admin')) {
+      return {
+        success: false,
+        message: 'Assignee not found',
+        error: 'Selected user is not a reviewer or admin',
+      };
+    }
+
+    const snapshot =
+      (application.formSnapshot as PassportApplyFormConfig | null) ?? null;
+    const productName =
+      snapshot?.productName ||
+      (application.serviceType === 'reissue'
+        ? 'Passport reissue'
+        : 'New passport');
+    const referenceNumber =
+      application.referenceNumber || application.id.slice(0, 8);
+
+    await db
+      .update(passportServices)
+      .set({
+        assignedReviewerId: reviewerId,
+        updatedAt: new Date(),
+      })
+      .where(eq(passportServices.id, applicationId));
+
+    revalidatePath('/admin/applications');
+    revalidatePath(`/admin/applications/passport/${referenceNumber}`);
+    revalidatePath(`/admin/applications/passport/${applicationId}`);
+
+    await notifyReviewerAssigned({
+      email: reviewer.email,
+      reviewerName: reviewer.name,
+      applicantName: 'Applicant',
+      country: 'Passport',
+      visaType: productName,
+      referenceNumber,
+    });
+    await notifyReviewerAssignedWhatsApp({
+      reviewerUserId: reviewer.id,
+      reviewerName: reviewer.name,
+      applicantName: 'Applicant',
+      country: 'Passport',
+      visaType: productName,
+      referenceNumber,
+    });
+
+    return {
+      success: true,
+      message: 'Reviewer assigned',
+    };
+  } catch (error) {
+    console.error('Error assigning passport reviewer:', error);
+    return {
+      success: false,
+      message: 'Failed to assign reviewer',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
 async function revalidateVisaSurfaces(applicationId: string) {
   const [row] = await db
     .select({ referenceNumber: visaApplications.referenceNumber })
@@ -1553,6 +1721,28 @@ async function revalidateVisaSurfaces(applicationId: string) {
     revalidatePath(`/admin/applications/visa/${referenceNumber}`);
     revalidatePath(`/applications/visa/${referenceNumber}`);
     revalidatePath(`/applications/visa/${referenceNumber}/fix`);
+  }
+  revalidatePath('/applications');
+  revalidatePath('/dashboard');
+}
+
+async function revalidatePassportSurfaces(applicationId: string) {
+  const [row] = await db
+    .select({ referenceNumber: passportServices.referenceNumber })
+    .from(passportServices)
+    .where(eq(passportServices.id, applicationId))
+    .limit(1);
+  const referenceNumber = row?.referenceNumber;
+
+  revalidatePath('/admin');
+  revalidatePath('/admin/applications');
+  revalidatePath(`/admin/applications/passport/${applicationId}`);
+  revalidatePath(`/applications/passport/${applicationId}`);
+  revalidatePath(`/applications/passport/${applicationId}/fix`);
+  if (referenceNumber) {
+    revalidatePath(`/admin/applications/passport/${referenceNumber}`);
+    revalidatePath(`/applications/passport/${referenceNumber}`);
+    revalidatePath(`/applications/passport/${referenceNumber}/fix`);
   }
   revalidatePath('/applications');
   revalidatePath('/dashboard');
@@ -1656,6 +1846,7 @@ export async function requestCorrection(
         .insert(correctionRequests)
         .values({
           applicationId,
+          applicationType: 'visa',
           travellerId,
           requestedBy: session.user.id,
           message,
@@ -1718,6 +1909,161 @@ export async function requestCorrection(
     return { success: true, message: 'Correction requested' };
   } catch (error) {
     console.error('Error requesting correction:', error);
+    return {
+      success: false,
+      message: 'Failed to request correction',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Ask the applicant to fix passport form fields or documents.
+ */
+export async function requestPassportCorrection(
+  input: unknown
+): Promise<ActionResponse> {
+  try {
+    const session = await requireRole(['admin', 'reviewer']);
+    const parsed = requestPassportCorrectionSchema.safeParse(input);
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message ?? 'Invalid request';
+      return { success: false, message, error: message };
+    }
+
+    const { applicationId, message, items } = parsed.data;
+    if (
+      await reviewerAccessDenied(
+        session.user.id,
+        session.user.role,
+        applicationId,
+        'passport'
+      )
+    ) {
+      return { success: false, message: 'Application not found' };
+    }
+
+    const [application] = await db
+      .select()
+      .from(passportServices)
+      .where(eq(passportServices.id, applicationId))
+      .limit(1);
+    if (!application || application.status === 'draft') {
+      return { success: false, message: 'Application not found' };
+    }
+    if (
+      application.status === 'approved' ||
+      application.status === 'rejected'
+    ) {
+      return { success: false, message: 'This application is already finished' };
+    }
+
+    const config =
+      (application.formSnapshot as PassportApplyFormConfig | null) ?? null;
+    const invalid = validatePassportRequestedItems(config, items);
+    if (invalid) return { success: false, message: invalid };
+
+    const open = await getOpenPassportCorrection(applicationId);
+    if (open) {
+      return {
+        success: false,
+        message: 'This application already has an open correction request',
+      };
+    }
+
+    const answers =
+      application.answers && typeof application.answers === 'object'
+        ? (application.answers as Record<string, unknown>)
+        : {};
+    const storedDocs = Array.isArray(application.documents)
+      ? (application.documents as StoredPassportDocument[])
+      : [];
+    const now = new Date();
+    const role = staffRole(session.user.role);
+    const oldStatus = application.status;
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(correctionRequests)
+        .set({ status: 'resolved', resolvedAt: now })
+        .where(
+          and(
+            eq(correctionRequests.applicationId, applicationId),
+            eq(correctionRequests.applicationType, 'passport'),
+            isNull(correctionRequests.travellerId),
+            eq(correctionRequests.status, 'resubmitted')
+          )
+        );
+
+      const [request] = await tx
+        .insert(correctionRequests)
+        .values({
+          applicationId,
+          applicationType: 'passport',
+          travellerId: null,
+          requestedBy: session.user.id,
+          message,
+          status: 'open',
+          createdAt: now,
+        })
+        .returning();
+
+      await tx.insert(correctionItems).values(
+        items.map((item) => ({
+          requestId: request.id,
+          kind: item.kind,
+          targetKey: item.targetKey,
+          comment: item.comment,
+          status: 'open' as const,
+          previousValue: readPassportTargetValue(
+            answers,
+            storedDocs,
+            item.targetKey,
+            item.kind
+          ),
+        }))
+      );
+
+      await tx
+        .update(passportServices)
+        .set({
+          status: 'action_required',
+          updatedAt: now,
+          completedAt: null,
+        })
+        .where(eq(passportServices.id, applicationId));
+
+      await tx.insert(statusHistory).values({
+        applicationId,
+        applicationType: 'passport',
+        travellerId: null,
+        oldStatus,
+        newStatus: 'action_required',
+        changedBy: session.user.id,
+        notes: message,
+        createdAt: now,
+      });
+
+      await tx.insert(applicationComments).values({
+        applicationId,
+        travellerId: null,
+        authorId: session.user.id,
+        authorRole: role,
+        body: message,
+        createdAt: now,
+      });
+    });
+
+    await revalidatePassportSurfaces(applicationId);
+    try {
+      await notifyPassportCorrectionRequestedEvent({ applicationId, message });
+    } catch (notifyError) {
+      console.error('Passport correction notification failed', notifyError);
+    }
+
+    return { success: true, message: 'Correction requested' };
+  } catch (error) {
+    console.error('Error requesting passport correction:', error);
     return {
       success: false,
       message: 'Failed to request correction',
@@ -1974,6 +2320,7 @@ export async function applyStaffFieldEdit(
 
       await tx.insert(staffFieldEdits).values({
         applicationId,
+        applicationType: 'visa',
         travellerId,
         actorId: session.user.id,
         kind: target.kind,
@@ -1989,6 +2336,219 @@ export async function applyStaffFieldEdit(
     return { success: true, message: 'Correction saved' };
   } catch (error) {
     console.error('Error saving staff field edit:', error);
+    return {
+      success: false,
+      message: 'Failed to save correction',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Staff correct one passport field or document in place.
+ */
+export async function applyPassportStaffFieldEdit(
+  input: unknown
+): Promise<ActionResponse> {
+  try {
+    const session = await requireRole(['admin', 'reviewer']);
+    const parsed = staffPassportFieldEditSchema.safeParse(input);
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message ?? 'Invalid update';
+      return { success: false, message, error: message };
+    }
+
+    const { applicationId, targetKey, message, value, file } = parsed.data;
+    if (
+      await reviewerAccessDenied(
+        session.user.id,
+        session.user.role,
+        applicationId,
+        'passport'
+      )
+    ) {
+      return { success: false, message: 'Application not found' };
+    }
+
+    const [application] = await db
+      .select()
+      .from(passportServices)
+      .where(eq(passportServices.id, applicationId))
+      .limit(1);
+    if (!application || application.status === 'draft') {
+      return { success: false, message: 'Application not found' };
+    }
+    if (
+      application.status === 'approved' ||
+      application.status === 'rejected'
+    ) {
+      return { success: false, message: 'This application is already finished' };
+    }
+
+    const config =
+      (application.formSnapshot as PassportApplyFormConfig | null) ?? null;
+    const target = buildPassportCorrectableTargets(config).find(
+      (item) => item.targetKey === targetKey
+    );
+    if (!target) {
+      return { success: false, message: 'Unknown field' };
+    }
+    if (target.kind === 'field' && (file || value === undefined)) {
+      return { success: false, message: 'Send a new value for this field' };
+    }
+    if (target.kind === 'document' && (!file || value !== undefined)) {
+      return { success: false, message: 'Upload a replacement file' };
+    }
+
+    let answers =
+      application.answers && typeof application.answers === 'object'
+        ? { ...(application.answers as Record<string, unknown>) }
+        : {};
+    let documents = Array.isArray(application.documents)
+      ? [...(application.documents as StoredPassportDocument[])]
+      : [];
+
+    let previousValue: unknown;
+    let newValue: unknown;
+    let uploaded: {
+      key: string;
+      url: string;
+      slotKey: string;
+      filename: string;
+      mimeType: string;
+      size: number;
+      previousKey?: string | null;
+    } | null = null;
+
+    if (target.kind === 'field') {
+      const issue = validatePassportFieldValue(config, targetKey, value ?? '');
+      if (issue) return { success: false, message: issue };
+      previousValue = readPassportAnswerValue(answers, targetKey);
+      const nextText = (value ?? '').trim();
+      if (String(previousValue ?? '').trim() === nextText) {
+        return { success: false, message: 'Enter a different value' };
+      }
+      answers = writePassportAnswerValue(answers, targetKey, nextText);
+      newValue = nextText;
+    } else {
+      const replacement = file!;
+      if (!ALLOWED_STAFF_EDIT_MIME.has(replacement.mimeType)) {
+        return { success: false, message: 'Upload a JPG, PNG, WEBP, or PDF' };
+      }
+      const bytes = Buffer.from(replacement.bufferBase64, 'base64');
+      const max =
+        replacement.mimeType === 'application/pdf'
+          ? 10 * 1024 * 1024
+          : 5 * 1024 * 1024;
+      if (bytes.length === 0 || bytes.length > max) {
+        return { success: false, message: 'File is empty or too large' };
+      }
+      if (!application.passportListingId) {
+        return {
+          success: false,
+          message: 'This application cannot accept new files',
+        };
+      }
+
+      const currentDoc = documents.find((item) => item.slotKey === targetKey);
+      const previousStorageKey = currentDoc?.key ?? null;
+      previousValue = currentDoc
+        ? {
+            filename: currentDoc.filename ?? null,
+            key: currentDoc.key ?? null,
+            url: currentDoc.url ?? null,
+            mimeType: currentDoc.mimeType ?? null,
+          }
+        : null;
+
+      const uploadResult = await uploadApplicationDocuments({
+        countryCode: PASSPORT_DRAFT_COUNTRY_CODE,
+        listingId: application.passportListingId,
+        applicationId,
+        documents: [
+          {
+            passengerId: PASSPORT_DRAFT_PASSENGER_ID,
+            slotKey: targetKey,
+            filename: replacement.filename,
+            mimeType: replacement.mimeType,
+            bufferBase64: replacement.bufferBase64,
+          },
+        ],
+      });
+      if (!uploadResult.success) {
+        return {
+          success: false,
+          message: uploadResult.error || 'Document upload failed',
+        };
+      }
+      const uploadedDoc = uploadResult.results[0];
+      if (!uploadedDoc) {
+        return { success: false, message: 'Document upload failed' };
+      }
+      await deleteReplacedObjectKey(previousStorageKey, uploadedDoc.key);
+      await deleteOtherSlotExtensionKeys(uploadedDoc.key);
+      documents = replacePassportDocument(documents, targetKey, {
+        slotKey: uploadedDoc.slotKey,
+        key: uploadedDoc.key,
+        url: uploadedDoc.url,
+        mimeType: uploadedDoc.mimeType,
+        filename: uploadedDoc.filename,
+        size: uploadedDoc.size,
+      });
+      newValue = {
+        filename: uploadedDoc.filename,
+        key: uploadedDoc.key,
+        url: uploadedDoc.url,
+        mimeType: uploadedDoc.mimeType,
+      };
+      uploaded = { ...uploadedDoc, previousKey: previousStorageKey };
+    }
+
+    const now = new Date();
+    await db.transaction(async (tx) => {
+      await tx
+        .update(passportServices)
+        .set({
+          answers,
+          personalInfo: answers,
+          documents,
+          updatedAt: now,
+        })
+        .where(eq(passportServices.id, applicationId));
+
+      if (uploaded) {
+        await upsertApplicationDocumentRow(tx, {
+          applicationId,
+          applicationType: 'passport',
+          passengerId: PASSPORT_DRAFT_PASSENGER_ID,
+          slotKey: uploaded.slotKey,
+          previousKey: uploaded.previousKey,
+          key: uploaded.key,
+          filename: uploaded.filename,
+          size: uploaded.size,
+          mimeType: uploaded.mimeType,
+          now,
+        });
+      }
+
+      await tx.insert(staffFieldEdits).values({
+        applicationId,
+        applicationType: 'passport',
+        travellerId: null,
+        actorId: session.user.id,
+        kind: target.kind,
+        targetKey,
+        message,
+        previousValue,
+        newValue,
+        createdAt: now,
+      });
+    });
+
+    await revalidatePassportSurfaces(applicationId);
+    return { success: true, message: 'Correction saved' };
+  } catch (error) {
+    console.error('Error saving passport staff field edit:', error);
     return {
       success: false,
       message: 'Failed to save correction',
@@ -2020,17 +2580,21 @@ export async function resolveCorrection(
       };
     }
 
+    const applicationType =
+      request.applicationType === 'passport' ? 'passport' : 'visa';
     if (
       await reviewerAccessDenied(
         session.user.id,
         session.user.role,
-        request.applicationId
+        request.applicationId,
+        applicationType
       )
     ) {
       return { success: false, message: 'Application not found' };
     }
 
     const now = new Date();
+    const acceptedBody = 'Updates accepted. Review is continuing.';
     await db.transaction(async (tx) => {
       await tx
         .update(correctionRequests)
@@ -2045,12 +2609,12 @@ export async function resolveCorrection(
         travellerId: request.travellerId,
         authorId: session.user.id,
         authorRole: staffRole(session.user.role),
-        body: 'Updates accepted. Review is continuing.',
+        body: acceptedBody,
         createdAt: now,
       });
       await tx.insert(statusHistory).values({
         applicationId: request.applicationId,
-        applicationType: 'visa',
+        applicationType,
         travellerId: request.travellerId,
         oldStatus: 'under_review',
         newStatus: 'under_review',
@@ -2058,16 +2622,35 @@ export async function resolveCorrection(
         notes: 'Accepted applicant updates',
         createdAt: now,
       });
+
+      if (applicationType === 'passport') {
+        await tx
+          .update(passportServices)
+          .set({ status: 'under_review', updatedAt: now })
+          .where(eq(passportServices.id, request.applicationId));
+      } else if (request.travellerId) {
+        await tx
+          .update(visaApplicationTravellers)
+          .set({ status: 'under_review', updatedAt: now })
+          .where(eq(visaApplicationTravellers.id, request.travellerId));
+      }
     });
 
-    await revalidateVisaSurfaces(request.applicationId);
+    if (applicationType === 'passport') {
+      await revalidatePassportSurfaces(request.applicationId);
+    } else {
+      await revalidateVisaSurfaces(request.applicationId);
+      if (request.travellerId) {
+        await recomputeVisaCaseStatus(request.applicationId);
+      }
+    }
     try {
       await notifyCommentEvent({
         applicationId: request.applicationId,
         authorId: session.user.id,
         authorName: session.user.name || 'Reviewer',
         authorRole: staffRole(session.user.role),
-        body: 'Updates accepted. Review is continuing.',
+        body: acceptedBody,
       });
     } catch (notifyError) {
       console.error('Resolve notification failed', notifyError);
@@ -2095,22 +2678,37 @@ export async function postStaffComment(
     }
 
     const { applicationId, body } = parsed.data;
-    if (
-      await reviewerAccessDenied(
-        session.user.id,
-        session.user.role,
-        applicationId
-      )
-    ) {
-      return { success: false, message: 'Application not found' };
-    }
 
-    const [application] = await db
+    const [visaApplication] = await db
       .select({ id: visaApplications.id })
       .from(visaApplications)
       .where(eq(visaApplications.id, applicationId))
       .limit(1);
-    if (!application) {
+    const [passportApplication] = visaApplication
+      ? []
+      : await db
+          .select({ id: passportServices.id })
+          .from(passportServices)
+          .where(eq(passportServices.id, applicationId))
+          .limit(1);
+
+    const applicationType = visaApplication
+      ? 'visa'
+      : passportApplication
+        ? 'passport'
+        : null;
+    if (!applicationType) {
+      return { success: false, message: 'Application not found' };
+    }
+
+    if (
+      await reviewerAccessDenied(
+        session.user.id,
+        session.user.role,
+        applicationId,
+        applicationType
+      )
+    ) {
       return { success: false, message: 'Application not found' };
     }
 
@@ -2123,7 +2721,11 @@ export async function postStaffComment(
       createdAt: new Date(),
     });
 
-    await revalidateVisaSurfaces(applicationId);
+    if (applicationType === 'passport') {
+      await revalidatePassportSurfaces(applicationId);
+    } else {
+      await revalidateVisaSurfaces(applicationId);
+    }
     try {
       await notifyCommentEvent({
         applicationId,

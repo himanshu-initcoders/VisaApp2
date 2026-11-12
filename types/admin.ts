@@ -308,6 +308,7 @@ export interface AddNoteRequest {
  */
 export interface AddCallLogRequest {
   applicationId: string;
+  applicationType?: 'visa' | 'passport';
   phone: string;
   note: string;
 }

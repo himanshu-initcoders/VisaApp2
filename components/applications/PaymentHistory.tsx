@@ -50,6 +50,7 @@ export function PaymentHistory({
   hideTitle = false,
   canRefund = false,
   applicationId,
+  applicationType = 'visa',
   onRefundSuccess,
 }: {
   payments: ApplicationPaymentItem[];
@@ -57,6 +58,7 @@ export function PaymentHistory({
   /** Admin-only: show Refund on completed charges with remaining balance. */
   canRefund?: boolean;
   applicationId?: string;
+  applicationType?: 'visa' | 'passport';
   onRefundSuccess?: () => void;
 }) {
   const [refundTarget, setRefundTarget] = useState<{
@@ -204,6 +206,7 @@ export function PaymentHistory({
           isOpen
           onClose={() => setRefundTarget(null)}
           applicationId={applicationId}
+          applicationType={applicationType}
           parentPaymentId={refundTarget.parentPaymentId}
           originalAmountPaise={refundTarget.originalAmountPaise}
           remainingAmountPaise={refundTarget.remainingAmountPaise}

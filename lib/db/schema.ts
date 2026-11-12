@@ -320,6 +320,9 @@ export const passportServices = pgTable(
     appointmentDate: timestamp('appointment_date'),
     appointmentLocation: varchar('appointment_location', { length: 255 }),
     paymentId: uuid('payment_id'),
+    assignedReviewerId: uuid('assigned_reviewer_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     submittedAt: timestamp('submitted_at'),
     completedAt: timestamp('completed_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -328,6 +331,9 @@ export const passportServices = pgTable(
   (table) => [
     index('passport_services_user_id_idx').on(table.userId),
     index('passport_services_listing_id_idx').on(table.passportListingId),
+    index('passport_services_assigned_reviewer_id_idx').on(
+      table.assignedReviewerId
+    ),
     uniqueIndex('passport_services_reference_number_unique').on(
       table.referenceNumber
     ),
@@ -561,12 +567,15 @@ export const correctionRequests = pgTable(
   'correction_requests',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    applicationId: uuid('application_id')
-      .references(() => visaApplications.id, { onDelete: 'cascade' })
-      .notNull(),
-    travellerId: uuid('traveller_id')
-      .references(() => visaApplicationTravellers.id, { onDelete: 'cascade' })
-      .notNull(),
+    /** Polymorphic: visa_applications.id or passport_services.id */
+    applicationId: uuid('application_id').notNull(),
+    applicationType: varchar('application_type', { length: 50 })
+      .notNull()
+      .default('visa'),
+    travellerId: uuid('traveller_id').references(
+      () => visaApplicationTravellers.id,
+      { onDelete: 'cascade' }
+    ),
     requestedBy: uuid('requested_by').references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -578,6 +587,10 @@ export const correctionRequests = pgTable(
   },
   (table) => [
     index('correction_requests_application_id_idx').on(table.applicationId),
+    index('correction_requests_application_type_idx').on(
+      table.applicationType,
+      table.applicationId
+    ),
     index('correction_requests_traveller_status_idx').on(
       table.travellerId,
       table.status
@@ -593,12 +606,15 @@ export const staffFieldEdits = pgTable(
   'staff_field_edits',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    applicationId: uuid('application_id')
-      .references(() => visaApplications.id, { onDelete: 'cascade' })
-      .notNull(),
-    travellerId: uuid('traveller_id')
-      .references(() => visaApplicationTravellers.id, { onDelete: 'cascade' })
-      .notNull(),
+    /** Polymorphic: visa_applications.id or passport_services.id */
+    applicationId: uuid('application_id').notNull(),
+    applicationType: varchar('application_type', { length: 50 })
+      .notNull()
+      .default('visa'),
+    travellerId: uuid('traveller_id').references(
+      () => visaApplicationTravellers.id,
+      { onDelete: 'cascade' }
+    ),
     actorId: uuid('actor_id').references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -611,6 +627,10 @@ export const staffFieldEdits = pgTable(
   },
   (table) => [
     index('staff_field_edits_application_id_idx').on(table.applicationId),
+    index('staff_field_edits_application_type_idx').on(
+      table.applicationType,
+      table.applicationId
+    ),
   ]
 );
 

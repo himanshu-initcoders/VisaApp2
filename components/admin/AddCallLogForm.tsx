@@ -7,6 +7,7 @@ import { addApplicationCallLog } from '@/app/(admin)/actions';
 
 interface AddCallLogFormProps {
   applicationId: string;
+  applicationType?: 'visa' | 'passport';
   defaultPhone?: string | null;
   onCancel?: () => void;
   onSuccess?: () => void;
@@ -17,6 +18,7 @@ interface AddCallLogFormProps {
  */
 export function AddCallLogForm({
   applicationId,
+  applicationType = 'visa',
   defaultPhone,
   onCancel,
   onSuccess,
@@ -33,6 +35,7 @@ export function AddCallLogForm({
     startTransition(async () => {
       const result = await addApplicationCallLog({
         applicationId,
+        applicationType,
         phone,
         note,
       });

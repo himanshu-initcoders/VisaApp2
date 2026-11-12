@@ -5,18 +5,11 @@ import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent, Button } from '@/components/ui';
 import { StatusUpdateModal } from '@/components/admin/StatusUpdateModal';
 import { NotesModal } from '@/components/admin/NotesModal';
+import { RequestCorrectionModal } from '@/components/admin/RequestCorrectionModal';
 import { DocumentViewer } from '@/components/admin/DocumentViewer';
 import { StatusHistoryCard } from '@/components/admin/Timeline';
 import type { DocumentWithVerification, StatusHistoryItem } from '@/types/admin';
-
-/**
- * Passport Application Actions Component
- *
- * Client-side component for managing passport application actions:
- * - Status updates
- * - Document verification
- * - Adding notes
- */
+import type { CorrectableTarget } from '@/lib/visa/corrections';
 
 interface PassportApplicationActionsProps {
   applicationId: string;
@@ -24,6 +17,7 @@ interface PassportApplicationActionsProps {
   documents: DocumentWithVerification[];
   statusHistory: StatusHistoryItem[];
   documentLabels?: Record<string, string>;
+  correctionTargets: CorrectableTarget[];
 }
 
 export function PassportApplicationActions({
@@ -32,18 +26,25 @@ export function PassportApplicationActions({
   documents,
   statusHistory,
   documentLabels,
+  correctionTargets,
 }: PassportApplicationActionsProps) {
   const router = useRouter();
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+  const [prefillSlot, setPrefillSlot] = useState<string | undefined>();
 
   const handleSuccess = () => {
     router.refresh();
   };
 
+  const canRequestChanges =
+    currentStatus !== 'draft' &&
+    currentStatus !== 'approved' &&
+    currentStatus !== 'rejected';
+
   return (
     <>
-      {/* Status Management */}
       <Card>
         <CardHeader>
           <CardTitle>Status Management</CardTitle>
@@ -56,6 +57,18 @@ export function PassportApplicationActions({
           >
             Update Status
           </Button>
+          {canRequestChanges ? (
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => {
+                setPrefillSlot(undefined);
+                setShowCorrectionModal(true);
+              }}
+            >
+              Request changes
+            </Button>
+          ) : null}
           <Button
             variant="ghost"
             className="w-full"
@@ -68,7 +81,6 @@ export function PassportApplicationActions({
 
       <StatusHistoryCard history={statusHistory} />
 
-      {/* Documents */}
       <Card>
         <CardHeader>
           <CardTitle>Documents</CardTitle>
@@ -78,11 +90,18 @@ export function PassportApplicationActions({
             documents={documents}
             labelBySlotKey={documentLabels}
             onDocumentVerified={handleSuccess}
+            onRequestReupload={
+              canRequestChanges
+                ? (slotKey) => {
+                    setPrefillSlot(slotKey);
+                    setShowCorrectionModal(true);
+                  }
+                : undefined
+            }
           />
         </CardContent>
       </Card>
 
-      {/* Modals */}
       <StatusUpdateModal
         isOpen={showStatusModal}
         onClose={() => setShowStatusModal(false)}
@@ -97,6 +116,17 @@ export function PassportApplicationActions({
         onClose={() => setShowNotesModal(false)}
         applicationId={applicationId}
         applicationType="passport"
+        onSuccess={handleSuccess}
+      />
+
+      <RequestCorrectionModal
+        isOpen={showCorrectionModal}
+        onClose={() => setShowCorrectionModal(false)}
+        applicationId={applicationId}
+        applicationType="passport"
+        travellers={[]}
+        targets={correctionTargets}
+        initialSlotKey={prefillSlot}
         onSuccess={handleSuccess}
       />
     </>

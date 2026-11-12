@@ -171,7 +171,13 @@
 - [x] Staff can request specific document reuploads and field fixes, with a comment on each item
 - [x] Applicant dashboard alert and email, then the same apply form with only those items enabled
 - [x] Two-way conversation, in-app notifications, and email on comments, resubmits, and status changes
-- [ ] Passport services reuse the same correction tables later
+- [x] Passport services reuse the same correction tables (polymorphic `application_type`, nullable traveller)
+
+### Passport ops parity (submitted apps)
+- [x] Admin detail tabs: payments, call logs, notes, corrections, conversation
+- [x] Reviewer assignment on `passport_services.assigned_reviewer_id` + reviewer-scoped list/detail
+- [x] Request changes / action required + applicant `/applications/passport/[id]/fix`
+- [x] Refunds via `initiatePassportRefund`
 
 ### Approved visa delivery documents
 - [x] Optional per-traveller `visa_outcome` upload on approve (passenger-scoped storage path)

@@ -20,6 +20,7 @@ export async function upsertApplicationDocumentRow(
   tx: DbLike,
   input: {
     applicationId: string;
+    applicationType?: 'visa' | 'passport';
     passengerId: string;
     slotKey: string;
     previousKey?: string | null;
@@ -30,13 +31,14 @@ export async function upsertApplicationDocumentRow(
     now: Date;
   }
 ): Promise<void> {
+  const applicationType = input.applicationType ?? 'visa';
   const rows = await tx
     .select()
     .from(documents)
     .where(
       and(
         eq(documents.applicationId, input.applicationId),
-        eq(documents.applicationType, 'visa'),
+        eq(documents.applicationType, applicationType),
         eq(documents.documentType, input.slotKey)
       )
     );
@@ -70,7 +72,7 @@ export async function upsertApplicationDocumentRow(
 
   await tx.insert(documents).values({
     applicationId: input.applicationId,
-    applicationType: 'visa' as const,
+    applicationType,
     documentType: input.slotKey,
     s3Key: input.key,
     filename: input.filename,

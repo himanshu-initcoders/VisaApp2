@@ -36,12 +36,27 @@ import {
   writeFieldValue,
   type StoredTraveller,
 } from '@/lib/visa/corrections';
+import {
+  getOpenPassportCorrection,
+  readPassportAnswerValue,
+  replacePassportDocument,
+  submitPassportCorrectionSchema,
+  validatePassportFieldValue,
+  writePassportAnswerValue,
+  type StoredPassportDocument,
+} from '@/lib/passport/corrections';
+import type { PassportApplyFormConfig } from '@/lib/apply/passportForm';
+import {
+  PASSPORT_DRAFT_COUNTRY_CODE,
+  PASSPORT_DRAFT_PASSENGER_ID,
+} from '@/lib/apply/passportDraftFiles';
 import { recomputeVisaCaseStatus } from '@/lib/visa/travellerStatus';
 import {
   markAllNotificationsRead,
   markStaffCommentNotificationsRead,
   notifyCommentEvent,
   notifyCorrectionResubmittedEvent,
+  notifyPassportCorrectionResubmittedEvent,
 } from '@/lib/notifications';
 
 export async function signOutAction() {
@@ -190,12 +205,22 @@ const ALLOWED_CORRECTION_MIME = new Set([
   'application/pdf',
 ]);
 
-function revalidateCorrectionSurfaces(applicationId: string) {
+function revalidateVisaCorrectionSurfaces(applicationId: string) {
   revalidatePath('/admin');
   revalidatePath('/admin/applications');
   revalidatePath(`/admin/applications/visa/${applicationId}`);
   revalidatePath(`/applications/visa/${applicationId}`);
   revalidatePath(`/applications/visa/${applicationId}/fix`);
+  revalidatePath('/applications');
+  revalidatePath('/dashboard');
+}
+
+function revalidatePassportCorrectionSurfaces(applicationId: string) {
+  revalidatePath('/admin');
+  revalidatePath('/admin/applications');
+  revalidatePath(`/admin/applications/passport/${applicationId}`);
+  revalidatePath(`/applications/passport/${applicationId}`);
+  revalidatePath(`/applications/passport/${applicationId}/fix`);
   revalidatePath('/applications');
   revalidatePath('/dashboard');
 }
@@ -266,7 +291,7 @@ export async function postApplicantComment(
     }
 
     const { applicationId, body } = parsed.data;
-    const [application] = await db
+    const [visaApplication] = await db
       .select({ id: visaApplications.id })
       .from(visaApplications)
       .where(
@@ -276,7 +301,19 @@ export async function postApplicantComment(
         )
       )
       .limit(1);
-    if (!application) {
+    const [passportApplication] = visaApplication
+      ? []
+      : await db
+          .select({ id: passportServices.id })
+          .from(passportServices)
+          .where(
+            and(
+              eq(passportServices.id, applicationId),
+              eq(passportServices.userId, session.user.id)
+            )
+          )
+          .limit(1);
+    if (!visaApplication && !passportApplication) {
       return { success: false, message: 'Application not found' };
     }
 
@@ -294,7 +331,11 @@ export async function postApplicantComment(
       createdAt: new Date(),
     });
 
-    revalidateCorrectionSurfaces(applicationId);
+    if (passportApplication) {
+      revalidatePassportCorrectionSurfaces(applicationId);
+    } else {
+      revalidateVisaCorrectionSurfaces(applicationId);
+    }
     try {
       await notifyCommentEvent({
         applicationId,
@@ -594,7 +635,7 @@ export async function submitCorrection(
     });
 
     await recomputeVisaCaseStatus(applicationId);
-    revalidateCorrectionSurfaces(applicationId);
+    revalidateVisaCorrectionSurfaces(applicationId);
     try {
       await notifyCorrectionResubmittedEvent({
         applicationId,
@@ -607,6 +648,256 @@ export async function submitCorrection(
     return { success: true, message: 'Updates sent' };
   } catch (error) {
     console.error('Error submitting correction:', error);
+    return {
+      success: false,
+      message: 'Failed to send updates',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Save only the passport fields and documents an open correction unlocked.
+ */
+export async function submitPassportCorrection(
+  input: unknown
+): Promise<ActionResponse> {
+  try {
+    const session = await auth();
+    if (
+      !session?.user?.id ||
+      session.user.role === 'admin' ||
+      session.user.role === 'reviewer'
+    ) {
+      return { success: false, message: 'Unauthorized' };
+    }
+
+    const parsed = submitPassportCorrectionSchema.safeParse(input);
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message ?? 'Invalid update';
+      return { success: false, message, error: message };
+    }
+
+    const { applicationId, fields, files } = parsed.data;
+    const [application] = await db
+      .select()
+      .from(passportServices)
+      .where(
+        and(
+          eq(passportServices.id, applicationId),
+          eq(passportServices.userId, session.user.id)
+        )
+      )
+      .limit(1);
+    if (!application) {
+      return { success: false, message: 'Application not found' };
+    }
+
+    const open = await getOpenPassportCorrection(applicationId);
+    if (!open) {
+      return { success: false, message: 'Nothing is waiting for an update' };
+    }
+
+    const allowed = allowedOpenKeys(open.items);
+    const itemByKey = new Map(open.items.map((item) => [item.targetKey, item]));
+    const fieldKeys = Object.keys(fields);
+    const fileKeys = files.map((file) => file.slotKey);
+    const submitted = new Set([...fieldKeys, ...fileKeys]);
+
+    for (const key of submitted) {
+      if (!allowed.has(key)) {
+        return {
+          success: false,
+          message: 'Only the requested fields can be changed',
+        };
+      }
+    }
+    for (const key of allowed) {
+      if (!submitted.has(key)) {
+        return {
+          success: false,
+          message: 'Update every requested item before sending',
+        };
+      }
+    }
+    if (fieldKeys.length + fileKeys.length !== submitted.size) {
+      return { success: false, message: 'Duplicate update' };
+    }
+
+    const config =
+      (application.formSnapshot as PassportApplyFormConfig | null) ?? null;
+    let answers =
+      application.answers && typeof application.answers === 'object'
+        ? { ...(application.answers as Record<string, unknown>) }
+        : {};
+    let documents = Array.isArray(application.documents)
+      ? [...(application.documents as StoredPassportDocument[])]
+      : [];
+
+    for (const key of fieldKeys) {
+      const item = itemByKey.get(key);
+      if (!item || item.kind !== 'field') {
+        return { success: false, message: 'Only the requested fields can be changed' };
+      }
+      const value = fields[key] ?? '';
+      const issue = validatePassportFieldValue(config, key, value);
+      if (issue) return { success: false, message: issue };
+      const previous = readPassportAnswerValue(answers, key);
+      if (String(previous ?? '').trim() === value.trim()) {
+        return {
+          success: false,
+          message: 'Change each requested field before sending',
+        };
+      }
+      answers = writePassportAnswerValue(answers, key, value.trim());
+    }
+
+    for (const file of files) {
+      const item = itemByKey.get(file.slotKey);
+      if (!item || item.kind !== 'document') {
+        return { success: false, message: 'Only the requested documents can be replaced' };
+      }
+      if (!ALLOWED_CORRECTION_MIME.has(file.mimeType)) {
+        return { success: false, message: 'Upload a JPG, PNG, WEBP, or PDF' };
+      }
+      const bytes = Buffer.from(file.bufferBase64, 'base64');
+      const max =
+        file.mimeType === 'application/pdf' ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
+      if (bytes.length === 0 || bytes.length > max) {
+        return { success: false, message: 'File is empty or too large' };
+      }
+    }
+
+    if (!application.passportListingId) {
+      return { success: false, message: 'This application cannot accept new files' };
+    }
+
+    const previousKeys = new Map<string, string>();
+    for (const file of files) {
+      const current = documents.find((item) => item.slotKey === file.slotKey);
+      if (current?.key) previousKeys.set(file.slotKey, current.key);
+    }
+
+    const uploadResult = files.length
+      ? await uploadApplicationDocuments({
+          countryCode: PASSPORT_DRAFT_COUNTRY_CODE,
+          listingId: application.passportListingId,
+          applicationId,
+          documents: files.map((file) => ({
+            passengerId: PASSPORT_DRAFT_PASSENGER_ID,
+            slotKey: file.slotKey,
+            filename: file.filename,
+            mimeType: file.mimeType,
+            bufferBase64: file.bufferBase64,
+          })),
+        })
+      : { success: true as const, results: [] };
+
+    if (!uploadResult.success) {
+      return {
+        success: false,
+        message: uploadResult.error || 'Document upload failed',
+      };
+    }
+
+    const now = new Date();
+    for (const uploaded of uploadResult.results) {
+      await deleteReplacedObjectKey(
+        previousKeys.get(uploaded.slotKey),
+        uploaded.key
+      );
+      await deleteOtherSlotExtensionKeys(uploaded.key);
+      documents = replacePassportDocument(documents, uploaded.slotKey, {
+        slotKey: uploaded.slotKey,
+        key: uploaded.key,
+        url: uploaded.url,
+        mimeType: uploaded.mimeType,
+        filename: uploaded.filename,
+        size: uploaded.size,
+      });
+    }
+
+    const oldStatus = application.status;
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(passportServices)
+        .set({
+          answers,
+          personalInfo: answers,
+          documents,
+          status: 'under_review',
+          updatedAt: now,
+        })
+        .where(eq(passportServices.id, applicationId));
+
+      for (const uploaded of uploadResult.results) {
+        await upsertApplicationDocumentRow(tx, {
+          applicationId,
+          applicationType: 'passport',
+          passengerId: PASSPORT_DRAFT_PASSENGER_ID,
+          slotKey: uploaded.slotKey,
+          previousKey: previousKeys.get(uploaded.slotKey),
+          key: uploaded.key,
+          filename: uploaded.filename,
+          size: uploaded.size,
+          mimeType: uploaded.mimeType,
+          now,
+        });
+      }
+
+      for (const item of open.items) {
+        const newValue =
+          item.kind === 'field'
+            ? fields[item.targetKey]
+            : uploadResult.results.find(
+                (file) => file.slotKey === item.targetKey
+              ) ?? null;
+        await tx
+          .update(correctionItems)
+          .set({ status: 'resubmitted', newValue })
+          .where(eq(correctionItems.id, item.id));
+      }
+
+      await tx
+        .update(correctionRequests)
+        .set({ status: 'resubmitted', resubmittedAt: now })
+        .where(eq(correctionRequests.id, open.request.id));
+
+      await tx.insert(statusHistory).values({
+        applicationId,
+        applicationType: 'passport',
+        travellerId: null,
+        oldStatus,
+        newStatus: 'under_review',
+        changedBy: session.user.id,
+        notes: 'Applicant sent the requested updates',
+        createdAt: now,
+      });
+
+      await tx.insert(applicationComments).values({
+        applicationId,
+        travellerId: null,
+        authorId: session.user.id,
+        authorRole: 'applicant',
+        body: 'I sent the requested updates.',
+        createdAt: now,
+      });
+    });
+
+    revalidatePassportCorrectionSurfaces(applicationId);
+    try {
+      await notifyPassportCorrectionResubmittedEvent({
+        applicationId,
+        excludeUserId: session.user.id,
+      });
+    } catch (notifyError) {
+      console.error('Passport resubmit notification failed', notifyError);
+    }
+
+    return { success: true, message: 'Updates sent' };
+  } catch (error) {
+    console.error('Error submitting passport correction:', error);
     return {
       success: false,
       message: 'Failed to send updates',

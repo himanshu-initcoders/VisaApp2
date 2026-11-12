@@ -4,6 +4,7 @@ import { and, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   notifications,
+  passportServices,
   users,
   visaApplicationTravellers,
   visaApplications,
@@ -53,6 +54,94 @@ interface VisaContext {
   accountName: string | null;
   accountPhone: string | null;
   passportEmail: string | null;
+}
+
+interface PassportNotifyContext {
+  id: string;
+  referenceNumber: string | null;
+  userId: string;
+  serviceType: string;
+  productName: string | null;
+  assignedReviewerId: string | null;
+  accountEmail: string | null;
+  accountName: string | null;
+}
+
+async function loadPassportNotifyContext(
+  applicationId: string
+): Promise<PassportNotifyContext | null> {
+  const [row] = await db
+    .select({
+      id: passportServices.id,
+      referenceNumber: passportServices.referenceNumber,
+      userId: passportServices.userId,
+      serviceType: passportServices.serviceType,
+      formSnapshot: passportServices.formSnapshot,
+      assignedReviewerId: passportServices.assignedReviewerId,
+      accountEmail: users.email,
+      accountName: users.name,
+    })
+    .from(passportServices)
+    .innerJoin(users, eq(passportServices.userId, users.id))
+    .where(eq(passportServices.id, applicationId))
+    .limit(1);
+
+  if (!row) return null;
+  const snapshot = row.formSnapshot as { productName?: string } | null;
+  return {
+    id: row.id,
+    referenceNumber: row.referenceNumber,
+    userId: row.userId,
+    serviceType: row.serviceType,
+    productName:
+      typeof snapshot?.productName === 'string' ? snapshot.productName : null,
+    assignedReviewerId: row.assignedReviewerId,
+    accountEmail: row.accountEmail,
+    accountName: row.accountName,
+  };
+}
+
+async function passportStaffAudience(
+  passport: PassportNotifyContext,
+  excludeUserId?: string
+): Promise<{ userIds: string[]; emails: Array<{ email: string; name: string }> }> {
+  if (
+    passport.assignedReviewerId &&
+    passport.assignedReviewerId !== excludeUserId
+  ) {
+    const [reviewer] = await db
+      .select({ id: users.id, email: users.email, name: users.name })
+      .from(users)
+      .where(eq(users.id, passport.assignedReviewerId))
+      .limit(1);
+    if (!reviewer) return { userIds: [], emails: [] };
+    return {
+      userIds: [reviewer.id],
+      emails: isDeliverableEmail(reviewer.email)
+        ? [{ email: reviewer.email, name: reviewer.name }]
+        : [],
+    };
+  }
+  if (passport.assignedReviewerId) return { userIds: [], emails: [] };
+
+  const admins = await db
+    .select({ id: users.id, email: users.email, name: users.name })
+    .from(users)
+    .where(and(eq(users.role, 'admin'), isNull(users.deactivatedAt)));
+
+  const userIds = admins
+    .map((admin) => admin.id)
+    .filter((id) => id !== excludeUserId);
+  const fallback = process.env.ADMIN_NOTIFY_EMAIL?.trim();
+  if (fallback && isDeliverableEmail(fallback)) {
+    return { userIds, emails: [{ email: fallback, name: 'Admin' }] };
+  }
+  return {
+    userIds,
+    emails: admins
+      .filter((admin) => admin.id !== excludeUserId && isDeliverableEmail(admin.email))
+      .map((admin) => ({ email: admin.email, name: admin.name })),
+  };
 }
 
 async function loadVisaContext(applicationId: string): Promise<VisaContext | null> {
@@ -205,6 +294,102 @@ async function resolveStatusRecipientName(
   return name || null;
 }
 
+export async function notifyPassportCorrectionRequestedEvent(input: {
+  applicationId: string;
+  message: string;
+}): Promise<void> {
+  const passport = await loadPassportNotifyContext(input.applicationId);
+  if (!passport) return;
+  const ref = passport.referenceNumber || passport.id;
+  const href = `/applications/passport/${ref}/fix`;
+  const title = 'Updates needed on your passport application';
+  const product =
+    passport.productName ||
+    (passport.serviceType === 'reissue' ? 'Passport reissue' : 'New passport');
+  await insertNotifications({
+    userIds: [passport.userId],
+    applicationId: passport.id,
+    type: 'correction_requested',
+    title,
+    body: input.message,
+    href,
+  });
+  const to = resolveApplicantEmail({ accountEmail: passport.accountEmail });
+  if (to) {
+    await sendSafely(
+      notifyCorrectionRequested({
+        to,
+        applicantName: passport.accountName || 'Applicant',
+        country: 'Passport',
+        visaType: product,
+        referenceNumber: ref,
+        message: input.message,
+      }),
+      'passport correction requested'
+    );
+  }
+  await sendSafely(
+    notifyCorrectionRequestedWhatsApp({
+      userId: passport.userId,
+      applicantName: passport.accountName || 'Applicant',
+      country: 'Passport',
+      visaType: product,
+      referenceNumber: ref,
+      message: input.message,
+    }),
+    'passport correction requested whatsapp'
+  );
+}
+
+export async function notifyPassportCorrectionResubmittedEvent(input: {
+  applicationId: string;
+  excludeUserId?: string;
+}): Promise<void> {
+  const passport = await loadPassportNotifyContext(input.applicationId);
+  if (!passport) return;
+  const audience = await passportStaffAudience(passport, input.excludeUserId);
+  const ref = passport.referenceNumber || passport.id;
+  const href = `/admin/applications/passport/${ref}`;
+  const product =
+    passport.productName ||
+    (passport.serviceType === 'reissue' ? 'Passport reissue' : 'New passport');
+  const title = `${passport.accountName || 'Applicant'} sent the requested updates`;
+  const body = `Passport · ${product}`;
+  await insertNotifications({
+    userIds: audience.userIds,
+    applicationId: passport.id,
+    type: 'correction_resubmitted',
+    title,
+    body,
+    href,
+  });
+  await Promise.all([
+    ...audience.emails.map((recipient) =>
+      sendSafely(
+        notifyCorrectionResubmitted({
+          to: recipient.email,
+          reviewerName: recipient.name,
+          applicantName: passport.accountName || 'Applicant',
+          country: 'Passport',
+          visaType: product,
+          referenceNumber: ref,
+        }),
+        'passport correction resubmitted'
+      )
+    ),
+    sendSafely(
+      notifyCorrectionResubmittedWhatsApp({
+        recipientUserIds: audience.userIds,
+        applicantName: passport.accountName || 'Applicant',
+        country: 'Passport',
+        visaType: product,
+        referenceNumber: ref,
+      }),
+      'passport correction resubmitted whatsapp'
+    ),
+  ]);
+}
+
 export async function notifyCorrectionRequestedEvent(input: {
   applicationId: string;
   message: string;
@@ -304,7 +489,105 @@ export async function notifyCommentEvent(input: {
   body: string;
 }): Promise<void> {
   const visa = await loadVisaContext(input.applicationId);
-  if (!visa) return;
+  if (!visa) {
+    const passport = await loadPassportNotifyContext(input.applicationId);
+    if (!passport) return;
+    const excerpt =
+      input.body.length > 280 ? `${input.body.slice(0, 277)}...` : input.body;
+    const ref = passport.referenceNumber || passport.id;
+    const product =
+      passport.productName ||
+      (passport.serviceType === 'reissue' ? 'Passport reissue' : 'New passport');
+    const toApplicant = input.authorRole !== 'applicant';
+    const href = toApplicant
+      ? `/applications/passport/${ref}`
+      : `/admin/applications/passport/${ref}`;
+    const title = `New comment from ${input.authorName}`;
+
+    if (toApplicant) {
+      await insertNotifications({
+        userIds: [passport.userId],
+        applicationId: passport.id,
+        type: 'staff_comment',
+        title,
+        body: excerpt,
+        href,
+      });
+      const to = resolveApplicantEmail({ accountEmail: passport.accountEmail });
+      if (to) {
+        await sendSafely(
+          notifyNewComment({
+            to,
+            recipientName: passport.accountName || 'Applicant',
+            authorName: input.authorName,
+            country: 'Passport',
+            visaType: product,
+            referenceNumber: ref,
+            excerpt,
+            href,
+          }),
+          'passport staff comment'
+        );
+      }
+      await sendSafely(
+        notifyNewCommentWhatsApp({
+          recipientUserId: passport.userId,
+          recipientName: passport.accountName || 'Applicant',
+          authorName: input.authorName,
+          country: 'Passport',
+          visaType: product,
+          referenceNumber: ref,
+          excerpt,
+          audience: 'applicant',
+        }),
+        'passport staff comment whatsapp'
+      );
+      return;
+    }
+
+    const audience = await passportStaffAudience(passport, input.authorId);
+    await insertNotifications({
+      userIds: audience.userIds,
+      applicationId: passport.id,
+      type: 'applicant_comment',
+      title,
+      body: excerpt,
+      href,
+    });
+    await Promise.all([
+      ...audience.emails.map((recipient) =>
+        sendSafely(
+          notifyNewComment({
+            to: recipient.email,
+            recipientName: recipient.name,
+            authorName: input.authorName,
+            country: 'Passport',
+            visaType: product,
+            referenceNumber: ref,
+            excerpt,
+            href,
+          }),
+          'passport applicant comment'
+        )
+      ),
+      ...audience.userIds.map((userId) =>
+        sendSafely(
+          notifyNewCommentWhatsApp({
+            recipientUserId: userId,
+            recipientName: '',
+            authorName: input.authorName,
+            country: 'Passport',
+            visaType: product,
+            referenceNumber: ref,
+            excerpt,
+            audience: 'staff',
+          }),
+          'passport applicant comment whatsapp'
+        )
+      ),
+    ]);
+    return;
+  }
   const excerpt = input.body.length > 280 ? `${input.body.slice(0, 277)}...` : input.body;
   const toApplicant = input.authorRole !== 'applicant';
   const href = toApplicant
@@ -434,11 +717,66 @@ export async function notifyStatusChangedEvent(input: {
   newStatus: string;
   notes?: string | null;
   travellerId?: string | null;
+  applicationType?: 'visa' | 'passport';
   /** When rejecting multiple travellers, comma-separated names for WhatsApp/email. */
   recipientNameOverride?: string | null;
   delivery?: StatusDeliveryPayload | null;
 }): Promise<void> {
   if (!STATUS_EMAILS.has(input.newStatus)) return;
+  if (input.applicationType === 'passport') {
+    const passport = await loadPassportNotifyContext(input.applicationId);
+    if (!passport) return;
+    const readable = input.newStatus.replace(/_/g, ' ');
+    const recipientName = passport.accountName || 'Applicant';
+    const product =
+      passport.productName || `Passport ${passport.serviceType}`;
+    const title = `Passport application is ${readable}`;
+    const body = input.notes?.trim() || product;
+    const href = `/applications/passport/${passport.referenceNumber || passport.id}`;
+    if (passport.userId !== input.actorId) {
+      await insertNotifications({
+        userIds: [passport.userId],
+        applicationId: passport.id,
+        type: 'status_changed',
+        title,
+        body,
+        href,
+      });
+      const to = resolveApplicantEmail({
+        accountEmail: passport.accountEmail,
+        passportEmail: null,
+      });
+      if (to) {
+        await sendSafely(
+          notifyStatusChanged({
+            to,
+            recipientName,
+            country: 'India',
+            visaType: product,
+            referenceNumber: passport.referenceNumber || passport.id,
+            newStatus: input.newStatus,
+            href,
+            notes: input.notes,
+          }),
+          'passport status to applicant'
+        );
+      }
+      await sendSafely(
+        notifyStatusChangedWhatsApp({
+          recipientUserId: passport.userId,
+          recipientName,
+          country: 'India',
+          visaType: product,
+          referenceNumber: passport.referenceNumber || passport.id,
+          newStatus: input.newStatus,
+          notes: input.notes,
+          audience: 'applicant',
+        }),
+        'passport status whatsapp'
+      );
+    }
+    return;
+  }
   const visa = await loadVisaContext(input.applicationId);
   if (!visa) return;
   const travellerName = await resolveStatusRecipientName(

@@ -175,9 +175,10 @@ export function ApplicationsTable({
                 {/* Actions */}
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
-                    {canAssign && app.type === 'visa' && (
+                    {canAssign && (app.type === 'visa' || app.type === 'passport') && (
                       <AssignReviewerButton
                         applicationId={app.id}
+                        applicationType={app.type}
                         assignedReviewerId={app.assignedReviewerId}
                         assignedReviewerName={app.assignedReviewerName}
                         iconOnly
