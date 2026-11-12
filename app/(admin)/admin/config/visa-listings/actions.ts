@@ -7,6 +7,7 @@ import { eq, and, sql, ne } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth-utils';
 import { processBasicInfoSchema, type ProcessBasicInfo, createVisaListingSchema, visaListingPriceSchema, type VisaListingPriceInput, additionalQuestionSchema, type AdditionalQuestion, componentRequiredSchema, type ComponentRequired, createComponentsBulkSchema, type CreateComponentsBulk, faqSchema, type FAQ, postCheckoutStepSchema, type PostCheckoutStep, multiCountrySchema, type MultiCountry } from '@/lib/validations/config';
 import { getQuestionById, getMaxQuestionSortOrder, getAdditionalQuestions, searchAdditionalQuestionsByLabel, getComponentById, getMaxComponentSortOrder, getComponentsRequired, getFaqById, getMaxFaqSortOrder, getPostCheckoutStepById, getMaxStepSortOrder, getProcessWithAllRelations, getDocumentTypeByValue, getDocumentTypeSamplesByValues } from '@/lib/db/queries/config';
+import { searchPassportAdditionalQuestionsByLabel } from '@/lib/db/queries/passport-config';
 import { revalidatePublicVisaCatalog } from '@/lib/revalidate-public-catalog';
 import { documentTypeLabel } from '@/lib/document-types';
 import { validateVisibilityAgainstSiblings } from '@/lib/question-visibility';
@@ -456,16 +457,26 @@ export async function getProcessInfo(processId: string) {
 }
 
 /**
- * Suggest existing question labels from all visa listings (admin autocomplete).
+ * Suggest existing question labels from visa + passport listings (admin autocomplete).
  */
 export async function suggestQuestions(query: string, excludeId?: string) {
   await requireRole(['admin']);
 
   try {
-    const suggestions = await searchAdditionalQuestionsByLabel(query, {
-      excludeId,
-      limit: 10,
-    });
+    const [visaSuggestions, passportSuggestions] = await Promise.all([
+      searchAdditionalQuestionsByLabel(query, { excludeId, limit: 10 }),
+      searchPassportAdditionalQuestionsByLabel(query, { excludeId, limit: 10 }),
+    ]);
+
+    const seen = new Set<string>();
+    const suggestions = [];
+    for (const row of [...visaSuggestions, ...passportSuggestions]) {
+      const dedupeKey = row.label.trim().toLowerCase();
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      suggestions.push(row);
+      if (suggestions.length >= 10) break;
+    }
 
     return { success: true as const, suggestions };
   } catch (error) {

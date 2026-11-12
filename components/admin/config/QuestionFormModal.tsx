@@ -17,6 +17,7 @@ import {
 import {
   createPassportQuestion,
   updatePassportQuestion,
+  suggestPassportQuestions,
 } from '@/app/(admin)/admin/config/passport-listings/actions';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -342,7 +343,9 @@ export function QuestionFormModal({
     const timer = window.setTimeout(async () => {
       setIsSearching(true);
       try {
-        const result = await suggestQuestions(query, initialData?.id);
+        const result = isPassport
+          ? await suggestPassportQuestions(query, initialData?.id)
+          : await suggestQuestions(query, initialData?.id);
         if (cancelled) return;
 
         if (result.success) {
@@ -366,7 +369,7 @@ export function QuestionFormModal({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [labelValue, initialData?.id]);
+  }, [labelValue, initialData?.id, isPassport]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {

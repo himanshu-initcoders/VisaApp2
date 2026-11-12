@@ -41,11 +41,13 @@ import {
   getMaxPassportComponentSortOrder,
   getMaxPassportFaqSortOrder,
   getNextPassportFormVersionNumber,
+  searchPassportAdditionalQuestionsByLabel,
 } from '@/lib/db/queries/passport-config';
 import {
   getDocumentTypeByValue,
   getDocumentTypeSamplesByValues,
   listDocumentTypes,
+  searchAdditionalQuestionsByLabel,
 } from '@/lib/db/queries/config';
 import { revalidatePublicPassportCatalog } from '@/lib/revalidate-public-catalog';
 import { buildPassportFormConfig } from '@/lib/apply/passportForm';
@@ -326,6 +328,36 @@ export async function reorderPassportFormSteps(
   } catch (error) {
     console.error('Error reordering passport form steps:', error);
     return { error: 'Failed to reorder steps' };
+  }
+}
+
+/**
+ * Suggest existing question labels from passport + visa listings (admin autocomplete).
+ */
+export async function suggestPassportQuestions(query: string, excludeId?: string) {
+  await requireRole(['admin']);
+
+  try {
+    const [passportSuggestions, visaSuggestions] = await Promise.all([
+      searchPassportAdditionalQuestionsByLabel(query, { excludeId, limit: 10 }),
+      searchAdditionalQuestionsByLabel(query, { excludeId, limit: 10 }),
+    ]);
+
+    const seen = new Set<string>();
+    const suggestions = [];
+    // Prefer same-domain matches first (passport when editing passport forms).
+    for (const row of [...passportSuggestions, ...visaSuggestions]) {
+      const dedupeKey = row.label.trim().toLowerCase();
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      suggestions.push(row);
+      if (suggestions.length >= 10) break;
+    }
+
+    return { success: true as const, suggestions };
+  } catch (error) {
+    console.error('Error suggesting passport questions:', error);
+    return { error: 'Failed to search questions', suggestions: [] as const };
   }
 }
 

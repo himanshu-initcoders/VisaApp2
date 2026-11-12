@@ -1,4 +1,4 @@
-import { asc, desc, eq, max } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, max, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   passportListings,
@@ -9,6 +9,38 @@ import {
   passportFaqs,
 } from '@/lib/db/schema-passport';
 import { passportFormVersions } from '@/lib/db/schema';
+
+export type PassportQuestionLabelSuggestion = {
+  id: string;
+  label: string;
+  description: string | null;
+  questionType:
+    | 'text'
+    | 'date'
+    | 'select'
+    | 'dropdown'
+    | 'file'
+    | 'flight'
+    | 'boolean'
+    | 'checkbox'
+    | 'radio';
+  /** Passport questions use form steps, not categories — kept for shared UI typing. */
+  category: string;
+  required: boolean | null;
+  options: Array<{ label: string; value: string }> | null;
+  visibility: {
+    enabled: true;
+    sourceQuestionKey: string;
+    operator: 'equals' | 'is_empty' | 'is_filled';
+    value: string;
+  } | null;
+  documentConditions: {
+    enabled: true;
+    operator: 'equals' | 'is_empty' | 'is_filled';
+    value: string;
+    documents: Array<{ documentType: string; required: boolean }>;
+  } | null;
+};
 
 export async function getAllPassportListings() {
   return db.query.passportListings.findMany({
@@ -180,4 +212,63 @@ export async function getLatestPassportFormVersion(listingId: string) {
 export async function getNextPassportFormVersionNumber(listingId: string) {
   const latest = await getLatestPassportFormVersion(listingId);
   return (latest?.version ?? 0) + 1;
+}
+
+/**
+ * Search passport additional questions by label across all passport listings.
+ * Returns recent matches (deduped by lowercase label) for admin autocomplete.
+ */
+export async function searchPassportAdditionalQuestionsByLabel(
+  query: string,
+  options?: { excludeId?: string; limit?: number }
+): Promise<PassportQuestionLabelSuggestion[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) {
+    return [];
+  }
+
+  const limit = options?.limit ?? 10;
+  // Strip LIKE wildcards from user input so they match literally as text search
+  const safeTerm = trimmed.replace(/[%_]/g, '');
+  if (safeTerm.length < 2) {
+    return [];
+  }
+
+  const conditions = [ilike(passportAdditionalQuestions.label, `%${safeTerm}%`)];
+
+  if (options?.excludeId) {
+    conditions.push(ne(passportAdditionalQuestions.id, options.excludeId));
+  }
+
+  const rows = await db.query.passportAdditionalQuestions.findMany({
+    where: and(...conditions),
+    orderBy: [desc(passportAdditionalQuestions.createdAt)],
+    limit: limit * 4,
+    columns: {
+      id: true,
+      label: true,
+      description: true,
+      questionType: true,
+      required: true,
+      options: true,
+      visibility: true,
+      documentConditions: true,
+    },
+  });
+
+  const seen = new Set<string>();
+  const suggestions: PassportQuestionLabelSuggestion[] = [];
+
+  for (const row of rows) {
+    const dedupeKey = row.label.trim().toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    suggestions.push({
+      ...row,
+      category: 'other',
+    });
+    if (suggestions.length >= limit) break;
+  }
+
+  return suggestions;
 }

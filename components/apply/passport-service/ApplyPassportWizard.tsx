@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -30,8 +30,9 @@ import {
   savePassportDraft,
 } from '@/lib/apply/passportDraftActions';
 import { PassportApplyDocumentsPanel } from '@/components/apply/passport-service/PassportApplyDocumentsPanel';
+import { cn } from '@/lib/utils';
 
-type SelectedPrice = {
+type PackagePrice = {
   id: string;
   scheme: 'normal' | 'tatkaal';
   bookletPages: '36' | '60';
@@ -51,8 +52,20 @@ interface ApplyPassportWizardProps {
   formConfig: PassportApplyFormConfig;
   /** Locked from /passport pricing card via ?priceOption= */
   priceOptionId: string;
-  selectedPrice: SelectedPrice;
+  prices: PackagePrice[];
   isSignedIn: boolean;
+}
+
+function feeRupees(value: string | number | null | undefined): number {
+  const n = typeof value === 'number' ? value : parseFloat(String(value ?? '0'));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatInrRupees(amount: number) {
+  return `₹${amount.toLocaleString('en-IN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 interface RazorpaySuccess {
@@ -92,14 +105,19 @@ export function ApplyPassportWizard({
   selectionLabel,
   formConfig,
   priceOptionId,
-  selectedPrice,
+  prices,
   isSignedIn,
 }: ApplyPassportWizardProps) {
   const router = useRouter();
   const [submitId] = useState(() => crypto.randomUUID());
-  const [macro, setMacro] = useState<MacroStage>(
-    formConfig.steps.length > 0 ? 'form' : 'documents'
-  );
+  const hasDocuments = formConfig.documentSlots.length > 0;
+  const selectedPrice =
+    prices.find((price) => price.id === priceOptionId) || prices[0];
+  const [macro, setMacro] = useState<MacroStage>(() => {
+    if (formConfig.steps.length > 0) return 'form';
+    if (formConfig.documentSlots.length > 0) return 'documents';
+    return 'review';
+  });
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [uploadedDocuments, setUploadedDocuments] = useState<
@@ -120,25 +138,33 @@ export function ApplyPassportWizard({
   const currentStep = steps[stepIndex];
 
   const totalFormSteps = steps.length;
-  const totalStages = Math.max(totalFormSteps, 0) + 2;
+  const totalStages =
+    Math.max(totalFormSteps, 0) + (hasDocuments ? 1 : 0) + 1;
 
   const progressLabel = useMemo(() => {
     if (macro === 'form' && currentStep) {
       return `Step ${stepIndex + 1} of ${totalStages} — ${currentStep.title}`;
     }
-    if (macro === 'documents') {
+    if (macro === 'documents' && hasDocuments) {
       return `Step ${totalFormSteps + 1} of ${totalStages} — Documents`;
     }
     return `Step ${totalStages} of ${totalStages} — Review & pay`;
-  }, [macro, currentStep, stepIndex, totalFormSteps, totalStages]);
+  }, [
+    macro,
+    currentStep,
+    stepIndex,
+    totalFormSteps,
+    totalStages,
+    hasDocuments,
+  ]);
 
   const progressPct = useMemo(() => {
     let index = 0;
     if (macro === 'form') index = stepIndex;
-    else if (macro === 'documents') index = totalFormSteps;
-    else index = totalFormSteps + 1;
+    else if (macro === 'documents' && hasDocuments) index = totalFormSteps;
+    else index = totalFormSteps + (hasDocuments ? 1 : 0);
     return Math.round(((index + 1) / Math.max(totalStages, 1)) * 100);
-  }, [macro, stepIndex, totalFormSteps, totalStages]);
+  }, [macro, stepIndex, totalFormSteps, totalStages, hasDocuments]);
 
   useEffect(() => {
     if (!isSignedIn) return;
@@ -159,7 +185,12 @@ export function ApplyPassportWizard({
         draft.macro === 'documents' ||
         draft.macro === 'review'
       ) {
-        setMacro(draft.macro);
+        // Skip empty documents stage for older drafts that stopped there.
+        if (draft.macro === 'documents' && formConfig.documentSlots.length === 0) {
+          setMacro('review');
+        } else {
+          setMacro(draft.macro);
+        }
       } else if (draft.macro === 'pay') {
         // Legacy drafts that stopped on removed package step.
         setMacro('review');
@@ -168,7 +199,13 @@ export function ApplyPassportWizard({
         setStepIndex(draft.stepIndex);
       }
     });
-  }, [isSignedIn, listingId]);
+  }, [isSignedIn, listingId, formConfig.documentSlots.length]);
+
+  useEffect(() => {
+    if (macro === 'documents' && !hasDocuments) {
+      setMacro('review');
+    }
+  }, [macro, hasDocuments]);
 
   useEffect(() => {
     if (!priceOptionId) return;
@@ -256,8 +293,26 @@ export function ApplyPassportWizard({
       return;
     }
     if (macro === 'review') {
-      setMacro('documents');
+      if (hasDocuments) {
+        setMacro('documents');
+        return;
+      }
+      if (totalFormSteps > 0) {
+        setMacro('form');
+        setStepIndex(Math.max(totalFormSteps - 1, 0));
+        return;
+      }
+      router.push('/passport');
     }
+  };
+
+  const selectPackage = (nextPriceOptionId: string) => {
+    if (!nextPriceOptionId || nextPriceOptionId === priceOptionId) return;
+    void persistDraft({ priceOptionId: nextPriceOptionId });
+    router.replace(
+      `/passport/${serviceType}/apply?priceOption=${encodeURIComponent(nextPriceOptionId)}`,
+      { scroll: false }
+    );
   };
 
   const goNext = async () => {
@@ -273,10 +328,14 @@ export function ApplyPassportWizard({
         setStepIndex((i) => i + 1);
         return;
       }
-      setMacro('documents');
+      setMacro(hasDocuments ? 'documents' : 'review');
       return;
     }
     if (macro === 'documents') {
+      if (!hasDocuments) {
+        setMacro('review');
+        return;
+      }
       const documentsError = validateRequiredDocuments();
       if (documentsError) {
         setError(documentsError);
@@ -367,11 +426,13 @@ export function ApplyPassportWizard({
       setError('Choose a passport package.');
       return;
     }
-    const documentsError = validateRequiredDocuments();
-    if (documentsError) {
-      setError(documentsError);
-      setMacro('documents');
-      return;
+    if (hasDocuments) {
+      const documentsError = validateRequiredDocuments();
+      if (documentsError) {
+        setError(documentsError);
+        setMacro('documents');
+        return;
+      }
     }
 
     setBusy(true);
@@ -604,41 +665,78 @@ export function ApplyPassportWizard({
                 </dl>
               </div>
             ))}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium text-portrait-ink">Documents</h3>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setMacro('documents')}
-                >
-                  Edit
-                </Button>
+            {hasDocuments ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium text-portrait-ink">Documents</h3>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setMacro('documents')}
+                  >
+                    Edit
+                  </Button>
+                </div>
+                <PassportApplyDocumentsPanel
+                  slots={formConfig.documentSlots}
+                  uploads={uploadedDocuments}
+                  readOnly
+                />
               </div>
-              <PassportApplyDocumentsPanel
-                slots={formConfig.documentSlots}
-                uploads={uploadedDocuments}
-                readOnly
-              />
-            </div>
+            ) : null}
 
             <div className="rounded-3xl border border-ash-divider bg-white p-5">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="font-medium text-portrait-ink">Package</h3>
-                <Link
-                  href="/passport"
-                  className="text-sm text-[#2563EB] hover:underline"
-                >
-                  Change
-                </Link>
-              </div>
-              <p className="text-sm text-portrait-ink">{selectionLabel}</p>
-              <p className="mt-1 text-xs text-slate-helper">
-                {passportPriceLabel(
-                  selectedPrice.scheme,
-                  selectedPrice.bookletPages
-                )}
+              <h3 className="font-medium text-portrait-ink">Package</h3>
+              <p className="mt-1 text-sm text-slate-helper">
+                {productName} — choose Normal/Tatkaal and booklet size.
               </p>
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {prices.map((price) => {
+                  const isSelected = price.id === (selectedPrice?.id || priceOptionId);
+                  const total =
+                    feeRupees(price.governmentFeeAmount) +
+                    feeRupees(price.serviceFeeAmount) +
+                    feeRupees(price.governmentGstFeeAmount);
+                  return (
+                    <button
+                      key={price.id}
+                      type="button"
+                      onClick={() => selectPackage(price.id)}
+                      disabled={busy || Boolean(uploadBusyKey)}
+                      className={cn(
+                        'rounded-2xl border px-4 py-3 text-left transition-colors',
+                        isSelected
+                          ? 'border-portrait-ink bg-sky-wash/50 ring-1 ring-portrait-ink'
+                          : 'border-ash-divider bg-white hover:border-portrait-ink/40'
+                      )}
+                      aria-pressed={isSelected}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-portrait-ink">
+                            {passportPriceLabel(price.scheme, price.bookletPages)}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-helper">
+                            {isSelected ? 'Selected' : 'Tap to select'}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-medium tabular-nums text-portrait-ink">
+                            {formatInrRupees(total)}
+                          </p>
+                          {isSelected ? (
+                            <span className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-portrait-ink text-white">
+                              <Check className="h-3 w-3" aria-hidden />
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
               {quote ? (
                 <div className="mt-4 space-y-1 text-sm">
                   <div className="flex justify-between py-1">
@@ -735,6 +833,28 @@ function formatAnswer(value: unknown): string {
   return String(value);
 }
 
+function QuestionLabel({
+  label,
+  description,
+  required,
+}: {
+  label: string;
+  description?: string | null;
+  required?: boolean;
+}) {
+  return (
+    <div className="mb-2">
+      <p className="block font-switzer text-sm font-medium text-portrait-ink">
+        {label}
+        {required ? <span className="text-[#ff4940]"> *</span> : null}
+      </p>
+      {description ? (
+        <p className="mt-1 font-switzer text-xs text-slate-helper">{description}</p>
+      ) : null}
+    </div>
+  );
+}
+
 function QuestionField({
   question,
   value,
@@ -744,10 +864,25 @@ function QuestionField({
   value: unknown;
   onChange: (value: unknown) => void;
 }) {
+  const description = question.description?.trim() || '';
+  const required = Boolean(question.required);
+  const isTextLike =
+    question.questionType === 'text' || question.questionType === 'textarea';
+
   if (question.questionType === 'boolean') {
     return (
       <Checkbox
-        label={question.label}
+        label={
+          required ? (
+            <>
+              {question.label}
+              <span className="text-[#ff4940]"> *</span>
+            </>
+          ) : (
+            question.label
+          )
+        }
+        description={description || undefined}
         checked={Boolean(value)}
         onChange={onChange}
       />
@@ -759,16 +894,21 @@ function QuestionField({
     question.questionType === 'radio'
   ) {
     return (
-      <Select
-        label={question.label}
-        helperText={question.description || undefined}
-        options={[
-          { value: '', label: 'Select…' },
-          ...question.options.map((o) => ({ value: o.value, label: o.label })),
-        ]}
-        value={typeof value === 'string' ? value : ''}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <div className="w-full">
+        <QuestionLabel
+          label={question.label}
+          description={description}
+          required={required}
+        />
+        <Select
+          options={[
+            { value: '', label: 'Select…' },
+            ...question.options.map((o) => ({ value: o.value, label: o.label })),
+          ]}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </div>
     );
   }
 
@@ -776,7 +916,11 @@ function QuestionField({
     const selected = Array.isArray(value) ? (value as string[]) : [];
     return (
       <div className="space-y-2">
-        <p className="text-sm font-medium text-portrait-ink">{question.label}</p>
+        <QuestionLabel
+          label={question.label}
+          description={description}
+          required={required}
+        />
         {question.options.map((option) => (
           <Checkbox
             key={option.value}
@@ -795,13 +939,54 @@ function QuestionField({
     );
   }
 
+  if (isTextLike) {
+    if (question.questionType === 'textarea') {
+      return (
+        <div className="w-full">
+          <QuestionLabel
+            label={question.label}
+            required={required}
+          />
+          <textarea
+            className="w-full rounded-input border border-ash bg-white px-4 py-2.5 font-switzer text-base text-portrait-ink placeholder:text-slate-helper transition-colors duration-200 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-portrait-ink"
+            rows={4}
+            placeholder={description || undefined}
+            value={typeof value === 'string' ? value : ''}
+            onChange={(e) => onChange(e.target.value)}
+            required={required}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="w-full">
+        <QuestionLabel label={question.label} required={required} />
+        <Input
+          placeholder={description || undefined}
+          type="text"
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => onChange(e.target.value)}
+          required={required}
+        />
+      </div>
+    );
+  }
+
+  // date and any other non-text controls: description under the question label
   return (
-    <Input
-      label={question.label}
-      helperText={question.description || undefined}
-      type={question.questionType === 'date' ? 'date' : 'text'}
-      value={typeof value === 'string' ? value : ''}
-      onChange={(e) => onChange(e.target.value)}
-    />
+    <div className="w-full">
+      <QuestionLabel
+        label={question.label}
+        description={description}
+        required={required}
+      />
+      <Input
+        type={question.questionType === 'date' ? 'date' : 'text'}
+        value={typeof value === 'string' ? value : ''}
+        onChange={(e) => onChange(e.target.value)}
+        required={required}
+      />
+    </div>
   );
 }

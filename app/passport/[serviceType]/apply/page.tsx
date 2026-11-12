@@ -105,14 +105,14 @@ export default async function PassportApplyPage({
       selectionLabel={selectionLabel}
       formConfig={formConfig}
       priceOptionId={selectedPrice.id}
-      selectedPrice={{
-        id: selectedPrice.id,
-        scheme: selectedPrice.scheme,
-        bookletPages: selectedPrice.bookletPages,
-        governmentFeeAmount: selectedPrice.governmentFeeAmount,
-        serviceFeeAmount: selectedPrice.serviceFeeAmount,
-        governmentGstFeeAmount: selectedPrice.governmentGstFeeAmount,
-      }}
+      prices={full.prices.map((price) => ({
+        id: price.id,
+        scheme: price.scheme,
+        bookletPages: price.bookletPages,
+        governmentFeeAmount: price.governmentFeeAmount,
+        serviceFeeAmount: price.serviceFeeAmount,
+        governmentGstFeeAmount: price.governmentGstFeeAmount,
+      }))}
       isSignedIn={Boolean(userId)}
     />
   );
