@@ -91,7 +91,18 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const ext = extensionFromMime(mimeType, file.name);
+    // Sniff bytes so a PDF is never stored under a leftover `.jpg` slot key.
+    let effectiveMime = mimeType;
+    if (
+      buffer.length >= 4 &&
+      buffer[0] === 0x25 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x44 &&
+      buffer[3] === 0x46
+    ) {
+      effectiveMime = 'application/pdf';
+    }
+    const ext = extensionFromMime(effectiveMime, file.name);
     const explicitKey = buildDraftObjectKey({
       countryCode,
       listingId,
@@ -107,12 +118,20 @@ export async function POST(request: NextRequest) {
         ? previousStorageKeyRaw.trim()
         : '';
 
+    const uploadFilename = (() => {
+      const original = (file.name || '').trim();
+      if (original) {
+        return original.replace(/\.[^.]+$/i, '') + `.${ext}`;
+      }
+      return `${slotKey}.${ext}`;
+    })();
+
     const result = await uploadService.upload(buffer, {
       folder: APPLICATION_UPLOAD_FOLDER,
-      filename: file.name || `${slotKey}.${ext}`,
-      mimeType,
+      filename: uploadFilename,
+      mimeType: effectiveMime,
       explicitKey,
-      maxSizeMB: mimeType === 'application/pdf' ? 10 : 5,
+      maxSizeMB: effectiveMime === 'application/pdf' ? 10 : 5,
       allowedTypes: [...ALLOWED_TYPES],
       metadata: {
         passengerId,
@@ -150,8 +169,8 @@ export async function POST(request: NextRequest) {
         slotKey,
         key: result.key,
         url: result.url,
-        mimeType: result.mimeType || mimeType,
-        filename: result.filename || file.name,
+        mimeType: result.mimeType || effectiveMime,
+        filename: result.filename || uploadFilename,
         size: result.size,
       },
     });
@@ -210,10 +229,29 @@ export async function GET(request: NextRequest) {
     if (!stored) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
-    let mimeType = stored.mimeType || 'application/octet-stream';
     const buffer = stored.buffer;
-
-    if (filename.endsWith('.pdf')) mimeType = 'application/pdf';
+    // Prefer magic bytes — a PDF saved under a leftover `.jpg` slot key must
+    // not be served as image/jpeg (that produces broken <img> previews).
+    let mimeType = stored.mimeType || 'application/octet-stream';
+    if (
+      buffer.length >= 4 &&
+      buffer[0] === 0x25 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x44 &&
+      buffer[3] === 0x46
+    ) {
+      mimeType = 'application/pdf';
+    } else if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8) {
+      mimeType = 'image/jpeg';
+    } else if (
+      buffer.length >= 8 &&
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47
+    ) {
+      mimeType = 'image/png';
+    } else if (filename.endsWith('.pdf')) mimeType = 'application/pdf';
     else if (filename.endsWith('.png')) mimeType = 'image/png';
     else if (filename.endsWith('.webp')) mimeType = 'image/webp';
     else if (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) {

@@ -2,21 +2,29 @@
 
 import { useState } from 'react';
 import { Eye, FileText } from 'lucide-react';
+import { PdfFirstPageThumbnail } from '@/components/apply/PdfFirstPageThumbnail';
 import {
   DocumentPreviewModal,
   type DocumentPreviewItem,
 } from '@/components/apply/review/DocumentPreviewModal';
+import { isPdfPreviewSource } from '@/lib/apply/pdfFirstPagePreview';
 
 interface DocumentPreviewListProps {
   items: DocumentPreviewItem[];
 }
 
 function isImagePreview(item: DocumentPreviewItem) {
+  if (isPdfPreviewSource(item.mimeType, item.name)) return false;
   return Boolean(
     item.mimeType?.startsWith('image/') ||
       /^data:image\//.test(item.previewUrl) ||
       /\.(jpe?g|png|webp|gif)$/i.test(item.name || item.previewUrl)
   );
+}
+
+function isPdfPreview(item: DocumentPreviewItem) {
+  if (!item.previewUrl) return false;
+  return isPdfPreviewSource(item.mimeType, item.name);
 }
 
 export function DocumentPreviewList({ items }: DocumentPreviewListProps) {
@@ -33,6 +41,7 @@ export function DocumentPreviewList({ items }: DocumentPreviewListProps) {
       <ul className="grid gap-3 sm:grid-cols-2">
         {items.map((item, index) => {
           const image = isImagePreview(item);
+          const pdf = isPdfPreview(item);
           return (
             <li
               key={`${item.title}-${item.name ?? 'file'}-${index}`}
@@ -45,6 +54,14 @@ export function DocumentPreviewList({ items }: DocumentPreviewListProps) {
                     src={item.previewUrl}
                     alt={item.title}
                     className="h-full w-full object-contain p-2"
+                  />
+                ) : pdf ? (
+                  <PdfFirstPageThumbnail
+                    src={item.previewUrl}
+                    alt={item.title}
+                    fallbackName={item.name || 'Document'}
+                    className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center"
+                    imgClassName="h-full w-full object-contain p-2"
                   />
                 ) : (
                   <div className="flex flex-col items-center gap-2 px-4 text-center">

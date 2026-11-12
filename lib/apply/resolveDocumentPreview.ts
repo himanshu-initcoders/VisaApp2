@@ -1,6 +1,7 @@
 /**
  * Resolve a usable preview URL for draft/review document cards.
- * Prefers IndexedDB blob → multipart draft GET → existing preview/storage URL.
+ * Prefers IndexedDB blob → multipart draft GET → verified preview/storage URL.
+ * Always sniffs magic bytes so PDFs mis-keyed as `.jpg` still preview correctly.
  */
 
 import type { DraftScopeInput } from '@/lib/apply/draftScope';
@@ -8,6 +9,7 @@ import {
   getFile,
   isIdbAvailable,
 } from '@/lib/apply/idbDraftStorage';
+import { sniffFileKind } from '@/lib/apply/sniffFileType';
 
 function looksLikeUsableUrl(url?: string): boolean {
   if (!url) return false;
@@ -16,6 +18,33 @@ function looksLikeUsableUrl(url?: string): boolean {
   if (url.startsWith('/')) return true;
   if (url.startsWith('http://') || url.startsWith('https://')) return true;
   return false;
+}
+
+async function bufferToPreview(
+  buffer: ArrayBuffer,
+  mimeHint?: string,
+  filename?: string
+): Promise<{ url: string; mimeType: string }> {
+  const sniffed = sniffFileKind(buffer, mimeHint, filename);
+  const blob = new Blob([buffer], { type: sniffed.mimeType });
+  return { url: URL.createObjectURL(blob), mimeType: sniffed.mimeType };
+}
+
+async function fetchAsObjectUrl(
+  url: string,
+  mimeHint?: string,
+  filename?: string
+): Promise<{ url: string; mimeType: string } | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const buffer = await response.arrayBuffer();
+    const headerMime =
+      response.headers.get('content-type')?.split(';')[0]?.trim() || mimeHint;
+    return bufferToPreview(buffer, headerMime, filename);
+  } catch {
+    return null;
+  }
 }
 
 export async function resolveDocumentPreviewUrl(input: {
@@ -27,6 +56,7 @@ export async function resolveDocumentPreviewUrl(input: {
   sessionUserId?: string | null;
   previewUrl?: string;
   storageUrl?: string;
+  filename?: string;
 }): Promise<{ url: string; mimeType?: string } | null> {
   const {
     listingId,
@@ -37,9 +67,10 @@ export async function resolveDocumentPreviewUrl(input: {
     sessionUserId,
     previewUrl,
     storageUrl,
+    filename,
   } = input;
 
-  // 1) Fresh blob from IndexedDB (most reliable after draft restore)
+  // 1) Fresh blob from IndexedDB
   if (listingId && travellerId && slotKey && isIdbAvailable()) {
     try {
       const scope: DraftScopeInput = {
@@ -49,10 +80,12 @@ export async function resolveDocumentPreviewUrl(input: {
       };
       const record = await getFile(scope, travellerId, slotKey);
       if (record?.blob) {
-        return {
-          url: URL.createObjectURL(record.blob),
-          mimeType: record.mimeType,
-        };
+        const buffer = await record.blob.arrayBuffer();
+        return bufferToPreview(
+          buffer,
+          record.mimeType,
+          record.filename || filename
+        );
       }
     } catch {
       // fall through
@@ -64,27 +97,39 @@ export async function resolveDocumentPreviewUrl(input: {
     try {
       const params = new URLSearchParams({ storageKey });
       if (ownerUserId) params.set('ownerUserId', ownerUserId);
-      const response = await fetch(`/api/apply/draft-files?${params.toString()}`);
+      const response = await fetch(
+        `/api/apply/draft-files?${params.toString()}`
+      );
       if (response.ok) {
-        const blob = await response.blob();
-        const mimeType =
-          response.headers.get('content-type') || 'application/octet-stream';
-        return { url: URL.createObjectURL(blob), mimeType };
+        const buffer = await response.arrayBuffer();
+        const headerMime =
+          response.headers.get('content-type')?.split(';')[0]?.trim() ||
+          undefined;
+        const keyName = storageKey.split('/').pop() || filename;
+        return bufferToPreview(buffer, headerMime, keyName);
       }
     } catch {
       // fall through
     }
   }
 
-  // 3) Existing URLs (prefer non-blob first if blob may be revoked)
-  if (looksLikeUsableUrl(storageUrl) && !storageUrl!.startsWith('blob:')) {
-    return { url: storageUrl! };
-  }
-  if (looksLikeUsableUrl(previewUrl)) {
-    return { url: previewUrl! };
-  }
-  if (looksLikeUsableUrl(storageUrl)) {
-    return { url: storageUrl! };
+  // 3) Existing URLs — verify + sniff
+  const candidates = [storageUrl, previewUrl].filter(
+    (url): url is string => Boolean(url && looksLikeUsableUrl(url))
+  );
+  candidates.sort((a, b) => {
+    const rank = (url: string) => {
+      if (url.startsWith('/api/apply/draft-files')) return 0;
+      if (url.startsWith('/api/media')) return 1;
+      if (url.startsWith('blob:')) return 3;
+      return 2;
+    };
+    return rank(a) - rank(b);
+  });
+
+  for (const url of candidates) {
+    const materialized = await fetchAsObjectUrl(url, undefined, filename);
+    if (materialized) return materialized;
   }
 
   return null;

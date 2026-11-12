@@ -408,6 +408,25 @@ export function createPreviewUrlFromIdb(
   });
 }
 
+/** Rehydrate preview URL + authoritative mime/filename from IndexedDB. */
+export async function createPreviewRecordFromIdb(
+  scope: DraftScopeInput | string,
+  passengerId: string,
+  slotKey: string
+): Promise<
+  | { previewUrl: string; mimeType?: string; filename?: string; size?: number }
+  | undefined
+> {
+  const record = await getFile(scope, passengerId, slotKey);
+  if (!record?.blob) return undefined;
+  return {
+    previewUrl: URL.createObjectURL(record.blob),
+    mimeType: record.mimeType,
+    filename: record.filename,
+    size: record.size,
+  };
+}
+
 export function dataUrlToBlob(dataUrl: string): Blob | null {
   try {
     const [header, data] = dataUrl.split(',');

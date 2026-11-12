@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { FileText, Loader2, X } from 'lucide-react';
+import { sniffFileKind } from '@/lib/apply/sniffFileType';
 
 export interface DocumentPreviewItem {
   title: string;
@@ -17,21 +18,92 @@ interface DocumentPreviewModalProps {
   onClose: () => void;
 }
 
+type ViewerState =
+  | { status: 'loading' }
+  | { status: 'error' }
+  | {
+      status: 'ready';
+      kind: 'image' | 'pdf' | 'other';
+      url: string;
+      /** Object URLs owned by the modal (revoked on close). */
+      owned: string[];
+    };
+
+/**
+ * Load bytes, sniff real type, and keep a modal-owned object URL.
+ * PDFs stay as application/pdf for a full iframe viewer (all pages).
+ * First-page rasterization is only for card thumbnails, not this dialog.
+ */
+async function buildViewer(
+  sourceUrl: string,
+  mimeHint?: string,
+  filename?: string
+): Promise<ViewerState> {
+  try {
+    const response = await fetch(sourceUrl);
+    if (!response.ok) {
+      if (sourceUrl.startsWith('blob:') || sourceUrl.startsWith('data:')) {
+        const hint = (mimeHint || '').toLowerCase();
+        const kind =
+          hint.includes('pdf') || /\.pdf$/i.test(filename || '')
+            ? 'pdf'
+            : hint.startsWith('image/')
+              ? 'image'
+              : 'other';
+        return { status: 'ready', kind, url: sourceUrl, owned: [] };
+      }
+      return { status: 'error' };
+    }
+
+    const buffer = await response.arrayBuffer();
+    const sniffed = sniffFileKind(
+      buffer,
+      mimeHint || response.headers.get('content-type') || undefined,
+      filename
+    );
+    const sourceBlob = new Blob([buffer], { type: sniffed.mimeType });
+    const sourceObjectUrl = URL.createObjectURL(sourceBlob);
+
+    if (sniffed.kind === 'pdf') {
+      return {
+        status: 'ready',
+        kind: 'pdf',
+        url: sourceObjectUrl,
+        owned: [sourceObjectUrl],
+      };
+    }
+
+    if (sniffed.kind === 'image') {
+      return {
+        status: 'ready',
+        kind: 'image',
+        url: sourceObjectUrl,
+        owned: [sourceObjectUrl],
+      };
+    }
+
+    return {
+      status: 'ready',
+      kind: 'other',
+      url: sourceObjectUrl,
+      owned: [sourceObjectUrl],
+    };
+  } catch {
+    return { status: 'error' };
+  }
+}
+
 export function DocumentPreviewModal({
   open,
   item,
   onClose,
 }: DocumentPreviewModalProps) {
   const [mounted, setMounted] = useState(false);
-  const [loadError, setLoadError] = useState(false);
+  const [viewer, setViewer] = useState<ViewerState>({ status: 'loading' });
 
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  useEffect(() => {
-    setLoadError(false);
-  }, [item?.previewUrl, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -47,18 +119,40 @@ export function DocumentPreviewModal({
     };
   }, [open, onClose]);
 
-  if (!mounted || !open || !item) return null;
+  useEffect(() => {
+    if (!open || !item?.previewUrl) {
+      setViewer({ status: 'error' });
+      return;
+    }
 
-  const isImage = Boolean(
-    item.mimeType?.startsWith('image/') ||
-      /^data:image\//.test(item.previewUrl) ||
-      /\.(jpe?g|png|webp|gif)$/i.test(item.name || item.previewUrl)
-  );
-  const isPdf = Boolean(
-    item.mimeType === 'application/pdf' ||
-      /^data:application\/pdf/.test(item.previewUrl) ||
-      /\.pdf$/i.test(item.name || item.previewUrl)
-  );
+    let cancelled = false;
+    const ownedRef: { current: string[] } = { current: [] };
+    setViewer({ status: 'loading' });
+
+    void (async () => {
+      const next = await buildViewer(
+        item.previewUrl,
+        item.mimeType,
+        item.name
+      );
+      if (cancelled) {
+        if (next.status === 'ready') {
+          for (const url of next.owned) URL.revokeObjectURL(url);
+        }
+        return;
+      }
+      if (next.status === 'ready') ownedRef.current = next.owned;
+      setViewer(next);
+    })();
+
+    return () => {
+      cancelled = true;
+      for (const url of ownedRef.current) URL.revokeObjectURL(url);
+      ownedRef.current = [];
+    };
+  }, [open, item?.previewUrl, item?.mimeType, item?.name]);
+
+  if (!mounted || !open || !item) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -93,32 +187,34 @@ export function DocumentPreviewModal({
         </div>
 
         <div className="flex min-h-0 flex-1 items-center justify-center bg-[#f8fafc] p-4">
-          {!item.previewUrl || loadError ? (
+          {viewer.status === 'loading' ? (
+            <Loader2 className="h-8 w-8 animate-spin text-slate-helper" />
+          ) : viewer.status === 'error' ? (
             <p className="text-sm text-slate-helper">
               Could not load this file. Re-save the draft or re-upload the
               document, then try View again.
             </p>
-          ) : isImage ? (
+          ) : viewer.kind === 'image' ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={item.previewUrl}
+              src={viewer.url}
               alt={item.title}
               className="max-h-[75vh] max-w-full object-contain"
-              onError={() => setLoadError(true)}
             />
-          ) : isPdf ? (
+          ) : viewer.kind === 'pdf' ? (
             <iframe
               title={item.title}
-              src={item.previewUrl}
+              src={`${viewer.url}#view=FitH`}
               className="h-[75vh] w-full rounded-2xl bg-white"
             />
           ) : (
             <div className="text-center">
-              <p className="text-sm text-portrait-ink">
+              <FileText className="mx-auto h-10 w-10 text-slate-helper" />
+              <p className="mt-3 text-sm text-portrait-ink">
                 Preview isn&apos;t available for this file type.
               </p>
               <a
-                href={item.previewUrl}
+                href={viewer.url}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-3 inline-flex text-sm font-medium text-[#3b82f6] hover:underline"

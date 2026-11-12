@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Camera, Check, Download, FileText, Trash2, Upload } from 'lucide-react';
+import { Camera, Check, Download, Trash2, Upload } from 'lucide-react';
+import { DocumentSlotThumb } from '@/components/apply/DocumentSlotThumb';
 import { PassportPhotoCaptureDialog } from '@/components/apply/form/PassportPhotoCaptureDialog';
 import type {
   ApplyDocumentSlot,
@@ -14,6 +15,8 @@ import {
 import type { DraftScopeInput } from '@/lib/apply/draftScope';
 import {
   IdbUnavailableError,
+  PASSPORT_BACK_SLOT,
+  PASSPORT_FRONT_SLOT,
   deleteFile,
   idbErrorMessage,
   isIdbAvailable,
@@ -56,13 +59,6 @@ function revokeIfObjectUrl(url?: string) {
   }
 }
 
-function isImagePreview(mimeType?: string, filename?: string) {
-  if (mimeType?.startsWith('image/')) return true;
-  if (mimeType === 'application/pdf') return false;
-  if (filename && /\.pdf$/i.test(filename)) return false;
-  return !mimeType || mimeType.startsWith('image/');
-}
-
 function PassportPreviewCard({
   title,
   previewUrl,
@@ -70,6 +66,13 @@ function PassportPreviewCard({
   filename,
   busy,
   onReplace,
+  listingId,
+  travellerId,
+  slotKey,
+  storageKey,
+  storageUrl,
+  sessionUserId,
+  ownerUserId,
 }: {
   title: string;
   previewUrl: string;
@@ -77,10 +80,16 @@ function PassportPreviewCard({
   filename?: string;
   busy?: boolean;
   onReplace?: (file: File) => void;
+  listingId: string;
+  travellerId: string;
+  slotKey: string;
+  storageKey?: string;
+  storageUrl?: string;
+  sessionUserId?: string | null;
+  ownerUserId?: string | null;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const showImage = isImagePreview(mimeType, filename);
 
   const acceptFile = (file: File) => {
     if (!isAllowedPassportFile(file)) {
@@ -104,22 +113,21 @@ function PassportPreviewCard({
           Uploaded
         </span>
       </div>
-      {showImage ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={previewUrl}
-          alt={title}
-          className="mt-3 max-h-44 w-full rounded-2xl object-contain bg-white"
-        />
-      ) : (
-        <div className="mt-3 flex min-h-[11rem] flex-col items-center justify-center gap-2 rounded-2xl bg-white px-4 text-center">
-          <FileText className="h-8 w-8 text-[#3b82f6]" />
-          <p className="truncate text-sm font-medium text-portrait-ink">
-            {filename || 'PDF uploaded'}
-          </p>
-          <p className="text-xs text-slate-helper">PDF preview not shown</p>
-        </div>
-      )}
+      <DocumentSlotThumb
+        title={title}
+        previewUrl={previewUrl}
+        mimeType={mimeType}
+        filename={filename}
+        listingId={listingId}
+        travellerId={travellerId}
+        slotKey={slotKey}
+        storageKey={storageKey}
+        storageUrl={storageUrl}
+        sessionUserId={sessionUserId}
+        ownerUserId={ownerUserId}
+        className="mt-3 flex max-h-44 min-h-[11rem] items-center justify-center overflow-hidden rounded-2xl bg-white"
+        imgClassName="mt-3 max-h-44 w-full rounded-2xl object-contain bg-white"
+      />
       {onReplace && (
         <>
           <input
@@ -161,6 +169,11 @@ function SlotCard({
   allowRemove = true,
   onFile,
   onRemove,
+  listingId,
+  travellerId,
+  draftFileRefs,
+  sessionUserId,
+  ownerUserId,
 }: {
   slot: ApplyDocumentSlot;
   upload?: TravellerDocumentUpload;
@@ -170,11 +183,16 @@ function SlotCard({
   allowRemove?: boolean;
   onFile: (file: File) => void;
   onRemove: () => void;
+  listingId: string;
+  travellerId: string;
+  draftFileRefs?: DraftFileRef[];
+  sessionUserId?: string | null;
+  ownerUserId?: string | null;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [captureOpen, setCaptureOpen] = useState(false);
-  const isImage = Boolean(upload?.mimeType.startsWith('image/'));
+  const ref = draftFileRefs?.find((item) => item.slotKey === slot.key);
 
   const acceptFile = (file: File) => {
     if (!isAllowedPassportFile(file)) {
@@ -227,17 +245,21 @@ function SlotCard({
         )}
       </div>
 
-      {upload && isImage && upload.previewUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={upload.previewUrl}
-          alt={slot.title}
-          className="mt-3 max-h-40 w-full rounded-2xl object-contain bg-[#f8fafc]"
+      {upload ? (
+        <DocumentSlotThumb
+          title={slot.title}
+          previewUrl={upload.previewUrl}
+          storageUrl={upload.storageUrl || ref?.url}
+          storageKey={upload.storageKey || ref?.storageKey}
+          mimeType={upload.mimeType || ref?.mimeType}
+          filename={upload.name || ref?.filename}
+          listingId={listingId}
+          travellerId={travellerId}
+          slotKey={slot.key}
+          sessionUserId={sessionUserId}
+          ownerUserId={ownerUserId}
         />
-      )}
-      {upload && !isImage && (
-        <p className="mt-3 truncate text-xs text-portrait-ink">{upload.name}</p>
-      )}
+      ) : null}
 
       <input
         ref={inputRef}
@@ -460,8 +482,29 @@ export function DocumentsTab({
             <PassportPreviewCard
               title="Passport bio page"
               previewUrl={passportPreviewUrl}
-              mimeType={passportFrontMimeType}
-              filename={passportFrontFilename}
+              mimeType={
+                passportFrontMimeType ||
+                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_FRONT_SLOT)
+                  ?.mimeType
+              }
+              filename={
+                passportFrontFilename ||
+                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_FRONT_SLOT)
+                  ?.filename
+              }
+              storageKey={
+                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_FRONT_SLOT)
+                  ?.storageKey
+              }
+              storageUrl={
+                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_FRONT_SLOT)
+                  ?.url
+              }
+              listingId={listingId}
+              travellerId={passengerId}
+              slotKey={PASSPORT_FRONT_SLOT}
+              sessionUserId={sessionUserId}
+              ownerUserId={ownerUserId}
               busy={passportReplaceBusy === 'front'}
               onReplace={onReplacePassportFront}
             />
@@ -470,8 +513,29 @@ export function DocumentsTab({
             <PassportPreviewCard
               title="Passport back page"
               previewUrl={passportBackPreviewUrl}
-              mimeType={passportBackMimeType}
-              filename={passportBackFilename}
+              mimeType={
+                passportBackMimeType ||
+                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_BACK_SLOT)
+                  ?.mimeType
+              }
+              filename={
+                passportBackFilename ||
+                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_BACK_SLOT)
+                  ?.filename
+              }
+              storageKey={
+                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_BACK_SLOT)
+                  ?.storageKey
+              }
+              storageUrl={
+                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_BACK_SLOT)
+                  ?.url
+              }
+              listingId={listingId}
+              travellerId={passengerId}
+              slotKey={PASSPORT_BACK_SLOT}
+              sessionUserId={sessionUserId}
+              ownerUserId={ownerUserId}
               busy={passportReplaceBusy === 'back'}
               onReplace={onReplacePassportBack}
             />
@@ -496,6 +560,11 @@ export function DocumentsTab({
             locked={Boolean(editableKeys && !editableKeys.has(slot.key))}
             note={comments?.[slot.key]}
             allowRemove={storage !== 'memory'}
+            listingId={listingId}
+            travellerId={passengerId}
+            draftFileRefs={draftFileRefs}
+            sessionUserId={sessionUserId}
+            ownerUserId={ownerUserId}
             onFile={(file) => {
               void handleFile(slot, file);
             }}

@@ -8,7 +8,7 @@ import {
   PASSPORT_BACK_SLOT,
   PASSPORT_FRONT_SLOT,
   clearListingFiles,
-  createPreviewUrlFromIdb,
+  createPreviewRecordFromIdb,
   deleteDraftMeta,
   getDraftMeta,
   isIdbAvailable,
@@ -469,12 +469,12 @@ export async function rehydrateTravellerPreviews(
 
   const next: ApplyTraveller[] = [];
   for (const traveller of travellers) {
-    const frontUrl = await createPreviewUrlFromIdb(
+    const frontRecord = await createPreviewRecordFromIdb(
       scope,
       traveller.id,
       PASSPORT_FRONT_SLOT
     );
-    const backUrl = await createPreviewUrlFromIdb(
+    const backRecord = await createPreviewRecordFromIdb(
       scope,
       traveller.id,
       PASSPORT_BACK_SLOT
@@ -482,26 +482,48 @@ export async function rehydrateTravellerPreviews(
 
     const documents: TravellerDocumentUpload[] = [];
     for (const doc of traveller.documents ?? []) {
-      const previewUrl = await createPreviewUrlFromIdb(
+      const idbRecord = await createPreviewRecordFromIdb(
         scope,
         traveller.id,
         doc.key
       );
+      // Never keep pre-refresh blob: URLs — they are dead after reload.
+      const durablePreview =
+        doc.previewUrl && !doc.previewUrl.startsWith('blob:')
+          ? doc.previewUrl
+          : doc.storageUrl && !doc.storageUrl.startsWith('blob:')
+            ? doc.storageUrl
+            : undefined;
       documents.push({
         ...doc,
-        storedInIdb: doc.storedInIdb || Boolean(previewUrl),
-        previewUrl,
+        storedInIdb: doc.storedInIdb || Boolean(idbRecord),
+        previewUrl: idbRecord?.previewUrl || durablePreview,
+        // Prefer IDB mime/name so a PDF is not stuck labeled image/jpeg.
+        mimeType: idbRecord?.mimeType || doc.mimeType,
+        name: idbRecord?.filename || doc.name,
+        size: idbRecord?.size ?? doc.size,
       });
     }
+
+    const durableFront =
+      traveller.passportFrontUrl &&
+      !traveller.passportFrontUrl.startsWith('blob:')
+        ? traveller.passportFrontUrl
+        : undefined;
+    const durableBack =
+      traveller.passportBackUrl &&
+      !traveller.passportBackUrl.startsWith('blob:')
+        ? traveller.passportBackUrl
+        : undefined;
 
     next.push({
       ...traveller,
       passportUploaded:
         traveller.passportUploaded ||
-        Boolean(frontUrl) ||
+        Boolean(frontRecord?.previewUrl) ||
         Boolean(traveller.passportData),
-      passportFrontUrl: frontUrl || traveller.passportFrontUrl,
-      passportBackUrl: backUrl || traveller.passportBackUrl,
+      passportFrontUrl: frontRecord?.previewUrl || durableFront,
+      passportBackUrl: backRecord?.previewUrl || durableBack,
       documents,
     });
   }

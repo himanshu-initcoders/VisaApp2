@@ -59,6 +59,10 @@ export interface PassportApplicationPayload {
   documents: TravellerDocumentUpload[];
   frontPreviewUrl: string;
   backPreviewUrl?: string;
+  frontMimeType?: string;
+  backMimeType?: string;
+  frontFilename?: string;
+  backFilename?: string;
   /** Draft slots whose server keys were invalidated by a local replace/remove. */
   invalidateDraftSlots?: string[];
 }
@@ -169,13 +173,27 @@ export function PassportReviewStage({
   const [backPreviewUrl, setBackPreviewUrl] = useState<string | undefined>(
     initial.backPreviewUrl
   );
-  // OCR crops are images; replace can switch to PDF.
-  const [frontMimeType, setFrontMimeType] = useState('image/jpeg');
-  const [backMimeType, setBackMimeType] = useState(
-    initial.backPreviewUrl ? 'image/jpeg' : undefined
+  // OCR crops are images; replace can switch to PDF. Prefer draft refs after refresh.
+  const [frontMimeType, setFrontMimeType] = useState(
+    () =>
+      draftFileRefsProp?.find((ref) => ref.slotKey === PASSPORT_FRONT_SLOT)
+        ?.mimeType || 'image/jpeg'
   );
-  const [frontFilename, setFrontFilename] = useState<string | undefined>();
-  const [backFilename, setBackFilename] = useState<string | undefined>();
+  const [backMimeType, setBackMimeType] = useState(() =>
+    draftFileRefsProp?.find((ref) => ref.slotKey === PASSPORT_BACK_SLOT)
+      ?.mimeType ||
+    (initial.backPreviewUrl ? 'image/jpeg' : undefined)
+  );
+  const [frontFilename, setFrontFilename] = useState<string | undefined>(
+    () =>
+      draftFileRefsProp?.find((ref) => ref.slotKey === PASSPORT_FRONT_SLOT)
+        ?.filename
+  );
+  const [backFilename, setBackFilename] = useState<string | undefined>(
+    () =>
+      draftFileRefsProp?.find((ref) => ref.slotKey === PASSPORT_BACK_SLOT)
+        ?.filename
+  );
   const [replaceBusy, setReplaceBusy] = useState<'front' | 'back' | null>(null);
   const [replaceError, setReplaceError] = useState<string | null>(null);
   const [invalidateDraftSlots, setInvalidateDraftSlots] = useState<string[]>(
@@ -208,6 +226,10 @@ export function PassportReviewStage({
     documents,
     frontPreviewUrl,
     backPreviewUrl,
+    frontMimeType,
+    backMimeType,
+    frontFilename,
+    backFilename,
     invalidateDraftSlots:
       invalidateDraftSlots.length > 0 ? invalidateDraftSlots : undefined,
   });
@@ -670,6 +692,11 @@ export function PassportReviewStage({
             showGeneralInfo={formConfig.showGeneralInfo}
             showTripDetails={formConfig.showTripDetails}
             onEditSection={setTab}
+            listingId={listingId}
+            travellerId={travellerId}
+            draftFileRefs={draftFileRefsProp}
+            ownerUserId={ownerUserId}
+            sessionUserId={sessionUserId}
           />
         )}
 

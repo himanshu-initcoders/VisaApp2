@@ -75,6 +75,41 @@ import type { TravellerDocumentUpload } from '@/lib/apply/applicationForm';
 import type { DraftFileRef } from '@/lib/apply/types';
 import { getFlagEmoji } from '@/lib/public';
 import { trackEvent } from '@/lib/analytics/gtm';
+import { sniffFileKind } from '@/lib/apply/sniffFileType';
+import { extensionFromMime } from '@/lib/upload/applicationKey';
+
+async function putPassportSlotFile(input: {
+  scope: DraftScopeInput;
+  travellerId: string;
+  slotKey: typeof PASSPORT_FRONT_SLOT | typeof PASSPORT_BACK_SLOT;
+  blob: Blob;
+  mimeHint?: string;
+  filenameHint?: string;
+}) {
+  const buffer = await input.blob.arrayBuffer();
+  const sniffed = sniffFileKind(
+    buffer,
+    input.mimeHint || input.blob.type,
+    input.filenameHint
+  );
+  const ext = extensionFromMime(sniffed.mimeType, input.filenameHint);
+  const fallbackName =
+    input.slotKey === PASSPORT_FRONT_SLOT
+      ? `passport-front.${ext}`
+      : `passport-back.${ext}`;
+  let filename = input.filenameHint || fallbackName;
+  // Keep the user's basename but force the extension to match real bytes.
+  if (input.filenameHint) {
+    filename = input.filenameHint.replace(/\.[^.]+$/i, '') + `.${ext}`;
+  }
+  const typed = new Blob([buffer], { type: sniffed.mimeType });
+  await putFile(input.scope, input.travellerId, input.slotKey, {
+    blob: typed,
+    mimeType: sniffed.mimeType,
+    filename,
+  });
+  return { mimeType: sniffed.mimeType, filename, blob: typed };
+}
 
 function toServerTravellerProfiles(
   rows: Array<{
@@ -1133,26 +1168,32 @@ export function ApplyVisaWizard({
 
       const frontBlob = await urlToBlob(payload.frontPreviewUrl);
       if (frontBlob) {
-        await putFile(draftScope(), id, PASSPORT_FRONT_SLOT, {
+        const saved = await putPassportSlotFile({
+          scope: draftScope(),
+          travellerId: id,
+          slotKey: PASSPORT_FRONT_SLOT,
           blob: frontBlob,
-          mimeType: frontBlob.type || 'image/jpeg',
-          filename: 'passport-front.jpg',
+          mimeHint: payload.frontMimeType,
+          filenameHint: payload.frontFilename,
         });
         if (!frontUrl?.startsWith('blob:')) {
-          frontUrl = URL.createObjectURL(frontBlob);
+          frontUrl = URL.createObjectURL(saved.blob);
         }
       }
 
       if (payload.backPreviewUrl) {
         const backBlob = await urlToBlob(payload.backPreviewUrl);
         if (backBlob) {
-          await putFile(draftScope(), id, PASSPORT_BACK_SLOT, {
+          const saved = await putPassportSlotFile({
+            scope: draftScope(),
+            travellerId: id,
+            slotKey: PASSPORT_BACK_SLOT,
             blob: backBlob,
-            mimeType: backBlob.type || 'image/jpeg',
-            filename: 'passport-back.jpg',
+            mimeHint: payload.backMimeType,
+            filenameHint: payload.backFilename,
           });
           if (!backUrl?.startsWith('blob:')) {
-            backUrl = URL.createObjectURL(backBlob);
+            backUrl = URL.createObjectURL(saved.blob);
           }
         }
       }

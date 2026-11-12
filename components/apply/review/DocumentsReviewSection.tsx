@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, FileText, ImageOff, Loader2 } from 'lucide-react';
+import { PdfFirstPageThumbnail } from '@/components/apply/PdfFirstPageThumbnail';
 import {
   DocumentPreviewModal,
   type DocumentPreviewItem,
@@ -16,8 +17,18 @@ import {
   PASSPORT_FRONT_SLOT,
 } from '@/lib/apply/idbDraftStorage';
 import { isPassportBackDocument } from '@/lib/document-types';
+import { isPdfPreviewSource } from '@/lib/apply/pdfFirstPagePreview';
 import { resolveDocumentPreviewUrl } from '@/lib/apply/resolveDocumentPreview';
 import type { DraftFileRef } from '@/lib/apply/types';
+
+/** If bytes are PDF but the stored name still ends in .jpg, show a .pdf label. */
+function displayNameForMime(name: string | undefined, mimeType?: string) {
+  if (!name) return name;
+  if (mimeType === 'application/pdf' && /\.(jpe?g|png|webp)$/i.test(name)) {
+    return name.replace(/\.[^.]+$/i, '.pdf');
+  }
+  return name;
+}
 
 interface DocumentsReviewSectionProps {
   slots: ApplyDocumentSlot[];
@@ -33,6 +44,7 @@ interface DocumentsReviewSectionProps {
   travellerId?: string;
   draftFileRefs?: DraftFileRef[];
   ownerUserId?: string;
+  sessionUserId?: string | null;
 }
 
 type PreviewCard =
@@ -44,8 +56,16 @@ type PreviewCard =
     })
   | { title: string; missing: true; required?: boolean };
 
+type ResolvedPreview = { url: string; mimeType?: string };
+
+function isPdfPreview(item: DocumentPreviewItem) {
+  // Filename wins — storage keys often keep a leftover `.jpg` mime for PDFs.
+  return isPdfPreviewSource(item.mimeType, item.name);
+}
+
 function isImagePreview(item: DocumentPreviewItem) {
   if (!item.previewUrl) return false;
+  if (isPdfPreview(item)) return false;
   return Boolean(
     item.mimeType?.startsWith('image/') ||
       /^data:image\//.test(item.previewUrl) ||
@@ -55,6 +75,16 @@ function isImagePreview(item: DocumentPreviewItem) {
 
 function refForSlot(refs: DraftFileRef[] | undefined, slotKey: string) {
   return refs?.find((ref) => ref.slotKey === slotKey);
+}
+
+function resolveSignature(item: PreviewCard & { missing?: false }) {
+  return [
+    item.slotKey || item.title,
+    item.previewUrl || '',
+    item.storageKey || '',
+    item.storageUrl || '',
+    item.mimeType || '',
+  ].join('|');
 }
 
 export function DocumentsReviewSection({
@@ -70,19 +100,31 @@ export function DocumentsReviewSection({
   travellerId,
   draftFileRefs,
   ownerUserId,
+  sessionUserId = null,
 }: DocumentsReviewSectionProps) {
   const [active, setActive] = useState<DocumentPreviewItem | null>(null);
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
-  const previewCacheRef = useRef<Map<string, string>>(new Map());
-  const byKey = new Map(uploads.map((item) => [item.key, item]));
+  const [resolvedByKey, setResolvedByKey] = useState<
+    Record<string, ResolvedPreview>
+  >({});
+  const [resolvingKeys, setResolvingKeys] = useState<Record<string, boolean>>(
+    {}
+  );
+  const previewCacheRef = useRef<Map<string, ResolvedPreview>>(new Map());
+  const resolvedSigRef = useRef<Map<string, string>>(new Map());
+  const byKey = useMemo(
+    () => new Map(uploads.map((item) => [item.key, item])),
+    [uploads]
+  );
 
   useEffect(() => {
     const cache = previewCacheRef.current;
     return () => {
-      for (const url of cache.values()) {
-        if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+      for (const entry of cache.values()) {
+        if (entry.url.startsWith('blob:')) URL.revokeObjectURL(entry.url);
       }
       cache.clear();
+      resolvedSigRef.current.clear();
     };
   }, []);
 
@@ -192,52 +234,127 @@ export function DocumentsReviewSection({
     }),
   ];
 
+  const resolveKey = useMemo(
+    () =>
+      items
+        .filter(
+          (item): item is PreviewCard & { missing?: false } =>
+            !('missing' in item && item.missing)
+        )
+        .map((item) => resolveSignature(item))
+        .join('||'),
+    [items]
+  );
+
+  // After refresh, blob: URLs die — rehydrate thumbs from IDB / draft-files.
+  useEffect(() => {
+    let cancelled = false;
+    const filled = items.filter(
+      (item): item is PreviewCard & { missing?: false } =>
+        !('missing' in item && item.missing)
+    );
+
+    void (async () => {
+      for (const item of filled) {
+        const key = item.slotKey || item.title;
+        const signature = resolveSignature(item);
+        if (resolvedSigRef.current.get(key) === signature) continue;
+
+        setResolvingKeys((prev) =>
+          prev[key] ? prev : { ...prev, [key]: true }
+        );
+
+        const resolved = await resolveDocumentPreviewUrl({
+          listingId,
+          travellerId,
+          slotKey: item.slotKey,
+          storageKey: item.storageKey,
+          ownerUserId,
+          sessionUserId,
+          previewUrl: item.previewUrl,
+          storageUrl: item.storageUrl,
+          filename: item.name,
+        });
+
+        if (cancelled) {
+          // Leave the blob alone — View may have raced and adopted this URL.
+          return;
+        }
+
+        if (resolved?.url) {
+          // Do not revoke previous blob URLs here — thumbnails / an open View
+          // modal may still be using them. Cleanup happens on unmount only.
+          const entry = {
+            url: resolved.url,
+            mimeType: resolved.mimeType || item.mimeType,
+          };
+          previewCacheRef.current.set(key, entry);
+          resolvedSigRef.current.set(key, signature);
+          setResolvedByKey((prev) => ({ ...prev, [key]: entry }));
+        } else {
+          resolvedSigRef.current.set(key, signature);
+        }
+
+        setResolvingKeys((prev) => {
+          if (!prev[key]) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // resolveKey captures item identity; listing/session drive storage lookup
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolveKey, listingId, travellerId, ownerUserId, sessionUserId]);
+
   const openPreview = async (item: PreviewCard & { missing?: false }) => {
     if ('missing' in item && item.missing) return;
     const key = item.slotKey || item.title;
     setLoadingKey(key);
     try {
-      const cached = previewCacheRef.current.get(key);
-      if (cached) {
-        setActive({
-          title: item.title,
-          name: item.name,
-          previewUrl: cached,
-          mimeType: item.mimeType,
-        });
-        return;
-      }
-
+      const ref = item.slotKey
+        ? refForSlot(draftFileRefs, item.slotKey)
+        : undefined;
+      const storageKey = item.storageKey || ref?.storageKey;
+      const storageUrl = item.storageUrl || ref?.url;
+      // Fresh resolve only — never open the modal with a cached blob: URL.
+      // Those are often revoked by draft rehydrate right after refresh/edit.
       const resolved = await resolveDocumentPreviewUrl({
         listingId,
         travellerId,
         slotKey: item.slotKey,
-        storageKey: item.storageKey,
+        storageKey,
         ownerUserId,
+        sessionUserId,
         previewUrl: item.previewUrl,
-        storageUrl: item.storageUrl,
+        storageUrl,
+        filename: item.name || ref?.filename,
       });
       if (!resolved) {
         setActive({
           title: item.title,
           name: item.name,
-          previewUrl: item.previewUrl || '',
-          mimeType: item.mimeType,
+          previewUrl: '',
+          mimeType: item.mimeType || ref?.mimeType,
         });
         return;
       }
-      if (resolved.url.startsWith('blob:')) {
-        const previous = previewCacheRef.current.get(key);
-        if (previous && previous.startsWith('blob:')) {
-          URL.revokeObjectURL(previous);
-        }
-        previewCacheRef.current.set(key, resolved.url);
-      }
+      const entry = {
+        url: resolved.url,
+        mimeType: resolved.mimeType || item.mimeType || ref?.mimeType,
+      };
+      previewCacheRef.current.set(key, entry);
+      resolvedSigRef.current.set(key, resolveSignature(item));
+      setResolvedByKey((prev) => ({ ...prev, [key]: entry }));
       setActive({
         title: item.title,
-        name: item.name,
-        previewUrl: resolved.url,
-        mimeType: resolved.mimeType || item.mimeType,
+        name: displayNameForMime(item.name, entry.mimeType),
+        previewUrl: entry.url,
+        mimeType: entry.mimeType,
       });
     } finally {
       setLoadingKey(null);
@@ -280,14 +397,29 @@ export function DocumentsReviewSection({
             );
           }
 
-          const image = isImagePreview(item);
+          const key = item.slotKey || item.title;
+          const resolved = resolvedByKey[key];
+          const displayMime = resolved?.mimeType || item.mimeType;
+          const displayItem: DocumentPreviewItem = {
+            title: item.title,
+            name: displayNameForMime(item.name, displayMime),
+            previewUrl: resolved?.url || item.previewUrl,
+            mimeType: displayMime,
+          };
+          // Sniffed mime from resolve wins — never put PDF bytes in <img>.
+          const pdf =
+            isPdfPreview(displayItem) ||
+            displayItem.mimeType === 'application/pdf';
+          const image = !pdf && isImagePreview(displayItem);
+          const thumbLoading = Boolean(resolvingKeys[key]) && !resolved?.url;
           const canView = Boolean(
-            item.previewUrl ||
+            resolved?.url ||
+              item.previewUrl ||
               item.storageUrl ||
               item.storageKey ||
               (listingId && travellerId && item.slotKey)
           );
-          const busy = loadingKey === (item.slotKey || item.title);
+          const busy = loadingKey === key;
 
           return (
             <li
@@ -295,10 +427,12 @@ export function DocumentsReviewSection({
               className="overflow-hidden rounded-[20px] border border-ash bg-white"
             >
               <div className="flex h-36 items-center justify-center bg-[#f8fafc]">
-                {image ? (
+                {thumbLoading ? (
+                  <Loader2 className="h-6 w-6 animate-spin text-slate-helper" />
+                ) : image && displayItem.previewUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={item.previewUrl}
+                    src={displayItem.previewUrl}
                     alt={item.title}
                     className="h-full w-full object-contain p-2"
                     onError={(event) => {
@@ -306,11 +440,19 @@ export function DocumentsReviewSection({
                       event.currentTarget.style.display = 'none';
                     }}
                   />
+                ) : pdf && displayItem.previewUrl ? (
+                  <PdfFirstPageThumbnail
+                    src={displayItem.previewUrl}
+                    alt={item.title}
+                    fallbackName={displayItem.name || 'Document'}
+                    className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center"
+                    imgClassName="h-full w-full object-contain p-2"
+                  />
                 ) : (
                   <div className="flex flex-col items-center gap-2 px-4 text-center">
                     <FileText className="h-8 w-8 text-slate-helper" />
                     <p className="line-clamp-2 text-xs text-portrait-ink">
-                      {item.name || 'Document'}
+                      {displayItem.name || 'Document'}
                     </p>
                   </div>
                 )}
@@ -320,9 +462,9 @@ export function DocumentsReviewSection({
                   <p className="truncate text-sm font-medium text-portrait-ink">
                     {item.title}
                   </p>
-                  {item.name && (
+                  {displayItem.name && (
                     <p className="truncate text-[11px] text-slate-helper">
-                      {item.name}
+                      {displayItem.name}
                     </p>
                   )}
                 </div>

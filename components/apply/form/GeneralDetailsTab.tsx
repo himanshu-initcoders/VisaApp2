@@ -1,6 +1,6 @@
 'use client';
 
-import { FileText, Pencil } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import type { ReactNode } from 'react';
 import {
   UnderlineField,
@@ -8,6 +8,8 @@ import {
   displayToIso,
 } from '@/components/apply/form/UnderlineField';
 import { CorrectionGate } from '@/components/apply/form/CorrectionGate';
+import { PdfFirstPageThumbnail } from '@/components/apply/PdfFirstPageThumbnail';
+import { isPdfPreviewSource } from '@/lib/apply/pdfFirstPagePreview';
 import type { IndianPassportFields } from '@/lib/passport/types';
 import {
   earliestFutureDateIso,
@@ -18,8 +20,7 @@ import {
 
 function isImagePreview(mimeType?: string, filename?: string) {
   if (mimeType?.startsWith('image/')) return true;
-  if (mimeType === 'application/pdf') return false;
-  if (filename && /\.pdf$/i.test(filename)) return false;
+  if (isPdfPreviewSource(mimeType, filename)) return false;
   // OCR canvas blobs are images; unknown mime defaults to image.
   return !mimeType || mimeType.startsWith('image/');
 }
@@ -49,16 +50,26 @@ function PassportSideMedia({
     );
   }
 
+  if (isPdfPreviewSource(mimeType, filename)) {
+    return (
+      <PdfFirstPageThumbnail
+        src={previewUrl}
+        alt={alt}
+        fallbackName={filename || 'PDF uploaded'}
+        className={`flex ${minHeightClass} w-full flex-col items-center justify-center gap-2 px-6 text-center`}
+        imgClassName="w-full object-contain"
+      />
+    );
+  }
+
   if (!isImagePreview(mimeType, filename)) {
     return (
       <div
         className={`flex ${minHeightClass} flex-col items-center justify-center gap-2 px-6 text-center`}
       >
-        <FileText className="h-10 w-10 text-[#3b82f6]" />
         <p className="text-sm font-medium text-portrait-ink">
-          {filename || 'PDF uploaded'}
+          {filename || 'Document uploaded'}
         </p>
-        <p className="text-xs text-slate-helper">PDF preview not shown</p>
       </div>
     );
   }

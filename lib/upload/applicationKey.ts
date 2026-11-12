@@ -42,15 +42,18 @@ export function sanitizeExtension(ext: string): string {
 }
 
 export function extensionFromMime(mimeType: string, filename?: string): string {
+  // Prefer authoritative MIME over filename. A PDF replaced onto a slot that
+  // previously used `passport-back.jpg` must not keep the .jpg key.
+  const mime = (mimeType || '').split(';')[0]?.trim().toLowerCase();
+  if (mime === 'application/pdf') return 'pdf';
+  if (mime === 'image/png') return 'png';
+  if (mime === 'image/webp') return 'webp';
+  if (mime === 'image/jpeg' || mime === 'image/jpg') return 'jpg';
   if (filename) {
     const match = filename.match(/\.([a-z0-9]+)$/i);
     if (match) return sanitizeExtension(match[1]);
   }
-  if (mimeType === 'application/pdf') return 'pdf';
-  if (mimeType === 'image/png') return 'png';
-  if (mimeType === 'image/webp') return 'webp';
-  if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') return 'jpg';
-  const subtype = mimeType.split('/')[1];
+  const subtype = mime.split('/')[1];
   return sanitizeExtension(subtype || 'bin');
 }
 

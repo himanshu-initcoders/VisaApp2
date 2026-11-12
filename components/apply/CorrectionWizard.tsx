@@ -386,6 +386,8 @@ export function CorrectionWizard({
               showTripDetails={formConfig.showTripDetails}
               editableKeys={editableKeys}
               onEditSection={setTab}
+              listingId={listingId}
+              travellerId={travellerId}
             />
           </TabsPanel>
         )}

@@ -17,6 +17,7 @@ import {
   hasPassportBackImage,
   resolveDocumentSlotsWithPassportBack,
 } from '@/lib/apply/applicationForm';
+import type { DraftFileRef } from '@/lib/apply/types';
 import { getVisibleDocumentSlots } from '@/lib/document-conditions';
 import type { IndianPassportFields } from '@/lib/passport/types';
 
@@ -37,6 +38,12 @@ interface ReviewSubmitTabProps {
   showTripDetails?: boolean;
   editableKeys?: ReadonlySet<string>;
   onEditSection?: (tab: ApplicationFormTabId) => void;
+  /** Needed so View can rehydrate files after refresh. */
+  listingId?: string;
+  travellerId?: string;
+  draftFileRefs?: DraftFileRef[];
+  ownerUserId?: string | null;
+  sessionUserId?: string | null;
 }
 
 function ReviewSection({
@@ -87,6 +94,11 @@ export function ReviewSubmitTab({
   showTripDetails = false,
   editableKeys,
   onEditSection,
+  listingId,
+  travellerId,
+  draftFileRefs,
+  ownerUserId,
+  sessionUserId,
 }: ReviewSubmitTabProps) {
   const hasAdditional = extraQuestions.length > 0;
   const visibleSlots = resolveDocumentSlotsWithPassportBack(
@@ -155,6 +167,11 @@ export function ReviewSubmitTab({
           passportBackMimeType={passportBackMimeType}
           passportFrontFilename={passportFrontFilename}
           passportBackFilename={passportBackFilename}
+          listingId={listingId}
+          travellerId={travellerId}
+          draftFileRefs={draftFileRefs}
+          ownerUserId={ownerUserId ?? undefined}
+          sessionUserId={sessionUserId}
         />
       </ReviewSection>
     </div>
