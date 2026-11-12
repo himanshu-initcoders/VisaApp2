@@ -31,10 +31,10 @@ export default async function AdminApplyDraftsPage({ searchParams }: PageProps) 
         action={
           <div className="flex flex-wrap items-center gap-3">
             <Link
-              href="/admin/applications"
+              href="/admin/applications/visa"
               className="font-switzer text-sm text-nautical-teal hover:text-portrait-ink"
             >
-              Submitted applications
+              Visa applications
             </Link>
             <Link
               href="/admin/applications/drafts/new"

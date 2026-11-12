@@ -145,7 +145,7 @@ export default async function DashboardPage({
       travellerCount: 0,
       approvedTravellerCount: 0,
       date: app.submittedAt || app.createdAt,
-      href: `/applications/passport/${app.id}`,
+      href: `/applications/passport/${app.referenceNumber || app.id}`,
       hasVisaDocument: false,
     })),
   ]

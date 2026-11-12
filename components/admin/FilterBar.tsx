@@ -54,15 +54,16 @@ function selectionFromParams(
  */
 export function FilterBar({
   countryItems,
-  visaOnly = false,
+  scope = 'visa',
 }: {
   countryItems: NestedMultiSelectItem[];
-  /** Reviewers only see assigned visas, so the passport type filter is hidden. */
-  visaOnly?: boolean;
+  /** Fixed list scope — type filter is not shown on dedicated pages. */
+  scope?: 'visa' | 'passport';
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const isVisa = scope === 'visa';
 
   const [referenceNumber, setReferenceNumber] = useState(
     searchParams.get('ref') || ''
@@ -76,17 +77,14 @@ export function FilterBar({
   const [dateFrom, setDateFrom] = useState(searchParams.get('from') || '');
   const [dateTo, setDateTo] = useState(searchParams.get('to') || '');
   const [status, setStatus] = useState(searchParams.get('status') || 'all');
-  const [type, setType] = useState(searchParams.get('type') || 'all');
   const [expanded, setExpanded] = useState(() => {
     const initialStatus = searchParams.get('status') || 'all';
-    const initialType = searchParams.get('type') || 'all';
     return Boolean(
       searchParams.get('phone') ||
         searchParams.get('passenger') ||
         searchParams.get('from') ||
         searchParams.get('to') ||
-        (initialStatus && initialStatus !== 'all') ||
-        (initialType && initialType !== 'all')
+        (initialStatus && initialStatus !== 'all')
     );
   });
 
@@ -96,13 +94,16 @@ export function FilterBar({
     if (referenceNumber.trim()) params.set('ref', referenceNumber.trim());
     if (search.trim()) params.set('q', search.trim());
     if (phone.trim()) params.set('phone', phone.trim());
-    if (destination.parents.length) params.set('countries', destination.parents.join(','));
-    if (destination.children.length) params.set('listings', destination.children.join(','));
-    if (passenger.trim()) params.set('passenger', passenger.trim());
+    if (isVisa && destination.parents.length) {
+      params.set('countries', destination.parents.join(','));
+    }
+    if (isVisa && destination.children.length) {
+      params.set('listings', destination.children.join(','));
+    }
+    if (isVisa && passenger.trim()) params.set('passenger', passenger.trim());
     if (dateFrom) params.set('from', dateFrom);
     if (dateTo) params.set('to', dateTo);
     if (status && status !== 'all') params.set('status', status);
-    if (!visaOnly && type && type !== 'all') params.set('type', type);
     params.set('page', '1');
 
     router.push(`${pathname}?${params.toString()}`);
@@ -117,7 +118,6 @@ export function FilterBar({
     setDateFrom('');
     setDateTo('');
     setStatus('all');
-    setType('all');
     router.push(pathname);
   };
 
@@ -125,13 +125,12 @@ export function FilterBar({
     referenceNumber.trim() !== '' ||
     search.trim() !== '' ||
     phone.trim() !== '' ||
-    destination.parents.length > 0 ||
-    destination.children.length > 0 ||
-    passenger.trim() !== '' ||
+    (isVisa && destination.parents.length > 0) ||
+    (isVisa && destination.children.length > 0) ||
+    (isVisa && passenger.trim() !== '') ||
     dateFrom !== '' ||
     dateTo !== '' ||
-    status !== 'all' ||
-    (!visaOnly && type !== 'all');
+    status !== 'all';
 
   const onEnterApply = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') applyFilters();
@@ -143,7 +142,7 @@ export function FilterBar({
         <div className="min-w-0 w-full md:w-56 md:shrink-0">
           <Input
             label="Reference number"
-            placeholder="VI…"
+            placeholder={isVisa ? 'VI…' : 'PS…'}
             value={referenceNumber}
             onChange={(e) => setReferenceNumber(e.target.value)}
             onKeyDown={onEnterApply}
@@ -158,15 +157,17 @@ export function FilterBar({
             onKeyDown={onEnterApply}
           />
         </div>
-        <div className="min-w-0 w-full md:w-64 md:shrink-0">
-          <NestedMultiSelect
-            label="Country"
-            placeholder="All countries"
-            items={countryItems}
-            value={destination}
-            onChange={setDestination}
-          />
-        </div>
+        {isVisa ? (
+          <div className="min-w-0 w-full md:w-64 md:shrink-0">
+            <NestedMultiSelect
+              label="Country"
+              placeholder="All countries"
+              items={countryItems}
+              value={destination}
+              onChange={setDestination}
+            />
+          </div>
+        ) : null}
         <div className="flex shrink-0 items-center gap-2">
           <Button
             type="button"
@@ -211,13 +212,15 @@ export function FilterBar({
             onChange={(e) => setPhone(e.target.value)}
             onKeyDown={onEnterApply}
           />
-          <Input
-            label="Passenger name"
-            placeholder="Passenger…"
-            value={passenger}
-            onChange={(e) => setPassenger(e.target.value)}
-            onKeyDown={onEnterApply}
-          />
+          {isVisa ? (
+            <Input
+              label="Passenger name"
+              placeholder="Passenger…"
+              value={passenger}
+              onChange={(e) => setPassenger(e.target.value)}
+              onKeyDown={onEnterApply}
+            />
+          ) : null}
           <Input
             label="From date (IST)"
             type="date"
@@ -245,18 +248,6 @@ export function FilterBar({
             value={status}
             onChange={(e) => setStatus(e.target.value)}
           />
-          {!visaOnly && (
-            <Select
-              label="Type"
-              options={[
-                { value: 'all', label: 'All Types' },
-                { value: 'visa', label: 'Visa' },
-                { value: 'passport', label: 'Passport' },
-              ]}
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-            />
-          )}
         </div>
       )}
 

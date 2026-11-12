@@ -38,6 +38,9 @@ Our database schema supports visa and passport products for Indian travelers:
 - `countries`
 - `visaListings` — metadata + listing-level ETA only (`standard_eta_*`)
 - `visaListingPrices` — validity, stay, government / service / GST fees (INR), `sort_order`
+
+### 3. `schema-passport.ts` (Passport catalog)
+- See [[Passport Catalog]] — Fresh/Re-issue listings, matrix prices, form steps/questions, docs, FAQs
 - `multiTripCountries`
 - `visaRisks`
 - `additionalQuestions`
@@ -79,3 +82,8 @@ Admin manages packages under Pricing (`/admin/config/visa-listings/[id]/tiers`).
 ## Historical note
 
 Older daily notes and competitor-analysis docs may still say `entry_processes`, Atlys importer, or Standard/Express tiers. Those describe research history; the live product schema is above.
+
+
+## Passport catalog (2026-11-11)
+See [[Passport Catalog]] for passport_listings and child tables, form versions, drafts, and extended passport_services fields.
+

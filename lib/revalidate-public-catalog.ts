@@ -35,3 +35,23 @@ export function revalidatePublicVisaCatalog(options?: {
   revalidatePath('/visa/[countryCode]/[listingId]', 'page');
   revalidatePath('/visa/[countryCode]/[listingId]/apply', 'page');
 }
+
+/** Shared cache tag for public passport marketing / apply queries. */
+export const PUBLIC_PASSPORT_CATALOG_TAG = 'public-passport-catalog';
+
+/**
+ * Invalidate public passport pages after admin passport-listing changes.
+ */
+export function revalidatePublicPassportCatalog(options?: {
+  serviceType?: string;
+}) {
+  revalidateTag(PUBLIC_PASSPORT_CATALOG_TAG, 'max');
+  revalidatePath('/passport');
+  revalidatePath('/');
+
+  const serviceType = options?.serviceType;
+  if (serviceType) {
+    revalidatePath(`/passport/${serviceType}/apply`);
+  }
+  revalidatePath('/passport/[serviceType]/apply', 'page');
+}

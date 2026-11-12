@@ -80,11 +80,13 @@
 - [ ] Form validation (client + server)
 
 ### Passport Services
-- [ ] Service type selection (New, Renewal, Update)
-- [ ] Application form
-- [ ] Document upload
-- [ ] Form validation
-- [ ] Service submission
+- [x] India-only catalog: Fresh + Re-issue (`passport_listings` + admin hub)
+- [x] Pricing matrix (Normal/Tatkaal × 36/60 pages) + public hero card from DB
+- [x] Documents from shared document-types catalog + FAQs per product
+- [x] Form builder with admin-defined steps/tabs + publish `passport_form_versions`
+- [x] In-app apply wizard (`/passport/{fresh|reissue}/apply`) — steps → documents → review → pay/submit
+- [ ] Email/WhatsApp notifications on passport submit
+- [ ] Staff draft-on-behalf for passport (parity with visa)
 
 ### Application Management
 - [x] Dashboard with all applications (`/applications` list)
@@ -108,6 +110,7 @@
 - [ ] User management
 - [x] Add Country (admin config create flow)
 - [x] Add Visa listing (admin config create flow)
+- [x] Passport listings admin (basic, pricing, forms/steps, docs, FAQs)
 - [x] Visa listing public URL slug (basic info, SEO paths)
 - [x] Admin blogs (TinyMCE) under Configuration + public `/blog` SEO
 

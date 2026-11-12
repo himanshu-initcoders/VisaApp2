@@ -11,6 +11,11 @@ import {
   getStatusVariant,
 } from '@/components/ui';
 import { ApplicationSidebar } from '@/components/dashboard/ApplicationSidebar';
+import {
+  PassportFormAnswers,
+  buildPassportDocumentLabelMap,
+} from '@/components/passport/PassportFormAnswers';
+import type { PassportApplyFormConfig } from '@/lib/apply/passportForm';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -48,16 +53,16 @@ export default async function UserPassportApplicationDetailPage({
 
   const app = details.application as {
     id: string;
+    referenceNumber?: string | null;
     serviceType: string;
     status: string;
     submittedAt?: Date | null;
-    appointmentDate?: Date | null;
-    appointmentLocation?: string | null;
-    personalInfo?: Record<string, string> | null;
-    addressInfo?: Record<string, string> | null;
+    formSnapshot?: PassportApplyFormConfig | null;
+    answers?: Record<string, unknown> | null;
   };
 
-  const { personalInfo, addressInfo } = app;
+  const snapshot = (app.formSnapshot as PassportApplyFormConfig | null) ?? null;
+  const documentLabels = buildPassportDocumentLabelMap(snapshot);
 
   return (
     <div className="space-y-6">
@@ -74,6 +79,9 @@ export default async function UserPassportApplicationDetailPage({
         </h1>
         <p className="mt-2 font-switzer text-lg text-slate-helper">
           Passport Service Application
+          {details.formVersionNumber != null
+            ? ` · Form v${details.formVersionNumber}`
+            : ''}
         </p>
       </div>
 
@@ -93,7 +101,10 @@ export default async function UserPassportApplicationDetailPage({
                     </Badge>
                   }
                 />
-                <Field label="Application ID" value={app.id} />
+                <Field
+                  label="Reference"
+                  value={app.referenceNumber || app.id}
+                />
                 <Field label="Service Type" value={app.serviceType} />
                 <Field
                   label="Submitted"
@@ -112,83 +123,13 @@ export default async function UserPassportApplicationDetailPage({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Personal Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field
-                  label="Full Name"
-                  value={personalInfo?.fullName || details.user.name}
-                />
-                <Field label="Email" value={details.user.email} />
-                <Field
-                  label="Phone"
-                  value={details.user.phone || 'Not provided'}
-                />
-                <Field
-                  label="Date of Birth"
-                  value={personalInfo?.dateOfBirth || 'Not provided'}
-                />
-                <Field
-                  label="Citizenship"
-                  value={personalInfo?.citizenship || 'Not provided'}
-                />
-              </dl>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Address Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Field
-                label="Current Address"
-                value={addressInfo?.currentAddress || 'Not provided'}
-              />
-              <Field
-                label="Permanent Address"
-                value={addressInfo?.permanentAddress || 'Not provided'}
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Service Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field
-                  label="Appointment Date"
-                  value={
-                    app.appointmentDate
-                      ? new Date(app.appointmentDate).toLocaleDateString(
-                          'en-IN',
-                          {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                            timeZone: 'Asia/Kolkata',
-                          }
-                        )
-                      : 'Not scheduled'
-                  }
-                />
-                <Field
-                  label="Appointment Location"
-                  value={app.appointmentLocation || 'Not specified'}
-                />
-              </dl>
-            </CardContent>
-          </Card>
+          <PassportFormAnswers snapshot={snapshot} answers={app.answers} />
         </div>
 
         <ApplicationSidebar
           documents={details.documents}
           statusHistory={details.statusHistory}
+          documentLabels={documentLabels}
         />
       </div>
     </div>

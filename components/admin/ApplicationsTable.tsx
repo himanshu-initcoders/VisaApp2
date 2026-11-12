@@ -23,12 +23,15 @@ export interface ApplicationsTableProps {
   canAssign?: boolean;
   /** ISO2 → flag image URL */
   flagUrls?: Record<string, string | null>;
+  /** Hide Type column on dedicated visa/passport list pages. */
+  hideTypeColumn?: boolean;
 }
 
 export function ApplicationsTable({
   applications,
   canAssign = false,
   flagUrls,
+  hideTypeColumn = false,
 }: ApplicationsTableProps) {
   if (applications.length === 0) {
     return (
@@ -67,9 +70,11 @@ export function ApplicationsTable({
               <th className="px-6 py-4 text-left font-switzer text-xs font-semibold text-slate-helper uppercase tracking-wider">
                 User
               </th>
-              <th className="px-6 py-4 text-left font-switzer text-xs font-semibold text-slate-helper uppercase tracking-wider">
-                Type
-              </th>
+              {!hideTypeColumn ? (
+                <th className="px-6 py-4 text-left font-switzer text-xs font-semibold text-slate-helper uppercase tracking-wider">
+                  Type
+                </th>
+              ) : null}
               <th className="px-6 py-4 text-left font-switzer text-xs font-semibold text-slate-helper uppercase tracking-wider">
                 Details
               </th>
@@ -90,12 +95,10 @@ export function ApplicationsTable({
                 key={`${app.type}-${app.id}`}
                 className="border-b border-ash hover:bg-sky-wash/10 transition-colors"
               >
-                {/* Public reference (visa) or short UUID (passport) */}
+                {/* Public reference (VI… / PS…) or short UUID fallback */}
                 <td className="px-6 py-4">
                   <span className="font-switzer text-sm font-mono text-portrait-ink">
-                    {app.type === 'visa' && app.referenceNumber
-                      ? app.referenceNumber
-                      : app.id.slice(0, 8)}
+                    {app.referenceNumber || app.id.slice(0, 8)}
                   </span>
                 </td>
 
@@ -111,12 +114,13 @@ export function ApplicationsTable({
                   </div>
                 </td>
 
-                {/* Type */}
-                <td className="px-6 py-4">
-                  <span className="font-switzer text-sm text-portrait-ink capitalize">
-                    {app.type}
-                  </span>
-                </td>
+                {!hideTypeColumn ? (
+                  <td className="px-6 py-4">
+                    <span className="font-switzer text-sm text-portrait-ink capitalize">
+                      {app.type}
+                    </span>
+                  </td>
+                ) : null}
 
                 {/* Details (country/visa type or passport service type) */}
                 <td className="px-6 py-4">
@@ -181,9 +185,7 @@ export function ApplicationsTable({
                     )}
                     <Link
                       href={`/admin/applications/${app.type}/${
-                        app.type === 'visa' && app.referenceNumber
-                          ? app.referenceNumber
-                          : app.id
+                        app.referenceNumber || app.id
                       }`}
                       aria-label="View details"
                       title="View details"

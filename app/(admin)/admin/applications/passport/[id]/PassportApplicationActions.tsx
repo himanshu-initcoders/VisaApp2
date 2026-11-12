@@ -23,6 +23,7 @@ interface PassportApplicationActionsProps {
   currentStatus: string;
   documents: DocumentWithVerification[];
   statusHistory: StatusHistoryItem[];
+  documentLabels?: Record<string, string>;
 }
 
 export function PassportApplicationActions({
@@ -30,6 +31,7 @@ export function PassportApplicationActions({
   currentStatus,
   documents,
   statusHistory,
+  documentLabels,
 }: PassportApplicationActionsProps) {
   const router = useRouter();
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -74,6 +76,7 @@ export function PassportApplicationActions({
         <CardContent>
           <DocumentViewer
             documents={documents}
+            labelBySlotKey={documentLabels}
             onDocumentVerified={handleSuccess}
           />
         </CardContent>

@@ -1,6 +1,7 @@
 'use server';
 
 import { and, eq, isNull } from 'drizzle-orm';
+import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { db } from '@/lib/db';
@@ -12,7 +13,11 @@ import {
   validateSubmitTravellers,
   type SubmitTravellerPayload,
 } from '@/lib/apply/validateSubmitTravellers';
-import { quoteVisaListing, type VisaFeeQuote } from '@/lib/payments/quote';
+import {
+  quoteVisaListing,
+  quotePassportListing,
+  type VisaFeeQuote,
+} from '@/lib/payments/quote';
 import {
   fetchGatewayPayment,
   markPaymentCaptured,
@@ -25,10 +30,14 @@ import {
 } from '@/lib/payments/razorpay';
 import {
   createVisaCheckoutOrderSchema,
+  createPassportCheckoutOrderSchema,
   quoteVisaCheckoutSchema,
+  quotePassportCheckoutSchema,
   verifyVisaCheckoutSchema,
   type CreateVisaCheckoutOrderInput,
 } from '@/lib/validations/payment';
+import { submitPassportApplication } from '@/lib/apply/submitPassportApplication';
+import { ensurePassportFormVersionForSubmit } from '@/lib/db/queries/passportFormVersions';
 
 export type CreateVisaCheckoutOrderResult =
   | { success: true; kind: 'free' }
@@ -663,3 +672,236 @@ export async function verifyVisaCheckout(
     };
   }
 }
+
+export async function quotePassportCheckout(input: unknown): Promise<
+  | {
+      success: true;
+      amountPaise: number;
+      currency: 'INR';
+      free: boolean;
+      governmentFeePaise: number;
+      serviceFeePaise: number;
+      gstFeePaise: number;
+    }
+  | { success: false; error: string }
+> {
+  const parsed = quotePassportCheckoutSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: firstIssue(parsed.error) };
+  }
+
+  const user = await requireUserId();
+  if (!user.ok) return { success: false, error: user.error };
+
+  const quoted = await quotePassportListing({
+    listingId: parsed.data.listingId,
+    priceOptionId: parsed.data.priceOptionId,
+  });
+  if (!quoted.ok) return { success: false, error: quoted.error };
+
+  return {
+    success: true,
+    amountPaise: quoted.quote.amountPaise,
+    currency: 'INR',
+    free: quoted.quote.amountPaise === 0,
+    governmentFeePaise: quoted.quote.governmentFeePaise,
+    serviceFeePaise: quoted.quote.serviceFeePaise,
+    gstFeePaise: quoted.quote.gstFeePaise,
+  };
+}
+
+export async function createPassportCheckoutOrder(
+  input: unknown
+): Promise<CreateVisaCheckoutOrderResult & { paymentId?: string }> {
+  try {
+    const parsed = createPassportCheckoutOrderSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, error: firstIssue(parsed.error) };
+    }
+
+    const user = await requireUserId();
+    if (!user.ok) return { success: false, error: user.error };
+
+    const formVersion = await ensurePassportFormVersionForSubmit(
+      parsed.data.listingId,
+      user.userId
+    );
+    if (!formVersion) {
+      return {
+        success: false,
+        error:
+          'Passport form not published. Ask an admin to open Form Builder and click Publish form version.',
+      };
+    }
+
+    const quoted = await quotePassportListing({
+      listingId: parsed.data.listingId,
+      priceOptionId: parsed.data.priceOptionId,
+    });
+    if (!quoted.ok) return { success: false, error: quoted.error };
+
+    if (quoted.quote.amountPaise === 0) {
+      return { success: true, kind: 'free' };
+    }
+
+    const [created] = await db
+      .insert(payments)
+      .values({
+        userId: user.userId,
+        applicationType: 'passport',
+        amount: quoted.quote.amountPaise,
+        currency: 'INR',
+        status: 'pending',
+        submitId: parsed.data.submitId,
+        priceOptionId: quoted.quote.priceOptionId,
+        governmentFeePaise: quoted.quote.governmentFeePaise,
+        serviceFeePaise: quoted.quote.serviceFeePaise,
+        gstFeePaise: quoted.quote.gstFeePaise,
+        travellerCount: 1,
+      })
+      .returning({ id: payments.id });
+
+    if (!created) {
+      return { success: false, error: 'Could not start payment.' };
+    }
+
+    const issued = await issueRazorpayOrder(created.id, {
+      amountPaise: quoted.quote.amountPaise,
+      submitId: parsed.data.submitId,
+      listingId: parsed.data.listingId,
+      userId: user.userId,
+    });
+    if (!issued.ok) {
+      await db
+        .update(payments)
+        .set({ status: 'failed', metadata: { reason: 'order_create_failed' } })
+        .where(eq(payments.id, created.id));
+      return { success: false, error: issued.error };
+    }
+
+    return {
+      success: true,
+      kind: 'order',
+      orderId: issued.orderId,
+      amount: issued.amount,
+      currency: 'INR',
+      keyId: issued.keyId,
+      paymentId: created.id,
+    };
+  } catch (error) {
+    console.error('createPassportCheckoutOrder error:', error);
+    return {
+      success: false,
+      error: 'Could not start passport payment. Try again.',
+    };
+  }
+}
+
+export async function verifyPassportCheckout(input: unknown): Promise<
+  | {
+      success: true;
+      applicationId: string;
+      referenceNumber: string;
+    }
+  | { success: false; error: string }
+> {
+  try {
+    const schema = createPassportCheckoutOrderSchema.extend({
+      answers: z.record(z.string(), z.unknown()),
+      uploadedDocuments: z
+        .record(
+          z.string(),
+          z
+            .object({
+              storageKey: z.string().min(1).optional(),
+              /** Legacy draft field name — treated as storageKey on submit. */
+              s3Key: z.string().min(1).optional(),
+              filename: z.string().min(1),
+              mimeType: z.string().optional(),
+              size: z.number().optional(),
+            })
+            .refine((row) => Boolean(row.storageKey || row.s3Key), {
+              message: 'storageKey is required',
+            })
+        )
+        .optional(),
+      razorpayOrderId: z.string().min(1).optional(),
+      razorpayPaymentId: z.string().min(1).optional(),
+      razorpaySignature: z.string().min(1).optional(),
+      paymentId: z.string().uuid().optional(),
+    });
+
+    const parsed = schema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, error: firstIssue(parsed.error) };
+    }
+
+    const user = await requireUserId();
+    if (!user.ok) return { success: false, error: user.error };
+
+    const quoted = await quotePassportListing({
+      listingId: parsed.data.listingId,
+      priceOptionId: parsed.data.priceOptionId,
+    });
+    if (!quoted.ok) return { success: false, error: quoted.error };
+
+    let paymentId: string | null = parsed.data.paymentId ?? null;
+
+    if (quoted.quote.amountPaise > 0) {
+      if (
+        !parsed.data.razorpayOrderId ||
+        !parsed.data.razorpayPaymentId ||
+        !parsed.data.razorpaySignature
+      ) {
+        return { success: false, error: 'Payment confirmation is incomplete.' };
+      }
+
+      const valid = verifyCheckoutSignature({
+        orderId: parsed.data.razorpayOrderId,
+        paymentId: parsed.data.razorpayPaymentId,
+        signature: parsed.data.razorpaySignature,
+      });
+      if (!valid) {
+        return { success: false, error: 'Payment signature is invalid.' };
+      }
+
+      const gateway = await fetchGatewayPayment(parsed.data.razorpayPaymentId);
+      if (!gateway) {
+        return {
+          success: false,
+          error: 'Could not confirm the payment with Razorpay.',
+        };
+      }
+
+      const recorded = await markPaymentCaptured({
+        razorpayOrderId: parsed.data.razorpayOrderId,
+        gateway,
+      });
+      if (!recorded.ok) return { success: false, error: recorded.error };
+      paymentId = recorded.payment.id;
+    }
+
+    const submitted = await submitPassportApplication({
+      submitId: parsed.data.submitId,
+      listingId: parsed.data.listingId,
+      priceOptionId: parsed.data.priceOptionId,
+      answers: parsed.data.answers,
+      uploadedDocuments: parsed.data.uploadedDocuments,
+      paymentId,
+    });
+
+    if (!submitted.success) {
+      return { success: false, error: submitted.error };
+    }
+
+    return {
+      success: true,
+      applicationId: submitted.applicationId,
+      referenceNumber: submitted.referenceNumber,
+    };
+  } catch (error) {
+    console.error('verifyPassportCheckout error:', error);
+    return { success: false, error: 'Could not confirm passport checkout.' };
+  }
+}
+

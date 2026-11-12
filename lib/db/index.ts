@@ -2,9 +2,10 @@ import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema';
 import * as schemaExtended from './schema-extended';
+import * as schemaPassport from './schema-passport';
 
 // Combine all schema tables + relations for typed db.query.*
-const allSchema = { ...schema, ...schemaExtended };
+const allSchema = { ...schema, ...schemaExtended, ...schemaPassport };
 
 export type Database = PostgresJsDatabase<typeof allSchema>;
 

@@ -14,6 +14,10 @@ import {
   foreignKey,
 } from 'drizzle-orm/pg-core';
 import { countries, visaListings } from './schema-extended';
+import {
+  passportListings,
+  passportListingPrices,
+} from './schema-passport';
 
 /**
  * Users table - stores user account information
@@ -231,26 +235,104 @@ export const visaApplicationTravellers = pgTable(
 );
 
 /**
- * Passport Services table
+ * Immutable published form config snapshots per passport listing.
  */
-export const passportServices = pgTable('passport_services', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id')
-    .references(() => users.id)
-    .notNull(),
-  serviceType: varchar('service_type', { length: 50 }).notNull(), // NEW, RENEWAL, UPDATE
-  status: varchar('status', { length: 50 }).notNull().default('draft'),
-  personalInfo: jsonb('personal_info'),
-  addressInfo: jsonb('address_info'),
-  documents: jsonb('documents'),
-  appointmentDate: timestamp('appointment_date'),
-  appointmentLocation: varchar('appointment_location', { length: 255 }),
-  paymentId: uuid('payment_id'),
-  submittedAt: timestamp('submitted_at'),
-  completedAt: timestamp('completed_at'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const passportFormVersions = pgTable(
+  'passport_form_versions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    passportListingId: uuid('passport_listing_id')
+      .references(() => passportListings.id, { onDelete: 'cascade' })
+      .notNull(),
+    version: integer('version').notNull(),
+    config: jsonb('config').notNull(),
+    publishedAt: timestamp('published_at').defaultNow().notNull(),
+    publishedBy: uuid('published_by').references(() => users.id),
+  },
+  (table) => [
+    uniqueIndex('passport_form_versions_listing_version_unique').on(
+      table.passportListingId,
+      table.version
+    ),
+    index('passport_form_versions_listing_id_idx').on(table.passportListingId),
+  ]
+);
+
+/**
+ * Client apply drafts for passport services (JSON only; files stay in IndexedDB).
+ */
+export const passportApplicationDrafts = pgTable(
+  'passport_application_drafts',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    passportListingId: uuid('passport_listing_id')
+      .references(() => passportListings.id, { onDelete: 'cascade' })
+      .notNull(),
+    payload: jsonb('payload').notNull(),
+    savedByUserId: uuid('saved_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('passport_application_drafts_user_listing_unique').on(
+      table.userId,
+      table.passportListingId
+    ),
+  ]
+);
+
+/**
+ * Passport Services — submitted / in-progress Indian passport applications.
+ * serviceType: fresh | reissue
+ */
+export const passportServices = pgTable(
+  'passport_services',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id)
+      .notNull(),
+    /** fresh | reissue */
+    serviceType: varchar('service_type', { length: 50 }).notNull(),
+    passportListingId: uuid('passport_listing_id').references(
+      () => passportListings.id,
+      { onDelete: 'set null' }
+    ),
+    priceOptionId: uuid('price_option_id').references(
+      () => passportListingPrices.id,
+      { onDelete: 'set null' }
+    ),
+    formVersionId: uuid('form_version_id').references(
+      () => passportFormVersions.id
+    ),
+    formSnapshot: jsonb('form_snapshot'),
+    answers: jsonb('answers'),
+    referenceNumber: varchar('reference_number', { length: 32 }),
+    status: varchar('status', { length: 50 }).notNull().default('draft'),
+    personalInfo: jsonb('personal_info'),
+    addressInfo: jsonb('address_info'),
+    documents: jsonb('documents'),
+    appointmentDate: timestamp('appointment_date'),
+    appointmentLocation: varchar('appointment_location', { length: 255 }),
+    paymentId: uuid('payment_id'),
+    submittedAt: timestamp('submitted_at'),
+    completedAt: timestamp('completed_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('passport_services_user_id_idx').on(table.userId),
+    index('passport_services_listing_id_idx').on(table.passportListingId),
+    uniqueIndex('passport_services_reference_number_unique').on(
+      table.referenceNumber
+    ),
+  ]
+);
 
 /**
  * Documents table - stores references to uploaded documents
@@ -586,6 +668,29 @@ export type NewVisaApplicationTraveller =
 
 export type PassportService = typeof passportServices.$inferSelect;
 export type NewPassportService = typeof passportServices.$inferInsert;
+
+export type PassportFormVersion = typeof passportFormVersions.$inferSelect;
+export type NewPassportFormVersion = typeof passportFormVersions.$inferInsert;
+
+export type PassportApplicationDraft =
+  typeof passportApplicationDrafts.$inferSelect;
+export type NewPassportApplicationDraft =
+  typeof passportApplicationDrafts.$inferInsert;
+
+export type {
+  PassportListing,
+  NewPassportListing,
+  PassportListingPrice,
+  NewPassportListingPrice,
+  PassportFormStep,
+  NewPassportFormStep,
+  PassportAdditionalQuestion,
+  NewPassportAdditionalQuestion,
+  PassportComponentRequired,
+  NewPassportComponentRequired,
+  PassportFaq,
+  NewPassportFaq,
+} from './schema-passport';
 
 export type Document = typeof documents.$inferSelect;
 export type NewDocument = typeof documents.$inferInsert;

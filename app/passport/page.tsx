@@ -16,6 +16,7 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { FaqAccordion } from '@/components/public/FaqAccordion';
 import { MotionReveal } from '@/components/public/MotionReveal';
+import { PassportHeroPricingCard } from '@/components/public/PassportHeroPricingCard';
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
 import { StickySectionNav } from '@/components/public/StickySectionNav';
 import { JsonLd } from '@/components/seo/JsonLd';
@@ -272,9 +273,53 @@ const faqs = [
   },
 ];
 
-export default function PassportPage() {
+export default async function PassportPage() {
+  const { getActivePassportListingsWithPublicData } = await import(
+    '@/lib/db/queries/passport-config'
+  );
+  const listings = await getActivePassportListingsWithPublicData();
+
+  const heroListings = listings.map((listing) => ({
+    serviceType: listing.serviceType,
+    name: listing.name,
+    prices: listing.prices.map((price) => ({
+      id: price.id,
+      scheme: price.scheme,
+      bookletPages: price.bookletPages,
+      governmentFeeAmount: parseFloat(price.governmentFeeAmount || '0'),
+      serviceFeeAmount: parseFloat(price.serviceFeeAmount || '0'),
+      governmentGstFeeAmount: parseFloat(price.governmentGstFeeAmount || '0'),
+    })),
+  }));
+
+  const dbDocumentGroups = listings
+    .filter((listing) => listing.componentsRequired.length > 0)
+    .map((listing) => ({
+      title:
+        listing.serviceType === 'fresh'
+          ? 'Fresh passport essentials'
+          : 'Re-issue essentials',
+      bullets: listing.componentsRequired.map(
+        (doc) => doc.label || doc.documentType || 'Document'
+      ),
+    }));
+
+  const resolvedDocumentGroups =
+    dbDocumentGroups.length > 0
+      ? [...dbDocumentGroups, ...documentGroups.slice(2)]
+      : documentGroups;
+
+  const dbFaqs = listings.flatMap((listing) =>
+    listing.faqs.map((faq) => ({
+      id: faq.id,
+      question: faq.question,
+      answer: faq.answer,
+    }))
+  );
+  const resolvedFaqs = dbFaqs.length > 0 ? dbFaqs : faqs;
+
   const faqSchema = buildFaqPageJsonLd(
-    faqs.map((faq) => ({
+    resolvedFaqs.map((faq) => ({
       question: faq.question,
       answer: faq.answer,
     }))
@@ -303,25 +348,17 @@ export default function PassportPage() {
         <section className="px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <MotionReveal className="overflow-hidden rounded-[32px] border border-ash-divider bg-white shadow-card sm:rounded-[40px]">
-              <div className="relative h-[260px] sm:h-[340px] lg:h-[420px]">
+              <div className="relative min-h-[420px] sm:min-h-[480px] lg:min-h-[540px]">
                 <Image
                   src="/indian-passport-banner.jpg"
                   alt="Indian passport cover on a desk"
                   fill
                   priority
-                  className="object-cover"
+                  className="object-cover object-center"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0b1220]/70 via-[#0b1220]/20 to-transparent" />
-                <div className="absolute inset-x-0 bottom-0 flex justify-center p-4 sm:p-6">
-                  <Link
-                    href="https://www.passportindia.gov.in/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/95 px-4 py-2.5 text-sm font-medium text-portrait-ink shadow-elevated transition-all hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(8,48,76,0.18)]"
-                  >
-                    Apply for Indian passport
-                    <ArrowUpRight className="h-4 w-4" />
-                  </Link>
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0b1220]/55 via-[#0b1220]/15 to-[#0b1220]/10" />
+                <div className="relative z-10 flex items-center justify-center px-4 py-8 sm:px-6 sm:py-10 lg:py-12">
+                  <PassportHeroPricingCard listings={heroListings} />
                 </div>
               </div>
             </MotionReveal>
@@ -429,7 +466,7 @@ export default function PassportPage() {
             </MotionReveal>
 
             <div className="grid gap-4 lg:grid-cols-2">
-              {documentGroups.map((group, index) => (
+              {resolvedDocumentGroups.map((group, index) => (
                 <MotionReveal key={group.title} delayMs={index * 60}>
                   <div className="h-full rounded-[28px] border border-ash-divider bg-white p-5 shadow-card sm:p-6">
                     <div className="flex items-center gap-3">
@@ -589,7 +626,7 @@ export default function PassportPage() {
               </p>
             </MotionReveal>
 
-            <FaqAccordion faqs={faqs} />
+            <FaqAccordion faqs={resolvedFaqs} />
           </div>
         </section>
 

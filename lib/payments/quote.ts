@@ -3,6 +3,7 @@ import 'server-only';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { visaListingPrices } from '@/lib/db/schema-extended';
+import { passportListingPrices } from '@/lib/db/schema-passport';
 import { rupeesDecimalToPaise } from '@/lib/payments/money';
 
 export interface VisaFeeQuote {
@@ -105,6 +106,72 @@ export async function quoteVisaListing(input: {
       serviceFeePaise,
       gstFeePaise,
       travellerCount: input.travellerCount,
+      amountPaise,
+    },
+  };
+}
+
+/**
+ * Recompute passport checkout total from passport_listing_prices.
+ */
+export async function quotePassportListing(input: {
+  listingId: string;
+  priceOptionId: string;
+}): Promise<QuoteResult> {
+  const [selected] = await db
+    .select({
+      id: passportListingPrices.id,
+      governmentFeeAmount: passportListingPrices.governmentFeeAmount,
+      serviceFeeAmount: passportListingPrices.serviceFeeAmount,
+      governmentGstFeeAmount: passportListingPrices.governmentGstFeeAmount,
+    })
+    .from(passportListingPrices)
+    .where(eq(passportListingPrices.id, input.priceOptionId))
+    .limit(1);
+
+  if (!selected) {
+    return { ok: false, error: 'Choose a passport package before paying.' };
+  }
+
+  const rows = await db
+    .select({ id: passportListingPrices.id })
+    .from(passportListingPrices)
+    .where(eq(passportListingPrices.passportListingId, input.listingId));
+
+  if (!rows.some((row) => row.id === input.priceOptionId)) {
+    return {
+      ok: false,
+      error: 'That passport option does not belong to this product.',
+    };
+  }
+
+  const governmentFeePaise = rupeesDecimalToPaise(selected.governmentFeeAmount);
+  const serviceFeePaise = rupeesDecimalToPaise(selected.serviceFeeAmount);
+  const gstFeePaise = rupeesDecimalToPaise(selected.governmentGstFeeAmount);
+  if (
+    governmentFeePaise == null ||
+    serviceFeePaise == null ||
+    gstFeePaise == null
+  ) {
+    return {
+      ok: false,
+      error: 'This product has an invalid fee. Ask an admin to fix the price.',
+    };
+  }
+
+  const amountPaise = governmentFeePaise + serviceFeePaise + gstFeePaise;
+  if (!Number.isSafeInteger(amountPaise) || amountPaise < 0) {
+    return { ok: false, error: 'The fee total is invalid.' };
+  }
+
+  return {
+    ok: true,
+    quote: {
+      priceOptionId: selected.id,
+      governmentFeePaise,
+      serviceFeePaise,
+      gstFeePaise,
+      travellerCount: 1,
       amountPaise,
     },
   };

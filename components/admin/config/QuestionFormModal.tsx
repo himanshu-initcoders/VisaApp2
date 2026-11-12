@@ -1,14 +1,23 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { additionalQuestionSchema, type AdditionalQuestion } from '@/lib/validations/config';
+import {
+  passportAdditionalQuestionSchema,
+  type PassportAdditionalQuestionInput,
+} from '@/lib/validations/passport-config';
 import {
   createQuestion,
   updateQuestion,
   suggestQuestions,
 } from '@/app/(admin)/admin/config/visa-listings/actions';
+import {
+  createPassportQuestion,
+  updatePassportQuestion,
+} from '@/app/(admin)/admin/config/passport-listings/actions';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -126,7 +135,8 @@ function defaultEqualsValueForSelf(
 
 interface Question {
   id: string;
-  visaListingId: string;
+  visaListingId?: string;
+  passportListingId?: string;
   key: string;
   label: string;
   description: string | null;
@@ -141,17 +151,18 @@ interface Question {
     | 'checkbox'
     | 'radio';
   category?: string | null;
+  stepId?: string | null;
   required: boolean | null;
-  familyEnabled: boolean | null;
-  onlyB2b: boolean | null;
-  extraInfo: string | null;
-  requiredDoc: string | null;
-  sourceUrl: string | null;
+  familyEnabled?: boolean | null;
+  onlyB2b?: boolean | null;
+  extraInfo?: string | null;
+  requiredDoc?: string | null;
+  sourceUrl?: string | null;
   options: Array<{ label: string; value: string }> | null;
   visibility?: QuestionVisibility;
   documentConditions?: DocumentConditions;
   sortOrder: number | null;
-  createdAt: Date;
+  createdAt?: Date;
 }
 
 interface QuestionFormModalProps {
@@ -162,6 +173,14 @@ interface QuestionFormModalProps {
   attachedDocumentTypes: string[];
   onClose: () => void;
   onSuccess: () => void;
+  /**
+   * Visa uses hardcoded categories; passport assigns questions to admin-defined steps.
+   * UI/logic (required, visibility, document conditions, options) is shared.
+   */
+  variant?: 'visa' | 'passport';
+  /** Required when variant is passport */
+  stepOptions?: Array<{ value: string; label: string }>;
+  defaultStepId?: string;
 }
 
 /**
@@ -177,14 +196,36 @@ export function QuestionFormModal({
   attachedDocumentTypes,
   onClose,
   onSuccess,
+  variant = 'visa',
+  stepOptions = [],
+  defaultStepId,
 }: QuestionFormModalProps) {
   const isEditMode = !!initialData;
+  const isPassport = variant === 'passport';
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [suggestions, setSuggestions] = useState<QuestionLabelSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const labelWrapRef = useRef<HTMLDivElement>(null);
   const skipNextSearchRef = useRef(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isSubmitting) onClose();
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isSubmitting, onClose]);
 
   const availableSiblings = useMemo(
     () => siblingQuestions.filter((q) => q.id !== initialData?.id),
@@ -206,14 +247,23 @@ export function QuestionFormModal({
     initialData?.documentConditions
   );
 
-  const form = useForm<QuestionFormValues, unknown, AdditionalQuestion>({
-    resolver: zodResolver(additionalQuestionSchema),
+  const resolvedStepId =
+    initialData?.stepId ||
+    defaultStepId ||
+    stepOptions[0]?.value ||
+    '';
+
+  const form = useForm({
+    resolver: zodResolver(
+      isPassport ? passportAdditionalQuestionSchema : additionalQuestionSchema
+    ),
     defaultValues: initialData
       ? {
           label: initialData.label,
           description: initialData.description || '',
           questionType: toAdminQuestionType(initialData.questionType),
           category: toAdminCategory(initialData.category),
+          stepId: resolvedStepId,
           required: initialData.required ?? true,
           requiredDoc: initialData.requiredDoc || '',
           options: initialData.options || [],
@@ -223,8 +273,9 @@ export function QuestionFormModal({
       : {
           label: '',
           description: '',
-          questionType: 'text',
-          category: 'other',
+          questionType: 'text' as const,
+          category: 'other' as const,
+          stepId: resolvedStepId,
           required: true,
           requiredDoc: '',
           options: [],
@@ -618,7 +669,11 @@ export function QuestionFormModal({
     form.setValue('questionType', toAdminQuestionType(suggestion.questionType), {
       shouldDirty: true,
     });
-    form.setValue('category', toAdminCategory(suggestion.category), { shouldDirty: true });
+    if (!isPassport) {
+      form.setValue('category', toAdminCategory(suggestion.category), {
+        shouldDirty: true,
+      });
+    }
     form.setValue('required', suggestion.required ?? true, { shouldDirty: true });
     form.setValue(
       'visibility',
@@ -640,13 +695,23 @@ export function QuestionFormModal({
     setShowSuggestions(false);
   };
 
-  const onSubmit = async (data: AdditionalQuestion) => {
+  const onSubmit = async (data: AdditionalQuestion | PassportAdditionalQuestionInput) => {
     setIsSubmitting(true);
 
     try {
-      const result = isEditMode
-        ? await updateQuestion(initialData!.id, data)
-        : await createQuestion(processId, data);
+      const result = isPassport
+        ? isEditMode
+          ? await updatePassportQuestion(
+              initialData!.id,
+              data as PassportAdditionalQuestionInput
+            )
+          : await createPassportQuestion(
+              processId,
+              data as PassportAdditionalQuestionInput
+            )
+        : isEditMode
+          ? await updateQuestion(initialData!.id, data as AdditionalQuestion)
+          : await createQuestion(processId, data as AdditionalQuestion);
 
       if (result.success) {
         onSuccess();
@@ -719,8 +784,20 @@ export function QuestionFormModal({
       message = errors.label.message;
     } else if (errors.options) {
       message = 'Dropdown questions need at least one option.';
-    } else if (errors.category?.message) {
-      message = errors.category.message;
+    } else if (
+      isPassport &&
+      (errors as { stepId?: { message?: string } }).stepId?.message
+    ) {
+      message = String(
+        (errors as { stepId?: { message?: string } }).stepId?.message
+      );
+    } else if (
+      !isPassport &&
+      (errors as { category?: { message?: string } }).category?.message
+    ) {
+      message = String(
+        (errors as { category?: { message?: string } }).category?.message
+      );
     }
 
     alert(message);
@@ -741,12 +818,14 @@ export function QuestionFormModal({
     return 'Complete the visibility rule or turn it off.';
   })();
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
-      <div className="relative bg-white rounded-3xl shadow-elevated max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-ash-divider p-6 flex items-center justify-between rounded-t-3xl z-10">
+      <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-elevated">
+        <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-3xl border-b border-ash-divider bg-white p-6">
           <h2
             className="text-[31px] font-medium text-portrait-ink"
             style={{ fontFamily: 'Basier Circle', letterSpacing: '-0.4px' }}
@@ -754,8 +833,9 @@ export function QuestionFormModal({
             {isEditMode ? 'Edit Question' : 'Add Question'}
           </h2>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 hover:bg-slate-helper/10 rounded-full transition-colors"
+            className="rounded-full p-2 transition-colors hover:bg-slate-helper/10"
           >
             <X className="h-5 w-5 text-slate-helper" />
           </button>
@@ -848,16 +928,32 @@ export function QuestionFormModal({
               {...form.register('questionType')}
             />
 
-            <Select
-              label="Category"
-              helperText="Groups this question under a section on the applicant form"
-              options={QUESTION_CATEGORIES.map((category) => ({
-                value: category.value,
-                label: category.label,
-              }))}
-              error={form.formState.errors.category?.message}
-              {...form.register('category')}
-            />
+            {isPassport ? (
+              <Select
+                label="Form step / tab"
+                helperText="Applicant sees this question under the selected step"
+                options={stepOptions}
+                error={
+                  (form.formState.errors as { stepId?: { message?: string } })
+                    .stepId?.message
+                }
+                {...form.register('stepId')}
+              />
+            ) : (
+              <Select
+                label="Category"
+                helperText="Groups this question under a section on the applicant form"
+                options={QUESTION_CATEGORIES.map((category) => ({
+                  value: category.value,
+                  label: category.label,
+                }))}
+                error={
+                  (form.formState.errors as { category?: { message?: string } })
+                    .category?.message
+                }
+                {...form.register('category')}
+              />
+            )}
 
             <Checkbox
               label="Required"
@@ -1322,7 +1418,7 @@ export function QuestionFormModal({
             )}
           </div>
 
-          <div className="flex gap-3 mt-8 pt-6 border-t border-ash-divider">
+          <div className="mt-8 flex gap-3 border-t border-ash-divider pt-6">
             <Button type="submit" variant="primary" size="md" disabled={isSubmitting}>
               {isSubmitting ? 'Saving...' : isEditMode ? 'Update Question' : 'Create Question'}
             </Button>
@@ -1332,6 +1428,7 @@ export function QuestionFormModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

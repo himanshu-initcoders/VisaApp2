@@ -9,6 +9,7 @@ import {
   applicationCallLogs,
   applicationCredentials,
   formVersions,
+  passportFormVersions,
   visaApplicationTravellers,
   payments,
 } from '@/lib/db/schema';
@@ -20,6 +21,10 @@ import {
   normalizeVisaReferenceNumber,
   resolveVisaApplicationId,
 } from '@/lib/visa/reference-number';
+import {
+  normalizePassportReferenceNumber,
+  resolvePassportApplicationId,
+} from '@/lib/passport/reference-number';
 import type {
   ApplicationListItem,
   ApplicationFilters,
@@ -244,7 +249,6 @@ export async function getApplicationsWithFilters(
     (type === 'all' || type === 'passport') &&
     !assignedReviewerId &&
     !hasDestinationFilter &&
-    !hasReferenceFilter &&
     !passenger &&
     !phoneDigits
   ) {
@@ -266,6 +270,17 @@ export async function getApplicationsWithFilters(
         lte(passportServices.submittedAt, istDayEndUtc(dateTo))
       );
     }
+    if (hasReferenceFilter) {
+      const ref = referenceNumber!.trim();
+      const exact = normalizePassportReferenceNumber(ref);
+      if (exact) {
+        passportConditions.push(eq(passportServices.referenceNumber, exact));
+      } else {
+        passportConditions.push(
+          ilike(passportServices.referenceNumber, `%${ref}%`)
+        );
+      }
+    }
     if (search?.trim()) {
       const q = `%${search.trim()}%`;
       passportConditions.push(
@@ -276,6 +291,7 @@ export async function getApplicationsWithFilters(
     const passportResults = await db
       .select({
         id: passportServices.id,
+        referenceNumber: passportServices.referenceNumber,
         userId: passportServices.userId,
         userName: users.name,
         userEmail: users.email,
@@ -293,6 +309,7 @@ export async function getApplicationsWithFilters(
 
     passportApps = passportResults.map((p) => ({
       id: p.id,
+      referenceNumber: p.referenceNumber,
       type: 'passport' as const,
       userId: p.userId,
       userName: p.userName,
@@ -567,6 +584,12 @@ export async function getApplicationDetails(
       };
     }
   } else {
+    const resolved = await resolvePassportApplicationId(db, id);
+    if (!resolved) {
+      return null;
+    }
+    resolvedId = resolved;
+
     const passportResult = await db
       .select({
         application: passportServices,
@@ -576,10 +599,15 @@ export async function getApplicationDetails(
           email: users.email,
           phone: users.phone,
         },
+        formVersionNumber: passportFormVersions.version,
       })
       .from(passportServices)
       .innerJoin(users, eq(passportServices.userId, users.id))
-      .where(eq(passportServices.id, id))
+      .leftJoin(
+        passportFormVersions,
+        eq(passportServices.formVersionId, passportFormVersions.id)
+      )
+      .where(eq(passportServices.id, resolvedId))
       .limit(1);
 
     if (!passportResult || passportResult.length === 0) {
@@ -588,6 +616,7 @@ export async function getApplicationDetails(
 
     application = passportResult[0].application;
     user = passportResult[0].user;
+    formVersionNumber = passportResult[0].formVersionNumber ?? null;
   }
 
   const docs = await getDocumentsByApplicationId(resolvedId, type);

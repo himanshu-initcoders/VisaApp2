@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 export interface DocumentPreviewItem {
@@ -21,7 +22,12 @@ export function DocumentPreviewModal({
   item,
   onClose,
 }: DocumentPreviewModalProps) {
+  const [mounted, setMounted] = useState(false);
   const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     setLoadError(false);
@@ -41,7 +47,7 @@ export function DocumentPreviewModal({
     };
   }, [open, onClose]);
 
-  if (!open || !item) return null;
+  if (!mounted || !open || !item) return null;
 
   const isImage = Boolean(
     item.mimeType?.startsWith('image/') ||
@@ -54,14 +60,13 @@ export function DocumentPreviewModal({
       /\.pdf$/i.test(item.name || item.previewUrl)
   );
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/50"
+        aria-hidden="true"
+        onClick={onClose}
+      />
       <div
         role="dialog"
         aria-modal="true"
@@ -124,6 +129,7 @@ export function DocumentPreviewModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

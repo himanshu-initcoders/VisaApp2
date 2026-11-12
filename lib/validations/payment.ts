@@ -68,7 +68,21 @@ export const quoteVisaCheckoutSchema = z.object({
   travellerCount: z.number().int().min(1).max(100),
 });
 
+export const quotePassportCheckoutSchema = z.object({
+  listingId: z.string().uuid(),
+  priceOptionId: z.string().uuid(),
+});
+
+export const createPassportCheckoutOrderSchema = z.object({
+  submitId: z.string().uuid(),
+  listingId: z.string().uuid(),
+  priceOptionId: z.string().uuid(),
+});
+
 export type CreateVisaCheckoutOrderInput = z.infer<
   typeof createVisaCheckoutOrderSchema
 >;
 export type VerifyVisaCheckoutInput = z.infer<typeof verifyVisaCheckoutSchema>;
+export type CreatePassportCheckoutOrderInput = z.infer<
+  typeof createPassportCheckoutOrderSchema
+>;

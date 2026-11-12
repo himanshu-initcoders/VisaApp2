@@ -180,10 +180,10 @@ export default async function VisaApplicationDetailPage({ params }: PageProps) {
   return (
     <div className="space-y-6">
       <Link
-        href="/admin/applications"
+        href="/admin/applications/visa"
         className="inline-flex items-center font-switzer text-sm text-nautical-teal transition-colors hover:text-portrait-ink"
       >
-        ← Back to Applications
+        ← Back to Visa applications
       </Link>
 
       <div className="flex flex-wrap items-start justify-between gap-4">

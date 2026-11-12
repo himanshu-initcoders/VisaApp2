@@ -16,7 +16,7 @@ import { User, VisaApplication, PassportService, Document } from '@/lib/db/schem
  */
 export interface ApplicationListItem {
   id: string;
-  /** Public VI… reference for visa rows. Null/undefined for passport. */
+  /** Public VI… / PS… reference. */
   referenceNumber?: string | null;
   type: 'visa' | 'passport';
   userId: string;

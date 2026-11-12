@@ -28,8 +28,8 @@ interface Question {
     | 'radio';
   category?: string | null;
   required: boolean | null;
-  familyEnabled: boolean | null;
-  onlyB2b: boolean | null;
+  familyEnabled?: boolean | null;
+  onlyB2b?: boolean | null;
   options: Array<{ label: string; value: string }> | null;
   visibility?: {
     enabled: true;
@@ -45,6 +45,8 @@ interface QuestionCardProps {
   index: number;
   onEdit: () => void;
   onDelete: () => void;
+  /** Override category badge (e.g. passport form step title). */
+  groupLabel?: string;
 }
 
 /**
@@ -60,7 +62,13 @@ interface QuestionCardProps {
  * - Options count for dropdowns
  * - Edit and Delete buttons
  */
-export function QuestionCard({ question, index, onEdit, onDelete }: QuestionCardProps) {
+export function QuestionCard({
+  question,
+  index,
+  onEdit,
+  onDelete,
+  groupLabel,
+}: QuestionCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: question.id,
   });
@@ -134,7 +142,7 @@ export function QuestionCard({ question, index, onEdit, onDelete }: QuestionCard
           </span>
 
           <span className="px-3 py-1 rounded-full text-xs font-medium bg-sky-wash text-portrait-ink">
-            {questionCategoryLabel(question.category || 'other')}
+            {groupLabel || questionCategoryLabel(question.category || 'other')}
           </span>
 
           {isConditional && (

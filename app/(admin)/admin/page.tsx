@@ -231,7 +231,7 @@ export default async function AdminDashboardPage() {
             </svg>
           }
         />
-        <Link href="/admin/applications?status=under_review">
+        <Link href="/admin/applications/visa?status=under_review">
           <StatsCard
             title="Pending Reviews"
             value={pendingReviews}
@@ -360,7 +360,7 @@ export default async function AdminDashboardPage() {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Link href="/admin/applications?status=under_review">
+        <Link href="/admin/applications/visa?status=under_review">
           <Card className="hover:shadow-elevated transition-shadow cursor-pointer">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
@@ -390,16 +390,16 @@ export default async function AdminDashboardPage() {
           </Card>
         </Link>
 
-        <Link href="/admin/applications">
+        <Link href="/admin/applications/visa">
           <Card className="hover:shadow-elevated transition-shadow cursor-pointer">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-switzer text-lg font-semibold text-portrait-ink">
-                    All Applications
+                    Visa applications
                   </h3>
                   <p className="font-switzer text-sm text-slate-helper mt-1">
-                    View and manage all submitted applications
+                    View and manage visa applications
                   </p>
                 </div>
                 <svg

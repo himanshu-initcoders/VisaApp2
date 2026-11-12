@@ -67,7 +67,7 @@ export default async function ApplicationsPage() {
       approvedTravellerCount: 0,
       date: app.submittedAt || app.createdAt,
       kind: 'passport' as const,
-      href: `/applications/passport/${app.id}`,
+      href: `/applications/passport/${app.referenceNumber || app.id}`,
       hasVisaDocument: false,
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
