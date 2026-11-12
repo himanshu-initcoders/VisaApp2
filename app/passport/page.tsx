@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -19,12 +20,45 @@ import { MotionReveal } from '@/components/public/MotionReveal';
 import { PassportHeroPricingCard } from '@/components/public/PassportHeroPricingCard';
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
 import { StickySectionNav } from '@/components/public/StickySectionNav';
+import { PassportHubViewTracker } from '@/components/analytics/PassportHubViewTracker';
 import { JsonLd } from '@/components/seo/JsonLd';
 import {
   buildBreadcrumbJsonLd,
   buildFaqPageJsonLd,
+  buildPassportServiceJsonLd,
   buildWebPageJsonLd,
 } from '@/lib/seo/jsonld';
+
+const PASSPORT_TITLE = 'Indian passport services — Viserv';
+const PASSPORT_DESCRIPTION =
+  'Fresh passport or re-issue for Indian citizens — clear documents, government fees, Tatkaal options, and expert-guided applications with Viserv.';
+const PASSPORT_OG_IMAGE = {
+  url: '/indian-passport-banner.jpg',
+  alt: 'Indian passport cover on a desk',
+};
+
+export const metadata: Metadata = {
+  title: PASSPORT_TITLE,
+  description: PASSPORT_DESCRIPTION,
+  alternates: { canonical: '/passport' },
+  openGraph: {
+    title: PASSPORT_TITLE,
+    description: PASSPORT_DESCRIPTION,
+    url: '/passport',
+    type: 'website',
+    images: [PASSPORT_OG_IMAGE],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: PASSPORT_TITLE,
+    description: PASSPORT_DESCRIPTION,
+    images: [PASSPORT_OG_IMAGE.url],
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
 
 const sectionItems = [
   { id: 'overview', label: 'Overview' },
@@ -280,7 +314,8 @@ export default async function PassportPage() {
   const listings = await getActivePassportListingsWithPublicData();
 
   const heroListings = listings.map((listing) => ({
-    serviceType: listing.serviceType,
+    id: listing.id,
+    serviceType: listing.serviceType as 'fresh' | 'reissue',
     name: listing.name,
     prices: listing.prices.map((price) => ({
       id: price.id,
@@ -291,6 +326,18 @@ export default async function PassportPage() {
       governmentGstFeeAmount: parseFloat(price.governmentGstFeeAmount || '0'),
     })),
   }));
+
+  const startingValue = heroListings
+    .flatMap((listing) =>
+      listing.prices.map(
+        (price) =>
+          price.governmentFeeAmount +
+          price.serviceFeeAmount +
+          price.governmentGstFeeAmount
+      )
+    )
+    .filter((amount) => Number.isFinite(amount) && amount > 0)
+    .sort((a, b) => a - b)[0];
 
   const dbDocumentGroups = listings
     .filter((listing) => listing.componentsRequired.length > 0)
@@ -324,17 +371,52 @@ export default async function PassportPage() {
       answer: faq.answer,
     }))
   );
+
+  const fallbackServices = [
+    { serviceType: 'fresh', name: 'Fresh Indian passport' },
+    { serviceType: 'reissue', name: 'Indian passport re-issue' },
+  ] as const;
+
+  const serviceSchemas = (
+    listings.length > 0
+      ? listings.map((listing) => {
+          const firstPrice = listing.prices[0];
+          const total = firstPrice
+            ? parseFloat(String(firstPrice.governmentFeeAmount || '0')) +
+              parseFloat(String(firstPrice.serviceFeeAmount || '0')) +
+              parseFloat(String(firstPrice.governmentGstFeeAmount || '0'))
+            : undefined;
+          return {
+            serviceType: listing.serviceType,
+            name: listing.name,
+            price:
+              typeof total === 'number' && Number.isFinite(total) && total > 0
+                ? total
+                : undefined,
+          };
+        })
+      : fallbackServices.map((item) => ({ ...item, price: undefined }))
+  ).map((listing) =>
+    buildPassportServiceJsonLd({
+      name: listing.name,
+      description: PASSPORT_DESCRIPTION,
+      path: '/passport',
+      serviceType: listing.serviceType,
+      price: listing.price,
+    })
+  );
+
   const jsonLd = [
     buildWebPageJsonLd({
-      title: 'Indian passport services - Viserv',
-      description:
-        'New passport, renewal, or updates - clear documents, fees, and tracking for Indian passport services.',
+      title: PASSPORT_TITLE,
+      description: PASSPORT_DESCRIPTION,
       path: '/passport',
     }),
     buildBreadcrumbJsonLd([
       { name: 'Home', path: '/' },
       { name: 'Passport', path: '/passport' },
     ]),
+    ...serviceSchemas,
   ];
   if (faqSchema) {
     jsonLd.push(faqSchema);
@@ -343,6 +425,10 @@ export default async function PassportPage() {
   return (
     <>
       <JsonLd data={jsonLd} />
+      <PassportHubViewTracker
+        listingCount={listings.length}
+        startingValue={startingValue}
+      />
       <Header />
       <main className="min-h-screen bg-[#f8f6f1] pb-20 pt-28 sm:pt-32">
         <section className="px-4 sm:px-6 lg:px-8">
@@ -630,80 +716,6 @@ export default async function PassportPage() {
           </div>
         </section>
 
-        <section className="px-4 pt-10 sm:px-6 sm:pt-14 lg:px-8">
-          <div className="mx-auto max-w-7xl">
-            <MotionReveal className="rounded-[28px] border border-ash-divider bg-white px-5 py-6 shadow-card sm:px-6">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                <div className="max-w-3xl">
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
-                    Source note
-                  </p>
-                  <h2 className="mt-2 font-basier text-2xl text-portrait-ink sm:text-3xl">
-                    Built from official public references, then simplified for humans.
-                  </h2>
-                  <p className="mt-3 text-[15px] leading-7 text-slate-helper sm:text-base">
-                    This page summarizes public guidance from Passport Seva, the
-                    official fee calculator, the passport instruction booklet,
-                    and the Ministry of External Affairs Citizen Charter. It is
-                    a planning guide, not a legal substitute for the official
-                    portal.
-                  </p>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 lg:w-[24rem] lg:grid-cols-1">
-                  <Link
-                    href="https://www.passportindia.gov.in/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between rounded-[20px] border border-ash-divider bg-[#f8fafc] px-4 py-3 text-sm font-medium text-portrait-ink transition-colors hover:bg-sky-wash/60"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <BookOpenText className="h-4 w-4" />
-                      Passport Seva portal
-                    </span>
-                    <ArrowUpRight className="h-4 w-4" />
-                  </Link>
-                  <Link
-                    href="https://portal2.passportindia.gov.in/AppOnlineProject/fee/feeInput"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between rounded-[20px] border border-ash-divider bg-[#f8fafc] px-4 py-3 text-sm font-medium text-portrait-ink transition-colors hover:bg-sky-wash/60"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <BadgeIndianRupee className="h-4 w-4" />
-                      Official fee calculator
-                    </span>
-                    <ArrowUpRight className="h-4 w-4" />
-                  </Link>
-                  <Link
-                    href="https://passportindia.gov.in/AppOnlineProject/docAdvisor/attachmentAdvFreshInp"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between rounded-[20px] border border-ash-divider bg-[#f8fafc] px-4 py-3 text-sm font-medium text-portrait-ink transition-colors hover:bg-sky-wash/60"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <FileCheck2 className="h-4 w-4" />
-                      Fresh passport documents
-                    </span>
-                    <ArrowUpRight className="h-4 w-4" />
-                  </Link>
-                  <Link
-                    href="https://portal2.passportindia.gov.in/AppOnlineProject/online/faqTatkaalPassports"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between rounded-[20px] border border-ash-divider bg-[#f8fafc] px-4 py-3 text-sm font-medium text-portrait-ink transition-colors hover:bg-sky-wash/60"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <HelpCircle className="h-4 w-4" />
-                      Tatkaal FAQs
-                    </span>
-                    <ArrowUpRight className="h-4 w-4" />
-                  </Link>
-                </div>
-              </div>
-            </MotionReveal>
-          </div>
-        </section>
       </main>
       <Footer />
     </>

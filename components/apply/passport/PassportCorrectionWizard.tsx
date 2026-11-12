@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Input, Select } from '@/components/ui';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { submitPassportCorrection } from '@/app/(dashboard)/actions';
+import { trackEvent } from '@/lib/analytics/gtm';
 import type { PassportApplyFormConfig } from '@/lib/apply/passportForm';
 import type { CorrectionItemView } from '@/components/apply/CorrectionWizard';
 
@@ -54,6 +55,16 @@ export function PassportCorrectionWizard({
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const startedTrackedRef = useRef(false);
+
+  useEffect(() => {
+    if (startedTrackedRef.current) return;
+    startedTrackedRef.current = true;
+    trackEvent('passport_correction_started', {
+      application_id: applicationId,
+      item_count: items.length,
+    });
+  }, [applicationId, items.length]);
 
   const questionByKey = useMemo(() => {
     const map = new Map<
@@ -110,6 +121,11 @@ export function PassportCorrectionWizard({
         setError(result.message || 'Could not submit updates');
         return;
       }
+      trackEvent('passport_correction_submitted', {
+        application_id: applicationId,
+        fields_changed_count: Object.keys(fieldPayload).length,
+        files_count: filePayload.length,
+      });
       router.push(`/applications/passport/${applicationId}`);
       router.refresh();
     } catch {

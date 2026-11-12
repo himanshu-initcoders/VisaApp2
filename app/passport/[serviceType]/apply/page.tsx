@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
@@ -12,6 +13,11 @@ import {
 import { getDocumentTypeSamplesByValues } from '@/lib/db/queries/config';
 import { buildPassportFormConfig } from '@/lib/apply/passportForm';
 import { ApplyPassportWizard } from '@/components/apply/passport-service/ApplyPassportWizard';
+import { JsonLd } from '@/components/seo/JsonLd';
+import {
+  buildBreadcrumbJsonLd,
+  buildWebPageJsonLd,
+} from '@/lib/seo/jsonld';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +26,10 @@ interface PageProps {
   searchParams: Promise<{ priceOption?: string }>;
 }
 
-export async function generateMetadata({ params, searchParams }: PageProps) {
+export async function generateMetadata({
+  params,
+  searchParams,
+}: PageProps): Promise<Metadata> {
   const { serviceType: raw } = await params;
   const query = await searchParams;
   const serviceType = raw.toLowerCase();
@@ -32,15 +41,37 @@ export async function generateMetadata({ params, searchParams }: PageProps) {
   const full = await getPassportListingWithAllRelations(listing.id);
   const selected =
     full?.prices.find((p) => p.id === query.priceOption) || full?.prices[0];
-  const title = formatPassportApplyLabel({
+  const label = formatPassportApplyLabel({
     serviceType,
     scheme: selected?.scheme,
     bookletPages: selected?.bookletPages,
   });
+  const title = `Apply · ${label}`;
+  const description = `Complete your ${label} application with Viserv. Guided form, document upload, and secure payment.`;
+  const canonical = `/passport/${serviceType}/apply`;
 
   return {
-    title: `Apply · ${title}`,
-    description: `Complete your ${title} application.`,
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      type: 'website',
+      images: [{ url: '/indian-passport-banner.jpg', alt: 'Indian passport' }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: ['/indian-passport-banner.jpg'],
+    },
+    // Apply funnel is disallowed in robots.txt; reinforce noindex for HTML crawlers.
+    robots: {
+      index: false,
+      follow: false,
+    },
   };
 }
 
@@ -96,24 +127,43 @@ export default async function PassportApplyPage({
     scheme: selectedPrice.scheme,
     bookletPages: selectedPrice.bookletPages,
   });
+  const pageTitle = `Apply · ${selectionLabel}`;
+  const pageDescription = `Complete your ${selectionLabel} application with Viserv. Guided form, document upload, and secure payment.`;
+  const applyPath = `/passport/${full.serviceType}/apply`;
 
   return (
-    <ApplyPassportWizard
-      listingId={full.id}
-      serviceType={full.serviceType}
-      productName={full.name}
-      selectionLabel={selectionLabel}
-      formConfig={formConfig}
-      priceOptionId={selectedPrice.id}
-      prices={full.prices.map((price) => ({
-        id: price.id,
-        scheme: price.scheme,
-        bookletPages: price.bookletPages,
-        governmentFeeAmount: price.governmentFeeAmount,
-        serviceFeeAmount: price.serviceFeeAmount,
-        governmentGstFeeAmount: price.governmentGstFeeAmount,
-      }))}
-      isSignedIn={Boolean(userId)}
-    />
+    <>
+      <JsonLd
+        data={[
+          buildWebPageJsonLd({
+            title: pageTitle,
+            description: pageDescription,
+            path: applyPath,
+          }),
+          buildBreadcrumbJsonLd([
+            { name: 'Home', path: '/' },
+            { name: 'Passport', path: '/passport' },
+            { name: selectionLabel, path: applyPath },
+          ]),
+        ]}
+      />
+      <ApplyPassportWizard
+        listingId={full.id}
+        serviceType={full.serviceType}
+        productName={full.name}
+        selectionLabel={selectionLabel}
+        formConfig={formConfig}
+        priceOptionId={selectedPrice.id}
+        prices={full.prices.map((price) => ({
+          id: price.id,
+          scheme: price.scheme,
+          bookletPages: price.bookletPages,
+          governmentFeeAmount: price.governmentFeeAmount,
+          serviceFeeAmount: price.serviceFeeAmount,
+          governmentGstFeeAmount: price.governmentGstFeeAmount,
+        }))}
+        isSignedIn={Boolean(userId)}
+      />
+    </>
   );
 }

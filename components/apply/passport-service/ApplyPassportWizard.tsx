@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -19,6 +19,7 @@ import {
   type PassportDraftUpload,
 } from '@/lib/apply/passportDraftFiles';
 import { deleteServerDraftFile } from '@/lib/apply/deleteDraftFileClient';
+import { trackEvent } from '@/lib/analytics/gtm';
 import { passportPriceLabel } from '@/lib/passport/constants';
 import {
   createPassportCheckoutOrder,
@@ -133,9 +134,79 @@ export function ApplyPassportWizard({
     gstFeePaise: number;
     free: boolean;
   } | null>(null);
+  const enterTrackedRef = useRef(false);
+  const reviewTrackedRef = useRef(false);
+  const beginCheckoutTrackedRef = useRef(false);
 
   const steps = formConfig.steps;
   const currentStep = steps[stepIndex];
+
+  useEffect(() => {
+    if (enterTrackedRef.current) return;
+    enterTrackedRef.current = true;
+    trackEvent('passport_apply_enter', {
+      service_type: serviceType,
+      listing_id: listingId,
+      price_option: priceOptionId,
+      product_name: productName,
+    });
+  }, [listingId, priceOptionId, productName, serviceType]);
+
+  useEffect(() => {
+    trackEvent('passport_wizard_step_view', {
+      stage: macro,
+      step_index: macro === 'form' ? stepIndex : undefined,
+      step_title:
+        macro === 'form'
+          ? currentStep?.title
+          : macro === 'documents'
+            ? 'Documents'
+            : 'Review & pay',
+      listing_id: listingId,
+      service_type: serviceType,
+    });
+  }, [macro, stepIndex, currentStep?.title, listingId, serviceType]);
+
+  useEffect(() => {
+    if (macro !== 'review' || reviewTrackedRef.current) return;
+    reviewTrackedRef.current = true;
+    const value =
+      typeof quote?.amountPaise === 'number' ? quote.amountPaise / 100 : undefined;
+    trackEvent('passport_review_proceed_checkout', {
+      listing_id: listingId,
+      service_type: serviceType,
+      value,
+      currency: 'INR',
+    });
+  }, [macro, quote?.amountPaise, listingId, serviceType]);
+
+  useEffect(() => {
+    if (
+      macro !== 'review' ||
+      beginCheckoutTrackedRef.current ||
+      typeof quote?.amountPaise !== 'number'
+    ) {
+      return;
+    }
+    beginCheckoutTrackedRef.current = true;
+    const value = quote.amountPaise / 100;
+    trackEvent('begin_checkout', {
+      listing_id: listingId,
+      country_code: 'IN',
+      currency: 'INR',
+      value,
+      traveller_count: 1,
+      items: [
+        {
+          item_id: listingId,
+          item_name: productName,
+          item_category: serviceType,
+          price: value,
+          quantity: 1,
+        },
+      ],
+    });
+  }, [macro, quote?.amountPaise, listingId, productName, serviceType]);
 
   const totalFormSteps = steps.length;
   const totalStages =
@@ -348,6 +419,11 @@ export function ApplyPassportWizard({
 
   const uploadDocument = async (slotKey: string, file: File) => {
     if (!isSignedIn) {
+      trackEvent('passport_apply_login_prompt', {
+        source: 'documents',
+        listing_id: listingId,
+        service_type: serviceType,
+      });
       setError('Sign in to upload documents.');
       return;
     }
@@ -382,7 +458,13 @@ export function ApplyPassportWizard({
       } | null;
 
       if (!response.ok || !data?.success || !data.result?.key) {
-        setError(data?.error || 'Upload failed. Try again.');
+        const message = data?.error || 'Upload failed. Try again.';
+        trackEvent('passport_document_upload_error', {
+          slot_key: slotKey,
+          listing_id: listingId,
+          error_message: message,
+        });
+        setError(message);
         return;
       }
 
@@ -398,8 +480,18 @@ export function ApplyPassportWizard({
       };
       setUploadedDocuments(nextUploads);
       await persistDraft({ uploadedDocuments: nextUploads });
+      trackEvent('passport_document_upload_success', {
+        slot_key: slotKey,
+        listing_id: listingId,
+        mime_type: nextUpload.mimeType,
+      });
     } catch (err) {
       console.error('passport draft upload failed:', err);
+      trackEvent('passport_document_upload_error', {
+        slot_key: slotKey,
+        listing_id: listingId,
+        error_message: 'Upload failed. Try again.',
+      });
       setError('Upload failed. Try again.');
     } finally {
       setUploadBusyKey(null);
@@ -417,8 +509,46 @@ export function ApplyPassportWizard({
     }
   };
 
+  const trackPassportPurchase = (input: {
+    applicationId: string;
+    value: number;
+    free?: boolean;
+  }) => {
+    trackEvent('purchase', {
+      transaction_id: input.applicationId,
+      currency: 'INR',
+      value: input.value,
+      listing_id: listingId,
+      country_code: 'IN',
+      traveller_count: 1,
+      free: input.free,
+      items: [
+        {
+          item_id: listingId,
+          item_name: productName,
+          item_category: serviceType,
+          price: input.value,
+          quantity: 1,
+        },
+      ],
+    });
+    trackEvent('passport_application_submitted', {
+      application_id: input.applicationId,
+      listing_id: listingId,
+      service_type: serviceType,
+      value: input.value,
+      currency: 'INR',
+      free: input.free,
+    });
+  };
+
   const handlePay = async () => {
     if (!isSignedIn) {
+      trackEvent('passport_apply_login_prompt', {
+        source: 'pay',
+        listing_id: listingId,
+        service_type: serviceType,
+      });
       setError('Sign in to pay and submit.');
       return;
     }
@@ -444,11 +574,24 @@ export function ApplyPassportWizard({
         priceOptionId,
       });
       if (!order.success) {
+        trackEvent('passport_payment_failed', {
+          listing_id: listingId,
+          service_type: serviceType,
+          error_description: order.error,
+          submit_id: submitId,
+        });
         setError(order.error);
         return;
       }
 
       if (order.kind === 'free') {
+        trackEvent('passport_payment_order_created', {
+          listing_id: listingId,
+          service_type: serviceType,
+          kind: 'free',
+          amount: 0,
+          currency: 'INR',
+        });
         const submitted = await verifyPassportCheckout({
           submitId,
           listingId,
@@ -457,9 +600,20 @@ export function ApplyPassportWizard({
           uploadedDocuments,
         });
         if (!submitted.success) {
+          trackEvent('passport_payment_failed', {
+            listing_id: listingId,
+            service_type: serviceType,
+            error_description: submitted.error,
+            submit_id: submitId,
+          });
           setError(submitted.error);
           return;
         }
+        trackPassportPurchase({
+          applicationId: submitted.applicationId,
+          value: 0,
+          free: true,
+        });
         router.push(
           `/applications/passport/${submitted.referenceNumber || submitted.applicationId}`
         );
@@ -471,6 +625,14 @@ export function ApplyPassportWizard({
         return;
       }
 
+      trackEvent('passport_payment_order_created', {
+        listing_id: listingId,
+        service_type: serviceType,
+        kind: 'order',
+        amount: order.amount / 100,
+        currency: order.currency || 'INR',
+      });
+
       const scriptReady = await loadRazorpayScript();
       const RazorpayCtor = (
         window as Window & {
@@ -480,6 +642,12 @@ export function ApplyPassportWizard({
         }
       ).Razorpay;
       if (!scriptReady || !RazorpayCtor) {
+        trackEvent('passport_payment_failed', {
+          listing_id: listingId,
+          service_type: serviceType,
+          error_description: 'Could not load Razorpay.',
+          submit_id: submitId,
+        });
         setError('Could not load Razorpay.');
         return;
       }
@@ -506,10 +674,21 @@ export function ApplyPassportWizard({
                 razorpaySignature: response.razorpay_signature,
               });
               if (!submitted.success) {
+                trackEvent('passport_payment_failed', {
+                  listing_id: listingId,
+                  service_type: serviceType,
+                  error_description: submitted.error,
+                  submit_id: submitId,
+                });
                 setError(submitted.error);
                 reject(new Error(submitted.error));
                 return;
               }
+              trackPassportPurchase({
+                applicationId: submitted.applicationId,
+                value: order.amount / 100,
+                free: false,
+              });
               router.push(
                 `/applications/passport/${submitted.referenceNumber || submitted.applicationId}`
               );
@@ -520,6 +699,12 @@ export function ApplyPassportWizard({
           },
         });
         razorpay.on('payment.failed', () => {
+          trackEvent('passport_payment_failed', {
+            listing_id: listingId,
+            service_type: serviceType,
+            error_description: 'Payment failed. Try again.',
+            submit_id: submitId,
+          });
           setError('Payment failed. Try again.');
           reject(new Error('payment failed'));
         });

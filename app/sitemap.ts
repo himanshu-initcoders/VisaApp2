@@ -13,7 +13,7 @@ const STATIC_PATHS: Array<{
   { path: '/destinations', changeFrequency: 'daily', priority: 0.9 },
   { path: '/blogs', changeFrequency: 'daily', priority: 0.8 },
   { path: '/how-it-works', changeFrequency: 'monthly', priority: 0.7 },
-  { path: '/passport', changeFrequency: 'monthly', priority: 0.8 },
+  { path: '/passport', changeFrequency: 'weekly', priority: 0.9 },
   { path: '/privacy', changeFrequency: 'yearly', priority: 0.3 },
   { path: '/terms', changeFrequency: 'yearly', priority: 0.3 },
   { path: '/refund', changeFrequency: 'yearly', priority: 0.3 },

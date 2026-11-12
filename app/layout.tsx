@@ -6,6 +6,7 @@ import { AuthSessionProvider } from '@/components/auth/AuthSessionProvider';
 import { GtmRouteListener } from '@/components/analytics/GtmRouteListener';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { buildSiteGraphJsonLd, getSiteUrl } from '@/lib/seo/jsonld';
+import { SITE_NAME } from '@/lib/seo/site';
 import './globals.css';
 
 const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID?.trim();
@@ -25,7 +26,7 @@ const instrumentSerif = Instrument_Serif({
   display: 'swap',
 });
 
-const DEFAULT_TITLE = 'Viserv — Visa & Passport Services';
+const DEFAULT_TITLE = `${SITE_NAME} — Visa & Passport Services`;
 const DEFAULT_DESCRIPTION =
   'Get your visa and passport services done quickly and easily with Viserv. We help Indian citizens with visa applications and passport services.';
 
@@ -37,9 +38,9 @@ export const metadata: Metadata = {
     title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
     url: '/',
-    siteName: 'Viserv',
+    siteName: SITE_NAME,
     type: 'website',
-    images: [{ url: '/logo.png', alt: 'Viserv' }],
+    images: [{ url: '/logo.png', alt: SITE_NAME }],
   },
   twitter: {
     card: 'summary_large_image',

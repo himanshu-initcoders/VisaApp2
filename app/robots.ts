@@ -22,8 +22,11 @@ export default function robots(): MetadataRoute.Robots {
         '/signin',
         '/login',
         '/register',
+        // Visa + passport apply funnels (e.g. /visa/.../apply, /passport/fresh/apply)
         '/*/apply',
         '/*/apply/',
+        '/passport/*/apply',
+        '/passport/*/apply/',
       ],
     },
     sitemap: `${siteUrl}/sitemap.xml`,

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ChevronDown, UserRound } from 'lucide-react';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { cn } from '@/lib/utils';
+import { trackEvent } from '@/lib/analytics/gtm';
 import { passportPriceLabel } from '@/lib/passport/constants';
 
 const CONSULTATION_URL =
@@ -23,6 +24,7 @@ export type PassportHeroPriceOption = {
 };
 
 export type PassportHeroListing = {
+  id: string;
   serviceType: 'fresh' | 'reissue';
   name: string;
   prices: PassportHeroPriceOption[];
@@ -209,6 +211,16 @@ export function PassportHeroPricingCard({
     ? `/passport/${applyingFor}/apply?priceOption=${encodeURIComponent(passportTypeId)}`
     : `/passport/${applyingFor}/apply`;
 
+  const onStartApplicationClick = () => {
+    trackEvent('passport_apply_start_click', {
+      service_type: applyingFor,
+      listing_id: activeListing?.id,
+      price_option_id: passportTypeId || undefined,
+      value: total > 0 ? total : undefined,
+      currency: 'INR',
+    });
+  };
+
   if (!activeListing || typeOptions.length === 0) {
     return (
       <div
@@ -286,6 +298,7 @@ export function PassportHeroPricingCard({
       <div className="mt-6 flex flex-col gap-2.5">
         <Link
           href={applyHref}
+          onClick={onStartApplicationClick}
           className="inline-flex w-full items-center justify-center rounded-full bg-[#2563EB] px-5 py-3.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.28)] transition-colors hover:bg-[#1749B5] active:scale-[0.99]"
         >
           Start Application

@@ -1,6 +1,7 @@
-const DEFAULT_SITE_NAME = 'Viserv';
-const DEFAULT_DESCRIPTION =
-  'Visa and passport services for Indian citizens — clear pricing, guided applications, and expert review.';
+import { SAME_AS, SITE_DESCRIPTION, SITE_NAME } from '@/lib/seo/site';
+
+const DEFAULT_SITE_NAME = SITE_NAME;
+const DEFAULT_DESCRIPTION = SITE_DESCRIPTION;
 
 /** Loose JSON-LD document for composing page graphs. */
 export type JsonLdDocument = Record<string, unknown>;
@@ -30,6 +31,7 @@ export function buildOrganizationJsonLd(siteUrl = getSiteUrl()): JsonLdDocument 
     url: siteUrl,
     logo: absoluteUrl('/apple-touch-icon.png', siteUrl),
     description: DEFAULT_DESCRIPTION,
+    sameAs: SAME_AS,
     areaServed: {
       '@type': 'Country',
       name: 'India',
@@ -142,6 +144,63 @@ export function buildVisaServiceJsonLd(input: {
       '@type': 'Country',
       name: input.countryName,
       identifier: input.countryCode,
+    },
+    audience: {
+      '@type': 'Audience',
+      geographicArea: {
+        '@type': 'Country',
+        name: 'India',
+      },
+    },
+    ...(offer ? { offers: offer } : {}),
+  };
+}
+
+/** Indian passport fresh / re-issue service for the public passport hub. */
+export function buildPassportServiceJsonLd(input: {
+  name: string;
+  description: string;
+  path?: string;
+  serviceType?: string;
+  price?: number;
+  currency?: string;
+  siteUrl?: string;
+}): JsonLdDocument {
+  const siteUrl = input.siteUrl ?? getSiteUrl();
+  const path = input.path ?? '/passport';
+  const url = absoluteUrl(path, siteUrl);
+  const idSuffix = input.serviceType
+    ? `#passport-service-${input.serviceType}`
+    : '#passport-service';
+  const offer =
+    typeof input.price === 'number'
+      ? {
+          '@type': 'Offer',
+          priceCurrency: input.currency || 'INR',
+          price: input.price,
+          availability: 'https://schema.org/InStock',
+          url,
+        }
+      : undefined;
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Service',
+    '@id': `${url}${idSuffix}`,
+    name: input.name,
+    description: input.description,
+    url,
+    serviceType: input.serviceType
+      ? input.serviceType === 'fresh'
+        ? 'Fresh passport'
+        : input.serviceType === 'reissue'
+          ? 'Passport re-issue'
+          : input.serviceType
+      : 'Passport',
+    provider: { '@id': `${siteUrl}/#organization` },
+    areaServed: {
+      '@type': 'Country',
+      name: 'India',
     },
     audience: {
       '@type': 'Audience',

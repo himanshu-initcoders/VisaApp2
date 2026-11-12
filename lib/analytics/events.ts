@@ -165,6 +165,84 @@ export type AnalyticsEventMap = {
     fields_changed_count?: number;
     files_count?: number;
   };
+
+  /** Passport hub (`/passport`) — parallel to visa `view_item`. */
+  view_passport_hub: {
+    listing_count: number;
+    currency?: string;
+    value?: number;
+  };
+  passport_apply_start_click: {
+    service_type: string;
+    listing_id?: string;
+    price_option_id?: string;
+    value?: number;
+    currency?: string;
+  };
+  passport_apply_enter: {
+    service_type: string;
+    listing_id: string;
+    price_option?: string;
+    product_name?: string;
+  };
+  passport_wizard_step_view: {
+    stage: 'form' | 'documents' | 'review';
+    step_index?: number;
+    step_title?: string;
+    listing_id: string;
+    service_type: string;
+  };
+  passport_apply_login_prompt: {
+    source: 'pay' | 'documents';
+    listing_id?: string;
+    service_type?: string;
+  };
+  passport_document_upload_success: {
+    slot_key: string;
+    listing_id: string;
+    mime_type?: string;
+  };
+  passport_document_upload_error: {
+    slot_key: string;
+    listing_id: string;
+    error_message?: string;
+  };
+  passport_review_proceed_checkout: {
+    listing_id: string;
+    service_type: string;
+    value?: number;
+    currency?: string;
+  };
+  passport_payment_order_created: {
+    listing_id: string;
+    service_type: string;
+    kind: 'free' | 'order';
+    amount?: number;
+    currency?: string;
+  };
+  passport_payment_failed: {
+    listing_id: string;
+    service_type: string;
+    error_description?: string;
+    submit_id?: string;
+  };
+  passport_application_submitted: {
+    application_id: string;
+    listing_id: string;
+    service_type: string;
+    value?: number;
+    currency?: string;
+    free?: boolean;
+  };
+  passport_correction_started: {
+    application_id: string;
+    item_count?: number;
+  };
+  passport_correction_submitted: {
+    application_id: string;
+    fields_changed_count?: number;
+    files_count?: number;
+  };
 };
 
 export type AnalyticsEventName = keyof AnalyticsEventMap;
