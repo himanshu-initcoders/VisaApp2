@@ -8,16 +8,19 @@ interface ApplyLoginModalProps {
   onClose: () => void;
   onVerified: () => void;
   analyticsContext?: 'apply_modal' | 'checkout' | 'save_draft';
+  /** Defaults to visa; passport hub uses the same modal. */
+  productLabel?: 'visa' | 'passport';
 }
 
 /**
- * Email OTP sign-in / create-account modal before starting a visa application.
+ * Email OTP sign-in / create-account modal before starting an application.
  */
 export function ApplyLoginModal({
   open,
   onClose,
   onVerified,
   analyticsContext = 'apply_modal',
+  productLabel = 'visa',
 }: ApplyLoginModalProps) {
   if (!open) return null;
 
@@ -48,7 +51,7 @@ export function ApplyLoginModal({
             </h2>
             <p className="mt-1 font-switzer text-sm text-slate-helper">
               Sign in or create an account with your email to start or resume
-              this visa application.
+              this {productLabel} application.
             </p>
           </div>
           <button

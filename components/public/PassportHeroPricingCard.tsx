@@ -1,11 +1,11 @@
 'use client';
 
 import { useMemo, useState, type ReactNode } from 'react';
-import Link from 'next/link';
-import { ChevronDown, UserRound } from 'lucide-react';
+import { ArrowRight, ChevronDown, UserRound } from 'lucide-react';
+import { usePassportApplyStartFlow } from '@/components/apply/usePassportApplyStartFlow';
+import { Button } from '@/components/ui/Button';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { cn } from '@/lib/utils';
-import { trackEvent } from '@/lib/analytics/gtm';
 import { passportPriceLabel } from '@/lib/passport/constants';
 
 const CONSULTATION_URL =
@@ -207,19 +207,13 @@ export function PassportHeroPricingCard({
     applyingOptions.find((option) => option.id === applyingFor)?.label ||
     'Re-issue';
 
-  const applyHref = passportTypeId
-    ? `/passport/${applyingFor}/apply?priceOption=${encodeURIComponent(passportTypeId)}`
-    : `/passport/${applyingFor}/apply`;
-
-  const onStartApplicationClick = () => {
-    trackEvent('passport_apply_start_click', {
-      service_type: applyingFor,
-      listing_id: activeListing?.id,
-      price_option_id: passportTypeId || undefined,
-      value: total > 0 ? total : undefined,
-      currency: 'INR',
-    });
-  };
+  const { requestStart, modals } = usePassportApplyStartFlow({
+    serviceType: applyingFor,
+    listingId: activeListing?.id,
+    priceOptionId: passportTypeId || undefined,
+    value: total > 0 ? total : undefined,
+    consumeStartApplyQuery: true,
+  });
 
   if (!activeListing || typeOptions.length === 0) {
     return (
@@ -296,22 +290,28 @@ export function PassportHeroPricingCard({
       </div>
 
       <div className="mt-6 flex flex-col gap-2.5">
-        <Link
-          href={applyHref}
-          onClick={onStartApplicationClick}
-          className="inline-flex w-full items-center justify-center rounded-full bg-[#2563EB] px-5 py-3.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.28)] transition-colors hover:bg-[#1749B5] active:scale-[0.99]"
+        <Button
+          type="button"
+          size="lg"
+          className="group flex w-full items-center justify-center border-portrait-ink bg-portrait-ink text-white hover:bg-transparent hover:text-portrait-ink"
+          onClick={() => requestStart()}
         >
-          Start Application
-        </Link>
-        <a
-          href={CONSULTATION_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex w-full items-center justify-center rounded-full border border-[#2563EB] bg-white px-5 py-3.5 text-sm font-semibold text-[#2563EB] transition-colors hover:bg-[#eff6ff] active:scale-[0.99]"
+          Start application
+          <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="lg"
+          className="w-full"
+          onClick={() => {
+            window.open(CONSULTATION_URL, '_blank', 'noopener,noreferrer');
+          }}
         >
           Get a free consultation
-        </a>
+        </Button>
       </div>
+      {modals}
     </div>
   );
 }

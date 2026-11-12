@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
  * Route protection (Next.js proxy).
  *
  * Protected: /dashboard, /applications, /documents, /profile, /admin
- * Apply: /visa/[countryCode]/[listingId]/apply — user, admin, or reviewer
+ * Apply: /visa/.../apply and /passport/[serviceType]/apply — user, admin, or reviewer
  * Auth pages:
  * - /login, /register → staff; applicants redirected away
  * - /signin → applicant OTP; staff redirected to admin
@@ -23,6 +23,13 @@ function matchVisaApplyPath(pathname: string) {
     countryCode: match[1],
     listingId: match[2],
   };
+}
+
+/** /passport/{serviceType}/apply */
+function matchPassportApplyPath(pathname: string) {
+  const match = pathname.match(/^\/passport\/([^/]+)\/apply\/?$/i);
+  if (!match) return null;
+  return { serviceType: match[1].toLowerCase() };
 }
 
 export default auth((req) => {
@@ -64,6 +71,21 @@ export default auth((req) => {
         listingUrl.searchParams.set(key, value);
       });
       return NextResponse.redirect(listingUrl);
+    }
+  }
+
+  const passportApply = matchPassportApplyPath(pathname);
+  if (passportApply) {
+    const allowed = isLoggedIn && role && APPLY_ROLES.has(role);
+    if (!allowed) {
+      // Send guests back to /passport so the OTP login dialog can open.
+      const hubUrl = new URL('/passport', req.url);
+      hubUrl.searchParams.set('startApply', '1');
+      hubUrl.searchParams.set('serviceType', passportApply.serviceType);
+      req.nextUrl.searchParams.forEach((value, key) => {
+        hubUrl.searchParams.set(key, value);
+      });
+      return NextResponse.redirect(hubUrl);
     }
   }
 

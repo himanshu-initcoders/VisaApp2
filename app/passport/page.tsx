@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -429,7 +430,7 @@ export default async function PassportPage() {
         listingCount={listings.length}
         startingValue={startingValue}
       />
-      <Header />
+      <Header cta="account" />
       <main className="min-h-screen bg-[#f8f6f1] pb-20 pt-28 sm:pt-32">
         <section className="px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
@@ -444,7 +445,9 @@ export default async function PassportPage() {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0b1220]/55 via-[#0b1220]/15 to-[#0b1220]/10" />
                 <div className="relative z-10 flex items-center justify-center px-4 py-8 sm:px-6 sm:py-10 lg:py-12">
-                  <PassportHeroPricingCard listings={heroListings} />
+                  <Suspense fallback={null}>
+                    <PassportHeroPricingCard listings={heroListings} />
+                  </Suspense>
                 </div>
               </div>
             </MotionReveal>

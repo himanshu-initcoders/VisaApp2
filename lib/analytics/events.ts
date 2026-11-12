@@ -193,7 +193,7 @@ export type AnalyticsEventMap = {
     service_type: string;
   };
   passport_apply_login_prompt: {
-    source: 'pay' | 'documents';
+    source: 'listing_cta' | 'proxy_redirect' | 'pay' | 'documents';
     listing_id?: string;
     service_type?: string;
   };
