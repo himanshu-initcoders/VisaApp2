@@ -56,8 +56,14 @@ pipeline {
           : "${POSTGRES_DB:?missing}"
           BUILD_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}"
           echo "Building app image (DATABASE_URL host=127.0.0.1 db=${POSTGRES_DB} user=${POSTGRES_USER})"
-          export DOCKER_BUILDKIT=1
           cd "${APP_DIR}"
+          # Prefer BuildKit when buildx exists in this Jenkins container; else classic builder.
+          if docker buildx version >/dev/null 2>&1; then
+            export DOCKER_BUILDKIT=1
+          else
+            export DOCKER_BUILDKIT=0
+            echo "WARN: docker buildx missing in Jenkins image — using classic builder"
+          fi
           docker build \
             --network=host \
             --target runner \
