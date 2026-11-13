@@ -63,11 +63,18 @@ module.exports = {
 
 ### PostgreSQL
 - **Type**: Relational database
-- **Hosting**: TBD (consider Vercel Postgres, Supabase, or Railway)
+- **Hosting (production)**: Docker Postgres 16 on Hostinger KVM (same VPS as the app). Migrated off Neon with full `pg_dump` / `pg_restore` (see `docs/DEPLOY-HOSTINGER.md`, `deploy/scripts/neon-to-postgres.sh`).
+- **Connection**: `DATABASE_URL` → Compose service hostname `db` (not exposed publicly; optional `127.0.0.1:5432` for admin).
 - **Features**:
   - ACID compliance
   - Complex queries for visa applications
   - User authentication data
+
+### Production deploy (Hostinger)
+- **Docker Compose**: `app` (Next standalone), `db`, `caddy` (TLS), `jenkins` (localhost:8080 + SSH tunnel)
+- **CI/CD**: `Jenkinsfile` — sync to `/opt/visa` → build → Drizzle migrate → deploy → `/api/health`
+- **Uploads**: remain on AWS S3 (`UPLOAD_PROVIDER=s3`); only DB moved off Neon
+- **Docs**: `docs/DEPLOY-HOSTINGER.md`
 
 ### Drizzle ORM
 **Why Drizzle**:

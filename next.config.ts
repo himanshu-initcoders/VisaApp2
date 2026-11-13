@@ -2,6 +2,8 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // Required for the production Docker image (copies a minimal server into the runner).
+  output: 'standalone',
   reactStrictMode: true,
   images: {
     // Next 16: local Image src with query strings need an allowlist.

@@ -42,6 +42,10 @@ scripts/reports/
 .env.test.local
 .env.production.local
 
+# Neon / Postgres transfer dumps (never commit)
+*.dump
+neon.dump
+
 # vercel
 .vercel
 

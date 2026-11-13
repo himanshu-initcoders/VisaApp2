@@ -1,0 +1,44 @@
+# dependencies & build output
+node_modules
+.next
+out
+build
+coverage
+
+# git / IDE / local tooling
+.git
+.github
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# env & secrets (compose mounts /opt/visa/.env on the server)
+.env
+.env.*
+!.env.example
+!deploy/env.production.example
+
+# dumps & local uploads
+*.dump
+neon.dump
+public/uploads
+
+# docs / knowledge base (not needed in image)
+obsidian-vault
+docs
+*.md
+!README.md
+
+# debug / reports
+scripts/passport-samples/debug
+scripts/reports
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+.next-env.d.ts
+
+# Jenkins / agent noise
+jenkins_home
