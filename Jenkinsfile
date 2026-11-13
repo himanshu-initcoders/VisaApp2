@@ -46,7 +46,22 @@ pipeline {
 
     stage('Build') {
       steps {
-        sh '${COMPOSE} build app migrate'
+        sh '''
+          set -euo pipefail
+          set -a
+          # shellcheck disable=SC1091
+          . "${APP_DIR}/.env"
+          set +a
+          : "${POSTGRES_USER:?POSTGRES_USER missing in .env}"
+          : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing in .env}"
+          : "${POSTGRES_DB:?POSTGRES_DB missing in .env}"
+          # Build collects page data against host Postgres on loopback (compose build network: host)
+          export BUILD_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}"
+          export DOCKER_BUILDKIT=1
+          export COMPOSE_DOCKER_CLI_BUILD=1
+          echo "Building with DATABASE_URL host=127.0.0.1 db=${POSTGRES_DB} user=${POSTGRES_USER}"
+          ${COMPOSE} build app migrate
+        '''
       }
     }
 

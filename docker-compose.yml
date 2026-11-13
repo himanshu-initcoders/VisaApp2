@@ -31,7 +31,8 @@ services:
       args:
         NEXT_PUBLIC_RAZORPAY_KEY_ID: ${NEXT_PUBLIC_RAZORPAY_KEY_ID:-}
         NEXT_PUBLIC_TINYMCE_API_KEY: ${NEXT_PUBLIC_TINYMCE_API_KEY:-}
-        DATABASE_URL: postgresql://${POSTGRES_USER:-visa}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB:-visa_db}
+        # Set by Jenkinsfile (host loopback). Compose cannot nest ${} interpolations.
+        DATABASE_URL: ${BUILD_DATABASE_URL:?Set BUILD_DATABASE_URL for image build}
     restart: unless-stopped
     env_file:
       - .env

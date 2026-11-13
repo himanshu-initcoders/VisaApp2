@@ -29,9 +29,10 @@ ARG NEXT_PUBLIC_TINYMCE_API_KEY
 ENV NEXT_PUBLIC_RAZORPAY_KEY_ID=$NEXT_PUBLIC_RAZORPAY_KEY_ID
 ENV NEXT_PUBLIC_TINYMCE_API_KEY=$NEXT_PUBLIC_TINYMCE_API_KEY
 # Some App Router pages collect data at build time and require DATABASE_URL.
-# Compose build uses network_mode host + 127.0.0.1 so the live db container is reachable.
+# Compose build uses network: host + 127.0.0.1 so host Postgres is reachable.
 ARG DATABASE_URL
 ENV DATABASE_URL=$DATABASE_URL
+RUN test -n "$DATABASE_URL" || (echo "ERROR: DATABASE_URL build-arg is empty" && exit 1)
 # Ensure OCR assets exist before `next build` (also runs via prebuild).
 RUN npm run build
 
