@@ -14,6 +14,12 @@ import {
   notifyCorrectionRequested,
   notifyCorrectionResubmitted,
   notifyNewComment,
+  notifyPassportCorrectionRequested,
+  notifyPassportCorrectionResubmitted,
+  notifyPassportNewComment,
+  notifyPassportStatusChanged,
+  notifyPassportSubmittedToAdmin,
+  notifyPassportSubmittedToApplicant,
   notifyStatusChanged,
   notifyVisaOutcomeDelivered,
   resolveApplicantEmail,
@@ -22,9 +28,16 @@ import {
   notifyCorrectionRequestedWhatsApp,
   notifyCorrectionResubmittedWhatsApp,
   notifyNewCommentWhatsApp,
+  notifyPassportCorrectionRequestedWhatsApp,
+  notifyPassportCorrectionResubmittedWhatsApp,
+  notifyPassportNewCommentWhatsApp,
+  notifyPassportStatusChangedWhatsApp,
+  notifyPassportSubmittedToAdminWhatsApp,
+  notifyPassportSubmittedToApplicantWhatsApp,
   notifyStatusApprovedWithDocumentWhatsApp,
   notifyStatusChangedWhatsApp,
 } from '@/lib/whatsapp/notify';
+import { passportServiceTypeLabel } from '@/lib/passport/constants';
 import { readStoredObject } from '@/lib/upload/readStoredObject';
 import { buildWaMediaPublicUrl } from '@/lib/wa-media/token';
 import { isPdfMime } from '@/lib/visa/outcomeDocumentShared';
@@ -65,6 +78,7 @@ interface PassportNotifyContext {
   assignedReviewerId: string | null;
   accountEmail: string | null;
   accountName: string | null;
+  accountPhone: string | null;
 }
 
 async function loadPassportNotifyContext(
@@ -80,6 +94,7 @@ async function loadPassportNotifyContext(
       assignedReviewerId: passportServices.assignedReviewerId,
       accountEmail: users.email,
       accountName: users.name,
+      accountPhone: users.phone,
     })
     .from(passportServices)
     .innerJoin(users, eq(passportServices.userId, users.id))
@@ -98,7 +113,27 @@ async function loadPassportNotifyContext(
     assignedReviewerId: row.assignedReviewerId,
     accountEmail: row.accountEmail,
     accountName: row.accountName,
+    accountPhone: row.accountPhone,
   };
+}
+
+function passportApplicantLabel(passport: PassportNotifyContext) {
+  return passport.accountName?.trim() || 'Applicant';
+}
+
+function passportServiceLabel(passport: PassportNotifyContext) {
+  return passportServiceTypeLabel(passport.serviceType);
+}
+
+function passportProductLabel(passport: PassportNotifyContext) {
+  return (
+    passport.productName?.trim() ||
+    (passport.serviceType === 'reissue' ? 'Passport reissue' : 'New passport')
+  );
+}
+
+function passportRef(passport: PassportNotifyContext) {
+  return passport.referenceNumber || passport.id;
 }
 
 async function passportStaffAudience(
@@ -294,18 +329,90 @@ async function resolveStatusRecipientName(
   return name || null;
 }
 
+export async function notifyPassportSubmittedEvent(input: {
+  applicationId: string;
+  applicantName?: string | null;
+  serviceType?: string | null;
+  productName?: string | null;
+  referenceNumber?: string | null;
+  accountEmail?: string | null;
+  accountPhone?: string | null;
+  userId?: string | null;
+}): Promise<void> {
+  const passport = await loadPassportNotifyContext(input.applicationId);
+  if (!passport && !input.userId) return;
+
+  const userId = input.userId || passport!.userId;
+  const applicantName =
+    input.applicantName?.trim() ||
+    (passport ? passportApplicantLabel(passport) : 'Applicant');
+  const serviceType =
+    input.serviceType?.trim() ||
+    (passport ? passportServiceLabel(passport) : 'Passport');
+  const productName =
+    input.productName?.trim() ||
+    (passport ? passportProductLabel(passport) : 'Passport');
+  const referenceNumber =
+    input.referenceNumber?.trim() ||
+    (passport ? passportRef(passport) : input.applicationId);
+  const accountEmail = input.accountEmail ?? passport?.accountEmail ?? null;
+  const accountPhone = input.accountPhone ?? passport?.accountPhone ?? null;
+
+  await sendSafely(
+    notifyPassportSubmittedToApplicant({
+      accountEmail,
+      applicantName,
+      serviceType,
+      productName,
+      referenceNumber,
+    }),
+    'passport submitted applicant'
+  );
+  await sendSafely(
+    notifyPassportSubmittedToApplicantWhatsApp({
+      userId,
+      applicantName,
+      phone: accountPhone,
+      serviceType,
+      productName,
+      referenceNumber,
+    }),
+    'passport submitted applicant whatsapp'
+  );
+  await sendSafely(
+    notifyPassportSubmittedToAdmin({
+      applicantName,
+      phone: accountPhone,
+      serviceType,
+      productName,
+      referenceNumber,
+    }),
+    'passport submitted admin'
+  );
+  await sendSafely(
+    notifyPassportSubmittedToAdminWhatsApp({
+      applicantName,
+      phone: accountPhone,
+      serviceType,
+      productName,
+      referenceNumber,
+    }),
+    'passport submitted admin whatsapp'
+  );
+}
+
 export async function notifyPassportCorrectionRequestedEvent(input: {
   applicationId: string;
   message: string;
 }): Promise<void> {
   const passport = await loadPassportNotifyContext(input.applicationId);
   if (!passport) return;
-  const ref = passport.referenceNumber || passport.id;
-  const href = `/applications/passport/${ref}/fix`;
+  const ref = passportRef(passport);
+  const href = `/applications/passport/${ref}/form`;
   const title = 'Updates needed on your passport application';
-  const product =
-    passport.productName ||
-    (passport.serviceType === 'reissue' ? 'Passport reissue' : 'New passport');
+  const serviceType = passportServiceLabel(passport);
+  const productName = passportProductLabel(passport);
+  const applicantName = passportApplicantLabel(passport);
   await insertNotifications({
     userIds: [passport.userId],
     applicationId: passport.id,
@@ -317,11 +424,11 @@ export async function notifyPassportCorrectionRequestedEvent(input: {
   const to = resolveApplicantEmail({ accountEmail: passport.accountEmail });
   if (to) {
     await sendSafely(
-      notifyCorrectionRequested({
+      notifyPassportCorrectionRequested({
         to,
-        applicantName: passport.accountName || 'Applicant',
-        country: 'Passport',
-        visaType: product,
+        applicantName,
+        serviceType,
+        productName,
         referenceNumber: ref,
         message: input.message,
       }),
@@ -329,18 +436,17 @@ export async function notifyPassportCorrectionRequestedEvent(input: {
     );
   }
   await sendSafely(
-    notifyCorrectionRequestedWhatsApp({
+    notifyPassportCorrectionRequestedWhatsApp({
       userId: passport.userId,
-      applicantName: passport.accountName || 'Applicant',
-      country: 'Passport',
-      visaType: product,
+      applicantName,
+      serviceType,
+      productName,
       referenceNumber: ref,
       message: input.message,
     }),
     'passport correction requested whatsapp'
   );
 }
-
 export async function notifyPassportCorrectionResubmittedEvent(input: {
   applicationId: string;
   excludeUserId?: string;
@@ -348,13 +454,13 @@ export async function notifyPassportCorrectionResubmittedEvent(input: {
   const passport = await loadPassportNotifyContext(input.applicationId);
   if (!passport) return;
   const audience = await passportStaffAudience(passport, input.excludeUserId);
-  const ref = passport.referenceNumber || passport.id;
+  const ref = passportRef(passport);
   const href = `/admin/applications/passport/${ref}`;
-  const product =
-    passport.productName ||
-    (passport.serviceType === 'reissue' ? 'Passport reissue' : 'New passport');
-  const title = `${passport.accountName || 'Applicant'} sent the requested updates`;
-  const body = `Passport · ${product}`;
+  const serviceType = passportServiceLabel(passport);
+  const productName = passportProductLabel(passport);
+  const applicantName = passportApplicantLabel(passport);
+  const title = `${applicantName} sent the requested updates`;
+  const body = `Passport · ${productName}`;
   await insertNotifications({
     userIds: audience.userIds,
     applicationId: passport.id,
@@ -366,30 +472,29 @@ export async function notifyPassportCorrectionResubmittedEvent(input: {
   await Promise.all([
     ...audience.emails.map((recipient) =>
       sendSafely(
-        notifyCorrectionResubmitted({
+        notifyPassportCorrectionResubmitted({
           to: recipient.email,
           reviewerName: recipient.name,
-          applicantName: passport.accountName || 'Applicant',
-          country: 'Passport',
-          visaType: product,
+          applicantName,
+          serviceType,
+          productName,
           referenceNumber: ref,
         }),
         'passport correction resubmitted'
       )
     ),
     sendSafely(
-      notifyCorrectionResubmittedWhatsApp({
+      notifyPassportCorrectionResubmittedWhatsApp({
         recipientUserIds: audience.userIds,
-        applicantName: passport.accountName || 'Applicant',
-        country: 'Passport',
-        visaType: product,
+        applicantName,
+        serviceType,
+        productName,
         referenceNumber: ref,
       }),
       'passport correction resubmitted whatsapp'
     ),
   ]);
 }
-
 export async function notifyCorrectionRequestedEvent(input: {
   applicationId: string;
   message: string;
@@ -494,10 +599,10 @@ export async function notifyCommentEvent(input: {
     if (!passport) return;
     const excerpt =
       input.body.length > 280 ? `${input.body.slice(0, 277)}...` : input.body;
-    const ref = passport.referenceNumber || passport.id;
-    const product =
-      passport.productName ||
-      (passport.serviceType === 'reissue' ? 'Passport reissue' : 'New passport');
+    const ref = passportRef(passport);
+    const serviceType = passportServiceLabel(passport);
+    const productName = passportProductLabel(passport);
+    const applicantName = passportApplicantLabel(passport);
     const toApplicant = input.authorRole !== 'applicant';
     const href = toApplicant
       ? `/applications/passport/${ref}`
@@ -516,12 +621,12 @@ export async function notifyCommentEvent(input: {
       const to = resolveApplicantEmail({ accountEmail: passport.accountEmail });
       if (to) {
         await sendSafely(
-          notifyNewComment({
+          notifyPassportNewComment({
             to,
-            recipientName: passport.accountName || 'Applicant',
+            recipientName: applicantName,
             authorName: input.authorName,
-            country: 'Passport',
-            visaType: product,
+            serviceType,
+            productName,
             referenceNumber: ref,
             excerpt,
             href,
@@ -530,12 +635,12 @@ export async function notifyCommentEvent(input: {
         );
       }
       await sendSafely(
-        notifyNewCommentWhatsApp({
+        notifyPassportNewCommentWhatsApp({
           recipientUserId: passport.userId,
-          recipientName: passport.accountName || 'Applicant',
+          recipientName: applicantName,
           authorName: input.authorName,
-          country: 'Passport',
-          visaType: product,
+          serviceType,
+          productName,
           referenceNumber: ref,
           excerpt,
           audience: 'applicant',
@@ -557,12 +662,12 @@ export async function notifyCommentEvent(input: {
     await Promise.all([
       ...audience.emails.map((recipient) =>
         sendSafely(
-          notifyNewComment({
+          notifyPassportNewComment({
             to: recipient.email,
             recipientName: recipient.name,
             authorName: input.authorName,
-            country: 'Passport',
-            visaType: product,
+            serviceType,
+            productName,
             referenceNumber: ref,
             excerpt,
             href,
@@ -572,12 +677,12 @@ export async function notifyCommentEvent(input: {
       ),
       ...audience.userIds.map((userId) =>
         sendSafely(
-          notifyNewCommentWhatsApp({
+          notifyPassportNewCommentWhatsApp({
             recipientUserId: userId,
             recipientName: '',
             authorName: input.authorName,
-            country: 'Passport',
-            visaType: product,
+            serviceType,
+            productName,
             referenceNumber: ref,
             excerpt,
             audience: 'staff',
@@ -727,12 +832,13 @@ export async function notifyStatusChangedEvent(input: {
     const passport = await loadPassportNotifyContext(input.applicationId);
     if (!passport) return;
     const readable = input.newStatus.replace(/_/g, ' ');
-    const recipientName = passport.accountName || 'Applicant';
-    const product =
-      passport.productName || `Passport ${passport.serviceType}`;
+    const recipientName = passportApplicantLabel(passport);
+    const serviceType = passportServiceLabel(passport);
+    const productName = passportProductLabel(passport);
+    const ref = passportRef(passport);
     const title = `Passport application is ${readable}`;
-    const body = input.notes?.trim() || product;
-    const href = `/applications/passport/${passport.referenceNumber || passport.id}`;
+    const body = input.notes?.trim() || productName;
+    const href = `/applications/passport/${ref}`;
     if (passport.userId !== input.actorId) {
       await insertNotifications({
         userIds: [passport.userId],
@@ -744,16 +850,15 @@ export async function notifyStatusChangedEvent(input: {
       });
       const to = resolveApplicantEmail({
         accountEmail: passport.accountEmail,
-        passportEmail: null,
       });
       if (to) {
         await sendSafely(
-          notifyStatusChanged({
+          notifyPassportStatusChanged({
             to,
             recipientName,
-            country: 'India',
-            visaType: product,
-            referenceNumber: passport.referenceNumber || passport.id,
+            serviceType,
+            productName,
+            referenceNumber: ref,
             newStatus: input.newStatus,
             href,
             notes: input.notes,
@@ -762,12 +867,12 @@ export async function notifyStatusChangedEvent(input: {
         );
       }
       await sendSafely(
-        notifyStatusChangedWhatsApp({
+        notifyPassportStatusChangedWhatsApp({
           recipientUserId: passport.userId,
           recipientName,
-          country: 'India',
-          visaType: product,
-          referenceNumber: passport.referenceNumber || passport.id,
+          serviceType,
+          productName,
+          referenceNumber: ref,
           newStatus: input.newStatus,
           notes: input.notes,
           audience: 'applicant',
@@ -775,6 +880,49 @@ export async function notifyStatusChangedEvent(input: {
         'passport status whatsapp'
       );
     }
+
+    const audience = await passportStaffAudience(passport, input.actorId);
+    const staffHref = `/admin/applications/passport/${ref}`;
+    await insertNotifications({
+      userIds: audience.userIds,
+      applicationId: passport.id,
+      type: 'status_changed',
+      title,
+      body,
+      href: staffHref,
+    });
+    await Promise.all([
+      ...audience.emails.map((recipient) =>
+        sendSafely(
+          notifyPassportStatusChanged({
+            to: recipient.email,
+            recipientName: recipient.name,
+            serviceType,
+            productName,
+            referenceNumber: ref,
+            newStatus: input.newStatus,
+            href: staffHref,
+            notes: input.notes,
+          }),
+          'passport status to staff'
+        )
+      ),
+      ...audience.userIds.map((userId) =>
+        sendSafely(
+          notifyPassportStatusChangedWhatsApp({
+            recipientUserId: userId,
+            recipientName: '',
+            serviceType,
+            productName,
+            referenceNumber: ref,
+            newStatus: input.newStatus,
+            notes: input.notes,
+            audience: 'staff',
+          }),
+          'passport status to staff whatsapp'
+        )
+      ),
+    ]);
     return;
   }
   const visa = await loadVisaContext(input.applicationId);

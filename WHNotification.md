@@ -15,12 +15,13 @@ Copy each block into **Twilio Console → Messaging → Content Template Builder
 - Optional one-liner for help when useful: *For any assistance, please contact us through your Viserv account.*
 
 ### Approval tips
-- Keep category **Utility** for transactional visa updates — not marketing.
+- Keep category **Utility** for transactional visa / passport updates — not marketing.
 - Login OTP: use full Utility sentences (`Dear {{1}},` … code is `{{2}}`). Do **not** submit a code-only body.
 - Do not start a Utility body with a variable; put greeting text first (`Dear {{1}},` is fine).
 - URL buttons can have **one** dynamic suffix only (`{{n}}` at the end of the path).
 - Sample values below are required for approval — keep them realistic.
 - After approval, map each `Template name` to the matching notify function in code.
+- **Passport vs visa:** submit separate passport templates (do not reuse visa SIDs). Deep links use `/applications/passport/` and `/admin/applications/passport/`.
 
 | # | Template name | Maps to | Audience | Status |
 |---|---|---|---|---|
@@ -36,6 +37,13 @@ Copy each block into **Twilio Console → Messaging → Content Template Builder
 | 9 | `viserv_status_changed` | `notifyStatusChanged` | Applicant + Staff | Submit |
 | 9f | `viserv_status_approved_with_document` | `notifyStatusApprovedWithDocumentWhatsApp` · `TWILIO_WA_SID_STATUS_APPROVED_WITH_DOCUMENT` | Applicant | **Submit (Document media)** |
 | 10 | `viserv_login_otp` | `requestOtp` (later) · `TWILIO_WA_SID_LOGIN_OTP` | Applicant | **Submit (Utility — full sentences)** |
+| 11 | `viserv_passport_submitted_applicant` | `notifyPassportSubmittedToApplicant` | Applicant | **Wired** |
+| 12 | `viserv_passport_submitted_admin` | `notifyPassportSubmittedToAdmin` | Admin | **Wired** |
+| 13 | `viserv_passport_reviewer_assigned` | `notifyPassportReviewerAssigned` | Reviewer | **Wired** |
+| 14 | `viserv_passport_correction_requested` | `notifyPassportCorrectionRequestedEvent` | Applicant | **Wired** |
+| 15 | `viserv_passport_correction_resubmitted` | `notifyPassportCorrectionResubmittedEvent` | Reviewer / Admin | **Wired** |
+| 16 | `viserv_passport_new_comment` | passport branch of `notifyCommentEvent` | Applicant or Staff | **Wired** |
+| 17 | `viserv_passport_status_changed` | passport branch of `notifyStatusChangedEvent` | Applicant + Staff | **Wired** (17a+17b only; not 17c–17e) |
 
 ---
 
@@ -594,6 +602,417 @@ Button: `https://app.viserv.com/applications/visa/{{5}}`
 
 ---
 
+## Passport templates (11–17)
+
+Passport notices mirror the visa set with passport copy and deep links. Wire dedicated notify helpers + env SIDs after Meta approval. Until then, code may temporarily reuse visa SIDs with `country: 'Passport'` — that is a stopgap only.
+
+**Service / product samples used below**
+
+| Field | Sample |
+|---|---|
+| Service type | New passport · Passport reissue |
+| Product / package | Tatkal · Normal · 36 pages |
+| Reference | `PP234567898765` |
+
+---
+
+## 11. Passport submitted — applicant
+
+**Template name:** `viserv_passport_submitted_applicant`  
+**Category:** Utility  
+**Language:** English (`en`)  
+**Maps to:** Passport submit → `notifyPassportSubmittedToApplicant` (to wire in `submitPassportApplication`)  
+**Env after approval:** `TWILIO_WA_SID_PASSPORT_SUBMITTED_APPLICANT`
+
+### Body (copy)
+
+```
+Dear {{1}},
+
+We're delighted to confirm that we have received your passport application. Our team will review it shortly.
+
+Service: {{2}}
+Package: {{3}}
+Reference: {{4}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+### Variables
+
+| Var | Meaning | Sample value |
+|---|---|---|
+| `{{1}}` | Applicant name | Priya Sharma |
+| `{{2}}` | Service type | New passport |
+| `{{3}}` | Product / package | Tatkal |
+| `{{4}}` | Reference number | PP234567898765 |
+
+### Button
+
+| Type | Text | URL |
+|---|---|---|
+| URL | View application | `https://app.viserv.com/applications/passport/{{4}}` |
+
+**Safer URL form:** `https://app.viserv.com/applications/passport/{{5}}` with sample reference matching `{{4}}`.
+
+---
+
+## 12. Passport submitted — admin
+
+**Template name:** `viserv_passport_submitted_admin`  
+**Category:** Utility  
+**Language:** English (`en`)  
+**Maps to:** Passport submit → `notifyPassportSubmittedToAdmin` (to wire)  
+**Env after approval:** `TWILIO_WA_SID_PASSPORT_SUBMITTED_ADMIN`  
+**Recipient:** Admin WhatsApp numbers (same role as `ADMIN_NOTIFY_EMAIL`)
+
+### Body (copy)
+
+```
+Dear Admin,
+
+A new passport application has been submitted on Viserv and is ready for your attention.
+
+Applicant: {{1}}
+Phone: {{2}}
+Service: {{3}}
+Package: {{4}}
+Reference: {{5}}
+
+Thank you for choosing Viserv.
+```
+
+### Variables
+
+| Var | Meaning | Sample value |
+|---|---|---|
+| `{{1}}` | Applicant name | Priya Sharma |
+| `{{2}}` | Phone | +919876543210 |
+| `{{3}}` | Service type | New passport |
+| `{{4}}` | Product / package | Tatkal |
+| `{{5}}` | Reference number | PP234567898765 |
+
+### Button
+
+| Type | Text | URL |
+|---|---|---|
+| URL | Open in admin | `https://app.viserv.com/admin/applications/passport/{{5}}` |
+
+**Safer URL form:** button `https://app.viserv.com/admin/applications/passport/{{6}}` with sample reference matching `{{5}}`.
+
+---
+
+## 13. Passport reviewer assigned
+
+**Template name:** `viserv_passport_reviewer_assigned`  
+**Category:** Utility  
+**Language:** English (`en`)  
+**Maps to:** `assignPassportReviewer` → dedicated passport assign notify (wire; do not use visa assign SID)  
+**Env after approval:** `TWILIO_WA_SID_PASSPORT_REVIEWER_ASSIGNED`
+
+### Body (copy)
+
+```
+Dear {{1}},
+
+A passport application has been assigned to you and is ready for review.
+
+Applicant: {{2}}
+Service: {{3}}
+Package: {{4}}
+Reference: {{5}}
+
+Thank you for choosing Viserv.
+```
+
+### Variables
+
+| Var | Meaning | Sample value |
+|---|---|---|
+| `{{1}}` | Reviewer name | Rajesh Kumar |
+| `{{2}}` | Applicant name | Priya Sharma |
+| `{{3}}` | Service type | Passport reissue |
+| `{{4}}` | Product / package | Normal |
+| `{{5}}` | Reference number | PP234567898765 |
+
+### Button
+
+| Type | Text | URL |
+|---|---|---|
+| URL | Open application | `https://app.viserv.com/admin/applications/passport/{{5}}` |
+
+---
+
+## 14. Passport correction requested (action needed)
+
+**Template name:** `viserv_passport_correction_requested`  
+**Category:** Utility  
+**Language:** English (`en`)  
+**Maps to:** `notifyPassportCorrectionRequestedEvent`  
+**Env after approval:** `TWILIO_WA_SID_PASSPORT_CORRECTION_REQUESTED`  
+**In-app type:** `correction_requested`
+
+### Body (copy)
+
+```
+Dear {{1}},
+
+We need a few updates before we can continue with your passport application. Please review the details below and submit the required corrections.
+
+{{2}}
+
+Service: {{3}}
+Package: {{4}}
+Reference: {{5}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+### Variables
+
+| Var | Meaning | Sample value |
+|---|---|---|
+| `{{1}}` | Applicant name | Priya Sharma |
+| `{{2}}` | Correction message from reviewer | Please re-upload a clearer passport photo and correct your date of birth. |
+| `{{3}}` | Service type | New passport |
+| `{{4}}` | Product / package | Tatkal |
+| `{{5}}` | Reference number | PP234567898765 |
+
+### Button
+
+| Type | Text | URL |
+|---|---|---|
+| URL | Fix now | `https://app.viserv.com/applications/passport/{{5}}/fix` |
+
+**Safer URL form:**  
+`https://app.viserv.com/applications/passport/{{6}}/form`  
+Sample `{{6}}`: same reference number.
+
+> Keep `{{2}}` under ~500 characters when sending so the full WhatsApp body stays readable.
+
+---
+
+## 15. Passport correction resubmitted
+
+**Template name:** `viserv_passport_correction_resubmitted`  
+**Category:** Utility  
+**Language:** English (`en`)  
+**Maps to:** `notifyPassportCorrectionResubmittedEvent`  
+**Env after approval:** `TWILIO_WA_SID_PASSPORT_CORRECTION_RESUBMITTED`  
+**In-app type:** `correction_resubmitted`
+
+### Body (copy)
+
+```
+Dear {{1}},
+
+{{2}} has submitted the requested updates for their passport application. The file is ready for your review.
+
+Service: {{3}}
+Package: {{4}}
+Reference: {{5}}
+
+Thank you for choosing Viserv.
+```
+
+### Variables
+
+| Var | Meaning | Sample value |
+|---|---|---|
+| `{{1}}` | Reviewer / admin name | Rajesh Kumar |
+| `{{2}}` | Applicant name | Priya Sharma |
+| `{{3}}` | Service type | New passport |
+| `{{4}}` | Product / package | Tatkal |
+| `{{5}}` | Reference number | PP234567898765 |
+
+### Button
+
+| Type | Text | URL |
+|---|---|---|
+| URL | Review updates | `https://app.viserv.com/admin/applications/passport/{{5}}` |
+
+---
+
+## 16. Passport new comment
+
+**Template name:** `viserv_passport_new_comment`  
+**Category:** Utility  
+**Language:** English (`en`)  
+**Maps to:** passport branch of `notifyCommentEvent`  
+**Env after approval:** `TWILIO_WA_SID_PASSPORT_NEW_COMMENT_APPLICANT` · `TWILIO_WA_SID_PASSPORT_NEW_COMMENT_STAFF`  
+**In-app types:** `staff_comment` / `applicant_comment`
+
+Use the same body for applicant ↔ staff. Pass the correct deep link path segment in the URL variable.
+
+### Body (copy)
+
+```
+Dear {{1}},
+
+{{2}} has left a comment on a passport application:
+
+{{3}}
+
+Service: {{4}}
+Package: {{5}}
+Reference: {{6}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+### Variables
+
+| Var | Meaning | Sample value |
+|---|---|---|
+| `{{1}}` | Recipient name | Priya Sharma |
+| `{{2}}` | Author name | Rajesh Kumar |
+| `{{3}}` | Comment excerpt (truncate ~280 chars in code) | Please confirm your address proof matches the form. |
+| `{{4}}` | Service type | New passport |
+| `{{5}}` | Product / package | Tatkal |
+| `{{6}}` | Reference number | PP234567898765 |
+
+### Buttons (pick one per send — or submit two templates)
+
+**16a — to applicant** (`viserv_passport_new_comment_applicant`)
+
+| Type | Text | URL |
+|---|---|---|
+| URL | Open conversation | `https://app.viserv.com/applications/passport/{{6}}` |
+
+**16b — to staff** (`viserv_passport_new_comment_staff`)
+
+| Type | Text | URL |
+|---|---|---|
+| URL | Open conversation | `https://app.viserv.com/admin/applications/passport/{{6}}` |
+
+If you prefer **one** approved template only, omit the URL button — better to submit **both** 16a and 16b with identical body.
+
+---
+
+## 17. Passport status changed
+
+**Template name:** `viserv_passport_status_changed`  
+**Category:** Utility  
+**Language:** English (`en`)  
+**Maps to:** passport branch of `notifyStatusChangedEvent` (`applicationType: 'passport'`)  
+**Env after approval:** `TWILIO_WA_SID_PASSPORT_STATUS_CHANGED_APPLICANT` · `TWILIO_WA_SID_PASSPORT_STATUS_CHANGED_STAFF`  
+**In-app type:** `status_changed`  
+**Fired only for:** `under_review`, `approved`, `rejected`
+
+### Body (copy)
+
+```
+Dear {{1}},
+
+We're writing to confirm that your passport application status is now {{2}}.
+
+{{3}}
+
+Service: {{4}}
+Package: {{5}}
+Reference: {{6}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+### Variables
+
+| Var | Meaning | Sample value |
+|---|---|---|
+| `{{1}}` | Recipient name | Priya Sharma |
+| `{{2}}` | Readable status | under review |
+| `{{3}}` | Notes (or `—` if empty) | Documents look good. We are reviewing your case. |
+| `{{4}}` | Service type | New passport |
+| `{{5}}` | Product / package | Tatkal |
+| `{{6}}` | Reference number | PP234567898765 |
+
+**Status sample values to list in approval notes:** `under review`, `approved`, `rejected`
+
+### Buttons (submit two templates if needed)
+
+**17a — to applicant** (`viserv_passport_status_changed_applicant`)
+
+| Type | Text | URL |
+|---|---|---|
+| URL | View application | `https://app.viserv.com/applications/passport/{{6}}` |
+
+**17b — to staff** (`viserv_passport_status_changed_staff`)
+
+| Type | Text | URL |
+|---|---|---|
+| URL | View application | `https://app.viserv.com/admin/applications/passport/{{6}}` |
+
+### Optional: passport status-specific templates — NOT SUBMITTED / NOT WIRED
+
+Do **not** use 17c–17e. Meta approval covers main #17 only (`viserv_passport_status_changed_applicant` + `…_staff`). Code wires those SIDs only.
+
+#### 17c. `viserv_passport_status_under_review` (reference only)
+
+```
+Dear {{1}},
+
+We're writing to confirm that your {{2}} passport application ({{3}}) is now under review.
+
+Reference: {{4}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+Samples: Priya Sharma / New passport / Tatkal / PP234567898765  
+Button: `https://app.viserv.com/applications/passport/{{4}}`
+
+#### 17d. `viserv_passport_status_approved` (reference only)
+
+```
+Dear {{1}},
+
+We're delighted to confirm that your {{2}} passport application ({{3}}) has been approved.
+
+Reference: {{4}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+Samples: same pattern  
+Button: `https://app.viserv.com/applications/passport/{{4}}`
+
+#### 17e. `viserv_passport_status_rejected` (reference only)
+
+```
+Dear {{1}},
+
+We're writing to inform you that your {{2}} passport application ({{3}}) was not approved.
+
+{{4}}
+
+Reference: {{5}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+| Var | Sample |
+|---|---|
+| `{{4}}` | Reason notes | Please check the comments on your application for next steps. |
+| `{{5}}` | Reference number | PP234567898765 |
+
+Button: `https://app.viserv.com/applications/passport/{{5}}`
+
+---
+
 ## 10. Login OTP (applicant sign-in)
 
 **Template name:** `viserv_login_otp`  
@@ -636,15 +1055,15 @@ Sending path today is **mock** in `lib/auth/otp.ts` (`AUTH_OTP_MODE=mock`). Real
 
 WhatsApp / Meta URL buttons usually require:
 
-1. Fixed prefix, e.g. `https://app.viserv.com/applications/visa/`
-2. Exactly **one** dynamic path suffix variable, e.g. `{{1}}` → application UUID
+1. Fixed prefix, e.g. `https://app.viserv.com/applications/visa/` or `https://app.viserv.com/applications/passport/`
+2. Exactly **one** dynamic path suffix variable, e.g. `{{1}}` → application reference / UUID
 
 In Twilio Content Template Builder:
 
 - **Button type:** Visit website  
 - **URL type:** Dynamic  
-- **URL:** `https://app.viserv.com/applications/visa/{{1}}`  
-- **Sample for** `{{1}`**:** `VI234567898765`
+- **URL:** `https://app.viserv.com/applications/visa/{{1}}` (or `/applications/passport/{{1}}`)  
+- **Sample for** `{{1}`**:** `VI234567898765` / `PP234567898765`
 
 When the button URL uses `{{1}}`, body variables must still be numbered sequentially without gaps. Prefer putting the application id as the **last** body variable and reuse that index in the URL when the console allows; otherwise add a dedicated final URL-only variable.
 
@@ -665,6 +1084,14 @@ When the button URL uses `{{1}}`, body variables must still be numbered sequenti
    *(or optional 9c–9e if generic status is rejected)*
 9f. [ ] `viserv_status_approved_with_document` — Document media + same body as status changed
 10. [ ] `viserv_login_otp` — Utility with full sentences (OTP as `{{2}}`, not code-only)
+11. [ ] `viserv_passport_submitted_applicant`
+12. [ ] `viserv_passport_submitted_admin`
+13. [ ] `viserv_passport_reviewer_assigned`
+14. [ ] `viserv_passport_correction_requested`
+15. [ ] `viserv_passport_correction_resubmitted`
+16. [ ] `viserv_passport_new_comment_applicant` + `viserv_passport_new_comment_staff`
+17. [x] `viserv_passport_status_changed_applicant` + `viserv_passport_status_changed_staff`  
+   *(17c–17e not submitted — do not wire)*
 
 ---
 
@@ -683,11 +1110,19 @@ When the button URL uses `{{1}}`, body variables must still be numbered sequenti
 | Status changed | `viserv_status_changed_*` | `TWILIO_WA_SID_STATUS_CHANGED_*` | Applicant + staff audience |
 | Approved + PDF delivery | `viserv_status_approved_with_document` | `TWILIO_WA_SID_STATUS_APPROVED_WITH_DOCUMENT` | Applicant phone (skips plain status WA) |
 | Applicant login OTP | `viserv_login_otp` | `TWILIO_WA_SID_LOGIN_OTP` | Applicant phone (requested number) |
+| Passport submitted | `viserv_passport_submitted_applicant` | `TWILIO_WA_SID_PASSPORT_SUBMITTED_APPLICANT` | Applicant phone |
+| Passport submitted | `viserv_passport_submitted_admin` | `TWILIO_WA_SID_PASSPORT_SUBMITTED_ADMIN` | Admins with `users.phone` |
+| Passport reviewer assigned | `viserv_passport_reviewer_assigned` | `TWILIO_WA_SID_PASSPORT_REVIEWER_ASSIGNED` | Reviewer phone |
+| Passport correction requested | `viserv_passport_correction_requested` | `TWILIO_WA_SID_PASSPORT_CORRECTION_REQUESTED` | Applicant phone |
+| Passport correction resubmitted | `viserv_passport_correction_resubmitted` | `TWILIO_WA_SID_PASSPORT_CORRECTION_RESUBMITTED` | Assigned reviewer (else admins) |
+| Passport new comment | `viserv_passport_new_comment_*` | `TWILIO_WA_SID_PASSPORT_NEW_COMMENT_*` | Opposite party |
+| Passport status changed | `viserv_passport_status_changed_*` | `TWILIO_WA_SID_PASSPORT_STATUS_CHANGED_*` | Applicant + staff audience |
 
 Phone format for Twilio: `whatsapp:+91XXXXXXXXXX`
 
 ---
 
-**Last updated:** 2026-11-10  
+**Last updated:** 2026-11-13  
+**Passport notify:** templates 11–17 main wired in code (`TWILIO_WA_SID_PASSPORT_*`); optional 17c–17e not wired.  
 **Voice reference:** TravelFirst booking confirmations (Dear / delighted to confirm / Thank you for choosing)  
 **Source of truth for events:** `lib/email/notify.ts` + `lib/notifications.ts` + `lib/whatsapp/notify.ts`

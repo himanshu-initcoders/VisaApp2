@@ -275,3 +275,214 @@ Thank you for choosing Viserv.
 ```
 
 **Samples:** `{{1}}` = Priya Sharma · `{{2}}` = 48291
+
+---
+
+# Passport templates
+
+Deep links: `/applications/passport/` · `/admin/applications/passport/`  
+Env prefix: `TWILIO_WA_SID_PASSPORT_*`  
+Full Twilio Builder specs: [WHNotification.md](./WHNotification.md) §§11–17
+
+---
+
+## `viserv_passport_submitted_applicant`
+
+```
+Dear {{1}},
+
+We're delighted to confirm that we have received your passport application. Our team will review it shortly.
+
+Service: {{2}}
+Package: {{3}}
+Reference: {{4}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+**Samples:** Priya Sharma / New passport / Tatkal / PP234567898765
+
+---
+
+## `viserv_passport_submitted_admin`
+
+```
+Dear Admin,
+
+A new passport application has been submitted on Viserv and is ready for your attention.
+
+Applicant: {{1}}
+Phone: {{2}}
+Service: {{3}}
+Package: {{4}}
+Reference: {{5}}
+
+Thank you for choosing Viserv.
+```
+
+**Samples:** Priya Sharma / +919876543210 / New passport / Tatkal / PP234567898765
+
+---
+
+## `viserv_passport_reviewer_assigned`
+
+```
+Dear {{1}},
+
+A passport application has been assigned to you and is ready for review.
+
+Applicant: {{2}}
+Service: {{3}}
+Package: {{4}}
+Reference: {{5}}
+
+Thank you for choosing Viserv.
+```
+
+**Samples:** Rajesh Kumar / Priya Sharma / Passport reissue / Normal / PP234567898765
+
+---
+
+## `viserv_passport_correction_requested`
+
+```
+Dear {{1}},
+
+We need a few updates before we can continue with your passport application. Please review the details below and submit the required corrections.
+
+{{2}}
+
+Service: {{3}}
+Package: {{4}}
+Reference: {{5}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+**Samples:** Priya Sharma / Please re-upload a clearer passport photo and correct your date of birth. / New passport / Tatkal / PP234567898765
+
+---
+
+## `viserv_passport_correction_resubmitted`
+
+```
+Dear {{1}},
+
+{{2}} has submitted the requested updates for their passport application. The file is ready for your review.
+
+Service: {{3}}
+Package: {{4}}
+Reference: {{5}}
+
+Thank you for choosing Viserv.
+```
+
+**Samples:** Rajesh Kumar / Priya Sharma / New passport / Tatkal / PP234567898765
+
+---
+
+## `viserv_passport_new_comment`
+
+```
+Dear {{1}},
+
+{{2}} has left a comment on a passport application:
+
+{{3}}
+
+Service: {{4}}
+Package: {{5}}
+Reference: {{6}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+**Samples:** Priya Sharma / Rajesh Kumar / Please confirm your address proof matches the form. / New passport / Tatkal / PP234567898765
+
+Also: `viserv_passport_new_comment_applicant` · `viserv_passport_new_comment_staff` (same body, different button URL)
+
+---
+
+## `viserv_passport_status_changed`
+
+```
+Dear {{1}},
+
+We're writing to confirm that your passport application status is now {{2}}.
+
+{{3}}
+
+Service: {{4}}
+Package: {{5}}
+Reference: {{6}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+**Samples:** Priya Sharma / under review / Documents look good. We are reviewing your case. / New passport / Tatkal / PP234567898765
+
+Also: `viserv_passport_status_changed_applicant` · `viserv_passport_status_changed_staff` (same body, different button URL)
+
+---
+
+## `viserv_passport_status_under_review` (optional — NOT SUBMITTED / NOT WIRED)
+
+```
+Dear {{1}},
+
+We're writing to confirm that your {{2}} passport application ({{3}}) is now under review.
+
+Reference: {{4}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+**Samples:** Priya Sharma / New passport / Tatkal / PP234567898765
+
+---
+
+## `viserv_passport_status_approved` (optional — NOT SUBMITTED / NOT WIRED)
+
+```
+Dear {{1}},
+
+We're delighted to confirm that your {{2}} passport application ({{3}}) has been approved.
+
+Reference: {{4}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+**Samples:** Priya Sharma / New passport / Tatkal / PP234567898765
+
+---
+
+## `viserv_passport_status_rejected` (optional — NOT SUBMITTED / NOT WIRED)
+
+```
+Dear {{1}},
+
+We're writing to inform you that your {{2}} passport application ({{3}}) was not approved.
+
+{{4}}
+
+Reference: {{5}}
+
+For any assistance, please contact us through your Viserv account.
+
+Thank you for choosing Viserv.
+```
+
+**Samples:** Priya Sharma / New passport / Tatkal / Please check the comments on your application for next steps. / PP234567898765

@@ -11,6 +11,7 @@ import {
   passportServices,
   payments,
   statusHistory,
+  users,
 } from '@/lib/db/schema';
 import { ensurePassportFormVersionForSubmit } from '@/lib/db/queries/passportFormVersions';
 import { quotePassportListing } from '@/lib/payments/quote';
@@ -26,6 +27,8 @@ import {
   type PassportDraftUpload,
 } from '@/lib/apply/passportDraftFiles';
 import { promoteDraftFileToApplication } from '@/lib/upload/promoteDraftFile';
+import { notifyPassportSubmittedEvent } from '@/lib/notifications';
+import { passportServiceTypeLabel } from '@/lib/passport/constants';
 
 export type SubmitPassportInput = {
   submitId: string;
@@ -293,6 +296,42 @@ export async function submitPassportApplication(
       notes: 'Applicant submitted passport application',
       changedBy: userId,
     });
+    const [userRow] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        phone: users.phone,
+        name: users.name,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    const answers = input.answers as Record<string, unknown>;
+    const given =
+      typeof answers.givenNames === 'string' ? answers.givenNames.trim() : '';
+    const surname =
+      typeof answers.surname === 'string' ? answers.surname.trim() : '';
+    const applicantName =
+      `${given} ${surname}`.trim() || userRow?.name?.trim() || 'Applicant';
+    const serviceType = passportServiceTypeLabel(config.serviceType);
+    const productName = config.productName?.trim() || serviceType;
+
+    try {
+      await notifyPassportSubmittedEvent({
+        applicationId,
+        userId,
+        applicantName,
+        serviceType,
+        productName,
+        referenceNumber,
+        accountEmail: userRow?.email ?? null,
+        accountPhone: userRow?.phone ?? null,
+      });
+    } catch (notifyError) {
+      console.error('Passport submit notification failed', notifyError);
+    }
+
 
     await db
       .delete(passportApplicationDrafts)

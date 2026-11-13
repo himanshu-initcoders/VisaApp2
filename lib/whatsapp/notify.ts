@@ -340,6 +340,253 @@ export async function notifyStatusChangedWhatsApp(input: {
   );
 }
 
+export async function notifyPassportSubmittedToApplicantWhatsApp(input: {
+  userId: string;
+  applicantName: string;
+  phone?: string | null;
+  serviceType: string;
+  productName: string;
+  referenceNumber: string;
+}): Promise<void> {
+  const recipient =
+    recipientFromUserPhone({
+      userId: input.userId,
+      name: input.applicantName,
+      phone: input.phone,
+    }) ?? (await resolveUserWhatsApp(input.userId));
+  if (!recipient) return;
+
+  await sendSafely(
+    sendToRecipient(
+      recipient,
+      sid('TWILIO_WA_SID_PASSPORT_SUBMITTED_APPLICANT'),
+      [
+        input.applicantName,
+        input.serviceType,
+        input.productName,
+        input.referenceNumber,
+      ],
+      'passport submitted applicant'
+    ),
+    'passport submitted applicant'
+  );
+}
+
+export async function notifyPassportSubmittedToAdminWhatsApp(input: {
+  applicantName: string;
+  phone?: string | null;
+  serviceType: string;
+  productName: string;
+  referenceNumber: string;
+}): Promise<void> {
+  const admins = await resolveAdminWhatsAppRecipients();
+  if (admins.length === 0) {
+    console.warn(
+      '[whatsapp] No admin users with phone; skipping passport submitted admin notice'
+    );
+    return;
+  }
+
+  const phoneDisplay = input.phone?.trim()
+    ? recipientFromUserPhone({
+        userId: 'applicant',
+        name: input.applicantName,
+        phone: input.phone,
+      })?.phoneDisplay ?? input.phone.trim()
+    : '—';
+
+  await Promise.all(
+    admins.map((admin) =>
+      sendSafely(
+        sendToRecipient(
+          admin,
+          sid('TWILIO_WA_SID_PASSPORT_SUBMITTED_ADMIN'),
+          [
+            input.applicantName,
+            phoneDisplay,
+            input.serviceType,
+            input.productName,
+            input.referenceNumber,
+          ],
+          'passport submitted admin'
+        ),
+        'passport submitted admin'
+      )
+    )
+  );
+}
+
+export async function notifyPassportReviewerAssignedWhatsApp(input: {
+  reviewerUserId: string;
+  reviewerName: string;
+  applicantName: string;
+  serviceType: string;
+  productName: string;
+  referenceNumber: string;
+}): Promise<void> {
+  const recipient = await resolveUserWhatsApp(input.reviewerUserId);
+  if (!recipient) return;
+
+  await sendSafely(
+    sendToRecipient(
+      recipient,
+      sid('TWILIO_WA_SID_PASSPORT_REVIEWER_ASSIGNED'),
+      [
+        input.reviewerName || recipient.name,
+        input.applicantName,
+        input.serviceType,
+        input.productName,
+        input.referenceNumber,
+      ],
+      'passport reviewer assigned'
+    ),
+    'passport reviewer assigned'
+  );
+}
+
+export async function notifyPassportCorrectionRequestedWhatsApp(input: {
+  userId: string;
+  applicantName: string;
+  serviceType: string;
+  productName: string;
+  referenceNumber: string;
+  message: string;
+}): Promise<void> {
+  const recipient = await resolveUserWhatsApp(input.userId);
+  if (!recipient) return;
+
+  const message =
+    input.message.length > 500
+      ? `${input.message.slice(0, 497)}...`
+      : input.message;
+
+  await sendSafely(
+    sendToRecipient(
+      recipient,
+      sid('TWILIO_WA_SID_PASSPORT_CORRECTION_REQUESTED'),
+      [
+        input.applicantName || recipient.name,
+        message,
+        input.serviceType,
+        input.productName,
+        input.referenceNumber,
+      ],
+      'passport correction requested'
+    ),
+    'passport correction requested'
+  );
+}
+
+export async function notifyPassportCorrectionResubmittedWhatsApp(input: {
+  recipientUserIds: string[];
+  applicantName: string;
+  serviceType: string;
+  productName: string;
+  referenceNumber: string;
+}): Promise<void> {
+  await Promise.all(
+    [...new Set(input.recipientUserIds)].map(async (userId) => {
+      const recipient = await resolveUserWhatsApp(userId);
+      if (!recipient) return;
+      await sendSafely(
+        sendToRecipient(
+          recipient,
+          sid('TWILIO_WA_SID_PASSPORT_CORRECTION_RESUBMITTED'),
+          [
+            recipient.name,
+            input.applicantName,
+            input.serviceType,
+            input.productName,
+            input.referenceNumber,
+          ],
+          'passport correction resubmitted'
+        ),
+        'passport correction resubmitted'
+      );
+    })
+  );
+}
+
+export async function notifyPassportNewCommentWhatsApp(input: {
+  recipientUserId: string;
+  recipientName: string;
+  authorName: string;
+  serviceType: string;
+  productName: string;
+  referenceNumber: string;
+  excerpt: string;
+  audience: 'applicant' | 'staff';
+}): Promise<void> {
+  const recipient = await resolveUserWhatsApp(input.recipientUserId);
+  if (!recipient) return;
+
+  const contentSid =
+    input.audience === 'applicant'
+      ? sid('TWILIO_WA_SID_PASSPORT_NEW_COMMENT_APPLICANT')
+      : sid('TWILIO_WA_SID_PASSPORT_NEW_COMMENT_STAFF');
+
+  const excerpt =
+    input.excerpt.length > 280
+      ? `${input.excerpt.slice(0, 277)}...`
+      : input.excerpt;
+
+  await sendSafely(
+    sendToRecipient(
+      recipient,
+      contentSid,
+      [
+        input.recipientName || recipient.name,
+        input.authorName,
+        excerpt,
+        input.serviceType,
+        input.productName,
+        input.referenceNumber,
+      ],
+      `passport new comment ${input.audience}`
+    ),
+    `passport new comment ${input.audience}`
+  );
+}
+
+export async function notifyPassportStatusChangedWhatsApp(input: {
+  recipientUserId: string;
+  recipientName: string;
+  serviceType: string;
+  productName: string;
+  referenceNumber: string;
+  newStatus: string;
+  notes?: string | null;
+  audience: 'applicant' | 'staff';
+}): Promise<void> {
+  const recipient = await resolveUserWhatsApp(input.recipientUserId);
+  if (!recipient) return;
+
+  const contentSid =
+    input.audience === 'applicant'
+      ? sid('TWILIO_WA_SID_PASSPORT_STATUS_CHANGED_APPLICANT')
+      : sid('TWILIO_WA_SID_PASSPORT_STATUS_CHANGED_STAFF');
+
+  const readable = input.newStatus.replace(/_/g, ' ');
+  const notes = input.notes?.trim() || '—';
+
+  await sendSafely(
+    sendToRecipient(
+      recipient,
+      contentSid,
+      [
+        input.recipientName || recipient.name,
+        readable,
+        notes,
+        input.serviceType,
+        input.productName,
+        input.referenceNumber,
+      ],
+      `passport status changed ${input.audience}`
+    ),
+    `passport status changed ${input.audience}`
+  );
+}
+
 /**
  * Applicant-only: same body as status_changed plus document media (var 7 = path token).
  * Call instead of plain status WhatsApp when a PDF is delivered with the approve notify.

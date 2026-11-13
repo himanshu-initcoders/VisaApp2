@@ -85,7 +85,7 @@
 - [x] Documents from shared document-types catalog + FAQs per product
 - [x] Form builder with admin-defined steps/tabs + publish `passport_form_versions`
 - [x] In-app apply wizard (`/passport/{fresh|reissue}/apply`) — steps → documents → review → pay/submit
-- [ ] Email/WhatsApp notifications on passport submit
+- [x] Email/WhatsApp notifications on passport submit
 - [ ] Staff draft-on-behalf for passport (parity with visa)
 
 ### Application Management

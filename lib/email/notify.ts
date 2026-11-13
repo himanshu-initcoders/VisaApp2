@@ -304,6 +304,233 @@ export async function notifyStatusChanged(input: {
   });
 }
 
+export async function notifyPassportSubmittedToApplicant(input: {
+  accountEmail?: string | null;
+  applicantName: string;
+  serviceType: string;
+  productName: string;
+  referenceNumber: string;
+}): Promise<void> {
+  const to = resolveApplicantEmail({ accountEmail: input.accountEmail });
+  if (!to) {
+    console.warn(
+      '[email] No deliverable applicant email; skipping passport submit confirmation',
+      input.referenceNumber
+    );
+    return;
+  }
+
+  await sendEmail({
+    to,
+    subject: `Passport application received — ${input.serviceType}`,
+    html: renderEmail({
+      preheader: 'We received your passport application.',
+      heading: 'Application received',
+      paragraphs: [
+        `Hi ${input.applicantName}, we received your passport application and will review it shortly.`,
+      ],
+      details: [
+        { label: 'Service', value: input.serviceType },
+        { label: 'Package', value: input.productName },
+        { label: 'Reference', value: input.referenceNumber },
+      ],
+      buttonLabel: 'View application',
+      buttonHref: `/applications/passport/${input.referenceNumber}`,
+    }),
+  });
+}
+
+export async function notifyPassportSubmittedToAdmin(input: {
+  applicantName: string;
+  phone?: string | null;
+  serviceType: string;
+  productName: string;
+  referenceNumber: string;
+}): Promise<void> {
+  const to = process.env.ADMIN_NOTIFY_EMAIL?.trim();
+  if (!to) {
+    console.warn(
+      '[email] ADMIN_NOTIFY_EMAIL is not set; skipping new passport notice'
+    );
+    return;
+  }
+
+  await sendEmail({
+    to,
+    subject: `New passport request — ${input.applicantName}`,
+    html: renderEmail({
+      preheader: 'A new passport application was submitted.',
+      heading: 'New passport request',
+      paragraphs: ['A traveller just submitted a passport application.'],
+      details: [
+        { label: 'Applicant', value: input.applicantName },
+        { label: 'Phone', value: input.phone?.trim() || '—' },
+        { label: 'Service', value: input.serviceType },
+        { label: 'Package', value: input.productName },
+        { label: 'Reference', value: input.referenceNumber },
+      ],
+      buttonLabel: 'Open in admin',
+      buttonHref: `/admin/applications/passport/${input.referenceNumber}`,
+    }),
+  });
+}
+
+export async function notifyPassportReviewerAssigned(input: {
+  email: string;
+  reviewerName: string;
+  applicantName: string;
+  serviceType: string;
+  productName: string;
+  referenceNumber: string;
+}): Promise<void> {
+  if (!isDeliverableEmail(input.email)) return;
+
+  await sendEmail({
+    to: input.email.trim(),
+    subject: `Passport application assigned to you — ${input.applicantName}`,
+    html: renderEmail({
+      preheader: 'A passport application was assigned to you.',
+      heading: 'Assigned to you',
+      paragraphs: [
+        `Hi ${input.reviewerName}, a passport application is now on your queue.`,
+      ],
+      details: [
+        { label: 'Applicant', value: input.applicantName },
+        { label: 'Service', value: input.serviceType },
+        { label: 'Package', value: input.productName },
+        { label: 'Reference', value: input.referenceNumber },
+      ],
+      buttonLabel: 'Open application',
+      buttonHref: `/admin/applications/passport/${input.referenceNumber}`,
+    }),
+  });
+}
+
+export async function notifyPassportCorrectionRequested(input: {
+  to: string;
+  applicantName: string;
+  serviceType: string;
+  productName: string;
+  referenceNumber: string;
+  message: string;
+}): Promise<void> {
+  if (!isDeliverableEmail(input.to)) return;
+  await sendEmail({
+    to: input.to.trim(),
+    subject: `Action needed on your passport application — ${input.serviceType}`,
+    html: renderEmail({
+      preheader: 'A reviewer asked you to update your passport application.',
+      heading: 'Please update your application',
+      paragraphs: [
+        `Hi ${input.applicantName}, we need a few updates before we can continue your passport application.`,
+        input.message,
+      ],
+      details: [
+        { label: 'Service', value: input.serviceType },
+        { label: 'Package', value: input.productName },
+        { label: 'Reference', value: input.referenceNumber },
+      ],
+      buttonLabel: 'Fix now',
+      buttonHref: `/applications/passport/${input.referenceNumber}/form`,
+    }),
+  });
+}
+
+export async function notifyPassportCorrectionResubmitted(input: {
+  to: string;
+  reviewerName: string;
+  applicantName: string;
+  serviceType: string;
+  productName: string;
+  referenceNumber: string;
+}): Promise<void> {
+  if (!isDeliverableEmail(input.to)) return;
+  await sendEmail({
+    to: input.to.trim(),
+    subject: `Passport updates received — ${input.applicantName}`,
+    html: renderEmail({
+      preheader: 'An applicant sent the requested passport updates.',
+      heading: 'Applicant sent updates',
+      paragraphs: [
+        `Hi ${input.reviewerName}, ${input.applicantName} updated the items you asked for.`,
+      ],
+      details: [
+        { label: 'Applicant', value: input.applicantName },
+        { label: 'Service', value: input.serviceType },
+        { label: 'Package', value: input.productName },
+        { label: 'Reference', value: input.referenceNumber },
+      ],
+      buttonLabel: 'Review updates',
+      buttonHref: `/admin/applications/passport/${input.referenceNumber}`,
+    }),
+  });
+}
+
+export async function notifyPassportNewComment(input: {
+  to: string;
+  recipientName: string;
+  authorName: string;
+  serviceType: string;
+  productName: string;
+  referenceNumber: string;
+  excerpt: string;
+  href: string;
+}): Promise<void> {
+  if (!isDeliverableEmail(input.to)) return;
+  await sendEmail({
+    to: input.to.trim(),
+    subject: `New comment on a passport application — ${input.serviceType}`,
+    html: renderEmail({
+      preheader: `${input.authorName} commented on a passport application.`,
+      heading: 'New comment',
+      paragraphs: [
+        `Hi ${input.recipientName}, ${input.authorName} wrote:`,
+        input.excerpt,
+      ],
+      details: [
+        { label: 'Service', value: input.serviceType },
+        { label: 'Package', value: input.productName },
+        { label: 'Reference', value: input.referenceNumber },
+      ],
+      buttonLabel: 'Open conversation',
+      buttonHref: input.href,
+    }),
+  });
+}
+
+export async function notifyPassportStatusChanged(input: {
+  to: string;
+  recipientName: string;
+  serviceType: string;
+  productName: string;
+  referenceNumber: string;
+  newStatus: string;
+  href: string;
+  notes?: string | null;
+}): Promise<void> {
+  if (!isDeliverableEmail(input.to)) return;
+  const readable = input.newStatus.replace(/_/g, ' ');
+  await sendEmail({
+    to: input.to.trim(),
+    subject: `Passport application ${readable} — ${input.serviceType}`,
+    html: renderEmail({
+      preheader: `Status is now ${readable}.`,
+      heading: `Status: ${readable}`,
+      paragraphs: [
+        `Hi ${input.recipientName}, a passport application status changed to ${readable}.`,
+        ...(input.notes?.trim() ? [input.notes.trim()] : []),
+      ],
+      details: [
+        { label: 'Service', value: input.serviceType },
+        { label: 'Package', value: input.productName },
+        { label: 'Reference', value: input.referenceNumber },
+      ],
+      buttonLabel: 'View application',
+      buttonHref: input.href,
+    }),
+  });
+}
+
 /** Delivery-only email when attaching an outcome after approval. */
 export async function notifyVisaOutcomeDelivered(input: {
   to: string;

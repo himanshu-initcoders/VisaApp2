@@ -26,10 +26,12 @@ import { requireRole, isValidStatusTransition, isAdmin } from '@/lib/auth-utils'
 import { normalizeIndianPhone } from '@/lib/auth/phone';
 import {
   notifyReviewerAssigned,
+  notifyPassportReviewerAssigned,
   notifyReviewerWelcome,
 } from '@/lib/email/notify';
 import {
   notifyReviewerAssignedWhatsApp,
+  notifyPassportReviewerAssignedWhatsApp,
   notifyReviewerWelcomeWhatsApp,
 } from '@/lib/whatsapp/notify';
 import {
@@ -73,6 +75,7 @@ import {
   writePassportAnswerValue,
   type StoredPassportDocument,
 } from '@/lib/passport/corrections';
+import { passportServiceTypeLabel } from '@/lib/passport/constants';
 import type { PassportApplyFormConfig } from '@/lib/apply/passportForm';
 import {
   PASSPORT_DRAFT_COUNTRY_CODE,
@@ -1619,8 +1622,11 @@ export async function assignPassportReviewer(
         referenceNumber: passportServices.referenceNumber,
         serviceType: passportServices.serviceType,
         formSnapshot: passportServices.formSnapshot,
+        answers: passportServices.answers,
+        applicantName: users.name,
       })
       .from(passportServices)
+      .innerJoin(users, eq(passportServices.userId, users.id))
       .where(eq(passportServices.id, applicationId))
       .limit(1);
 
@@ -1673,20 +1679,31 @@ export async function assignPassportReviewer(
     revalidatePath(`/admin/applications/passport/${referenceNumber}`);
     revalidatePath(`/admin/applications/passport/${applicationId}`);
 
-    await notifyReviewerAssigned({
+    const answers = (application.answers ?? {}) as Record<string, unknown>;
+    const given =
+      typeof answers.givenNames === 'string' ? answers.givenNames.trim() : '';
+    const surname =
+      typeof answers.surname === 'string' ? answers.surname.trim() : '';
+    const applicantName =
+      `${given} ${surname}`.trim() ||
+      application.applicantName?.trim() ||
+      'Applicant';
+    const serviceType = passportServiceTypeLabel(application.serviceType);
+
+    await notifyPassportReviewerAssigned({
       email: reviewer.email,
       reviewerName: reviewer.name,
-      applicantName: 'Applicant',
-      country: 'Passport',
-      visaType: productName,
+      applicantName,
+      serviceType,
+      productName,
       referenceNumber,
     });
-    await notifyReviewerAssignedWhatsApp({
+    await notifyPassportReviewerAssignedWhatsApp({
       reviewerUserId: reviewer.id,
       reviewerName: reviewer.name,
-      applicantName: 'Applicant',
-      country: 'Passport',
-      visaType: productName,
+      applicantName,
+      serviceType,
+      productName,
       referenceNumber,
     });
 
