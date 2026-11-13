@@ -20,10 +20,9 @@ pipeline {
         sh '''
           set -e
           mkdir -p "${APP_DIR}"
-          # -a tries chown/chgrp and fails as jenkins on root-owned /opt/visa
+          # No -a/-t owner/group/times: jenkins (uid 1000) cannot setattr on root files
           if command -v rsync >/dev/null 2>&1; then
-            rsync -rltD --delete \
-              --no-owner --no-group \
+            rsync -rlD --delete \
               --exclude '.env' \
               --exclude 'neon.dump' \
               --exclude '.git' \
