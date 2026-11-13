@@ -21,12 +21,12 @@ const SOCIAL_ICONS: Record<(typeof SOCIAL_PROFILES)[number]['network'], ReactNod
   ),
 };
 
-export function Footer() { 
+export function Footer() {
   const currentYear = new Date().getFullYear();
   const linkGroups = [
     {
       title: 'Company',
-      links: [ 
+      links: [
         { href: '/', label: 'Home' },
         { href: '/destinations', label: 'Destinations' },
         { href: '/blogs', label: 'Blogs' },
@@ -40,7 +40,15 @@ export function Footer() {
         { href: '/passport', label: 'Passport services' },
         { href: '/dashboard', label: 'Track application' },
       ],
-    }
+    },
+    {
+      title: 'Legal',
+      links: [
+        { href: '/privacy', label: 'Privacy Policy' },
+        { href: '/terms', label: 'Terms and Conditions' },
+        { href: '/refund', label: 'Refund Policy' },
+      ],
+    },
   ];
 
   return (
@@ -76,67 +84,24 @@ export function Footer() {
               className="text-base font-medium mb-4"
               style={{ fontFamily: 'Basier Circle' }}
             >
-              Legal
+              Social Links
             </h3>
             <ul className="space-y-3">
-              <li>
-                <Link
-                  href="/privacy"
-                  className="text-sm text-white/70 hover:text-nautical-teal transition-colors"
-                >
-                  Privacy Policy
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/terms"
-                  className="text-sm text-white/70 hover:text-nautical-teal transition-colors"
-                >
-                  Terms and Conditions
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/refund"
-                  className="text-sm text-white/70 hover:text-nautical-teal transition-colors"
-                >
-                  Refund Policy
-                </Link>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Social Proof & App Badges */}
-        <div className="border-t border-white/10 pt-8 mb-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            {/* Social Proof Badge */}
-            <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-full">
-              <div className="flex items-center gap-1">
-                <span className="text-yellow-400">★</span>
-                <span className="text-yellow-400">★</span>
-                <span className="text-yellow-400">★</span>
-                <span className="text-yellow-400">★</span>
-                <span className="text-yellow-400">★</span>
-              </div>
-              <span className="text-sm font-medium">200+ reviews</span>
-            </div>
-
-            {/* Social Links */}
-            <div className="flex items-center gap-4">
               {SOCIAL_PROFILES.map((profile) => (
-                <a
-                  key={profile.network}
-                  href={profile.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-white/70 hover:text-nautical-teal transition-colors"
-                  aria-label={profile.label}
-                >
-                  {SOCIAL_ICONS[profile.network]}
-                </a>
+                <li key={profile.network}>
+                  <a
+                    href={profile.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-nautical-teal transition-colors"
+                    aria-label={profile.label}
+                  >
+                    <span className="shrink-0">{SOCIAL_ICONS[profile.network]}</span>
+                    {profile.label}
+                  </a>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         </div>
 
