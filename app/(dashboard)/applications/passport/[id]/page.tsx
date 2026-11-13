@@ -143,7 +143,7 @@ export default async function UserPassportApplicationDetailPage({
               </CardContent>
             </Card>
 
-            <div className="mt-6">
+            <div className="mt-6 space-y-6">
               <PassportFormAnswers snapshot={snapshot} answers={app.answers} />
             </div>
           </ApplicantActivityTabs>

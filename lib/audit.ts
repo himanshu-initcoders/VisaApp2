@@ -34,6 +34,7 @@ export async function logAdminAction(
       newStatus: action,
       changedBy: userId,
       notes: metadata ? JSON.stringify(metadata) : null,
+      createdAt: new Date(),
     });
   } catch (error) {
     console.error('Failed to log admin action:', error);

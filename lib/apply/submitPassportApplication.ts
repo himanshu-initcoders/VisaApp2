@@ -295,6 +295,8 @@ export async function submitPassportApplication(
       newStatus: 'submitted',
       notes: 'Applicant submitted passport application',
       changedBy: userId,
+      // Explicit Date — PG defaultNow() on timestamp-without-tz skews +5:30 vs Node writers.
+      createdAt: now,
     });
     const [userRow] = await db
       .select({

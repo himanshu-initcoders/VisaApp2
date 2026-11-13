@@ -88,7 +88,8 @@ export function Timeline({ history }: TimelineProps) {
                 </span>
                 <span>•</span>
                 <span>
-                  {new Date(item.createdAt).toLocaleDateString('en-IN', {
+                  {new Date(item.createdAt).toLocaleString('en-IN', {
+                    timeZone: 'Asia/Kolkata',
                     year: 'numeric',
                     month: 'short',
                     day: 'numeric',
@@ -111,6 +112,13 @@ export function Timeline({ history }: TimelineProps) {
   );
 }
 
+function newestFirst(history: StatusHistoryItem[]): StatusHistoryItem[] {
+  return [...history].sort(
+    (a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
 export function StatusHistoryCard({
   history,
   subtitle,
@@ -118,15 +126,16 @@ export function StatusHistoryCard({
   history: StatusHistoryItem[];
   subtitle?: string | null;
 }) {
+  const ordered = newestFirst(history);
   const [expanded, setExpanded] = useState(false);
-  const latestId = history[0]?.id;
+  const latestId = ordered[0]?.id;
 
   useEffect(() => {
     setExpanded(false);
   }, [latestId]);
 
-  const canToggle = history.length > 1;
-  const visible = expanded || !canToggle ? history : history.slice(0, 1);
+  const canToggle = ordered.length > 1;
+  const visible = expanded || !canToggle ? ordered : ordered.slice(0, 1);
 
   return (
     <Card>

@@ -155,9 +155,9 @@ export function PassportHeroPricingCard({
   );
 
   const [applyingFor, setApplyingFor] = useState<ApplyingForId>(
-    applyingOptions.find((o) => o.id === 'reissue')?.id ||
+    applyingOptions.find((o) => o.id === 'fresh')?.id ||
       applyingOptions[0]?.id ||
-      'reissue'
+      'fresh'
   );
 
   const activeListing =
@@ -205,7 +205,7 @@ export function PassportHeroPricingCard({
   const total = governmentFee + serviceFee + gstFee;
   const applyingLabel =
     applyingOptions.find((option) => option.id === applyingFor)?.label ||
-    'Re-issue';
+    'Fresh passport';
 
   const { requestStart, modals } = usePassportApplyStartFlow({
     serviceType: applyingFor,
