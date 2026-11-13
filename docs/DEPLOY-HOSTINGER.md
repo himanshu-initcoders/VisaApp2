@@ -1,14 +1,13 @@
 # Deploy: Hostinger KVM + Docker + Postgres + Jenkins
 
-Same-VPS stack: **Next.js app**, **Postgres 16**, **Caddy (HTTPS)**, **Jenkins** (localhost only).
+Same-VPS stack: **Next.js app** (Docker), **Postgres 18 on the host OS**, **Caddy (HTTPS)**, **Jenkins** (localhost only).
 
 Uploads stay on **S3** (`UPLOAD_PROVIDER=s3`). Only the database moves off Neon.
 
 ## Architecture
 
-- `db` — Postgres 18, volume `pgdata` mounted at `/var/lib/postgresql` (18+ image layout), published as `127.0.0.1:5432` only
-- `app` — Next.js standalone (`Dockerfile` target `runner`)
-- `migrate` — Drizzle migrate image (Compose profile `migrate`)
+- **Postgres** — installed on the VPS host (not a Compose service). Listens on `127.0.0.1` + Docker bridge; UFW denies public `5432`
+- `app` / `migrate` — reach DB via `host.docker.internal` (`extra_hosts: host-gateway`)
 - `caddy` — ports 80/443, auto TLS for `DOMAIN`
 - `jenkins` — `127.0.0.1:8080`, Docker socket for compose deploys
 
@@ -55,39 +54,35 @@ Set at minimum:
 | `DOCKER_GID` | from `getent group docker` |
 | `NEON_DATABASE_URL` | current Neon URL (**temporary**, for dump only) |
 
-## 2. Neon → Docker Postgres (one-time)
+## 2. Host Postgres + data (one-time)
 
 ```bash
 cd /opt/visa
-chmod +x deploy/scripts/neon-to-postgres.sh
-docker compose up -d db
+chmod +x deploy/scripts/*.sh
+
+# A) Install Postgres 18 on the VPS (not Docker)
+./deploy/scripts/install-host-postgres.sh
+
+# B) Load data — pick one:
+#    From Neon:
 ./deploy/scripts/neon-to-postgres.sh
+#    Or from an old Compose db container:
+# ./deploy/scripts/docker-db-to-host.sh
 ```
 
-What it does:
+Set in `.env`:
 
-1. `pg_dump` Neon (custom format) → `neon.dump`
-2. `pg_restore` into the `db` container
-3. Prints row counts for `users`, `visa_applications`, `passport_services`, drizzle migrations
-
-**Do not** run `db:migrate` immediately after a successful restore — schema + `drizzle.__drizzle_migrations` are already in the dump.
-
-Smoke-test after bringing the app up (next section): login + open one visa/passport application.
-
-Then treat Neon as read-only for a few days and remove `NEON_DATABASE_URL` from `.env`.
-
-Restore-only (dump already on disk):
-
-```bash
-SKIP_DUMP=1 DUMP_FILE=/opt/visa/neon.dump ./deploy/scripts/neon-to-postgres.sh
+```env
+DATABASE_URL=postgresql://visa:PASSWORD@host.docker.internal:5432/visa_db
 ```
+
+**Do not** run `db:migrate` immediately after a successful restore — schema + drizzle history are already in the dump.
 
 ## 3. Start the stack
 
 ```bash
 cd /opt/visa
-docker compose up -d --build db app caddy jenkins
-curl -fsS http://127.0.0.1:3000/api/health   # may fail until app is up; use:
+docker compose up -d --build app caddy jenkins
 docker compose exec -T app curl -fsS http://127.0.0.1:3000/api/health
 ```
 

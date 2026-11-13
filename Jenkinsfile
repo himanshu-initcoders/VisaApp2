@@ -55,7 +55,7 @@ pipeline {
         // After Neon cutover: apply pending Drizzle migrations (no-op if already applied).
         sh '''
           set -e
-          ${COMPOSE} up -d db
+          # Host Postgres (not Compose). migrate container uses host.docker.internal.
           ${COMPOSE} --profile migrate run --rm migrate
         '''
       }
