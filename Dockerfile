@@ -28,13 +28,13 @@ ARG NEXT_PUBLIC_RAZORPAY_KEY_ID
 ARG NEXT_PUBLIC_TINYMCE_API_KEY
 ENV NEXT_PUBLIC_RAZORPAY_KEY_ID=$NEXT_PUBLIC_RAZORPAY_KEY_ID
 ENV NEXT_PUBLIC_TINYMCE_API_KEY=$NEXT_PUBLIC_TINYMCE_API_KEY
-# Some App Router pages collect data at build time and require DATABASE_URL.
-# Compose build uses network: host + 127.0.0.1 so host Postgres is reachable.
-ARG DATABASE_URL
-ENV DATABASE_URL=$DATABASE_URL
-RUN test -n "$DATABASE_URL" || (echo "ERROR: DATABASE_URL build-arg is empty" && exit 1)
-# Ensure OCR assets exist before `next build` (also runs via prebuild).
-RUN npm run build
+# Page data collection needs DB at build time. Pass via BuildKit secret so the
+# password is NOT inlined into image history / build logs (unlike ARG in RUN).
+#   docker build --network=host --secret id=database_url,env=BUILD_DATABASE_URL ...
+RUN --mount=type=secret,id=database_url \
+  export DATABASE_URL="$(cat /run/secrets/database_url)" \
+  && test -n "$DATABASE_URL" \
+  && npm run build
 
 # ---------------------------------------------------------------------------
 # One-off / Jenkins: drizzle migrations against Docker Postgres

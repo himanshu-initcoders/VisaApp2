@@ -64,10 +64,11 @@ pipeline {
             export DOCKER_BUILDKIT=0
             echo "WARN: docker buildx missing in Jenkins image — using classic builder"
           fi
+          export BUILD_DATABASE_URL
           docker build \
             --network=host \
             --target runner \
-            --build-arg "DATABASE_URL=${BUILD_DATABASE_URL}" \
+            --secret id=database_url,env=BUILD_DATABASE_URL \
             --build-arg "NEXT_PUBLIC_RAZORPAY_KEY_ID=${NEXT_PUBLIC_RAZORPAY_KEY_ID:-}" \
             --build-arg "NEXT_PUBLIC_TINYMCE_API_KEY=${NEXT_PUBLIC_TINYMCE_API_KEY:-}" \
             -t visa-app:latest \
@@ -83,7 +84,8 @@ pipeline {
         sh '''
           set +x
           set -e
-          ${COMPOSE} --profile migrate run --rm --no-build migrate
+          # Image already built above; compose run has no --no-build flag on this CLI
+          ${COMPOSE} --profile migrate run --rm migrate
         '''
       }
     }
