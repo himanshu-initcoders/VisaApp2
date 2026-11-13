@@ -18,6 +18,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     docker-ce-cli \
     docker-compose-plugin \
+    docker-buildx-plugin \
     rsync \
     curl \
   && rm -rf /var/lib/apt/lists/*

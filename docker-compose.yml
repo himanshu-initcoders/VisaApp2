@@ -6,6 +6,7 @@ name: visa
 
 services:
   migrate:
+    image: visa-migrate:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -22,17 +23,11 @@ services:
       - visa_net
 
   app:
+    image: visa-app:latest
     build:
       context: .
       dockerfile: Dockerfile
       target: runner
-      # Build-time page collection hits host Postgres on loopback
-      network: host
-      args:
-        NEXT_PUBLIC_RAZORPAY_KEY_ID: ${NEXT_PUBLIC_RAZORPAY_KEY_ID:-}
-        NEXT_PUBLIC_TINYMCE_API_KEY: ${NEXT_PUBLIC_TINYMCE_API_KEY:-}
-        # Set by Jenkinsfile (host loopback). Compose cannot nest ${} interpolations.
-        DATABASE_URL: ${BUILD_DATABASE_URL:?Set BUILD_DATABASE_URL for image build}
     restart: unless-stopped
     env_file:
       - .env

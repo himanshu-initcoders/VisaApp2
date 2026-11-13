@@ -8,9 +8,7 @@ pipeline {
   }
 
   environment {
-    // Host path bind-mounted into the Jenkins container (see docker-compose.yml)
     APP_DIR = '/opt/visa'
-    // Always target the deploy tree; do not dir(APP_DIR) — jenkins cannot create APP_DIR@tmp
     COMPOSE = 'docker compose -f /opt/visa/docker-compose.yml --project-directory /opt/visa'
   }
 
@@ -20,7 +18,6 @@ pipeline {
         sh '''
           set -e
           mkdir -p "${APP_DIR}"
-          # No -a/-t owner/group/times: jenkins (uid 1000) cannot setattr on root files
           if command -v rsync >/dev/null 2>&1; then
             rsync -rlD --delete \
               --exclude '.env' \
@@ -46,32 +43,41 @@ pipeline {
 
     stage('Build') {
       steps {
+        // Jenkins runs sh with -xe; set +x before touching secrets so .env is not logged.
         sh '''
+          set +x
           set -euo pipefail
           set -a
           # shellcheck disable=SC1091
           . "${APP_DIR}/.env"
           set +a
-          : "${POSTGRES_USER:?POSTGRES_USER missing in .env}"
-          : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing in .env}"
-          : "${POSTGRES_DB:?POSTGRES_DB missing in .env}"
-          # Build collects page data against host Postgres on loopback (compose build network: host)
-          export BUILD_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}"
+          : "${POSTGRES_USER:?missing}"
+          : "${POSTGRES_PASSWORD:?missing}"
+          : "${POSTGRES_DB:?missing}"
+          BUILD_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}"
+          echo "Building app image (DATABASE_URL host=127.0.0.1 db=${POSTGRES_DB} user=${POSTGRES_USER})"
           export DOCKER_BUILDKIT=1
-          export COMPOSE_DOCKER_CLI_BUILD=1
-          echo "Building with DATABASE_URL host=127.0.0.1 db=${POSTGRES_DB} user=${POSTGRES_USER}"
-          ${COMPOSE} build app migrate
+          cd "${APP_DIR}"
+          docker build \
+            --network=host \
+            --target runner \
+            --build-arg "DATABASE_URL=${BUILD_DATABASE_URL}" \
+            --build-arg "NEXT_PUBLIC_RAZORPAY_KEY_ID=${NEXT_PUBLIC_RAZORPAY_KEY_ID:-}" \
+            --build-arg "NEXT_PUBLIC_TINYMCE_API_KEY=${NEXT_PUBLIC_TINYMCE_API_KEY:-}" \
+            -t visa-app:latest \
+            .
+          echo "Building migrate image"
+          docker build --target migrate -t visa-migrate:latest .
         '''
       }
     }
 
     stage('Migrate') {
       steps {
-        // After Neon cutover: apply pending Drizzle migrations (no-op if already applied).
         sh '''
+          set +x
           set -e
-          # Host Postgres (not Compose). migrate container uses host.docker.internal.
-          ${COMPOSE} --profile migrate run --rm migrate
+          ${COMPOSE} --profile migrate run --rm --no-build migrate
         '''
       }
     }
@@ -80,8 +86,8 @@ pipeline {
       steps {
         sh '''
           set -e
-          ${COMPOSE} up -d --remove-orphans app caddy
-          ${COMPOSE} up -d jenkins
+          ${COMPOSE} up -d --no-build --remove-orphans app caddy
+          ${COMPOSE} up -d --no-build jenkins
         '''
       }
     }
