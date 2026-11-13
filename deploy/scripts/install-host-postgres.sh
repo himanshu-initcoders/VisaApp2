@@ -48,7 +48,9 @@ PG_HBA="$(ls /etc/postgresql/18/main/pg_hba.conf 2>/dev/null || true)"
 
 echo "==> Listen on localhost + Docker bridge (not the public internet)"
 # host.docker.internal (host-gateway) reaches the host via docker0 (often 172.17.0.1)
-sed -i "s/^#\?listen_addresses.*/listen_addresses = '127.0.0.1,172.17.0.1'/" "$PG_CONF"
+# '*' so compose-bridge containers can reach host via host.docker.internal (172.17.0.1).
+# Public access is blocked by UFW default deny + no public allow on 5432.
+sed -i "s/^#\?listen_addresses.*/listen_addresses = '*'/" "$PG_CONF"
 
 # Allow local socket + loopback + Docker bridge networks
 if ! grep -q 'visa docker bridge' "$PG_HBA"; then
@@ -60,9 +62,11 @@ host    ${POSTGRES_DB}    ${POSTGRES_USER}    172.16.0.0/12   scram-sha-256
 EOF
 fi
 
-# Do not expose 5432 publicly via UFW
+# Allow Docker private ranges to Postgres; do NOT open 5432 to the public internet.
+# (A blanket `ufw deny 5432` breaks host.docker.internal — default deny is enough.)
 if command -v ufw >/dev/null 2>&1; then
-  ufw deny 5432/tcp >/dev/null 2>&1 || true
+  ufw allow from 172.16.0.0/12 to any port 5432 proto tcp >/dev/null 2>&1 || true
+  ufw allow from 192.168.0.0/16 to any port 5432 proto tcp >/dev/null 2>&1 || true
 fi
 
 systemctl restart postgresql
