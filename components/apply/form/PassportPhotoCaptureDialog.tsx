@@ -255,7 +255,7 @@ export function PassportPhotoCaptureDialog({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-ash px-5 py-4">
+        <div className="flex items-center justify-center gap-2 border-t border-ash px-5 py-4">
           <button
             type="button"
             onClick={onClose}
