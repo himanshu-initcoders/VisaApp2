@@ -26,8 +26,10 @@ COPY . .
 # Client bundle inlines these at build time
 ARG NEXT_PUBLIC_RAZORPAY_KEY_ID
 ARG NEXT_PUBLIC_TINYMCE_API_KEY
+ARG NEXT_PUBLIC_GTM_ID
 ENV NEXT_PUBLIC_RAZORPAY_KEY_ID=$NEXT_PUBLIC_RAZORPAY_KEY_ID
 ENV NEXT_PUBLIC_TINYMCE_API_KEY=$NEXT_PUBLIC_TINYMCE_API_KEY
+ENV NEXT_PUBLIC_GTM_ID=$NEXT_PUBLIC_GTM_ID
 # Page data collection needs DB at build time. Pass via BuildKit secret so the
 # password is NOT inlined into image history / build logs (unlike ARG in RUN).
 #   docker build --network=host --secret id=database_url,env=BUILD_DATABASE_URL ...

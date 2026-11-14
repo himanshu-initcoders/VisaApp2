@@ -128,7 +128,7 @@ docker compose --profile migrate run --rm migrate
 docker compose up -d app caddy
 ```
 
-After changing `NEXT_PUBLIC_RAZORPAY_KEY_ID` or `NEXT_PUBLIC_TINYMCE_API_KEY`, rebuild the app image (restart alone is not enough).
+After changing `NEXT_PUBLIC_RAZORPAY_KEY_ID`, `NEXT_PUBLIC_TINYMCE_API_KEY`, or `NEXT_PUBLIC_GTM_ID`, rebuild the app image (restart alone is not enough).
 
 ## 5. Cutover checklist
 

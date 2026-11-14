@@ -71,6 +71,7 @@ pipeline {
             --secret id=database_url,env=BUILD_DATABASE_URL \
             --build-arg "NEXT_PUBLIC_RAZORPAY_KEY_ID=${NEXT_PUBLIC_RAZORPAY_KEY_ID:-}" \
             --build-arg "NEXT_PUBLIC_TINYMCE_API_KEY=${NEXT_PUBLIC_TINYMCE_API_KEY:-}" \
+            --build-arg "NEXT_PUBLIC_GTM_ID=${NEXT_PUBLIC_GTM_ID:-}" \
             -t visa-app:latest \
             .
           echo "Building migrate image"
