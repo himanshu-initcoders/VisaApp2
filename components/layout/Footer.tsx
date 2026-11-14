@@ -28,7 +28,6 @@ export function Footer() {
       title: 'Company',
       links: [
         { href: '/', label: 'Home' },
-        { href: '/destinations', label: 'Destinations' },
         { href: '/blogs', label: 'Blogs' },
         { href: '/how-it-works', label: 'How it works' },
       ],
@@ -36,7 +35,7 @@ export function Footer() {
     {
       title: 'Products',
       links: [
-        { href: '/destinations', label: 'Visa services' },
+        { href: '/', label: 'Visa services' },
         { href: '/passport', label: 'Passport services' },
         { href: '/dashboard', label: 'Track application' },
       ],
