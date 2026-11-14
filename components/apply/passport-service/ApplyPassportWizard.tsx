@@ -31,6 +31,7 @@ import {
   savePassportDraft,
 } from '@/lib/apply/passportDraftActions';
 import { PassportApplyDocumentsPanel } from '@/components/apply/passport-service/PassportApplyDocumentsPanel';
+import { ApplicationSubmittedModal } from '@/components/apply/ApplicationSubmittedModal';
 import { cn } from '@/lib/utils';
 
 type PackagePrice = {
@@ -128,6 +129,11 @@ export function ApplyPassportWizard({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploadBusyKey, setUploadBusyKey] = useState<string | null>(null);
+  const [submittedRedirect, setSubmittedRedirect] = useState<{
+    href: string;
+    referenceHint: string | null;
+  } | null>(null);
+  const redirectingRef = useRef(false);
   const [quote, setQuote] = useState<{
     amountPaise: number;
     governmentFeePaise: number;
@@ -557,6 +563,26 @@ export function ApplyPassportWizard({
     });
   };
 
+  const finishPassportSubmitted = (input: {
+    applicationId: string;
+    referenceNumber?: string | null;
+  }) => {
+    const ref = input.referenceNumber || input.applicationId;
+    setSubmittedRedirect({
+      href: `/applications/passport/${ref}`,
+      referenceHint:
+        ref.length > 10 ? `${ref.slice(0, 10)}…` : ref,
+    });
+  };
+
+  const continueAfterPassportSubmit = () => {
+    if (!submittedRedirect || redirectingRef.current) return;
+    redirectingRef.current = true;
+    const href = submittedRedirect.href;
+    setSubmittedRedirect(null);
+    router.push(href);
+  };
+
   const handlePay = async () => {
     if (!isSignedIn) {
       trackEvent('passport_apply_login_prompt', {
@@ -607,7 +633,7 @@ export function ApplyPassportWizard({
       }
 
       if (order.kind === 'already_submitted') {
-        router.push(`/applications/passport/${order.applicationId}`);
+        finishPassportSubmitted({ applicationId: order.applicationId });
         return;
       }
 
@@ -642,9 +668,10 @@ export function ApplyPassportWizard({
           value: 0,
           free: true,
         });
-        router.push(
-          `/applications/passport/${submitted.referenceNumber || submitted.applicationId}`
-        );
+        finishPassportSubmitted({
+          applicationId: submitted.applicationId,
+          referenceNumber: submitted.referenceNumber,
+        });
         return;
       }
 
@@ -718,9 +745,10 @@ export function ApplyPassportWizard({
                 value: order.amount / 100,
                 free: false,
               });
-              router.push(
-                `/applications/passport/${submitted.referenceNumber || submitted.applicationId}`
-              );
+              finishPassportSubmitted({
+                applicationId: submitted.applicationId,
+                referenceNumber: submitted.referenceNumber,
+              });
               resolve();
             } catch (err) {
               reject(err);
@@ -750,6 +778,12 @@ export function ApplyPassportWizard({
 
   return (
     <div className="relative min-h-dvh bg-[#f4f7fb] pb-28">
+      <ApplicationSubmittedModal
+        open={Boolean(submittedRedirect)}
+        product="passport"
+        referenceHint={submittedRedirect?.referenceHint}
+        onContinue={continueAfterPassportSubmit}
+      />
       <header className="relative z-20 px-4 pb-2 pt-4 sm:px-8 sm:pt-5">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <button

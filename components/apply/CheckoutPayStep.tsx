@@ -22,6 +22,7 @@ import { formatInrFromPaise } from '@/lib/payments/money';
 import { trackEvent } from '@/lib/analytics/gtm';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/Checkbox';
+import { ApplicationSubmittedModal } from '@/components/apply/ApplicationSubmittedModal';
 
 interface CheckoutPayStepProps {
   countryName: string;
@@ -135,8 +136,10 @@ export function CheckoutPayStep({
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
+  const [showSubmittedModal, setShowSubmittedModal] = useState(false);
   const submitIdRef = useRef<string | null>(null);
   const applicationIdRef = useRef<string | null>(initialApplicationId);
+  const redirectingRef = useRef(false);
   const [insuranceChecked, setInsuranceChecked] = useState(interestedInInsurance);
   const lastEmittedInsuranceRef = useRef(interestedInInsurance);
 
@@ -258,7 +261,14 @@ export function CheckoutPayStep({
     await clearLocalDraftAfterSubmit(draftScope);
     setSuccessId(applicationId);
     setSubmitting(false);
-    router.push(`/dashboard?submitted=${applicationId}`);
+    setShowSubmittedModal(true);
+  };
+
+  const continueAfterSubmit = () => {
+    if (!successId || redirectingRef.current) return;
+    redirectingRef.current = true;
+    setShowSubmittedModal(false);
+    router.push(`/dashboard?submitted=${successId}`);
   };
 
   const handlePay = async () => {
@@ -550,6 +560,16 @@ export function CheckoutPayStep({
 
   return (
     <section className="mx-auto max-w-xl pt-8 sm:pt-12">
+      <ApplicationSubmittedModal
+        open={showSubmittedModal}
+        product="visa"
+        referenceHint={
+          successId && successId.length > 8
+            ? `${successId.slice(0, 8)}…`
+            : successId
+        }
+        onContinue={continueAfterSubmit}
+      />
       <div className="text-center">
         <h1 className="font-basier text-3xl text-portrait-ink sm:text-4xl">
           Checkout
