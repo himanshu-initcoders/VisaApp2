@@ -72,6 +72,25 @@ export async function getPublishedPosts(): Promise<BlogPost[]> {
   }
 }
 
+/** Newest published posts for homepage / hub teasers. */
+export async function getRecentPublishedPosts(
+  limit = 3
+): Promise<BlogPost[]> {
+  try {
+    return await db.query.blogPosts.findMany({
+      where: eq(blogPosts.status, 'published'),
+      orderBy: [desc(blogPosts.publishedAt), desc(blogPosts.updatedAt)],
+      limit,
+    });
+  } catch (error) {
+    if (isMissingRelationError(error)) {
+      console.warn('blog_posts table missing — run npm run db:migrate');
+      return [];
+    }
+    throw error;
+  }
+}
+
 export async function getPublishedPostBySlug(
   slug: string
 ): Promise<BlogPost | undefined> {

@@ -139,6 +139,7 @@
 - [x] JSON-LD structured data (Organization, WebSite, WebPage, Breadcrumb, Service, FAQ, BlogPosting)
 - [x] Sitemap (`/sitemap.xml`) + robots (`/robots.txt`)
 - [x] Blog index + post pages in sitemap, footer, header, `view_blog_post` analytics
+- [x] Recent blogs teaser (3 posts) on home + `/passport`
 - [ ] Analytics dashboard
 - [ ] Reporting system
 

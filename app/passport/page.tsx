@@ -20,9 +20,11 @@ import { FaqAccordion } from '@/components/public/FaqAccordion';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { PassportHeroPricingCard } from '@/components/public/PassportHeroPricingCard';
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
+import { RecentBlogsSection } from '@/components/public/RecentBlogsSection';
 import { StickySectionNav } from '@/components/public/StickySectionNav';
 import { PassportHubViewTracker } from '@/components/analytics/PassportHubViewTracker';
 import { JsonLd } from '@/components/seo/JsonLd';
+import { getRecentPublishedPosts } from '@/lib/db/queries/blog';
 import {
   buildBreadcrumbJsonLd,
   buildFaqPageJsonLd,
@@ -312,7 +314,10 @@ export default async function PassportPage() {
   const { getActivePassportListingsWithPublicData } = await import(
     '@/lib/db/queries/passport-config'
   );
-  const listings = await getActivePassportListingsWithPublicData();
+  const [listings, recentPosts] = await Promise.all([
+    getActivePassportListingsWithPublicData(),
+    getRecentPublishedPosts(3),
+  ]);
 
   const heroListings = listings.map((listing) => ({
     id: listing.id,
@@ -719,6 +724,7 @@ export default async function PassportPage() {
           </div>
         </section>
 
+        <RecentBlogsSection posts={recentPosts} compactBottom />
       </main>
       <Footer />
     </>

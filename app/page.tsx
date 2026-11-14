@@ -5,8 +5,10 @@ import { Footer } from '@/components/layout/Footer';
 import { HomeLandingClient } from '@/components/public/HomeLandingClient';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
+import { RecentBlogsSection } from '@/components/public/RecentBlogsSection';
 import { WhatsAppFloat } from '@/components/public/WhatsAppFloat';
 import { JsonLd } from '@/components/seo/JsonLd';
+import { getRecentPublishedPosts } from '@/lib/db/queries/blog';
 import { getEnabledCountriesWithProcesses } from '@/lib/db/queries/public';
 import {
   buildBreadcrumbJsonLd,
@@ -71,7 +73,10 @@ const HOW_IT_WORKS_STEPS = [
 ];
 
 export default async function Home() {
-  const countriesWithProcesses = await getEnabledCountriesWithProcesses();
+  const [countriesWithProcesses, recentPosts] = await Promise.all([
+    getEnabledCountriesWithProcesses(),
+    getRecentPublishedPosts(3),
+  ]);
   type CountryWithProcesses = (typeof countriesWithProcesses)[number];
   type VisaListing = CountryWithProcesses['visaListings'][number];
 
@@ -184,6 +189,8 @@ export default async function Home() {
             </div>
           </MotionReveal>
         </section>
+
+        <RecentBlogsSection posts={recentPosts} />
       </main>
       <Footer />
       <WhatsAppFloat />
