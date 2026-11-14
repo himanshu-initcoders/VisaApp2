@@ -16,6 +16,12 @@ import {
   type PassengerAutofillPayload,
 } from '@/lib/apply/previousProfilesAutofill';
 import { stageAutofillDocumentsToDraft } from '@/lib/apply/stageAutofillDocuments';
+import {
+  getApplicationDraft,
+  getApplicationDraftForUser,
+  upsertApplicationDraft,
+  upsertApplicationDraftForUser,
+} from '@/lib/apply/serverDraft';
 import { readStoredObject } from '@/lib/upload/readStoredObject';
 import type { ActionResponse } from '@/types/admin';
 
@@ -136,10 +142,56 @@ export async function getMyPassengerAutofill(input: {
       return { success: false, message: 'Profile not found' };
     }
 
+    const existingDraft =
+      requestedOwner && requestedOwner !== session.user.id
+        ? await getApplicationDraftForUser(listingId, userId)
+        : await getApplicationDraft(listingId);
+
+    let applicationId =
+      existingDraft.success && existingDraft.draft
+        ? existingDraft.draft.applicationId
+        : null;
+
+    if (!applicationId) {
+      const draftPayload = {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        countryCode: countryCode.toUpperCase().slice(0, 2),
+        countryName: '',
+        listingId,
+        processName: '',
+        step: 'travellers',
+        primaryName: '',
+        travellers: [{ id: travellerId, name: '' }],
+        departure: {},
+        travellersCount: 1,
+      };
+
+      const saved =
+        requestedOwner && requestedOwner !== session.user.id
+          ? await upsertApplicationDraftForUser({
+              listingId,
+              targetUserId: userId,
+              countryCode,
+              payload: draftPayload,
+            })
+          : await upsertApplicationDraft({
+              listingId,
+              countryCode,
+              payload: draftPayload,
+            });
+
+      if (!saved.success) {
+        return { success: false, message: saved.error };
+      }
+      applicationId = saved.applicationId;
+    }
+
     const staged = await stageAutofillDocumentsToDraft({
       userId,
       countryCode,
       listingId,
+      applicationId,
       travellerId,
       payload,
     });

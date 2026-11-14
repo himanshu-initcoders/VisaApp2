@@ -147,6 +147,9 @@ export default async function AdminApplyDraftsPage({ searchParams }: PageProps) 
                               : processLabel}
                           </p>
                           <p className="font-switzer text-xs text-slate-helper">
+                            {draft.referenceNumber
+                              ? `${draft.referenceNumber} · `
+                              : ''}
                             Step: {draft.payload.step || 'travellers'}
                           </p>
                         </div>

@@ -1,18 +1,15 @@
 /**
- * Submit one visa application.
- * Paid listings are accepted only after a captured Razorpay payment.
- * A zero-fee listing submits without a charge.
+ * Submit a visa application by flipping an existing draft row to submitted.
+ * Files already live under the application storage path — no promote/copy.
  */
 
 'use server';
 
 import { and, eq } from 'drizzle-orm';
-import { randomUUID } from 'crypto';
 import { auth } from '@/lib/auth';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { db } from '@/lib/db';
 import {
-  applicationDrafts,
   documents,
   payments,
   statusHistory,
@@ -30,8 +27,6 @@ import {
   notifyVisaSubmittedToAdminWhatsApp,
   notifyVisaSubmittedToApplicantWhatsApp,
 } from '@/lib/whatsapp/notify';
-import { promoteDraftFileToApplication } from '@/lib/upload/promoteDraftFile';
-import { deleteDraftStorageFiles } from '@/lib/apply/deleteDraftStorageFiles';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 import {
   validateSubmitTravellers,
@@ -39,7 +34,6 @@ import {
 } from '@/lib/apply/validateSubmitTravellers';
 import { quoteVisaListing } from '@/lib/payments/quote';
 import { attachPaymentsToApplication } from '@/lib/payments/record';
-import { ensureUniqueVisaReferenceNumber } from '@/lib/visa/reference-number';
 
 export type { SubmitTravellerPayload } from '@/lib/apply/validateSubmitTravellers';
 
@@ -52,38 +46,17 @@ export interface DraftStorageKeySubmitItem {
   size?: number;
 }
 
-async function loadAndClearDraft(userId: string, listingId: string) {
-  const [row] = await db
-    .select({
-      id: applicationDrafts.id,
-      payload: applicationDrafts.payload,
-    })
-    .from(applicationDrafts)
-    .where(
-      and(
-        eq(applicationDrafts.userId, userId),
-        eq(applicationDrafts.listingId, listingId)
-      )
-    )
-    .limit(1);
-
-  return row ?? null;
-}
-
 export interface SubmitApplicationInput {
   submitId: string;
   listingId: string;
   countryCode: string;
+  /** Existing draft application id (required). */
+  applicationId: string;
   travellers: SubmitTravellerPayload[];
-  /**
-   * Draft object keys already uploaded via FormData (/api/apply/draft-files).
-   * Submit never accepts file bytes — promote these keys into the application path.
-   */
+  /** Storage keys already under the application path. */
   draftStorageKeys?: DraftStorageKeySubmitItem[];
   priceOptionId?: string | null;
-  /** Captured payments.id. Required when the listing fee is above zero. */
   paymentId?: string | null;
-  /** Applicant optional insurance interest from checkout. */
   interestedInInsurance?: boolean;
 }
 
@@ -176,55 +149,28 @@ type UploadResultRow = {
   size: number;
 };
 
-async function resolveDocumentUploads(input: {
-  userId: string;
-  countryCode: string;
-  listingId: string;
-  applicationId: string;
-  draftStorageKeys: DraftStorageKeySubmitItem[];
-}): Promise<
-  | { success: true; results: UploadResultRow[] }
-  | { success: false; error: string }
-> {
+function resolveDocumentKeys(
+  draftStorageKeys: DraftStorageKeySubmitItem[]
+): UploadResultRow[] {
   const results: UploadResultRow[] = [];
   const covered = new Set<string>();
 
-  for (const item of input.draftStorageKeys) {
+  for (const item of draftStorageKeys) {
     const dedupe = `${item.passengerId}:${item.slotKey}`;
     if (covered.has(dedupe)) continue;
-    try {
-      const promoted = await promoteDraftFileToApplication({
-        draftStorageKey: item.storageKey,
-        countryCode: input.countryCode,
-        listingId: input.listingId,
-        userId: input.userId,
-        applicationId: input.applicationId,
-        passengerId: item.passengerId,
-        slotKey: item.slotKey,
-        filename: item.filename,
-        mimeType: item.mimeType,
-      });
-      covered.add(dedupe);
-      results.push({
-        passengerId: item.passengerId,
-        slotKey: item.slotKey,
-        key: promoted.key,
-        url: promoted.url,
-        mimeType: promoted.mimeType,
-        filename: promoted.filename,
-        size: promoted.size,
-      });
-    } catch (error) {
-      console.error('[Submit] Promote failed:', item.storageKey, error);
-      const label = item.filename || item.slotKey;
-      return {
-        success: false,
-        error: `Could not attach "${label}". Go back, re-upload that document, and try again.`,
-      };
-    }
+    covered.add(dedupe);
+    results.push({
+      passengerId: item.passengerId,
+      slotKey: item.slotKey,
+      key: item.storageKey,
+      url: '',
+      mimeType: item.mimeType || 'application/octet-stream',
+      filename: item.filename || `${item.slotKey}.bin`,
+      size: item.size ?? 0,
+    });
   }
 
-  return { success: true, results };
+  return results;
 }
 
 export async function submitApplication(
@@ -247,43 +193,64 @@ export async function submitApplication(
     if (!input.submitId || !isUuid(input.submitId)) {
       return { success: false, error: 'Invalid submit id.' };
     }
+    if (!input.applicationId || !isUuid(input.applicationId)) {
+      return { success: false, error: 'Missing draft application id.' };
+    }
     if (!input.listingId || !input.countryCode) {
       return { success: false, error: 'Missing listing or country.' };
     }
 
-    const [existing] = await db
+    const [draftApp] = await db
+      .select()
+      .from(visaApplications)
+      .where(eq(visaApplications.id, input.applicationId))
+      .limit(1);
+
+    if (!draftApp || draftApp.userId !== userId) {
+      return { success: false, error: 'Draft application not found.' };
+    }
+
+    if (draftApp.visaListingId !== input.listingId) {
+      return { success: false, error: 'Application listing mismatch.' };
+    }
+
+    if (draftApp.status !== 'draft') {
+      await attachPaymentsToApplication({
+        applicationId: draftApp.id,
+        submitId: input.submitId,
+        paymentId: input.paymentId,
+      });
+      return {
+        success: true,
+        applicationId: draftApp.id,
+        referenceNumber: draftApp.referenceNumber,
+        alreadySubmitted: true,
+      };
+    }
+
+    // Idempotency: another submit already claimed this submitId on a different row.
+    const [bySubmitId] = await db
       .select({
         id: visaApplications.id,
         userId: visaApplications.userId,
         referenceNumber: visaApplications.referenceNumber,
+        status: visaApplications.status,
       })
       .from(visaApplications)
       .where(eq(visaApplications.submitId, input.submitId))
       .limit(1);
 
-    if (existing) {
-      if (existing.userId !== userId) {
+    if (bySubmitId && bySubmitId.id !== draftApp.id) {
+      if (bySubmitId.userId !== userId) {
         return {
           success: false,
           error: 'This submission belongs to another account.',
         };
       }
-      await attachPaymentsToApplication({
-        applicationId: existing.id,
-        submitId: input.submitId,
-        paymentId: input.paymentId,
-      });
-      const draft = await loadAndClearDraft(userId, input.listingId);
-      if (draft) {
-        await deleteDraftStorageFiles(draft.payload);
-        await db
-          .delete(applicationDrafts)
-          .where(eq(applicationDrafts.id, draft.id));
-      }
       return {
         success: true,
-        applicationId: existing.id,
-        referenceNumber: existing.referenceNumber,
+        applicationId: bySubmitId.id,
+        referenceNumber: bySubmitId.referenceNumber,
         alreadySubmitted: true,
       };
     }
@@ -378,27 +345,9 @@ export async function submitApplication(
       return { success: false, error: 'User not found.' };
     }
 
-    const applicationId = randomUUID();
-    const referenceNumber = await ensureUniqueVisaReferenceNumber(db);
-    const draftRow = await loadAndClearDraft(userId, input.listingId);
-
-    const uploadResult = await resolveDocumentUploads({
-      userId,
-      countryCode,
-      listingId: input.listingId,
-      applicationId,
-      draftStorageKeys: input.draftStorageKeys ?? [],
-    });
-
-    if (!uploadResult.success) {
-      return {
-        success: false,
-        error: uploadResult.error || 'Document upload failed.',
-      };
-    }
-
+    const uploadResults = resolveDocumentKeys(input.draftStorageKeys ?? []);
     const uploadsByPassenger = new Map<string, UploadResultRow[]>();
-    for (const result of uploadResult.results) {
+    for (const result of uploadResults) {
       const list = uploadsByPassenger.get(result.passengerId) ?? [];
       list.push(result);
       uploadsByPassenger.set(result.passengerId, list);
@@ -435,15 +384,14 @@ export async function submitApplication(
       listing.processName;
 
     const now = new Date();
+    const applicationId = draftApp.id;
+    const referenceNumber = draftApp.referenceNumber;
 
-    try {
-      await db.transaction(async (tx) => {
-        await tx.insert(visaApplications).values({
-          id: applicationId,
-          userId,
-          referenceNumber,
+    await db.transaction(async (tx) => {
+      await tx
+        .update(visaApplications)
+        .set({
           countryCode,
-          visaListingId: input.listingId,
           country: country?.name ?? countryCode,
           visaType: String(resolvedVisaType).slice(0, 100),
           status: 'submitted',
@@ -464,30 +412,72 @@ export async function submitApplication(
             interestedInInsurance,
           },
           travelInfo: travellersJson[0]?.tripDetails ?? null,
-          documents: uploadResult.results.map((r) => ({
+          documents: uploadResults.map((r) => ({
             key: r.key,
             url: r.url,
             slotKey: r.slotKey,
             passengerId: r.passengerId,
           })),
-        });
+        })
+        .where(
+          and(
+            eq(visaApplications.id, applicationId),
+            eq(visaApplications.status, 'draft')
+          )
+        );
 
-        if (uploadResult.results.length > 0) {
-          await tx.insert(documents).values(
-            uploadResult.results.map((r) => ({
-              applicationId,
-              applicationType: 'visa',
-              documentType: r.slotKey,
-              s3Key: r.key,
-              filename: r.filename,
-              fileSize: r.size,
-              mimeType: r.mimeType,
+      for (const result of uploadResults) {
+        const existingDocs = await tx
+          .select({ id: documents.id, s3Key: documents.s3Key })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.applicationId, applicationId),
+              eq(documents.applicationType, 'visa'),
+              eq(documents.documentType, result.slotKey)
+            )
+          );
+
+        const match =
+          existingDocs.find((row) => row.s3Key === result.key) ||
+          existingDocs.find((row) =>
+            row.s3Key.includes(`/passengers/${result.passengerId}/`)
+          ) ||
+          (existingDocs.length === 1 ? existingDocs[0] : undefined);
+
+        if (match) {
+          await tx
+            .update(documents)
+            .set({
+              s3Key: result.key,
+              filename: result.filename,
+              fileSize: result.size,
+              mimeType: result.mimeType,
               verified: null,
               uploadedAt: now,
-            }))
-          );
+            })
+            .where(eq(documents.id, match.id));
+        } else {
+          await tx.insert(documents).values({
+            applicationId,
+            applicationType: 'visa',
+            documentType: result.slotKey,
+            s3Key: result.key,
+            filename: result.filename,
+            fileSize: result.size,
+            mimeType: result.mimeType,
+            verified: null,
+            uploadedAt: now,
+          });
         }
+      }
 
+      const existingTravellers = await tx
+        .select({ id: visaApplicationTravellers.id })
+        .from(visaApplicationTravellers)
+        .where(eq(visaApplicationTravellers.applicationId, applicationId));
+
+      if (existingTravellers.length === 0) {
         const insertedTravellers = await tx
           .insert(visaApplicationTravellers)
           .values(
@@ -509,7 +499,7 @@ export async function submitApplication(
               applicationId,
               applicationType: 'visa' as const,
               travellerId: traveller.id,
-              oldStatus: null,
+              oldStatus: 'draft',
               newStatus: 'submitted',
               changedBy: userId,
               notes: resolvedPaymentId
@@ -519,57 +509,14 @@ export async function submitApplication(
             }))
           );
         }
-
-        if (draftRow) {
-          await tx
-            .delete(applicationDrafts)
-            .where(eq(applicationDrafts.id, draftRow.id));
-        } else {
-          await tx
-            .delete(applicationDrafts)
-            .where(
-              and(
-                eq(applicationDrafts.userId, userId),
-                eq(applicationDrafts.listingId, input.listingId)
-              )
-            );
-        }
-      });
-    } catch (insertError) {
-      const [raced] = await db
-        .select({
-          id: visaApplications.id,
-          referenceNumber: visaApplications.referenceNumber,
-        })
-        .from(visaApplications)
-        .where(eq(visaApplications.submitId, input.submitId))
-        .limit(1);
-      if (raced) {
-        await attachPaymentsToApplication({
-          applicationId: raced.id,
-          submitId: input.submitId,
-          paymentId: resolvedPaymentId,
-        });
-        return {
-          success: true,
-          applicationId: raced.id,
-          referenceNumber: raced.referenceNumber,
-          alreadySubmitted: true,
-        };
       }
-      throw insertError;
-    }
+    });
 
     await attachPaymentsToApplication({
       applicationId,
       submitId: input.submitId,
       paymentId: resolvedPaymentId,
     });
-
-    // Remaining draft files (if any keys not promoted) — best effort after TX
-    if (draftRow?.payload) {
-      await deleteDraftStorageFiles(draftRow.payload);
-    }
 
     const passportData = travellersJson[0]?.passportData;
     const passportEmail =

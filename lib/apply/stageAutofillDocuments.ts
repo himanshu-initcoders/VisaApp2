@@ -14,6 +14,7 @@ export async function stageAutofillDocumentsToDraft(input: {
   userId: string;
   countryCode: string;
   listingId: string;
+  applicationId: string;
   travellerId: string;
   payload: PassengerAutofillPayload;
 }): Promise<PassengerAutofillPayload> {
@@ -36,6 +37,7 @@ export async function stageAutofillDocumentsToDraft(input: {
         countryCode: input.countryCode,
         listingId: input.listingId,
         userId: input.userId,
+        applicationId: input.applicationId,
         passengerId: input.travellerId,
         slotKey: ref.slotKey,
         filename: ref.filename,

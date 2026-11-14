@@ -22,6 +22,7 @@ import { DraftApplicationsList } from '@/components/dashboard/DraftApplicationsL
 import { FlagLogo } from '@/components/shared/FlagLogo';
 import { SubmissionConfirmationTracker } from '@/components/analytics/SubmissionConfirmationTracker';
 import { listMyApplicationDrafts } from '@/lib/apply/serverDraft';
+import { listMyPassportDrafts } from '@/lib/apply/passportDraftActions';
 import { flagUrlFor, getCountryFlagMap } from '@/lib/countries/flags';
 import { loadVisaOutcomePresence } from '@/lib/visa/outcomeDocument';
 import Link from 'next/link';
@@ -44,31 +45,66 @@ export default async function DashboardPage({
   const submittedId = params.submitted;
   const firstName = session.user.name?.split(' ')[0] || 'traveler';
 
-  const [visaApps, passportApps, draftsResult] = await Promise.all([
-    db
-      .select()
-      .from(visaApplications)
-      .where(eq(visaApplications.userId, session.user.id))
-      .orderBy(desc(visaApplications.createdAt))
-      .limit(8),
-    db
-      .select()
-      .from(passportServices)
-      .where(eq(passportServices.userId, session.user.id))
-      .orderBy(desc(passportServices.createdAt))
-      .limit(8),
-    listMyApplicationDrafts(),
-  ]);
+  const [visaAppsAll, passportAppsAll, draftsResult, passportDraftsResult] =
+    await Promise.all([
+      db
+        .select()
+        .from(visaApplications)
+        .where(eq(visaApplications.userId, session.user.id))
+        .orderBy(desc(visaApplications.createdAt))
+        .limit(20),
+      db
+        .select()
+        .from(passportServices)
+        .where(eq(passportServices.userId, session.user.id))
+        .orderBy(desc(passportServices.createdAt))
+        .limit(20),
+      listMyApplicationDrafts(),
+      listMyPassportDrafts(),
+    ]);
 
-  const drafts = draftsResult.success ? draftsResult.drafts : [];
+  const visaApps = visaAppsAll.filter((a) => a.status !== 'draft').slice(0, 8);
+  const passportApps = passportAppsAll
+    .filter((a) => a.status !== 'draft')
+    .slice(0, 8);
+
+  const visaDrafts = draftsResult.success ? draftsResult.drafts : [];
+  const passportDrafts = passportDraftsResult.success
+    ? passportDraftsResult.drafts.map((d) => ({
+        id: d.id,
+        listingId: d.listingId,
+        listingSlug: d.listingSlug ?? null,
+        countryCode: 'IN',
+        referenceNumber: d.referenceNumber,
+        updatedAt: d.updatedAt,
+        kind: 'passport' as const,
+        passportServiceType: d.serviceType,
+        payload: {
+          version: 1,
+          updatedAt: d.updatedAt,
+          countryCode: 'IN',
+          countryName: 'India',
+          listingId: d.listingId,
+          processName: d.serviceType,
+          step: 'form',
+          primaryName: '',
+          travellers: [],
+          departure: {},
+          travellersCount: 1,
+        },
+      }))
+    : [];
+  const drafts = [...visaDrafts, ...passportDrafts].sort(
+    (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
+  );
 
   const totalApplications = visaApps.length + passportApps.length;
   const inProgress =
     visaApps.filter((a) =>
-      ['submitted', 'under_review', 'action_required', 'draft'].includes(a.status)
+      ['submitted', 'under_review', 'action_required'].includes(a.status)
     ).length +
     passportApps.filter((a) =>
-      ['submitted', 'under_review', 'draft', 'in_progress'].includes(a.status)
+      ['submitted', 'under_review', 'in_progress'].includes(a.status)
     ).length +
     drafts.length;
   const approved =

@@ -111,6 +111,7 @@ export function ApplyPassportWizard({
 }: ApplyPassportWizardProps) {
   const router = useRouter();
   const [submitId] = useState(() => crypto.randomUUID());
+  const applicationIdRef = useRef<string | null>(null);
   const hasDocuments = formConfig.documentSlots.length > 0;
   const selectedPrice =
     prices.find((price) => price.id === priceOptionId) || prices[0];
@@ -242,6 +243,9 @@ export function ApplyPassportWizard({
     void loadPassportDraft(listingId).then((result) => {
       if (!result.success || !result.draft) return;
       const draft = result.draft;
+      if (typeof draft.applicationId === 'string') {
+        applicationIdRef.current = draft.applicationId;
+      }
       if (draft.answers && typeof draft.answers === 'object') {
         setAnswers(draft.answers as Record<string, unknown>);
       }
@@ -299,9 +303,9 @@ export function ApplyPassportWizard({
     uploadedDocuments?: Record<string, PassportDraftUpload>;
     macro?: MacroStage;
     stepIndex?: number;
-  }) => {
-    if (!isSignedIn) return;
-    await savePassportDraft({
+  }): Promise<string | null> => {
+    if (!isSignedIn) return applicationIdRef.current;
+    const result = await savePassportDraft({
       listingId,
       payload: {
         answers: overrides?.answers ?? answers,
@@ -311,6 +315,11 @@ export function ApplyPassportWizard({
         stepIndex: overrides?.stepIndex ?? stepIndex,
       },
     });
+    if (result.success) {
+      applicationIdRef.current = result.applicationId;
+      return result.applicationId;
+    }
+    return applicationIdRef.current;
   };
 
   const validateCurrentStep = (): string | null => {
@@ -431,8 +440,14 @@ export function ApplyPassportWizard({
     setUploadBusyKey(slotKey);
     setError(null);
     try {
+      const applicationId = await persistDraft();
+      if (!applicationId) {
+        setError('Could not save draft before upload. Try again.');
+        return;
+      }
       const previous = uploadedDocuments[slotKey];
       const form = new FormData();
+      form.set('applicationId', applicationId);
       form.set('listingId', listingId);
       form.set('countryCode', PASSPORT_DRAFT_COUNTRY_CODE);
       form.set('passengerId', PASSPORT_DRAFT_PASSENGER_ID);
@@ -568,9 +583,16 @@ export function ApplyPassportWizard({
     setBusy(true);
     setError(null);
     try {
+      const applicationId = await persistDraft();
+      if (!applicationId) {
+        setError('Could not save draft before payment. Try again.');
+        return;
+      }
+
       const order = await createPassportCheckoutOrder({
         submitId,
         listingId,
+        applicationId,
         priceOptionId,
       });
       if (!order.success) {
@@ -581,6 +603,11 @@ export function ApplyPassportWizard({
           submit_id: submitId,
         });
         setError(order.error);
+        return;
+      }
+
+      if (order.kind === 'already_submitted') {
+        router.push(`/applications/passport/${order.applicationId}`);
         return;
       }
 
@@ -595,6 +622,7 @@ export function ApplyPassportWizard({
         const submitted = await verifyPassportCheckout({
           submitId,
           listingId,
+          applicationId,
           priceOptionId,
           answers,
           uploadedDocuments,
@@ -665,6 +693,7 @@ export function ApplyPassportWizard({
               const submitted = await verifyPassportCheckout({
                 submitId,
                 listingId,
+                applicationId,
                 priceOptionId,
                 answers,
                 uploadedDocuments,

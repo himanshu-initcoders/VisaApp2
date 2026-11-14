@@ -23,7 +23,6 @@ import {
 import { v2 as cloudinary } from 'cloudinary';
 import { db } from '../lib/db';
 import {
-  applicationDrafts,
   documents,
   passportServices,
   visaApplications,
@@ -466,20 +465,9 @@ async function collectFromDatabase() {
   }
   console.log(`  visa_applications: ${visaRows.length} rows`);
 
-  const draftRows = await db
-    .select({
-      id: applicationDrafts.id,
-      payload: applicationDrafts.payload,
-    })
-    .from(applicationDrafts);
-  for (const row of draftRows) {
-    walkJson(row.payload, {
-      table: 'application_drafts',
-      id: row.id,
-      fieldPrefix: 'payload',
-    });
-  }
-  console.log(`  application_drafts: ${draftRows.length} rows`);
+  console.log(
+    '  application_drafts: skipped (table removed; drafts live in visa_applications)'
+  );
 
   const passportRows = await db
     .select({
@@ -1001,29 +989,7 @@ async function updateDatabase(map: RewriteMap): Promise<{
     }
   }
 
-  // application_drafts.payload
-  const draftRows = await db
-    .select({
-      id: applicationDrafts.id,
-      payload: applicationDrafts.payload,
-    })
-    .from(applicationDrafts);
-  for (const row of draftRows) {
-    const next = rewriteJson(row.payload, map);
-    if (jsonChanged(row.payload, next)) {
-      if (EXECUTE) {
-        await db
-          .update(applicationDrafts)
-          .set({ payload: next as typeof row.payload, updatedAt: new Date() })
-          .where(eq(applicationDrafts.id, row.id));
-      }
-      updated.push({
-        table: 'application_drafts',
-        id: row.id,
-        fields: ['payload'],
-      });
-    }
-  }
+  // application_drafts removed — draft JSON now lives on visa_applications.
 
   // passport_services.documents
   const passportRows = await db

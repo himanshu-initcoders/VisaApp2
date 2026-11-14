@@ -9,6 +9,7 @@ import { FlagLogo } from '@/components/shared/FlagLogo';
 import { DraftApplicationsList } from '@/components/dashboard/DraftApplicationsList';
 import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
 import { listMyApplicationDrafts } from '@/lib/apply/serverDraft';
+import { listMyPassportDrafts } from '@/lib/apply/passportDraftActions';
 import { flagUrlFor, getCountryFlagMap } from '@/lib/countries/flags';
 import { loadVisaOutcomePresence } from '@/lib/visa/outcomeDocument';
 import Link from 'next/link';
@@ -17,21 +18,54 @@ export default async function ApplicationsPage() {
   const session = await auth();
   if (!session) redirect('/signin');
 
-  const [visaApps, passportApps, draftsResult] = await Promise.all([
-    db
-      .select()
-      .from(visaApplications)
-      .where(eq(visaApplications.userId, session.user.id))
-      .orderBy(desc(visaApplications.createdAt)),
-    db
-      .select()
-      .from(passportServices)
-      .where(eq(passportServices.userId, session.user.id))
-      .orderBy(desc(passportServices.createdAt)),
-    listMyApplicationDrafts(),
-  ]);
+  const [visaAppsAll, passportAppsAll, draftsResult, passportDraftsResult] =
+    await Promise.all([
+      db
+        .select()
+        .from(visaApplications)
+        .where(eq(visaApplications.userId, session.user.id))
+        .orderBy(desc(visaApplications.createdAt)),
+      db
+        .select()
+        .from(passportServices)
+        .where(eq(passportServices.userId, session.user.id))
+        .orderBy(desc(passportServices.createdAt)),
+      listMyApplicationDrafts(),
+      listMyPassportDrafts(),
+    ]);
 
-  const drafts = draftsResult.success ? draftsResult.drafts : [];
+  const visaApps = visaAppsAll.filter((a) => a.status !== 'draft');
+  const passportApps = passportAppsAll.filter((a) => a.status !== 'draft');
+
+  const visaDrafts = draftsResult.success ? draftsResult.drafts : [];
+  const passportDrafts = passportDraftsResult.success
+    ? passportDraftsResult.drafts.map((d) => ({
+        id: d.id,
+        listingId: d.listingId,
+        listingSlug: d.listingSlug ?? null,
+        countryCode: 'IN',
+        referenceNumber: d.referenceNumber,
+        updatedAt: d.updatedAt,
+        kind: 'passport' as const,
+        passportServiceType: d.serviceType,
+        payload: {
+          version: 1,
+          updatedAt: d.updatedAt,
+          countryCode: 'IN',
+          countryName: 'India',
+          listingId: d.listingId,
+          processName: d.serviceType,
+          step: 'form',
+          primaryName: '',
+          travellers: [],
+          departure: {},
+          travellersCount: 1,
+        },
+      }))
+    : [];
+  const drafts = [...visaDrafts, ...passportDrafts].sort(
+    (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
+  );
 
   const [summaries, flagUrls, outcomePresence] = await Promise.all([
     loadTravellerSummaries(visaApps.map((app) => app.id)),

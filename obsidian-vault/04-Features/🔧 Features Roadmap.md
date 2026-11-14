@@ -71,7 +71,8 @@
 - [x] Passport capture + Indian MRZ/OCR review (client-side)
 - [x] Passport OCR hardened against real upload layouts (extra pages, rotations, visa pages, PIN-as-MRZ) — see [[Passport OCR]]
 - [x] After passport scan, application form uses AnimatedTabs: General details / Trip details / Documents / Review & submit
-- [x] Traveller form tab Continue flushes local draft + quiet server `application_drafts` sync (signed-in only; no login interrupt)
+- [x] Traveller form tab Continue flushes local draft + quiet server sync into `visa_applications` with `status=draft` (signed-in only; no login interrupt)
+- [x] Drafts unified into main tables: visa + passport use `status=draft`, reference number at create, final storage path from first upload; payment flips to `submitted` (no promote/copy)
 - [ ] **Submission finish line** — see [[📋 Upcoming Tasks Hub]]
   - [x] [[Phase 1 - Document Upload Module]] — IndexDB immediate; cloud key builder + submit helper ready
   - [x] [[Phase 2 - Mobile OTP Applicant Login]] — phone OTP; checkout lock until login

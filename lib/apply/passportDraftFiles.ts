@@ -1,7 +1,7 @@
 /**
- * Passport apply draft files — same draft → promote path as visa.
- * Draft keys live under applications/IN/{listingId}/{userId}/drafts/...
- * Submit promotes them into the application id path; never treat drafts as final.
+ * Passport apply draft files — same final path as submitted applications.
+ * Keys live under applications/IN/{listingId}/{userId}/{applicationId}/...
+ * while passport_services.status = draft; payment only flips status.
  */
 
 export const PASSPORT_DRAFT_COUNTRY_CODE = 'IN';

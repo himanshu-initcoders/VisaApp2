@@ -1,12 +1,12 @@
 /**
- * Copy an owned application/storage object into the current listing draft path.
+ * Copy an owned application/storage object into the current draft application path.
  * Used by previous-profile autofill so the browser never base64-downloads files.
  */
 
 import { uploadService } from '@/lib/upload';
 import {
   APPLICATION_UPLOAD_FOLDER,
-  buildDraftObjectKey,
+  buildApplicationObjectKey,
   extensionFromMime,
 } from '@/lib/upload/applicationKey';
 import { deleteOtherSlotExtensionKeys } from '@/lib/upload/deleteSlotSiblings';
@@ -27,6 +27,7 @@ export async function copyOwnedFileToDraft(input: {
   countryCode: string;
   listingId: string;
   userId: string;
+  applicationId: string;
   passengerId: string;
   slotKey: string;
   filename?: string | null;
@@ -45,10 +46,11 @@ export async function copyOwnedFileToDraft(input: {
     sourceKey.split('/').pop() ||
     `${input.slotKey}.bin`;
   const ext = extensionFromMime(mimeType, filename);
-  const explicitKey = buildDraftObjectKey({
+  const explicitKey = buildApplicationObjectKey({
     countryCode: input.countryCode,
     listingId: input.listingId,
     userId: input.userId,
+    applicationId: input.applicationId,
     passengerId: input.passengerId,
     slotKey: input.slotKey,
     ext,
@@ -71,7 +73,7 @@ export async function copyOwnedFileToDraft(input: {
       passengerId: input.passengerId,
       slotKey: input.slotKey,
       listingId: input.listingId,
-      draft: '1',
+      applicationId: input.applicationId,
       autofillSource: sourceKey,
       ownerUserId: input.userId,
     },

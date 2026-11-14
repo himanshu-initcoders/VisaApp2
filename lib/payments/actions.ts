@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { db } from '@/lib/db';
-import { payments, visaApplications } from '@/lib/db/schema';
+import { passportServices, payments, visaApplications } from '@/lib/db/schema';
 import { ensureFormVersionForSubmit } from '@/lib/db/queries/formVersions';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 import { submitApplication } from '@/lib/apply/submitApplication';
@@ -312,17 +312,18 @@ export async function createVisaCheckoutOrder(
     const user = await requireUserId();
     if (!user.ok) return { success: false, error: user.error };
 
-    const [existingApp] = await db
+    const [existingBySubmit] = await db
       .select({
         id: visaApplications.id,
         userId: visaApplications.userId,
+        status: visaApplications.status,
       })
       .from(visaApplications)
       .where(eq(visaApplications.submitId, parsed.data.submitId))
       .limit(1);
 
-    if (existingApp) {
-      if (existingApp.userId !== user.userId) {
+    if (existingBySubmit && existingBySubmit.status !== 'draft') {
+      if (existingBySubmit.userId !== user.userId) {
         return {
           success: false,
           error: 'This submission belongs to another account.',
@@ -331,7 +332,32 @@ export async function createVisaCheckoutOrder(
       return {
         success: true,
         kind: 'already_submitted',
-        applicationId: existingApp.id,
+        applicationId: existingBySubmit.id,
+      };
+    }
+
+    const [draftApp] = await db
+      .select({
+        id: visaApplications.id,
+        userId: visaApplications.userId,
+        status: visaApplications.status,
+        visaListingId: visaApplications.visaListingId,
+      })
+      .from(visaApplications)
+      .where(eq(visaApplications.id, parsed.data.applicationId))
+      .limit(1);
+
+    if (!draftApp || draftApp.userId !== user.userId) {
+      return { success: false, error: 'Draft application not found.' };
+    }
+    if (draftApp.visaListingId !== parsed.data.listingId) {
+      return { success: false, error: 'Application listing mismatch.' };
+    }
+    if (draftApp.status !== 'draft') {
+      return {
+        success: true,
+        kind: 'already_submitted',
+        applicationId: draftApp.id,
       };
     }
 
@@ -427,6 +453,7 @@ export async function createVisaCheckoutOrder(
       userId: user.userId,
       submitId: parsed.data.submitId,
       quote: prepared.quote,
+      applicationId: parsed.data.applicationId,
     });
     if (!created.ok) return { success: false, error: created.error };
 
@@ -484,6 +511,7 @@ async function insertPendingPayment(input: {
   userId: string;
   submitId: string;
   quote: VisaFeeQuote;
+  applicationId?: string | null;
 }): Promise<
   | { ok: true; paymentId: string; reusedOrderId?: string }
   | { ok: false; error: string }
@@ -493,6 +521,7 @@ async function insertPendingPayment(input: {
       .insert(payments)
       .values({
         userId: input.userId,
+        applicationId: input.applicationId ?? null,
         applicationType: 'visa',
         amount: input.quote.amountPaise,
         currency: 'INR',
@@ -641,6 +670,7 @@ export async function verifyVisaCheckout(
       submitId: parsed.data.submitId,
       listingId: parsed.data.listingId,
       countryCode: parsed.data.countryCode,
+      applicationId: parsed.data.applicationId,
       priceOptionId: prepared.quote.priceOptionId,
       paymentId: recorded.payment.id,
       travellers,
@@ -734,6 +764,31 @@ export async function createPassportCheckoutOrder(
       };
     }
 
+    const [draftApp] = await db
+      .select({
+        id: passportServices.id,
+        userId: passportServices.userId,
+        status: passportServices.status,
+        passportListingId: passportServices.passportListingId,
+      })
+      .from(passportServices)
+      .where(eq(passportServices.id, parsed.data.applicationId))
+      .limit(1);
+
+    if (!draftApp || draftApp.userId !== user.userId) {
+      return { success: false, error: 'Draft application not found.' };
+    }
+    if (draftApp.passportListingId !== parsed.data.listingId) {
+      return { success: false, error: 'Application listing mismatch.' };
+    }
+    if (draftApp.status !== 'draft') {
+      return {
+        success: true,
+        kind: 'already_submitted',
+        applicationId: draftApp.id,
+      };
+    }
+
     const quoted = await quotePassportListing({
       listingId: parsed.data.listingId,
       priceOptionId: parsed.data.priceOptionId,
@@ -748,6 +803,7 @@ export async function createPassportCheckoutOrder(
       .insert(payments)
       .values({
         userId: user.userId,
+        applicationId: parsed.data.applicationId,
         applicationType: 'passport',
         amount: quoted.quote.amountPaise,
         currency: 'INR',
@@ -884,6 +940,7 @@ export async function verifyPassportCheckout(input: unknown): Promise<
     const submitted = await submitPassportApplication({
       submitId: parsed.data.submitId,
       listingId: parsed.data.listingId,
+      applicationId: parsed.data.applicationId,
       priceOptionId: parsed.data.priceOptionId,
       answers: parsed.data.answers,
       uploadedDocuments: parsed.data.uploadedDocuments,

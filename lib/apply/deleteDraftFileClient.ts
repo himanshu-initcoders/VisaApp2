@@ -7,6 +7,7 @@
 export async function deleteServerDraftFile(input: {
   storageKey: string;
   ownerUserId?: string | null;
+  applicationId?: string | null;
 }): Promise<boolean> {
   const key = input.storageKey.trim();
   if (!key) return false;
@@ -18,6 +19,9 @@ export async function deleteServerDraftFile(input: {
       body: JSON.stringify({
         storageKey: key,
         ...(input.ownerUserId ? { ownerUserId: input.ownerUserId } : {}),
+        ...(input.applicationId
+          ? { applicationId: input.applicationId }
+          : {}),
       }),
     });
     if (!response.ok) {

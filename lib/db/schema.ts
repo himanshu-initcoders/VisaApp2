@@ -72,36 +72,6 @@ export const emailOtpChallenges = pgTable('email_otp_challenges', {
 });
 
 /**
- * Client apply drafts synced after applicant OTP login (JSON only; files stay in IndexedDB).
- */
-export const applicationDrafts = pgTable(
-  'application_drafts',
-  {
-    id: uuid('id').defaultRandom().primaryKey(),
-    userId: uuid('user_id')
-      .references(() => users.id, { onDelete: 'cascade' })
-      .notNull(),
-    listingId: uuid('listing_id')
-      .references(() => visaListings.id, { onDelete: 'cascade' })
-      .notNull(),
-    countryCode: char('country_code', { length: 2 }),
-    payload: jsonb('payload').notNull(),
-    /** Applicant or staff who last saved this draft. */
-    savedByUserId: uuid('saved_by_user_id').references(() => users.id, {
-      onDelete: 'set null',
-    }),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex('application_drafts_user_listing_unique').on(
-      table.userId,
-      table.listingId
-    ),
-  ]
-);
-
-/**
  * Immutable published form config snapshots per listing (Phase 3).
  */
 export const formVersions = pgTable(
@@ -167,7 +137,7 @@ export const visaApplications = pgTable(
     applicantName: varchar('applicant_name', { length: 255 }),
     applicantPhone: varchar('applicant_phone', { length: 20 }),
     passengerNames: text('passenger_names'),
-    /** Client idempotency key for mock-pay submit */
+    /** Client idempotency key for checkout / submit */
     submitId: uuid('submit_id'),
     /** Applicant opted in to visa insurance interest at checkout (optional). */
     interestedInInsurance: boolean('interested_in_insurance')
@@ -175,6 +145,10 @@ export const visaApplications = pgTable(
       .notNull(),
 
     paymentId: uuid('payment_id'),
+    /** Applicant or staff who last saved while status=draft. */
+    savedByUserId: uuid('saved_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     /** Staff reviewer assigned to this visa application. */
     assignedReviewerId: uuid('assigned_reviewer_id').references(() => users.id, {
       onDelete: 'set null',
@@ -190,6 +164,9 @@ export const visaApplications = pgTable(
     uniqueIndex('visa_applications_reference_number_unique').on(
       table.referenceNumber
     ),
+    uniqueIndex('visa_applications_one_draft_per_user_listing')
+      .on(table.userId, table.visaListingId)
+      .where(sql`${table.status} = 'draft'`),
     index('visa_applications_status_submitted_at_idx').on(
       table.status,
       table.submittedAt
@@ -259,36 +236,9 @@ export const passportFormVersions = pgTable(
 );
 
 /**
- * Client apply drafts for passport services (JSON only; files stay in IndexedDB).
- */
-export const passportApplicationDrafts = pgTable(
-  'passport_application_drafts',
-  {
-    id: uuid('id').defaultRandom().primaryKey(),
-    userId: uuid('user_id')
-      .references(() => users.id, { onDelete: 'cascade' })
-      .notNull(),
-    passportListingId: uuid('passport_listing_id')
-      .references(() => passportListings.id, { onDelete: 'cascade' })
-      .notNull(),
-    payload: jsonb('payload').notNull(),
-    savedByUserId: uuid('saved_by_user_id').references(() => users.id, {
-      onDelete: 'set null',
-    }),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex('passport_application_drafts_user_listing_unique').on(
-      table.userId,
-      table.passportListingId
-    ),
-  ]
-);
-
-/**
- * Passport Services — submitted / in-progress Indian passport applications.
+ * Passport Services — draft / submitted Indian passport applications.
  * serviceType: fresh | reissue
+ * In-progress apply rows use status=draft (same table + storage path as submitted).
  */
 export const passportServices = pgTable(
   'passport_services',
@@ -319,7 +269,13 @@ export const passportServices = pgTable(
     documents: jsonb('documents'),
     appointmentDate: timestamp('appointment_date'),
     appointmentLocation: varchar('appointment_location', { length: 255 }),
+    /** Client idempotency key for checkout / submit */
+    submitId: uuid('submit_id'),
     paymentId: uuid('payment_id'),
+    /** Applicant or staff who last saved while status=draft. */
+    savedByUserId: uuid('saved_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     assignedReviewerId: uuid('assigned_reviewer_id').references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -337,6 +293,10 @@ export const passportServices = pgTable(
     uniqueIndex('passport_services_reference_number_unique').on(
       table.referenceNumber
     ),
+    uniqueIndex('passport_services_submit_id_unique').on(table.submitId),
+    uniqueIndex('passport_services_one_draft_per_user_listing')
+      .on(table.userId, table.passportListingId)
+      .where(sql`${table.status} = 'draft'`),
   ]
 );
 
@@ -359,7 +319,7 @@ export const documents = pgTable('documents', {
 
 /**
  * Payments table.
- * application_id stays null until the visa application row exists.
+ * application_id points at the draft/submitted application when known.
  * amount is paise.
  */
 export const payments = pgTable(
@@ -692,11 +652,6 @@ export type NewPassportService = typeof passportServices.$inferInsert;
 export type PassportFormVersion = typeof passportFormVersions.$inferSelect;
 export type NewPassportFormVersion = typeof passportFormVersions.$inferInsert;
 
-export type PassportApplicationDraft =
-  typeof passportApplicationDrafts.$inferSelect;
-export type NewPassportApplicationDraft =
-  typeof passportApplicationDrafts.$inferInsert;
-
 export type {
   PassportListing,
   NewPassportListing,
@@ -720,9 +675,6 @@ export type NewPayment = typeof payments.$inferInsert;
 
 export type StatusHistory = typeof statusHistory.$inferSelect;
 export type NewStatusHistory = typeof statusHistory.$inferInsert;
-
-export type ApplicationDraft = typeof applicationDrafts.$inferSelect;
-export type NewApplicationDraft = typeof applicationDrafts.$inferInsert;
 
 export type FormVersion = typeof formVersions.$inferSelect;
 export type NewFormVersion = typeof formVersions.$inferInsert;

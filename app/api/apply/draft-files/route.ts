@@ -1,24 +1,32 @@
 /**
- * Multipart draft file upload / restore / delete (no Base64).
+ * Multipart application file upload / restore / delete.
+ * Writes under the final application path while status=draft.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { canAccessAdmin } from '@/lib/auth-utils';
 import { db } from '@/lib/db';
-import { users } from '@/lib/db/schema';
+import {
+  documents,
+  passportServices,
+  users,
+  visaApplications,
+} from '@/lib/db/schema';
 import { uploadService } from '@/lib/upload';
 import {
   APPLICATION_UPLOAD_FOLDER,
-  buildDraftObjectKey,
+  buildApplicationObjectKey,
   extensionFromMime,
+  isApplicationObjectKey,
   isDraftObjectKey,
 } from '@/lib/upload/applicationKey';
 import { readStoredObject } from '@/lib/upload/readStoredObject';
 import { assertSafeStorageKey } from '@/lib/upload/safeStorageKey';
 import { deleteOtherSlotExtensionKeys } from '@/lib/upload/deleteSlotSiblings';
+import { upsertApplicationDocumentRow } from '@/lib/upload/upsertApplicationDocumentRow';
 
 const ALLOWED_TYPES = [
   'image/jpeg',
@@ -48,6 +56,92 @@ async function resolveOwnerUserId(
   return { ok: true, ownerUserId: target.id };
 }
 
+async function resolveDraftApplication(input: {
+  applicationId: string;
+  ownerUserId: string;
+}): Promise<
+  | {
+      ok: true;
+      applicationType: 'visa' | 'passport';
+      countryCode: string;
+      listingId: string;
+    }
+  | { ok: false; error: string }
+> {
+  const [visa] = await db
+    .select({
+      id: visaApplications.id,
+      userId: visaApplications.userId,
+      status: visaApplications.status,
+      countryCode: visaApplications.countryCode,
+      listingId: visaApplications.visaListingId,
+    })
+    .from(visaApplications)
+    .where(eq(visaApplications.id, input.applicationId))
+    .limit(1);
+
+  if (visa) {
+    if (visa.userId !== input.ownerUserId) {
+      return { ok: false, error: 'Unauthorized' };
+    }
+    if (visa.status !== 'draft') {
+      return { ok: false, error: 'Application is no longer a draft' };
+    }
+    if (!visa.listingId || !visa.countryCode) {
+      return { ok: false, error: 'Draft application is incomplete' };
+    }
+    return {
+      ok: true,
+      applicationType: 'visa',
+      countryCode: visa.countryCode,
+      listingId: visa.listingId,
+    };
+  }
+
+  const [passport] = await db
+    .select({
+      id: passportServices.id,
+      userId: passportServices.userId,
+      status: passportServices.status,
+      listingId: passportServices.passportListingId,
+    })
+    .from(passportServices)
+    .where(eq(passportServices.id, input.applicationId))
+    .limit(1);
+
+  if (!passport) {
+    return { ok: false, error: 'Draft application not found' };
+  }
+  if (passport.userId !== input.ownerUserId) {
+    return { ok: false, error: 'Unauthorized' };
+  }
+  if (passport.status !== 'draft') {
+    return { ok: false, error: 'Application is no longer a draft' };
+  }
+  if (!passport.listingId) {
+    return { ok: false, error: 'Draft application is incomplete' };
+  }
+
+  return {
+    ok: true,
+    applicationType: 'passport',
+    countryCode: 'IN',
+    listingId: passport.listingId,
+  };
+}
+
+function keyBelongsToOwner(
+  key: string,
+  ownerUserId: string,
+  applicationId?: string | null
+): boolean {
+  if (applicationId && isApplicationObjectKey(key, ownerUserId, applicationId)) {
+    return true;
+  }
+  // Allow reading abandoned legacy /drafts/ keys during transition.
+  return isDraftObjectKey(key, ownerUserId);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -60,6 +154,7 @@ export async function POST(request: NextRequest) {
     }
 
     const form = await request.formData();
+    const applicationId = String(form.get('applicationId') || '').trim();
     const listingId = String(form.get('listingId') || '').trim();
     const countryCode = String(form.get('countryCode') || '').trim();
     const passengerId = String(form.get('passengerId') || '').trim();
@@ -69,8 +164,11 @@ export async function POST(request: NextRequest) {
       typeof ownerUserIdRaw === 'string' ? ownerUserIdRaw.trim() : null;
     const file = form.get('file');
 
-    if (!listingId || !countryCode || !passengerId || !slotKey) {
-      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+    if (!applicationId || !passengerId || !slotKey) {
+      return NextResponse.json(
+        { error: 'Missing applicationId, passengerId, or slotKey' },
+        { status: 400 }
+      );
     }
     if (!(file instanceof File)) {
       return NextResponse.json({ error: 'File required' }, { status: 400 });
@@ -85,13 +183,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: owner.error }, { status: 403 });
     }
 
+    const draft = await resolveDraftApplication({
+      applicationId,
+      ownerUserId: owner.ownerUserId,
+    });
+    if (!draft.ok) {
+      return NextResponse.json({ error: draft.error }, { status: 403 });
+    }
+
+    const resolvedListingId = listingId || draft.listingId;
+    const resolvedCountryCode = (countryCode || draft.countryCode).toUpperCase();
+
     const mimeType = file.type || 'application/octet-stream';
     if (!ALLOWED_TYPES.includes(mimeType as (typeof ALLOWED_TYPES)[number])) {
       return NextResponse.json({ error: 'File type not allowed' }, { status: 400 });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    // Sniff bytes so a PDF is never stored under a leftover `.jpg` slot key.
     let effectiveMime = mimeType;
     if (
       buffer.length >= 4 &&
@@ -103,10 +211,11 @@ export async function POST(request: NextRequest) {
       effectiveMime = 'application/pdf';
     }
     const ext = extensionFromMime(effectiveMime, file.name);
-    const explicitKey = buildDraftObjectKey({
-      countryCode,
-      listingId,
+    const explicitKey = buildApplicationObjectKey({
+      countryCode: resolvedCountryCode,
+      listingId: resolvedListingId,
       userId: owner.ownerUserId,
+      applicationId,
       passengerId,
       slotKey,
       ext,
@@ -136,17 +245,16 @@ export async function POST(request: NextRequest) {
       metadata: {
         passengerId,
         slotKey,
-        listingId,
-        draft: '1',
+        listingId: resolvedListingId,
+        applicationId,
         ownerUserId: owner.ownerUserId,
       },
     });
 
-    // Drop prior key when extension/MIME changed; also purge sibling extensions on S3/local.
     if (
       previousStorageKey &&
       previousStorageKey !== result.key &&
-      isDraftObjectKey(previousStorageKey, owner.ownerUserId)
+      keyBelongsToOwner(previousStorageKey, owner.ownerUserId, applicationId)
     ) {
       try {
         await uploadService.delete({
@@ -154,13 +262,26 @@ export async function POST(request: NextRequest) {
         });
       } catch (error) {
         console.warn(
-          '[Draft] Failed to delete previous draft key:',
+          '[Draft] Failed to delete previous key:',
           previousStorageKey,
           error
         );
       }
     }
     await deleteOtherSlotExtensionKeys(result.key);
+
+    await upsertApplicationDocumentRow(db, {
+      applicationId,
+      applicationType: draft.applicationType,
+      passengerId,
+      slotKey,
+      previousKey: previousStorageKey || null,
+      key: result.key,
+      filename: result.filename || uploadFilename,
+      size: result.size,
+      mimeType: result.mimeType || effectiveMime,
+      now: new Date(),
+    });
 
     return NextResponse.json({
       success: true,
@@ -199,6 +320,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const storageKeyRaw = searchParams.get('storageKey') || '';
     const ownerUserId = searchParams.get('ownerUserId');
+    const applicationId = searchParams.get('applicationId');
 
     let storageKey: string;
     try {
@@ -220,7 +342,7 @@ export async function GET(request: NextRequest) {
     if (!owner.ok) {
       return NextResponse.json({ error: owner.error }, { status: 403 });
     }
-    if (!isDraftObjectKey(storageKey, owner.ownerUserId)) {
+    if (!keyBelongsToOwner(storageKey, owner.ownerUserId, applicationId)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -230,8 +352,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     const buffer = stored.buffer;
-    // Prefer magic bytes — a PDF saved under a leftover `.jpg` slot key must
-    // not be served as image/jpeg (that produces broken <img> previews).
     let mimeType = stored.mimeType || 'application/octet-stream';
     if (
       buffer.length >= 4 &&
@@ -286,6 +406,7 @@ export async function DELETE(request: NextRequest) {
     const body = (await request.json().catch(() => null)) as {
       storageKey?: string;
       ownerUserId?: string;
+      applicationId?: string;
     } | null;
 
     let storageKey: string;
@@ -308,11 +429,33 @@ export async function DELETE(request: NextRequest) {
     if (!owner.ok) {
       return NextResponse.json({ error: owner.error }, { status: 403 });
     }
-    if (!isDraftObjectKey(storageKey, owner.ownerUserId)) {
+    if (
+      !keyBelongsToOwner(
+        storageKey,
+        owner.ownerUserId,
+        body?.applicationId ?? null
+      )
+    ) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     await uploadService.delete({ key: storageKey });
+
+    if (body?.applicationId) {
+      await db
+        .delete(documents)
+        .where(
+          and(
+            eq(documents.applicationId, body.applicationId),
+            eq(documents.s3Key, storageKey),
+            or(
+              eq(documents.applicationType, 'visa'),
+              eq(documents.applicationType, 'passport')
+            )
+          )
+        );
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('draft-files DELETE error:', error);

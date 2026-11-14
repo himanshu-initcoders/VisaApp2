@@ -253,6 +253,13 @@
       "when": 1794700000000,
       "tag": "0035_fix_passport_submit_status_history_tz",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794800000000,
+      "tag": "0036_drafts_into_applications",
+      "breakpoints": true
     }
   ]
 }

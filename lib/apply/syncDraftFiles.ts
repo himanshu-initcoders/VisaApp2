@@ -148,9 +148,10 @@ async function listIdbSlots(
 }
 
 /**
- * Upload local IDB files for this listing draft via FormData (no Base64).
+ * Upload local IDB files into the draft application's final storage path.
  */
 export async function syncDraftFilesToServer(input: {
+  applicationId: string;
   listingId: string;
   countryCode: string;
   travellers: ApplyTraveller[];
@@ -160,6 +161,14 @@ export async function syncDraftFilesToServer(input: {
   | { success: true; travellers: ApplyTraveller[]; uploadedCount: number }
   | { success: false; error: string; travellers: ApplyTraveller[] }
 > {
+  if (!input.applicationId) {
+    return {
+      success: false,
+      error: 'Save the draft application before uploading files.',
+      travellers: input.travellers,
+    };
+  }
+
   const scope: DraftScopeInput = {
     listingId: input.listingId,
     sessionUserId: input.sessionUserId ?? null,
@@ -187,6 +196,7 @@ export async function syncDraftFilesToServer(input: {
 
   for (const file of files) {
     const form = new FormData();
+    form.set('applicationId', input.applicationId);
     form.set('listingId', input.listingId);
     form.set('countryCode', input.countryCode);
     form.set('passengerId', file.passengerId);
@@ -243,6 +253,7 @@ export async function prepareDraftFilesForSubmit(input: {
   draft: ApplyDraft;
   draftScope: DraftScopeInput;
   countryCode: string;
+  applicationId: string;
 }): Promise<
   | {
       success: true;
@@ -254,6 +265,7 @@ export async function prepareDraftFilesForSubmit(input: {
 > {
   const ownerUserId = input.draftScope.onBehalfOfUserId ?? undefined;
   const sync = await syncDraftFilesToServer({
+    applicationId: input.applicationId,
     listingId: input.draft.listingId,
     countryCode: input.countryCode,
     travellers: input.draft.travellers,
@@ -304,6 +316,7 @@ export async function restoreDraftFilesToIdb(input: {
   travellers: ApplyTraveller[];
   ownerUserId?: string;
   sessionUserId?: string | null;
+  applicationId?: string | null;
 }): Promise<ApplyTraveller[]> {
   if (!isIdbAvailable()) return input.travellers;
 
@@ -373,6 +386,9 @@ export async function restoreDraftFilesToIdb(input: {
         });
         if (input.ownerUserId) {
           params.set('ownerUserId', input.ownerUserId);
+        }
+        if (input.applicationId) {
+          params.set('applicationId', input.applicationId);
         }
         const response = await fetch(
           `/api/apply/draft-files?${params.toString()}`

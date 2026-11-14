@@ -45,6 +45,7 @@ export const checkoutTravellerSchema = z.object({
 export const createVisaCheckoutOrderSchema = z.object({
   submitId: z.string().uuid(),
   listingId: z.string().uuid(),
+  applicationId: z.string().uuid(),
   countryCode: z
     .string()
     .trim()
@@ -76,6 +77,7 @@ export const quotePassportCheckoutSchema = z.object({
 export const createPassportCheckoutOrderSchema = z.object({
   submitId: z.string().uuid(),
   listingId: z.string().uuid(),
+  applicationId: z.string().uuid(),
   priceOptionId: z.string().uuid(),
 });
 

@@ -1,10 +1,8 @@
 /**
  * Canonical object keys for applicant documents (S3 / Cloudinary / local).
  *
+ * Draft and submitted applications share the same path (status lives in DB):
  * applications/{countryCode}/{listingId}/{userId}/{applicationId}/passengers/{passengerId}/{slotKey}.{ext}
- *
- * Draft (pre-submit) files:
- * applications/{countryCode}/{listingId}/{userId}/drafts/passengers/{passengerId}/{slotKey}.{ext}
  */
 
 export interface ApplicationObjectKeyInput {
@@ -82,6 +80,26 @@ export function buildApplicationObjectKey(input: ApplicationObjectKeyInput): str
   ].join('/');
 }
 
+/** True when key belongs to this user + application under applications/. */
+export function isApplicationObjectKey(
+  key: string,
+  userId: string,
+  applicationId: string
+): boolean {
+  const userSeg = sanitizePathSegment(userId);
+  const appSeg = sanitizePathSegment(applicationId);
+  const marker = `/${userSeg}/${appSeg}/`;
+  return key.startsWith('applications/') && key.includes(marker);
+}
+
+/**
+ * @deprecated Legacy /drafts/ path — kept only for reading abandoned keys.
+ */
+export function isDraftObjectKey(key: string, userId: string): boolean {
+  const segment = `/${sanitizePathSegment(userId)}/drafts/`;
+  return key.includes(segment) && key.startsWith('applications/');
+}
+
 export interface DraftObjectKeyInput {
   countryCode: string;
   listingId: string;
@@ -91,7 +109,10 @@ export interface DraftObjectKeyInput {
   ext: string;
 }
 
-/** Stable per user+listing draft file key (no applicationId yet). */
+/**
+ * @deprecated Prefer {@link buildApplicationObjectKey} with a draft application id.
+ * Kept so transitional callers can still compile until fully migrated.
+ */
 export function buildDraftObjectKey(input: DraftObjectKeyInput): string {
   const countryCode = sanitizePathSegment(input.countryCode).toUpperCase();
   const listingId = sanitizePathSegment(input.listingId);
@@ -110,12 +131,6 @@ export function buildDraftObjectKey(input: DraftObjectKeyInput): string {
     passengerId,
     `${slotKey}.${ext}`,
   ].join('/');
-}
-
-/** True when key is under the draft files prefix for a user. */
-export function isDraftObjectKey(key: string, userId: string): boolean {
-  const segment = `/${sanitizePathSegment(userId)}/drafts/`;
-  return key.includes(segment) && key.startsWith('applications/');
 }
 
 /** Cloudinary public_id — same path without file extension. */

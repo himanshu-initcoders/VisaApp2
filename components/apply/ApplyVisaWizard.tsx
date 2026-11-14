@@ -42,6 +42,7 @@ import {
   deleteApplicationDraft,
   getApplicationDraft,
   getApplicationDraftForUser,
+  touchVisaDraftApplication,
   upsertApplicationDraft,
   upsertApplicationDraftForUser,
   type ServerDraftPayload,
@@ -300,6 +301,8 @@ export function ApplyVisaWizard({
   travellersRef.current = travellers;
   const stepRef = useRef(step);
   stepRef.current = step;
+  const applicationIdRef = useRef<string | null>(null);
+  const referenceNumberRef = useRef<string | null>(null);
   const enterTrackedRef = useRef(false);
 
   useEffect(() => {
@@ -426,8 +429,37 @@ export function ApplyVisaWizard({
         return false;
       }
 
+      const payload = await persistLocalDraft();
+
+      if (!quiet) setSaveDraftMessage('Saving application…');
+      const draftResult = savingOnBehalf
+        ? await upsertApplicationDraftForUser({
+            listingId,
+            targetUserId: onBehalfOfUserId!,
+            countryCode,
+            payload,
+          })
+        : await upsertApplicationDraft({
+            listingId,
+            countryCode,
+            payload,
+          });
+
+      if (!draftResult.success) {
+        if (quiet) {
+          console.warn('[Draft] quiet sync failed:', draftResult.error);
+        } else {
+          setSaveDraftError(draftResult.error);
+        }
+        return false;
+      }
+
+      applicationIdRef.current = draftResult.applicationId;
+      referenceNumberRef.current = draftResult.referenceNumber;
+
       if (!quiet) setSaveDraftMessage('Uploading documents…');
       const fileSync = await syncDraftFilesToServer({
+        applicationId: draftResult.applicationId,
         listingId,
         countryCode,
         travellers: travellersRef.current,
@@ -449,50 +481,36 @@ export function ApplyVisaWizard({
         travellersRef.current = fileSync.travellers;
       }
 
-      const payload = await persistLocalDraft();
-
-      if (savingOnBehalf) {
-        const result = await upsertApplicationDraftForUser({
-          listingId,
-          targetUserId: onBehalfOfUserId!,
-          countryCode,
-          payload,
-        });
-        if (!result.success) {
+      if (fileSync.uploadedCount > 0) {
+        const refreshedPayload = await persistLocalDraft();
+        const refreshResult = savingOnBehalf
+          ? await upsertApplicationDraftForUser({
+              listingId,
+              targetUserId: onBehalfOfUserId!,
+              countryCode,
+              payload: refreshedPayload,
+            })
+          : await upsertApplicationDraft({
+              listingId,
+              countryCode,
+              payload: refreshedPayload,
+            });
+        if (!refreshResult.success) {
           if (quiet) {
-            console.warn('[Draft] quiet sync failed:', result.error);
+            console.warn('[Draft] quiet sync failed:', refreshResult.error);
           } else {
-            setSaveDraftError(result.error);
+            setSaveDraftError(refreshResult.error);
           }
           return false;
         }
-        if (!quiet) {
-          setSaveDraftMessage(
-            fileSync.uploadedCount > 0
-              ? `Draft saved for applicant (${fileSync.uploadedCount} file${fileSync.uploadedCount === 1 ? '' : 's'})`
-              : 'Draft saved for applicant'
-          );
-        }
-        return true;
       }
 
-      const result = await upsertApplicationDraft({
-        listingId,
-        countryCode,
-        payload,
-      });
-      if (!result.success) {
-        if (quiet) {
-          console.warn('[Draft] quiet sync failed:', result.error);
-        } else {
-          setSaveDraftError(result.error);
-        }
-        return false;
-      }
       if (!quiet) {
-        const base = isStaffSession
-          ? 'Draft saved to your staff account'
-          : 'Draft saved to your account';
+        const base = savingOnBehalf
+          ? 'Draft saved for applicant'
+          : isStaffSession
+            ? 'Draft saved to your staff account'
+            : 'Draft saved to your account';
         setSaveDraftMessage(
           fileSync.uploadedCount > 0
             ? `${base} (${fileSync.uploadedCount} file${fileSync.uploadedCount === 1 ? '' : 's'})`
@@ -572,6 +590,15 @@ export function ApplyVisaWizard({
 
   const applyDraftToUi = async (draft: ApplyDraft) => {
     const scope = draftScope();
+    if (sessionStatus === 'authenticated') {
+      void touchVisaDraftApplication({
+        listingId,
+        ownerUserId:
+          onBehalfOfUserId && isStaffSession ? onBehalfOfUserId : undefined,
+      }).catch((error) => {
+        console.warn('[Draft] touch updatedAt failed:', error);
+      });
+    }
     const migrated = await migrateLegacyDraftBinaries(draft, {
       sessionUserId: scope.sessionUserId,
       onBehalfOfUserId: scope.onBehalfOfUserId,
@@ -584,6 +611,7 @@ export function ApplyVisaWizard({
         ownerUserId:
           onBehalfOfUserId && isStaffSession ? onBehalfOfUserId : undefined,
         sessionUserId,
+        applicationId: applicationIdRef.current,
       });
     }
     setStep(draft.step);
@@ -625,6 +653,8 @@ export function ApplyVisaWizard({
               (Date.parse(remote.draft.updatedAt) || 0) >=
                 (Date.parse(local.updatedAt) || 0))
           ) {
+            applicationIdRef.current = remote.draft.applicationId;
+            referenceNumberRef.current = remote.draft.referenceNumber;
             const payload = remote.draft.payload;
             local = {
               version: 1,
@@ -640,6 +670,14 @@ export function ApplyVisaWizard({
               travellersCount: payload.travellersCount || 1,
               interestedInInsurance: payload.interestedInInsurance,
             };
+            const restored = await restoreDraftFilesToIdb({
+              listingId,
+              travellers: local.travellers,
+              ownerUserId: onBehalfOfUserId ?? undefined,
+              sessionUserId,
+              applicationId: remote.draft.applicationId,
+            });
+            local = { ...local, travellers: restored };
             await writeApplyDraftAsync(local, {
               sessionUserId,
               onBehalfOfUserId,
@@ -1560,6 +1598,12 @@ export function ApplyVisaWizard({
             countryName={countryName}
             countryCode={countryCode}
             listingId={listingId}
+            processName={processName}
+            applicationId={applicationIdRef.current}
+            onApplicationId={(id, referenceNumber) => {
+              applicationIdRef.current = id;
+              referenceNumberRef.current = referenceNumber;
+            }}
             filledCount={filledTravellers.length}
             showInsuranceInterest={Boolean(formConfig.showInsuranceInterest)}
             interestedInInsurance={interestedInInsurance}

@@ -14,7 +14,6 @@ import { uploadService } from '@/lib/upload';
 import {
   APPLICATION_UPLOAD_FOLDER,
   buildApplicationObjectKey,
-  buildDraftObjectKey,
   extensionFromMime,
   isDraftObjectKey,
 } from '@/lib/upload/applicationKey';
@@ -155,14 +154,14 @@ export async function uploadApplicationDocuments(
 export interface DraftDocumentUploadInput {
   countryCode: string;
   listingId: string;
-  /** When set by staff, files are stored under this applicant's draft path. */
+  applicationId: string;
+  /** When set by staff, files are stored under this applicant's path. */
   ownerUserId?: string;
   documents: ApplicationDocumentUploadItem[];
 }
 
 /**
- * Upload apply-draft documents under …/{ownerUserId}/drafts/…
- * Does not create visa_applications or documents rows.
+ * Upload apply-draft documents under the final application object path.
  */
 export async function uploadDraftDocuments(
   input: DraftDocumentUploadInput
@@ -179,6 +178,10 @@ export async function uploadDraftDocuments(
     const actorId = await resolveSessionUserId(session.user);
     if (!actorId) {
       return { success: false, error: 'Your session is out of date. Sign in again.' };
+    }
+
+    if (!input.applicationId) {
+      return { success: false, error: 'applicationId is required for draft uploads.' };
     }
 
     let ownerUserId = actorId;
@@ -209,10 +212,11 @@ export async function uploadDraftDocuments(
         const buffer = decodeBase64(doc.bufferBase64);
         const mimeType = doc.mimeType || 'application/octet-stream';
         const ext = extensionFromMime(mimeType, doc.filename);
-        const explicitKey = buildDraftObjectKey({
+        const explicitKey = buildApplicationObjectKey({
           countryCode: input.countryCode,
           listingId: input.listingId,
           userId: ownerUserId,
+          applicationId: input.applicationId,
           passengerId: doc.passengerId,
           slotKey: doc.slotKey,
           ext,
@@ -234,7 +238,7 @@ export async function uploadDraftDocuments(
             passengerId: doc.passengerId,
             slotKey: doc.slotKey,
             listingId: input.listingId,
-            draft: '1',
+            applicationId: input.applicationId,
             ownerUserId,
           },
         });
@@ -317,7 +321,10 @@ export async function fetchDraftDocumentBlob(input: {
       ownerUserId = input.ownerUserId;
     }
 
-    if (!isDraftObjectKey(storageKey, ownerUserId)) {
+    const underOwner =
+      storageKey.startsWith('applications/') &&
+      storageKey.includes(`/${ownerUserId}/`);
+    if (!underOwner && !isDraftObjectKey(storageKey, ownerUserId)) {
       return { success: false, error: 'Unauthorized' };
     }
 

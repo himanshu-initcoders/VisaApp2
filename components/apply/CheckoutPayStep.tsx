@@ -4,11 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { ApplicantAuthPanel } from '@/components/auth/ApplicantAuthPanel';
-import { readApplyDraftAsync } from '@/lib/apply/draftStorage';
+import {
+  readApplyDraftAsync,
+  serializeTravellersForDraft,
+} from '@/lib/apply/draftStorage';
 import type { DraftScopeInput } from '@/lib/apply/draftScope';
 import { clearLocalDraftAfterSubmit } from '@/lib/apply/collectSubmitFiles';
 import { prepareDraftFilesForSubmit } from '@/lib/apply/syncDraftFiles';
-import { deleteApplicationDraft } from '@/lib/apply/serverDraft';
+import { upsertApplicationDraft } from '@/lib/apply/serverDraft';
 import { submitApplication } from '@/lib/apply/submitApplication';
 import {
   createVisaCheckoutOrder,
@@ -29,6 +32,9 @@ interface CheckoutPayStepProps {
   interestedInInsurance?: boolean;
   onInterestedInInsuranceChange?: (value: boolean) => void;
   draftScope: DraftScopeInput;
+  processName?: string;
+  /** Known draft application id from the wizard (optional; checkout can create). */
+  applicationId?: string | null;
   onBack: () => void;
   /** Called when submit begins (locks wizard autosave). */
   onSubmitting?: () => void;
@@ -36,6 +42,8 @@ interface CheckoutPayStepProps {
   onSubmitSuccess?: () => void;
   /** Re-enable wizard autosave if payment/submit fails. */
   onSubmitFailed?: () => void;
+  /** Keep wizard applicationId in sync after ensure/save. */
+  onApplicationId?: (applicationId: string, referenceNumber: string) => void;
 }
 
 interface CheckoutQuote {
@@ -110,10 +118,13 @@ export function CheckoutPayStep({
   interestedInInsurance = false,
   onInterestedInInsuranceChange,
   draftScope,
+  processName = '',
+  applicationId: initialApplicationId = null,
   onBack,
   onSubmitting,
   onSubmitSuccess,
   onSubmitFailed,
+  onApplicationId,
 }: CheckoutPayStepProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -125,8 +136,13 @@ export function CheckoutPayStep({
   const [error, setError] = useState<string | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
   const submitIdRef = useRef<string | null>(null);
+  const applicationIdRef = useRef<string | null>(initialApplicationId);
   const [insuranceChecked, setInsuranceChecked] = useState(interestedInInsurance);
   const lastEmittedInsuranceRef = useRef(interestedInInsurance);
+
+  useEffect(() => {
+    applicationIdRef.current = initialApplicationId;
+  }, [initialApplicationId]);
 
   const insuranceInterest =
     showInsuranceInterest && insuranceChecked === true;
@@ -239,11 +255,6 @@ export function CheckoutPayStep({
       free: quote?.free,
     });
     onSubmitSuccess?.();
-    try {
-      await deleteApplicationDraft(listingId);
-    } catch {
-      // server submit already deletes; ignore
-    }
     await clearLocalDraftAfterSubmit(draftScope);
     setSuccessId(applicationId);
     setSubmitting(false);
@@ -272,11 +283,41 @@ export function CheckoutPayStep({
         return;
       }
 
-      // FormData sync first — Server Actions receive storage keys only (no base64).
+      setUploadStatus('Saving application…');
+      const saved = await upsertApplicationDraft({
+        listingId,
+        countryCode,
+        payload: {
+          version: draft.version || 1,
+          updatedAt: draft.updatedAt || new Date().toISOString(),
+          countryCode: draft.countryCode || countryCode,
+          countryName: draft.countryName || countryName,
+          listingId: draft.listingId || listingId,
+          processName: draft.processName || processName,
+          step: draft.step || 'pay',
+          primaryName: draft.primaryName || '',
+          travellers: serializeTravellersForDraft(draft.travellers),
+          departure: draft.departure || {},
+          travellersCount: draft.travellersCount || draft.travellers.length,
+          interestedInInsurance: insuranceInterest,
+        },
+      });
+      if (!saved.success) {
+        setError(saved.error);
+        setUploadStatus(null);
+        setSubmitting(false);
+        releaseSubmit();
+        return;
+      }
+      applicationIdRef.current = saved.applicationId;
+      onApplicationId?.(saved.applicationId, saved.referenceNumber);
+
+      // FormData sync into the final application path (no promote later).
       const prepared = await prepareDraftFilesForSubmit({
         draft,
         draftScope,
         countryCode,
+        applicationId: saved.applicationId,
       });
       if (!prepared.success) {
         setError(prepared.error);
@@ -310,6 +351,7 @@ export function CheckoutPayStep({
 
       const draftStorageKeys = prepared.draftStorageKeys;
       const priceOptionId = draft.departure?.priceOption ?? null;
+      const applicationId = saved.applicationId;
 
       const created = await createVisaCheckoutOrder({
         submitId,
@@ -318,6 +360,7 @@ export function CheckoutPayStep({
         priceOptionId,
         travellers,
         interestedInInsurance: insuranceInterest,
+        applicationId,
       });
 
       if (!created.success) {
@@ -353,6 +396,7 @@ export function CheckoutPayStep({
           submitId,
           listingId,
           countryCode,
+          applicationId,
           priceOptionId,
           travellers,
           draftStorageKeys,
@@ -376,6 +420,7 @@ export function CheckoutPayStep({
           submitId,
           listingId,
           countryCode,
+          applicationId,
           priceOptionId,
           travellers,
           draftStorageKeys,
@@ -423,6 +468,7 @@ export function CheckoutPayStep({
               submitId,
               listingId,
               countryCode,
+              applicationId,
               priceOptionId,
               travellers,
               draftStorageKeys,

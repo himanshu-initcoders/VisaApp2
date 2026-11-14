@@ -1,13 +1,16 @@
+/**
+ * Submit passport application by flipping draft → submitted on the same row.
+ * Files already live under the application storage path — no promote/copy.
+ */
+
 'use server';
 
-import { randomUUID } from 'crypto';
 import { and, eq } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { db } from '@/lib/db';
 import {
   documents,
-  passportApplicationDrafts,
   passportServices,
   payments,
   statusHistory,
@@ -15,18 +18,14 @@ import {
 } from '@/lib/db/schema';
 import { ensurePassportFormVersionForSubmit } from '@/lib/db/queries/passportFormVersions';
 import { quotePassportListing } from '@/lib/payments/quote';
-import { ensureUniquePassportReferenceNumber } from '@/lib/passport/reference-number';
 import {
   getMissingPassportDocuments,
   type PassportApplyFormConfig,
 } from '@/lib/apply/passportForm';
 import {
   normalizePassportDraftUploads,
-  PASSPORT_DRAFT_COUNTRY_CODE,
-  PASSPORT_DRAFT_PASSENGER_ID,
   type PassportDraftUpload,
 } from '@/lib/apply/passportDraftFiles';
-import { promoteDraftFileToApplication } from '@/lib/upload/promoteDraftFile';
 import { notifyPassportSubmittedEvent } from '@/lib/notifications';
 import { passportServiceTypeLabel } from '@/lib/passport/constants';
 
@@ -35,10 +34,6 @@ export type SubmitPassportInput = {
   listingId: string;
   priceOptionId: string;
   answers: Record<string, unknown>;
-  /**
-   * Draft uploads from /api/apply/draft-files.
-   * Accepts `storageKey` (canonical) or legacy `s3Key`.
-   */
   uploadedDocuments?: Record<
     string,
     {
@@ -50,6 +45,8 @@ export type SubmitPassportInput = {
     }
   >;
   paymentId?: string | null;
+  /** Existing draft application id (required). */
+  applicationId: string;
 };
 
 function validateAnswers(
@@ -87,71 +84,21 @@ function validateDocuments(
     .join(', ')}.`;
 }
 
-async function promotePassportDraftUploads(input: {
-  userId: string;
-  listingId: string;
-  applicationId: string;
-  uploads: Record<string, PassportDraftUpload>;
-}): Promise<
-  | {
-      success: true;
-      results: Array<{
-        slotKey: string;
-        key: string;
-        url: string;
-        mimeType: string;
-        filename: string;
-        size: number;
-      }>;
-    }
-  | { success: false; error: string }
-> {
-  const results: Array<{
-    slotKey: string;
-    key: string;
-    url: string;
-    mimeType: string;
-    filename: string;
-    size: number;
-  }> = [];
-
-  for (const [slotKey, file] of Object.entries(input.uploads)) {
-    try {
-      const promoted = await promoteDraftFileToApplication({
-        draftStorageKey: file.storageKey,
-        countryCode: PASSPORT_DRAFT_COUNTRY_CODE,
-        listingId: input.listingId,
-        userId: input.userId,
-        applicationId: input.applicationId,
-        passengerId: PASSPORT_DRAFT_PASSENGER_ID,
-        slotKey,
-        filename: file.filename,
-        mimeType: file.mimeType,
-      });
-      results.push({
-        slotKey,
-        key: promoted.key,
-        url: promoted.url,
-        mimeType: promoted.mimeType,
-        filename: promoted.filename,
-        size: promoted.size,
-      });
-    } catch (error) {
-      console.error('[PassportSubmit] Promote failed:', file.storageKey, error);
-      return {
-        success: false,
-        error: `Could not attach “${file.filename || slotKey}”. Go back, re-upload that document, and try again.`,
-      };
-    }
-  }
-
-  return { success: true, results };
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
 }
 
 export async function submitPassportApplication(
   input: SubmitPassportInput
 ): Promise<
-  | { success: true; applicationId: string; referenceNumber: string }
+  | {
+      success: true;
+      applicationId: string;
+      referenceNumber: string;
+      alreadySubmitted?: boolean;
+    }
   | { success: false; error: string }
 > {
   try {
@@ -161,6 +108,58 @@ export async function submitPassportApplication(
       : null;
     if (!userId) {
       return { success: false, error: 'Sign in to submit your application.' };
+    }
+
+    if (!input.applicationId || !isUuid(input.applicationId)) {
+      return { success: false, error: 'Missing draft application id.' };
+    }
+
+    const [draftApp] = await db
+      .select()
+      .from(passportServices)
+      .where(eq(passportServices.id, input.applicationId))
+      .limit(1);
+
+    if (!draftApp || draftApp.userId !== userId) {
+      return { success: false, error: 'Draft application not found.' };
+    }
+    if (draftApp.passportListingId !== input.listingId) {
+      return { success: false, error: 'Application listing mismatch.' };
+    }
+
+    if (draftApp.status !== 'draft') {
+      return {
+        success: true,
+        applicationId: draftApp.id,
+        referenceNumber: draftApp.referenceNumber || '',
+        alreadySubmitted: true,
+      };
+    }
+
+    if (input.submitId && isUuid(input.submitId)) {
+      const [bySubmit] = await db
+        .select({
+          id: passportServices.id,
+          referenceNumber: passportServices.referenceNumber,
+          userId: passportServices.userId,
+        })
+        .from(passportServices)
+        .where(eq(passportServices.submitId, input.submitId))
+        .limit(1);
+      if (bySubmit && bySubmit.id !== draftApp.id) {
+        if (bySubmit.userId !== userId) {
+          return {
+            success: false,
+            error: 'This submission belongs to another account.',
+          };
+        }
+        return {
+          success: true,
+          applicationId: bySubmit.id,
+          referenceNumber: bySubmit.referenceNumber || '',
+          alreadySubmitted: true,
+        };
+      }
     }
 
     const formVersion = await ensurePassportFormVersionForSubmit(
@@ -224,61 +223,83 @@ export async function submitPassportApplication(
       }
     }
 
-    // Allocate ids first; promote drafts into the application path before insert
-    // so a failed promote never leaves a submitted row with missing files.
-    const applicationId = randomUUID();
-    const referenceNumber = await ensureUniquePassportReferenceNumber(db);
-
-    const promoted = await promotePassportDraftUploads({
-      userId,
-      listingId: input.listingId,
-      applicationId,
-      uploads: draftUploads,
-    });
-    if (!promoted.success) {
-      return { success: false, error: promoted.error };
-    }
-
     const now = new Date();
-    const documentsJson = promoted.results.map((row) => ({
-      slotKey: row.slotKey,
-      key: row.key,
-      url: row.url,
-      mimeType: row.mimeType,
-      filename: row.filename,
-      size: row.size,
+    const applicationId = draftApp.id;
+    const referenceNumber = draftApp.referenceNumber || '';
+
+    const documentsJson = Object.entries(draftUploads).map(([slotKey, file]) => ({
+      slotKey,
+      key: file.storageKey,
+      url: '',
+      mimeType: file.mimeType,
+      filename: file.filename,
+      size: file.size,
     }));
 
-    await db.insert(passportServices).values({
-      id: applicationId,
-      userId,
-      serviceType: config.serviceType,
-      passportListingId: input.listingId,
-      priceOptionId: input.priceOptionId,
-      formVersionId: formVersion.id,
-      formSnapshot: formVersion.config,
-      answers: input.answers,
-      referenceNumber,
-      status: 'submitted',
-      personalInfo: input.answers,
-      documents: documentsJson,
-      paymentId: input.paymentId || null,
-      submittedAt: now,
-    });
+    await db
+      .update(passportServices)
+      .set({
+        serviceType: config.serviceType,
+        priceOptionId: input.priceOptionId,
+        formVersionId: formVersion.id,
+        formSnapshot: formVersion.config,
+        answers: input.answers,
+        status: 'submitted',
+        personalInfo: input.answers,
+        documents: documentsJson,
+        submitId: input.submitId || null,
+        paymentId: input.paymentId || null,
+        submittedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(passportServices.id, applicationId),
+          eq(passportServices.status, 'draft')
+        )
+      );
 
-    if (promoted.results.length > 0) {
-      await db.insert(documents).values(
-        promoted.results.map((row) => ({
+    for (const row of documentsJson) {
+      if (!row.key) continue;
+      const existingDocs = await db
+        .select({ id: documents.id, s3Key: documents.s3Key })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.applicationId, applicationId),
+            eq(documents.applicationType, 'passport'),
+            eq(documents.documentType, row.slotKey)
+          )
+        );
+
+      const match =
+        existingDocs.find((d) => d.s3Key === row.key) ||
+        (existingDocs.length === 1 ? existingDocs[0] : undefined);
+
+      if (match) {
+        await db
+          .update(documents)
+          .set({
+            s3Key: row.key,
+            filename: row.filename || `${row.slotKey}.bin`,
+            mimeType: row.mimeType || null,
+            fileSize: row.size ?? null,
+            verified: null,
+            uploadedAt: now,
+          })
+          .where(eq(documents.id, match.id));
+      } else {
+        await db.insert(documents).values({
           applicationId,
-          applicationType: 'passport' as const,
+          applicationType: 'passport',
           documentType: row.slotKey,
           s3Key: row.key,
-          filename: row.filename,
+          filename: row.filename || `${row.slotKey}.bin`,
           mimeType: row.mimeType || null,
           fileSize: row.size ?? null,
           uploadedAt: now,
-        }))
-      );
+        });
+      }
     }
 
     if (input.paymentId) {
@@ -295,9 +316,9 @@ export async function submitPassportApplication(
       newStatus: 'submitted',
       notes: 'Applicant submitted passport application',
       changedBy: userId,
-      // Explicit Date — PG defaultNow() on timestamp-without-tz skews +5:30 vs Node writers.
       createdAt: now,
     });
+
     const [userRow] = await db
       .select({
         id: users.id,
@@ -333,16 +354,6 @@ export async function submitPassportApplication(
     } catch (notifyError) {
       console.error('Passport submit notification failed', notifyError);
     }
-
-
-    await db
-      .delete(passportApplicationDrafts)
-      .where(
-        and(
-          eq(passportApplicationDrafts.userId, userId),
-          eq(passportApplicationDrafts.passportListingId, input.listingId)
-        )
-      );
 
     return {
       success: true,

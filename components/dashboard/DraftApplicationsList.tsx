@@ -10,8 +10,12 @@ export interface DraftApplicationRow {
   listingId: string;
   listingSlug?: string | null;
   countryCode: string | null;
+  referenceNumber?: string;
   updatedAt: string;
   payload: ServerDraftPayload;
+  kind?: 'visa' | 'passport';
+  /** Passport-only display fields when payload is synthetic. */
+  passportServiceType?: string;
 }
 
 interface DraftApplicationsListProps {
@@ -23,6 +27,13 @@ interface DraftApplicationsListProps {
 }
 
 function continueHref(draft: DraftApplicationRow) {
+  if (draft.kind === 'passport') {
+    const service =
+      draft.passportServiceType ||
+      draft.payload.processName ||
+      'fresh';
+    return `/passport/${service}/apply?resume=1`;
+  }
   const cc = (draft.countryCode || draft.payload.countryCode || 'xx').toLowerCase();
   const segment = draft.listingSlug || draft.listingId;
   return `/visa/${cc}/${segment}/apply?resume=1`;
@@ -50,21 +61,22 @@ export function DraftApplicationsList({
       </div>
       <ul className="space-y-3">
         {drafts.map((draft) => {
+          const isPassport = draft.kind === 'passport';
           const processName =
             draft.payload.processName ||
             draft.payload.countryName ||
-            'Visa application';
+            (isPassport ? 'Passport application' : 'Visa application');
           const country =
             draft.payload.countryName ||
             draft.countryCode ||
             draft.payload.countryCode ||
-            '';
+            (isPassport ? 'India' : '');
           const travellers =
             draft.payload.travellersCount ||
             (Array.isArray(draft.payload.travellers)
               ? draft.payload.travellers.length
               : 1);
-          const code = draftCountryCode(draft);
+          const code = isPassport ? 'IN' : draftCountryCode(draft);
 
           return (
             <li
@@ -81,13 +93,18 @@ export function DraftApplicationsList({
                 />
                 <div className="min-w-0">
                   <p className="font-switzer text-xs uppercase tracking-wide text-slate-helper">
-                    Draft · Visa
+                    Draft · {isPassport ? 'Passport' : 'Visa'}
+                    {draft.referenceNumber
+                      ? ` · ${draft.referenceNumber}`
+                      : ''}
                   </p>
                   <p className="mt-1 truncate font-switzer text-sm font-medium text-portrait-ink">
                     {country ? `${country} · ${processName}` : processName}
                   </p>
                   <p className="mt-1 font-switzer text-xs text-slate-helper">
-                    {travellers} traveller{travellers === 1 ? '' : 's'}
+                    {isPassport
+                      ? 'Continue your passport application'
+                      : `${travellers} traveller${travellers === 1 ? '' : 's'}`}
                     {draft.updatedAt
                       ? ` · Saved ${formatDraftUpdatedAt(draft.updatedAt)}`
                       : ''}
