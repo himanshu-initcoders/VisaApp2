@@ -49,7 +49,7 @@ function normalizeCountryUpdate(data: UpdateCountryData) {
   const { exemption, ...rest } = data;
   if (exemption === undefined) return rest;
 
-  const cleaned = sanitizeBlogHtml(exemption).trim();
+  const cleaned = sanitizeBlogHtml(exemption ?? '').trim();
   return {
     ...rest,
     exemption: cleaned.length > 0 ? cleaned : null,
