@@ -15,6 +15,7 @@ import { ExploreMoreRail } from '@/components/public/ExploreMoreRail';
 import { MobileStickyBar } from '@/components/public/MobileStickyBar';
 import { loadPublicListingPage } from '@/app/visa/loadPublicListing';
 import { trackEvent } from '@/lib/analytics/gtm';
+import { sanitizeBlogHtml } from '@/lib/blog/sanitize';
 import type { PublicProcessPageData } from '@/lib/db/queries/public';
 import type { VisaKindOption } from '@/components/public/PricingPanel';
 
@@ -169,10 +170,16 @@ export function PublicListingExperience({
     [switchListing]
   );
 
+  const exemptionHtml = data.page.exemption
+    ? sanitizeBlogHtml(data.page.exemption)
+    : '';
+  const hasExemption = exemptionHtml.replace(/<[^>]*>/g, '').trim().length > 0;
   const hasFaqs = data.page.faqs.length > 0;
-  const navItems = hasFaqs
-    ? [...BASE_NAV_ITEMS, { id: 'faqs', label: 'FAQs' }]
-    : BASE_NAV_ITEMS;
+  const navItems = [
+    ...BASE_NAV_ITEMS,
+    ...(hasExemption ? [{ id: 'exemption', label: 'Exemption' }] : []),
+    ...(hasFaqs ? [{ id: 'faqs', label: 'FAQs' }] : []),
+  ];
 
   return (
     <>
@@ -248,6 +255,25 @@ export function PublicListingExperience({
                 </p>
               </MotionReveal>
               <ProcessTimeline steps={data.page.timeline} />
+            </section>
+          )}
+
+          {hasExemption && (
+            <section id="exemption" className="space-y-5 sm:space-y-8">
+              <MotionReveal className="max-w-2xl space-y-2 sm:space-y-3">
+                <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
+                  Visa exemption
+                </p>
+                <h2 className="font-basier text-2xl text-portrait-ink sm:text-4xl">
+                  Who may be exempt?
+                </h2>
+              </MotionReveal>
+              <MotionReveal>
+                <div
+                  className="max-w-3xl space-y-4 text-[15px] leading-7 text-portrait-ink sm:text-base sm:leading-8 [&_a]:text-nautical-teal [&_a]:underline [&_h2]:font-basier [&_h2]:text-2xl [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:font-basier [&_h3]:text-xl [&_h3]:mt-6 [&_h3]:mb-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-3"
+                  dangerouslySetInnerHTML={{ __html: exemptionHtml }}
+                />
+              </MotionReveal>
             </section>
           )}
 

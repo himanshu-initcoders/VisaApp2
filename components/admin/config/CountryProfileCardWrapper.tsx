@@ -11,6 +11,7 @@ interface Country {
   showAuthorizationTag: boolean;
   images?: any;
   seo?: any;
+  exemption?: string | null;
 }
 
 interface CountryProfileCardWrapperProps {

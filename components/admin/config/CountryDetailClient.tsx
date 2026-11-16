@@ -38,6 +38,7 @@ interface CountryDetailClientProps {
     showAuthorizationTag: boolean | null;
     images: CountryImages | null;
     seo: CountrySEO | null;
+    exemption?: string | null;
     visaListings: Array<{ id: string; processName: string }>;
   };
 }
@@ -90,6 +91,7 @@ export function CountryDetailClient({ country }: CountryDetailClientProps) {
           showAuthorizationTag: country.showAuthorizationTag ?? false,
           images: country.images,
           seo: country.seo,
+          exemption: country.exemption ?? null,
         }}
       />
 

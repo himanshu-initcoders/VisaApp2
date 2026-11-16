@@ -1,12 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { LinkedInStyleImageUpload } from './LinkedInStyleImageUpload';
 import { ImageGallery } from './ImageGallery';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Image as ImageIcon, FileText, Check } from 'lucide-react';
+import { Image as ImageIcon, FileText, ShieldCheck, Check } from 'lucide-react';
+
+const TinyMceEditor = dynamic(
+  () =>
+    import('@/components/admin/config/TinyMceEditor').then(
+      (mod) => mod.TinyMceEditor
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[320px] animate-pulse rounded-2xl border border-ash-divider bg-sky-wash/30" />
+    ),
+  }
+);
 
 interface CountryImages {
   banner?: {
@@ -40,6 +54,7 @@ interface Country {
   showAuthorizationTag: boolean;
   images?: CountryImages | null;
   seo?: CountrySEO | null;
+  exemption?: string | null;
 }
 
 interface CountryProfileCardProps {
@@ -47,14 +62,27 @@ interface CountryProfileCardProps {
   onUpdate: (data: Partial<Country>) => Promise<void>;
 }
 
+type CountryTab = 'images' | 'seo' | 'exemption';
+
 export function CountryProfileCard({ country, onUpdate }: CountryProfileCardProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'images' | 'seo'>('images');
+  const [activeTab, setActiveTab] = useState<CountryTab>('images');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [exemptionSaveSuccess, setExemptionSaveSuccess] = useState(false);
 
   // SEO form state
   const [seoData, setSeoData] = useState<CountrySEO>(country.seo || {});
+  const [exemptionHtml, setExemptionHtml] = useState(country.exemption || '');
+  const hasTinymceKey = Boolean(process.env.NEXT_PUBLIC_TINYMCE_API_KEY);
+
+  useEffect(() => {
+    setSeoData(country.seo || {});
+  }, [country.seo]);
+
+  useEffect(() => {
+    setExemptionHtml(country.exemption || '');
+  }, [country.exemption]);
 
   const handleImageUpdate = async (type: 'banner' | 'hero' | 'flag', url: string) => {
     const updatedImages = {
@@ -79,6 +107,27 @@ export function CountryProfileCard({ country, onUpdate }: CountryProfileCardProp
       setIsSaving(false);
     }
   };
+
+  const handleExemptionSave = async () => {
+    setIsSaving(true);
+    try {
+      await onUpdate({ exemption: exemptionHtml });
+      setExemptionSaveSuccess(true);
+      setTimeout(() => setExemptionSaveSuccess(false), 3000);
+      router.refresh();
+    } catch (error) {
+      alert('Failed to save exemption content');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const tabClass = (tab: CountryTab) =>
+    `inline-flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+      activeTab === tab
+        ? 'text-portrait-ink border-b-2 border-portrait-ink -mb-px'
+        : 'text-slate-helper hover:text-portrait-ink'
+    }`;
 
   return (
     <div className="bg-white rounded-3xl border border-ash-divider overflow-hidden shadow-card">
@@ -125,28 +174,30 @@ export function CountryProfileCard({ country, onUpdate }: CountryProfileCardProp
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 border-b border-ash-divider">
+        <div className="flex flex-wrap gap-2 mb-6 border-b border-ash-divider">
           <button
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'images'
-                ? 'text-portrait-ink border-b-2 border-portrait-ink -mb-px'
-                : 'text-slate-helper hover:text-portrait-ink'
-            }`}
+            type="button"
+            className={tabClass('images')}
             onClick={() => setActiveTab('images')}
           >
-            <ImageIcon className="h-4 w-4 inline mr-2" />
+            <ImageIcon className="h-4 w-4 shrink-0" />
             Images
           </button>
           <button
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'seo'
-                ? 'text-portrait-ink border-b-2 border-portrait-ink -mb-px'
-                : 'text-slate-helper hover:text-portrait-ink'
-            }`}
+            type="button"
+            className={tabClass('seo')}
             onClick={() => setActiveTab('seo')}
           >
-            <FileText className="h-4 w-4 inline mr-2" />
+            <FileText className="h-4 w-4 shrink-0" />
             SEO & Metadata
+          </button>
+          <button
+            type="button"
+            className={tabClass('exemption')}
+            onClick={() => setActiveTab('exemption')}
+          >
+            <ShieldCheck className="h-4 w-4 shrink-0" />
+            Exemption
           </button>
         </div>
 
@@ -195,14 +246,71 @@ export function CountryProfileCard({ country, onUpdate }: CountryProfileCardProp
               disabled={isSaving || saveSuccess}
             >
               {saveSuccess ? (
-                <span className="flex items-center gap-2">
-                  <Check className="h-4 w-4" />
+                <span className="inline-flex items-center gap-2">
+                  <Check className="h-4 w-4 shrink-0" />
                   Saved!
                 </span>
               ) : isSaving ? (
                 'Saving...'
               ) : (
                 'Save SEO Settings'
+              )}
+            </Button>
+          </div>
+        )}
+
+        {/* Exemption Tab */}
+        {activeTab === 'exemption' && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-medium text-portrait-ink mb-1">
+                Visa exemption content
+              </h3>
+              <p className="text-sm text-slate-helper mb-4">
+                Shown as an Exemption section on public visa listing pages
+                (above FAQs). Leave empty to hide the section.
+              </p>
+              {hasTinymceKey ? (
+                <TinyMceEditor
+                  value={exemptionHtml}
+                  onChange={setExemptionHtml}
+                  height={360}
+                  disabled={isSaving}
+                />
+              ) : (
+                <textarea
+                  rows={12}
+                  className="w-full rounded-2xl border border-ash-divider px-4 py-3 font-mono text-sm text-portrait-ink focus:border-nautical-teal focus:outline-none focus:ring-2 focus:ring-nautical-teal/20"
+                  value={exemptionHtml}
+                  onChange={(e) => setExemptionHtml(e.target.value)}
+                  placeholder="<p>Who is exempt from this visa…</p>"
+                  disabled={isSaving}
+                />
+              )}
+              {!hasTinymceKey ? (
+                <p className="mt-2 text-xs text-slate-helper">
+                  TinyMCE key missing — editing as HTML.
+                </p>
+              ) : null}
+            </div>
+
+            <Button
+              onClick={handleExemptionSave}
+              variant="primary"
+              size="md"
+              disabled={isSaving || exemptionSaveSuccess}
+            >
+              {exemptionSaveSuccess ? (
+                <span className="inline-flex items-center gap-2">
+                  <Check className="h-4 w-4 shrink-0" />
+                  Saved!
+                </span>
+              ) : isSaving ? (
+                'Saving...'
+              ) : country.exemption ? (
+                'Update Exemption'
+              ) : (
+                'Save Exemption'
               )}
             </Button>
           </div>

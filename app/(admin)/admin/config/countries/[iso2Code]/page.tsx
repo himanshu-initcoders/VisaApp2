@@ -29,6 +29,7 @@ export default async function CountryDetailPage({
       showAuthorizationTag: countries.showAuthorizationTag,
       images: countries.images,
       seo: countries.seo,
+      exemption: countries.exemption,
     })
     .from(countries)
     .where(eq(countries.iso2Code, code))

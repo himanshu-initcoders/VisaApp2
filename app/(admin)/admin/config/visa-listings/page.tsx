@@ -85,6 +85,7 @@ export default async function VisaListingsPage({
             iso2Code: country.iso2Code,
             images: country.images,
             seo: country.seo,
+            exemption: country.exemption ?? null,
             enabled: country.enabled,
             showAuthorizationTag: country.showAuthorizationTag ?? false,
           }}

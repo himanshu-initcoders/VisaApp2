@@ -483,6 +483,7 @@ const getCachedPublicProcessPageData = unstable_cache(
                 },
               ],
         faqs: process.faqs,
+        exemption: process.country.exemption?.trim() || null,
         exploreMore,
         visaKinds,
         applyForm: buildApplyFormConfig({

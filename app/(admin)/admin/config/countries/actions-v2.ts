@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { countries } from '@/lib/db/schema-extended';
 import { eq } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth-utils';
+import { sanitizeBlogHtml } from '@/lib/blog/sanitize';
 import { revalidatePublicVisaCatalog } from '@/lib/revalidate-public-catalog';
 
 /**
@@ -38,9 +39,21 @@ interface CountrySEO {
 interface UpdateCountryData {
   images?: CountryImages;
   seo?: CountrySEO;
+  exemption?: string | null;
   name?: string;
   enabled?: boolean;
   showAuthorizationTag?: boolean;
+}
+
+function normalizeCountryUpdate(data: UpdateCountryData) {
+  const { exemption, ...rest } = data;
+  if (exemption === undefined) return rest;
+
+  const cleaned = sanitizeBlogHtml(exemption).trim();
+  return {
+    ...rest,
+    exemption: cleaned.length > 0 ? cleaned : null,
+  };
 }
 
 /**
@@ -66,7 +79,7 @@ export async function updateCountryV2(
     await db
       .update(countries)
       .set({
-        ...data,
+        ...normalizeCountryUpdate(data),
         updatedAt: new Date(),
       })
       .where(eq(countries.id, countryId));
@@ -110,7 +123,7 @@ export async function updateCountryByIsoCode(
     await db
       .update(countries)
       .set({
-        ...data,
+        ...normalizeCountryUpdate(data),
         updatedAt: new Date(),
       })
       .where(eq(countries.id, country.id));

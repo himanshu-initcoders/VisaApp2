@@ -106,6 +106,9 @@ export const countries = pgTable('countries', {
     headline?: string;
   }>(),
 
+  /** Visa exemption / eligibility notes (TinyMCE HTML), shown on public listing pages */
+  exemption: text('exemption'),
+
   showAuthorizationTag: boolean('show_authorization_tag').default(false),
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
