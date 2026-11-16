@@ -196,8 +196,9 @@ function PackageCard({
   return (
     <button
       type="button"
+      role="radio"
       onClick={onSelect}
-      aria-pressed={selected}
+      aria-checked={selected}
       className={cn(
         'w-full rounded-2xl border bg-white p-4 text-left transition-colors sm:rounded-[18px] sm:p-5',
         selected
@@ -324,7 +325,11 @@ export function VisaTypesOffered({
         onSelect={onVisaKindSelect}
       />
 
-      <div className="space-y-3" role="listbox" aria-label="Visa packages">
+      <div
+        className="space-y-3"
+        role="radiogroup"
+        aria-label="Visa packages"
+      >
         {visibleOptions.map((option) => (
           <PackageCard
             key={option.id}
