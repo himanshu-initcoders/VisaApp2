@@ -41,6 +41,27 @@ pipeline {
       }
     }
 
+    // Migrate must run before the app image build: Next.js SSG queries the live DB
+    // (e.g. countries.exemption). New columns must exist before `next build`.
+    stage('Migrate') {
+      steps {
+        sh '''
+          set +x
+          set -euo pipefail
+          cd "${APP_DIR}"
+          if docker buildx version >/dev/null 2>&1; then
+            export DOCKER_BUILDKIT=1
+          else
+            export DOCKER_BUILDKIT=0
+            echo "WARN: docker buildx missing in Jenkins image — using classic builder"
+          fi
+          echo "Building migrate image"
+          docker build --target migrate -t visa-migrate:latest .
+          ${COMPOSE} --profile migrate run --rm migrate
+        '''
+      }
+    }
+
     stage('Build') {
       steps {
         // Jenkins runs sh with -xe; set +x before touching secrets so .env is not logged.
@@ -74,19 +95,6 @@ pipeline {
             --build-arg "NEXT_PUBLIC_GTM_ID=${NEXT_PUBLIC_GTM_ID:-}" \
             -t visa-app:latest \
             .
-          echo "Building migrate image"
-          docker build --target migrate -t visa-migrate:latest .
-        '''
-      }
-    }
-
-    stage('Migrate') {
-      steps {
-        sh '''
-          set +x
-          set -e
-          # Image already built above; compose run has no --no-build flag on this CLI
-          ${COMPOSE} --profile migrate run --rm migrate
         '''
       }
     }
