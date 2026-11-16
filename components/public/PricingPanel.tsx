@@ -269,7 +269,7 @@ export function PricingPanel({
   countryCode,
   listingId,
   listingSlug,
-  compact: _compact = false,
+  compact = false,
   priceOptions,
   headline,
   visaKinds = [],
@@ -412,7 +412,8 @@ export function PricingPanel({
 
   const typeAndTravellers = (tone: 'dark' | 'light') => (
     <div className="mb-5 space-y-3 sm:mb-6 sm:space-y-4">
-      {visaKinds.length > 1 && (
+      {/* When compact, package + visa-kind selection lives in VisaTypesOffered. */}
+      {!compact && visaKinds.length > 1 && (
         <VisaKindSelector
           visaKinds={visaKinds}
           currentListingId={currentListingId}
@@ -425,7 +426,7 @@ export function PricingPanel({
         onChange={setTravellers}
         tone={tone}
       />
-      {priceOptions.length > 1 && selected && (
+      {!compact && priceOptions.length > 1 && selected && (
         <div>
           <p
             className={`mb-2 text-[10px] uppercase tracking-[0.2em] sm:text-xs ${

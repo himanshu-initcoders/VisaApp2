@@ -1,26 +1,14 @@
 'use client';
 
-import { Suspense, useMemo, useState } from 'react';
-import { AnimatedStatValue } from '@/components/ui/AnimatedStatValue';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import {
   PricingPanel,
-  isFreeVisaWithServiceFee,
   type ApplyPath,
   type PriceOptionView,
   type VisaKindOption,
 } from '@/components/public/PricingPanel';
-import { formatPrice } from '@/lib/public';
-
-function stayValue(option?: PriceOptionView, fallback?: string | null) {
-  return (
-    option?.stayDuration ||
-    option?.daysLabel ||
-    option?.entryValidity ||
-    fallback ||
-    'Check rules'
-  );
-}
+import { VisaTypesOffered } from '@/components/public/VisaTypesOffered';
 
 interface ListingOverviewSectionProps {
   overview: string;
@@ -31,99 +19,63 @@ interface ListingOverviewSectionProps {
   officialPortalUrl?: string | null;
   withFreeInsurance?: boolean;
   countryCode: string;
+  countryName: string;
   listingId: string;
   listingSlug: string;
   priceOptions: PriceOptionView[];
   headline?: string;
+  isMultipleEntry?: boolean;
   visaKinds?: VisaKindOption[];
   onVisaKindSelect?: (kind: VisaKindOption) => Promise<boolean> | boolean;
 }
 
-function OverviewStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="shrink-0 rounded-2xl border border-ash-divider bg-white p-4 shadow-card sm:rounded-[26px] sm:p-5">
-      <p className="text-[10px] uppercase tracking-[0.18em] text-slate-helper sm:text-xs">
-        {label}
-      </p>
-      <p className="mt-2 text-xl font-semibold text-portrait-ink sm:mt-3 sm:text-2xl">
-        <AnimatedStatValue value={value} />
-      </p>
-    </div>
-  );
-}
-
 export function ListingOverviewSection({
-  overview,
   processingEta,
-  fallbackStay,
   isFree,
   visaFree = false,
   officialPortalUrl = null,
   withFreeInsurance = false,
   countryCode,
+  countryName,
   listingId,
   listingSlug,
   priceOptions,
   headline,
+  isMultipleEntry = false,
   visaKinds = [],
   onVisaKindSelect,
 }: ListingOverviewSectionProps) {
   const [selectedId, setSelectedId] = useState(priceOptions[0]?.id);
   const [applyPath, setApplyPath] = useState<ApplyPath>('viserv');
+
+  useEffect(() => {
+    if (!priceOptions.some((option) => option.id === selectedId)) {
+      setSelectedId(priceOptions[0]?.id);
+    }
+  }, [priceOptions, selectedId]);
+
   const selected = useMemo(
     () => priceOptions.find((option) => option.id === selectedId) || priceOptions[0],
     [priceOptions, selectedId]
   );
-  const freeWithServiceFee = isFreeVisaWithServiceFee(selected);
-
-  // Portal path / fully free → FREE; Apply with Viserv → show Viserv charges.
-  const startingPrice = useMemo(() => {
-    if (freeWithServiceFee) {
-      if (applyPath === 'viserv' && selected) {
-        const total =
-          selected.governmentFeeAmount +
-          selected.serviceFeeAmount +
-          selected.governmentGstFeeAmount;
-        return formatPrice(total, 'INR');
-      }
-      return 'FREE';
-    }
-    if (isFree || (selected?.governmentFeeAmount ?? 0) === 0) return 'FREE';
-    return selected?.formattedTotal || 'On request';
-  }, [applyPath, freeWithServiceFee, isFree, selected]);
 
   return (
     <section
       id="overview"
       className="space-y-6 sm:space-y-0 lg:grid lg:grid-cols-[1fr_0.95fr] lg:gap-8"
     >
-      <MotionReveal className="space-y-3 sm:space-y-4">
-        <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
-          Product overview
-        </p>
-        <h2 className="font-basier text-2xl leading-tight text-portrait-ink sm:text-4xl">
-          Know what this product is, who it helps, and how fast it moves.
-        </h2>
-        <p className="max-w-2xl text-[15px] leading-7 text-slate-helper sm:text-base sm:leading-8">
-          {overview}
-        </p>
-        <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
-          <OverviewStat label="Starting price" value={startingPrice} />
-          <OverviewStat
-            label="Processing"
-            value={processingEta || 'Varies'}
-          />
-          <OverviewStat
-            label="Stay duration"
-            value={stayValue(selected, fallbackStay)}
-          />
-        </div>
+      <MotionReveal>
+        <VisaTypesOffered
+          countryName={countryName}
+          processingEta={processingEta}
+          isMultipleEntry={isMultipleEntry}
+          priceOptions={priceOptions}
+          selectedId={selected?.id}
+          onSelectedIdChange={setSelectedId}
+          visaKinds={visaKinds}
+          currentListingId={listingId}
+          onVisaKindSelect={onVisaKindSelect}
+        />
       </MotionReveal>
 
       <div id="pricing" className="scroll-mt-28 sm:scroll-mt-32">

@@ -207,10 +207,12 @@ export function PublicListingExperience({
             officialPortalUrl={data.page.officialPortalUrl}
             withFreeInsurance={data.page.withFreeInsurance}
             countryCode={data.country.iso2Code}
+            countryName={data.country.name}
             listingId={data.process.id}
             listingSlug={data.process.slug}
             priceOptions={data.page.pricing.priceOptions}
             headline={data.page.pricing.headline}
+            isMultipleEntry={Boolean(data.process.isMultipleEntry)}
             visaKinds={data.page.visaKinds}
             onVisaKindSelect={onVisaKindSelect}
           />
