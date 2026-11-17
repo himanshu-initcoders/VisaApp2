@@ -122,7 +122,7 @@ function RowSelect<T extends string>({
                   className={cn(
                     'flex w-full items-center rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors',
                     selected
-                      ? 'bg-[#2563EB] text-white'
+                      ? 'bg-portrait-ink text-white'
                       : 'text-portrait-ink hover:bg-sky-wash/70'
                   )}
                 >
