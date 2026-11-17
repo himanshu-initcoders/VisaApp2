@@ -136,40 +136,47 @@ function mapProcess(process: {
 }
 
 /**
+ * Fresh (uncached) catalog query.
+ * Use in generateStaticParams so build never bakes stale/404 listing paths
+ * from a previous Data Cache entry.
+ */
+export async function loadEnabledCountriesWithProcesses() {
+  const enabledCountries = await db.query.countries.findMany({
+    where: and(eq(countries.enabled, true), eq(countries.supported, true)),
+    with: {
+      visaListings: {
+        with: {
+          prices: {
+            orderBy: [visaListingPrices.sortOrder],
+          },
+        },
+        orderBy: [visaListings.processName],
+      },
+    },
+    orderBy: [countries.name],
+  });
+
+  return enabledCountries
+    .map((country) => ({
+      ...country,
+      images: rewriteCountryImages(country.images),
+      visaListings: country.visaListings
+        .filter((process) => !process.unsupported)
+        .map((process) => ({
+          ...mapProcess(process),
+          featured: false,
+          href: buildProcessHref(country.iso2Code, process.slug),
+        })),
+    }))
+    .filter((country) => country.visaListings.length > 0);
+}
+
+/**
  * Get all enabled countries with their active visa listings
  * Used for the landing page visa grid
  */
 export const getEnabledCountriesWithProcesses = unstable_cache(
-  async () => {
-    const enabledCountries = await db.query.countries.findMany({
-      where: and(eq(countries.enabled, true), eq(countries.supported, true)),
-      with: {
-        visaListings: {
-          with: {
-            prices: {
-              orderBy: [visaListingPrices.sortOrder],
-            },
-          },
-          orderBy: [visaListings.processName],
-        },
-      },
-      orderBy: [countries.name],
-    });
-
-    return enabledCountries
-      .map((country) => ({
-        ...country,
-        images: rewriteCountryImages(country.images),
-        visaListings: country.visaListings
-          .filter((process) => !process.unsupported)
-          .map((process) => ({
-            ...mapProcess(process),
-            featured: false,
-            href: buildProcessHref(country.iso2Code, process.slug),
-          })),
-      }))
-      .filter((country) => country.visaListings.length > 0);
-  },
+  loadEnabledCountriesWithProcesses,
   ['enabled-countries-with-processes'],
   {
     tags: [PUBLIC_VISA_CATALOG_TAG],

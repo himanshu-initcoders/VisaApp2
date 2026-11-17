@@ -17,6 +17,10 @@ import {
   isPublicMediaKey,
   sniffMediaContentType,
 } from '@/lib/upload/mediaUrl';
+import {
+  getCachedPublicMedia,
+  setCachedPublicMedia,
+} from '@/lib/upload/publicMediaCache';
 import { UPLOADS_ROOT } from '@/lib/upload/safeStorageKey';
 
 export const runtime = 'nodejs';
@@ -105,6 +109,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const isPublic = isPublicMediaKey(key);
+    if (isPublic) {
+      const cached = getCachedPublicMedia(key);
+      if (cached) {
+        return new NextResponse(new Uint8Array(cached.buffer), {
+          status: 200,
+          headers: {
+            'Content-Type': cached.contentType,
+            'Cache-Control':
+              'public, max-age=86400, stale-while-revalidate=604800',
+            'Content-Length': String(cached.buffer.length),
+            'X-Media-Cache': 'HIT',
+          },
+        });
+      }
+    }
+
     const provider = (process.env.UPLOAD_PROVIDER || 'local').toLowerCase();
 
     let buffer: Buffer | null = null;
@@ -136,9 +157,13 @@ export async function GET(request: NextRequest) {
     }
 
     const contentType = resolveContentType(key, buffer, storedType);
-    const cacheControl = isPublicMediaKey(key)
+    const cacheControl = isPublic
       ? 'public, max-age=86400, stale-while-revalidate=604800'
       : 'private, no-store';
+
+    if (isPublic) {
+      setCachedPublicMedia(key, buffer, contentType);
+    }
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
@@ -146,6 +171,7 @@ export async function GET(request: NextRequest) {
         'Content-Type': contentType,
         'Cache-Control': cacheControl,
         'Content-Length': String(buffer.length),
+        ...(isPublic ? { 'X-Media-Cache': 'MISS' } : {}),
       },
     });
   } catch (error) {

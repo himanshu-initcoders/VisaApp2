@@ -2,6 +2,7 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { db } from '@/lib/db';
 import { visaListings } from '@/lib/db/schema-extended';
 import { eq } from 'drizzle-orm';
+import { scheduleWarmPublicVisaCatalog } from '@/lib/warm-public-catalog';
 
 /** Shared cache tag for public landing / destinations / listing queries. */
 export const PUBLIC_VISA_CATALOG_TAG = 'public-visa-catalog';
@@ -9,12 +10,16 @@ export const PUBLIC_VISA_CATALOG_TAG = 'public-visa-catalog';
 /**
  * Invalidate public catalog pages after admin country / visa-listing changes.
  * Without this, Vercel can keep serving a stale empty homepage or outdated hero images.
+ * After purge, schedule a background warm so listing HTML + hero images are ready
+ * before the next visitor hits a cold /_next/image miss.
  */
 export async function revalidatePublicVisaCatalog(options?: {
   countryCode?: string;
   listingId?: string;
   listingSlug?: string;
   previousSlug?: string;
+  /** Set false when a caller will warm explicitly (e.g. deploy script). */
+  warm?: boolean;
 }) {
   try {
     revalidateTag(PUBLIC_VISA_CATALOG_TAG, 'max');
@@ -78,6 +83,12 @@ export async function revalidatePublicVisaCatalog(options?: {
     revalidatePath('/visa/[countryCode]/[listingId]/apply', 'page');
   } catch (err) {
     console.warn('revalidatePath pattern error:', err);
+  }
+
+  if (options?.warm !== false) {
+    scheduleWarmPublicVisaCatalog(
+      countryCode ? { countryCode } : undefined
+    );
   }
 }
 

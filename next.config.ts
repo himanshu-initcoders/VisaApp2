@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
     // Next 16: custom image qualities must be declared in qualities array
     qualities: [75, 85, 90, 95, 100],
     formats: ['image/avif', 'image/webp'],
+    // Keep optimized listing heroes warm across revalidations (default is 60s).
+    minimumCacheTTL: 86400,
     // Next 16: local Image src with query strings need an allowlist.
     // - /api/media?key=... (private S3 proxy)
     // - static files under /public (logo, icons, etc.) — no query string

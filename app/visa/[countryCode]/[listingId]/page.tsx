@@ -3,10 +3,11 @@ import { notFound, permanentRedirect } from 'next/navigation';
 import { PublicListingExperience } from '@/components/public/PublicListingExperience';
 import { JsonLd } from '@/components/seo/JsonLd';
 import {
-  getEnabledCountriesWithProcesses,
+  loadEnabledCountriesWithProcesses,
   getPublicProcessPageData,
 } from '@/lib/db/queries/public';
 import { getCountryOgImage } from '@/lib/public';
+import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 import {
   buildBreadcrumbJsonLd,
   buildFaqPageJsonLd,
@@ -32,7 +33,8 @@ interface PageProps {
 
 export async function generateStaticParams() {
   try {
-    const countries = await getEnabledCountriesWithProcesses();
+    // Uncached: avoid baking stale slug paths (→ static 404 HTML) from Data Cache.
+    const countries = await loadEnabledCountriesWithProcesses();
     return countries.flatMap((country) =>
       country.visaListings.flatMap((listing) => [
         {
@@ -53,6 +55,18 @@ export async function generateStaticParams() {
     console.error('generateStaticParams error in visa/[countryCode]/[listingId]:', error);
     return [];
   }
+}
+
+function resolveHeroPreloadUrl(
+  images?: {
+    hero?: { url?: string | null };
+    banner?: { url?: string | null };
+  } | null
+): string | null {
+  if (!images) return null;
+  const raw = images.hero?.url?.trim() || images.banner?.url?.trim();
+  if (!raw) return null;
+  return toAppMediaUrl(raw) || raw;
 }
 
 export async function generateMetadata({
@@ -144,8 +158,18 @@ export default async function PublicProcessPage({ params, searchParams }: PagePr
     ...(faqSchema ? [faqSchema] : []),
   ];
 
+  const heroPreload = resolveHeroPreloadUrl(data.country.images);
+
   return (
     <>
+      {heroPreload ? (
+        <link
+          rel="preload"
+          as="image"
+          href={heroPreload}
+          fetchPriority="high"
+        />
+      ) : null}
       <JsonLd data={jsonLd} />
       <PublicListingExperience initialData={data} />
     </>

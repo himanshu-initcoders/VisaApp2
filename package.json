@@ -21,7 +21,8 @@
     "db:seed:occupations": "tsx lib/db/seeds/seedOccupations.ts",
     "db:seed:document-types": "tsx lib/db/seeds/seedDocumentTypes.ts",
     "db:backfill-visa-refs": "tsx scripts/backfill-visa-reference-numbers.ts",
-    "storage:migrate-cloudinary-to-s3": "tsx scripts/migrate-cloudinary-to-s3.ts"
+    "storage:migrate-cloudinary-to-s3": "tsx scripts/migrate-cloudinary-to-s3.ts",
+    "warm:public": "tsx scripts/warm-public-catalog.ts"
   },
   "keywords": [
     "visa",
