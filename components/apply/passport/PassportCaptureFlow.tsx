@@ -183,7 +183,7 @@ export function PassportCaptureFlow({
   const [extraction, setExtraction] = useState<IndianPassportExtraction | null>(
     canResume && resume ? toExtraction(resume) : null
   );
-  const [scanStatus, setScanStatus] = useState('Reading MRZ…');
+  const [scanStatus, setScanStatus] = useState('Reading your details…');
   const startedRef = useRef(false);
   const reuploadRef = useRef<HTMLInputElement>(null);
   const originalPreviewRef = useRef<string | null>(null);
@@ -212,7 +212,7 @@ export function PassportCaptureFlow({
   const runExtraction = async (input: File | Blob) => {
     setError(null);
     setStage('scan');
-    setScanStatus('Detecting passport page…');
+    setScanStatus('Finding your photo page…');
 
     adoptOriginalPreview(createImageUploadPreview(input));
     const pdfPreviewPromise = createPdfUploadPreview(input);
@@ -220,7 +220,7 @@ export function PassportCaptureFlow({
     const started = Date.now();
 
     try {
-      setScanStatus('Extracting MRZ / OCR…');
+      setScanStatus('Reading your details…');
       const [result, pdfPreview] = await Promise.all([
         extractIndianPassport(input),
         pdfPreviewPromise,
@@ -353,7 +353,7 @@ export function PassportCaptureFlow({
 
   if (stage === 'scan') {
     return (
-      <div className="fixed inset-0 z-[90]">
+      <div className="fixed inset-0 z-[90] overflow-hidden bg-white">
         <PassportScanStage
           previewUrl={previewUrl}
           statusText={scanStatus}
