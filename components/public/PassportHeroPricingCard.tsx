@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { passportPriceLabel } from '@/lib/passport/constants';
 
 const CONSULTATION_URL =
-  'https://wa.me/917676231760?text=' +
+  'https://wa.me/917019902821?text=' +
   encodeURIComponent(
     'Hi Viserv — I would like a free consultation for an Indian passport application.'
   );
@@ -156,8 +156,8 @@ export function PassportHeroPricingCard({
 
   const [applyingFor, setApplyingFor] = useState<ApplyingForId>(
     applyingOptions.find((o) => o.id === 'fresh')?.id ||
-      applyingOptions[0]?.id ||
-      'fresh'
+    applyingOptions[0]?.id ||
+    'fresh'
   );
 
   const activeListing =

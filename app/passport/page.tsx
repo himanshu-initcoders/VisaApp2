@@ -16,12 +16,14 @@ import {
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
+import { ContactBar } from '@/components/public/ContactBar';
 import { FaqAccordion } from '@/components/public/FaqAccordion';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { PassportHeroPricingCard } from '@/components/public/PassportHeroPricingCard';
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
 import { RecentBlogsSection } from '@/components/public/RecentBlogsSection';
 import { StickySectionNav } from '@/components/public/StickySectionNav';
+import { WhatsAppFloat } from '@/components/public/WhatsAppFloat';
 import { PassportHubViewTracker } from '@/components/analytics/PassportHubViewTracker';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { getRecentPublishedPosts } from '@/lib/db/queries/blog';
@@ -436,7 +438,7 @@ export default async function PassportPage() {
         startingValue={startingValue}
       />
       <Header cta="account" />
-      <main className="min-h-screen bg-[#f8f6f1] pb-20 pt-28 sm:pt-32">
+      <main className="min-h-screen bg-[#f8f6f1] pt-28 sm:pt-32">
         <section className="px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <MotionReveal className="overflow-hidden rounded-[32px] border border-ash-divider bg-white shadow-card sm:rounded-[40px]">
@@ -725,8 +727,10 @@ export default async function PassportPage() {
         </section>
 
         <RecentBlogsSection posts={recentPosts} compactBottom />
+        <ContactBar />
       </main>
       <Footer />
+      <WhatsAppFloat />
     </>
   );
 }

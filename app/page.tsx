@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Footer } from '@/components/layout/Footer';
+import { ContactBar } from '@/components/public/ContactBar';
 import { HomeLandingClient } from '@/components/public/HomeLandingClient';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
@@ -190,7 +191,8 @@ export default async function Home() {
           </MotionReveal>
         </section>
 
-        <RecentBlogsSection posts={recentPosts} />
+        <RecentBlogsSection posts={recentPosts} compactBottom />
+        <ContactBar />
       </main>
       <Footer />
       <WhatsAppFloat />
