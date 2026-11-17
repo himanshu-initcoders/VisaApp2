@@ -10,7 +10,6 @@ import { BasicInformationStep } from '@/components/apply/BasicInformationStep';
 import { ReviewStep } from '@/components/apply/review/ReviewStep';
 import { PassportCaptureFlow } from '@/components/apply/passport/PassportCaptureFlow';
 import { CheckoutPayStep } from '@/components/apply/CheckoutPayStep';
-import { SaveDraftLoginModal } from '@/components/apply/SaveDraftLoginModal';
 import type { PassportApplicationPayload } from '@/components/apply/passport/PassportReviewStage';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 import {
@@ -164,7 +163,6 @@ const MAX_TRAVELLERS = 100;
 type WizardLifecycle =
   | 'initializing'
   | 'ready'
-  | 'syncing'
   | 'submitting'
   | 'submitted';
 
@@ -272,11 +270,6 @@ export function ApplyVisaWizard({
   const [resumeChoiceDraft, setResumeChoiceDraft] = useState<ApplyDraft | null>(
     null
   );
-  const [savingDraft, setSavingDraft] = useState(false);
-  const [saveDraftMessage, setSaveDraftMessage] = useState<string | null>(null);
-  const [saveDraftError, setSaveDraftError] = useState<string | null>(null);
-  const [loginForDraftOpen, setLoginForDraftOpen] = useState(false);
-  const saveAfterLoginRef = useRef(false);
   /** Serializes quiet server draft sync from traveller tab Continue. */
   const quietServerSyncInFlightRef = useRef(false);
   const quietServerSyncQueuedRef = useRef(false);
@@ -284,9 +277,6 @@ export function ApplyVisaWizard({
   const sessionRole = session?.user?.role;
   const isStaffSession =
     sessionRole === 'admin' || sessionRole === 'reviewer';
-  const isApplicantSession = Boolean(
-    session?.user?.id && sessionStatus === 'authenticated' && !isStaffSession
-  );
   const sessionUserId = session?.user?.id ?? null;
   /** Any signed-in apply user (applicant or staff) — previous profiles are DB-backed. */
   const canUseDbPreviousProfiles = Boolean(
@@ -386,52 +376,25 @@ export function ApplyVisaWizard({
     return payload;
   };
 
-  const pushDraftToServer = async (options?: {
-    /** Background sync from tab Continue — no login modal, toasts, or lifecycle flip. */
-    quiet?: boolean;
-  }): Promise<boolean> => {
-    const quiet = Boolean(options?.quiet);
-
+  /** Background server draft sync — local-only for guests; no login prompt. */
+  const pushDraftToServer = async (): Promise<boolean> => {
     if (lifecycle === 'submitted' || lifecycle === 'submitting') {
-      if (!quiet) {
-        setSaveDraftError(
-          'This application was already submitted. Start a new application to save a draft.'
-        );
-      }
       return false;
-    }
-
-    if (!quiet) {
-      setSavingDraft(true);
-      setLifecycle((current) => (current === 'ready' ? 'syncing' : current));
-      setSaveDraftError(null);
-      setSaveDraftMessage(null);
     }
 
     try {
       if (sessionStatus === 'loading') {
-        if (!quiet) setSaveDraftError('Checking sign-in…');
         return false;
       }
 
       const savingOnBehalf = Boolean(onBehalfOfUserId && isStaffSession);
 
       if (!savingOnBehalf && sessionStatus !== 'authenticated') {
-        // Quiet tab saves stay local only — never interrupt with login.
-        if (quiet) return false;
-        await persistLocalDraft();
-        trackEvent('visa_apply_login_prompt', {
-          source: 'save_draft',
-          listing_id: listingId,
-          country_code: countryCode,
-        });
-        setLoginForDraftOpen(true);
         return false;
       }
 
       const payload = await persistLocalDraft();
 
-      if (!quiet) setSaveDraftMessage('Saving application…');
       const draftResult = savingOnBehalf
         ? await upsertApplicationDraftForUser({
             listingId,
@@ -446,18 +409,13 @@ export function ApplyVisaWizard({
           });
 
       if (!draftResult.success) {
-        if (quiet) {
-          console.warn('[Draft] quiet sync failed:', draftResult.error);
-        } else {
-          setSaveDraftError(draftResult.error);
-        }
+        console.warn('[Draft] quiet sync failed:', draftResult.error);
         return false;
       }
 
       applicationIdRef.current = draftResult.applicationId;
       referenceNumberRef.current = draftResult.referenceNumber;
 
-      if (!quiet) setSaveDraftMessage('Uploading documents…');
       const fileSync = await syncDraftFilesToServer({
         applicationId: draftResult.applicationId,
         listingId,
@@ -468,11 +426,7 @@ export function ApplyVisaWizard({
       });
 
       if (!fileSync.success) {
-        if (quiet) {
-          console.warn('[Draft] quiet sync files failed:', fileSync.error);
-        } else {
-          setSaveDraftError(fileSync.error);
-        }
+        console.warn('[Draft] quiet sync files failed:', fileSync.error);
         return false;
       }
 
@@ -496,44 +450,15 @@ export function ApplyVisaWizard({
               payload: refreshedPayload,
             });
         if (!refreshResult.success) {
-          if (quiet) {
-            console.warn('[Draft] quiet sync failed:', refreshResult.error);
-          } else {
-            setSaveDraftError(refreshResult.error);
-          }
+          console.warn('[Draft] quiet sync failed:', refreshResult.error);
           return false;
         }
       }
 
-      if (!quiet) {
-        const base = savingOnBehalf
-          ? 'Draft saved for applicant'
-          : isStaffSession
-            ? 'Draft saved to your staff account'
-            : 'Draft saved to your account';
-        setSaveDraftMessage(
-          fileSync.uploadedCount > 0
-            ? `${base} (${fileSync.uploadedCount} file${fileSync.uploadedCount === 1 ? '' : 's'})`
-            : base
-        );
-      }
       return true;
     } catch (error) {
-      if (quiet) {
-        console.warn('[Draft] quiet sync failed:', error);
-      } else {
-        setSaveDraftError(
-          error instanceof Error ? error.message : 'Could not save draft'
-        );
-      }
+      console.warn('[Draft] quiet sync failed:', error);
       return false;
-    } finally {
-      if (!quiet) {
-        setSavingDraft(false);
-        setLifecycle((current) =>
-          current === 'submitted' || current === 'submitting' ? current : 'ready'
-        );
-      }
     }
   };
 
@@ -559,16 +484,12 @@ export function ApplyVisaWizard({
       try {
         do {
           quietServerSyncQueuedRef.current = false;
-          await pushDraftToServer({ quiet: true });
+          await pushDraftToServer();
         } while (quietServerSyncQueuedRef.current);
       } finally {
         quietServerSyncInFlightRef.current = false;
       }
     })();
-  };
-
-  const handleSaveAsDraft = () => {
-    void pushDraftToServer();
   };
 
   const backHref = `/visa/${countryCode.toLowerCase()}/${listingSlug}`;
@@ -767,14 +688,6 @@ export function ApplyVisaWizard({
     previousProfiles,
     onBehalfOfUserId,
   ]);
-
-  // After OTP login from Save as draft modal, push to server
-  useEffect(() => {
-    if (!saveAfterLoginRef.current || !isApplicantSession) return;
-    saveAfterLoginRef.current = false;
-    void pushDraftToServer();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: run once after login
-  }, [isApplicantSession]);
 
   // Autosave only when lifecycle is ready (and not choosing Continue vs Start new)
   useEffect(() => {
@@ -1437,56 +1350,31 @@ export function ApplyVisaWizard({
             <ArrowLeft className="h-3.5 w-3.5" />
             Back
           </button>
-          <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:gap-3">
-            <button
-              type="button"
-              onClick={handleSaveAsDraft}
-              disabled={
-                savingDraft ||
-                lifecycle === 'submitting' ||
-                lifecycle === 'submitted'
-              }
-              className="inline-flex shrink-0 items-center rounded-full border border-portrait-ink/20 bg-white px-3 py-1.5 font-switzer text-xs font-medium text-portrait-ink transition-colors hover:border-portrait-ink hover:bg-sky-wash/40 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
-            >
-              {savingDraft ? 'Saving…' : 'Save as draft'}
-            </button>
-            <p className="min-w-0 text-right text-sm font-medium leading-snug text-portrait-ink sm:text-base">
-              <span className="inline-flex max-w-full items-center justify-end gap-2">
-                <span className="relative flex h-5 w-5 shrink-0 overflow-hidden rounded-full bg-sky-wash sm:h-6 sm:w-6">
-                  {flagUrl ? (
-                    <MediaImage
-                      src={flagUrl}
-                      alt=""
-                      fill
-                      sizes="24px"
-                      className="object-cover"
-                    />
-                  ) : (
-                    <span
-                      className="flex size-full items-center justify-center text-sm leading-none sm:text-base"
-                      aria-hidden
-                    >
-                      {getFlagEmoji(countryCode)}
-                    </span>
-                  )}
-                </span>
-                <span className="min-w-0 truncate">{visaLabel}</span>
+          <p className="min-w-0 text-right text-sm font-medium leading-snug text-portrait-ink sm:text-base">
+            <span className="inline-flex max-w-full items-center justify-end gap-2">
+              <span className="relative flex h-5 w-5 shrink-0 overflow-hidden rounded-full bg-sky-wash sm:h-6 sm:w-6">
+                {flagUrl ? (
+                  <MediaImage
+                    src={flagUrl}
+                    alt=""
+                    fill
+                    sizes="24px"
+                    className="object-cover"
+                  />
+                ) : (
+                  <span
+                    className="flex size-full items-center justify-center text-sm leading-none sm:text-base"
+                    aria-hidden
+                  >
+                    {getFlagEmoji(countryCode)}
+                  </span>
+                )}
               </span>
-              <span className="sr-only">{countryName}</span>
-            </p>
-          </div>
-        </div>
-
-        {(saveDraftMessage || saveDraftError) && (
-          <p
-            className={`mx-auto mt-2 max-w-5xl text-center font-switzer text-xs ${
-              saveDraftError ? 'text-red-600' : 'text-nautical-teal'
-            }`}
-            role="status"
-          >
-            {saveDraftError || saveDraftMessage}
+              <span className="min-w-0 truncate">{visaLabel}</span>
+            </span>
+            <span className="sr-only">{countryName}</span>
           </p>
-        )}
+        </div>
 
         <div className="mt-3 sm:mt-4">
           <ApplyStepper
@@ -1728,15 +1616,6 @@ export function ApplyVisaWizard({
         />
       )}
 
-      <SaveDraftLoginModal
-        open={loginForDraftOpen}
-        onClose={() => setLoginForDraftOpen(false)}
-        onVerified={() => {
-          saveAfterLoginRef.current = true;
-          setLoginForDraftOpen(false);
-          setSaveDraftMessage('Signed in — saving draft…');
-        }}
-      />
     </div>
   );
 }
