@@ -209,7 +209,8 @@ export function ListingHero({
             alt={heroImageAlt || countryName}
             fill
             priority
-            sizes="58vw"
+            quality={95}
+            sizes="(min-width: 1536px) 60vw, (min-width: 1024px) 65vw, 100vw"
             className="object-cover object-[center_30%]"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-[#F3F8FF] from-0% via-[#F3F8FF]/70 via-[22%] to-transparent to-[68%]" />
@@ -226,6 +227,7 @@ export function ListingHero({
               alt={heroImageAlt || countryName}
               fill
               priority
+              quality={90}
               sizes="100vw"
               className="object-cover object-center"
             />
@@ -242,7 +244,7 @@ export function ListingHero({
             <InfoPills
               countryName={countryName}
               countryFlag={countryFlag}
-              flagUrl={flagUrl}
+              flagUrl={resolvedFlagUrl}
               pillVisaLabel={pillVisaLabel}
               processingEta={processingEta}
               withFreeInsurance={withFreeInsurance}

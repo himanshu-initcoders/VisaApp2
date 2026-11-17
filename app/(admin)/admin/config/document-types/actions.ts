@@ -18,9 +18,12 @@ import {
   DOCUMENT_SAMPLE_ALLOWED_TYPES,
 } from '@/lib/upload';
 
+import { revalidatePublicVisaCatalog } from '@/lib/revalidate-public-catalog';
+
 function revalidateDocumentTypePaths() {
   revalidatePath('/admin/config/document-types');
   revalidatePath('/admin/config/visa-listings');
+  void revalidatePublicVisaCatalog();
 }
 
 /**

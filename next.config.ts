@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   images: {
+    // Next 16: custom image qualities must be declared in qualities array
+    qualities: [75, 85, 90, 95, 100],
+    formats: ['image/avif', 'image/webp'],
     // Next 16: local Image src with query strings need an allowlist.
     // - /api/media?key=... (private S3 proxy)
     // - static files under /public (logo, icons, etc.) — no query string

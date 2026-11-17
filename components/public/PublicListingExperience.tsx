@@ -95,6 +95,29 @@ async function readListing(
   return loaded;
 }
 
+function resolveHeroBannerUrl(
+  countryImages?: PublicProcessPageData['country']['images']
+): string | null {
+  if (!countryImages) return null;
+  const heroUrl = countryImages.hero?.url?.trim();
+  const bannerUrl = countryImages.banner?.url?.trim();
+
+  // Prefer custom uploaded images (/api/media, /uploads/, S3) over legacy seeded remote URLs
+  const isCustomUpload = (u?: string | null) =>
+    Boolean(
+      u &&
+      (u.startsWith('/api/media') ||
+       u.startsWith('/uploads/') ||
+       u.includes('amazonaws.com') ||
+       u.includes('cloudinary.com') ||
+       !u.includes('media.atlys.com'))
+    );
+
+  if (heroUrl && isCustomUpload(heroUrl)) return heroUrl;
+  if (bannerUrl && isCustomUpload(bannerUrl)) return bannerUrl;
+  return heroUrl || bannerUrl || null;
+}
+
 export function PublicListingExperience({
   initialData,
 }: {
@@ -181,6 +204,12 @@ export function PublicListingExperience({
     ...(hasFaqs ? [{ id: 'faqs', label: 'FAQs' }] : []),
   ];
 
+  const resolvedHeroImage = resolveHeroBannerUrl(data.country.images);
+  const resolvedHeroAlt =
+    data.country.images?.hero?.alt ||
+    data.country.images?.banner?.alt ||
+    data.country.name;
+
   return (
     <>
       <Header overlay theme="dark" cta="none" />
@@ -189,8 +218,8 @@ export function PublicListingExperience({
           countryName={data.country.name}
           countryFlag={data.country.flag}
           flagUrl={data.country.images?.flag?.url}
-          heroImageUrl={data.country.images?.hero?.url}
-          heroImageAlt={data.country.images?.hero?.alt || data.country.name}
+          heroImageUrl={resolvedHeroImage}
+          heroImageAlt={resolvedHeroAlt}
           purpose={data.process.purpose}
           entryType={data.process.entryType}
           processName={data.process.processName}

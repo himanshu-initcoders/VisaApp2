@@ -4,7 +4,7 @@
   "description": "Visa and Passport Service Platform for Indian Citizens",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "node scripts/sync-ocr-assets.mjs",

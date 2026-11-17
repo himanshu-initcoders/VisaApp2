@@ -14,6 +14,30 @@ import { validateVisibilityAgainstSiblings } from '@/lib/question-visibility';
 import { normalizeDocumentConditions } from '@/lib/document-conditions';
 
 /**
+ * Invalidate public static catalog pages whenever any listing attribute changes.
+ */
+async function revalidateListingPublic(processId: string) {
+  try {
+    const listing = await db.query.visaListings.findFirst({
+      where: eq(visaListings.id, processId),
+      columns: { id: true, slug: true, destinationCountry: true },
+    });
+
+    if (listing) {
+      await revalidatePublicVisaCatalog({
+        countryCode: listing.destinationCountry,
+        listingId: listing.id,
+        listingSlug: listing.slug,
+      });
+    } else {
+      await revalidatePublicVisaCatalog();
+    }
+  } catch (error) {
+    console.warn('Failed to revalidate public visa catalog:', error);
+  }
+}
+
+/**
  * Ensure catalog document types exist on the listing's components_required.
  * Skips types already attached. Returns how many were newly attached.
  */
@@ -559,6 +583,7 @@ export async function createQuestion(processId: string, data: AdditionalQuestion
     revalidatePath(`/admin/config/visa-listings/${processId}/forms`);
     revalidatePath(`/admin/config/visa-listings/${processId}/docs`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return {
       success: true,
@@ -641,6 +666,7 @@ export async function updateQuestion(questionId: string, data: AdditionalQuestio
     revalidatePath(`/admin/config/visa-listings/${processId}/forms`);
     revalidatePath(`/admin/config/visa-listings/${processId}/docs`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return {
       success: true,
@@ -679,6 +705,7 @@ export async function deleteQuestion(questionId: string) {
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/forms`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return {
       success: true,
@@ -711,6 +738,7 @@ export async function reorderQuestions(processId: string, questionIds: string[])
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/forms`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return {
       success: true,
@@ -773,6 +801,7 @@ export async function createComponent(processId: string, data: ComponentRequired
     revalidatePath(`/admin/config/visa-listings/${processId}/docs`);
     revalidatePath('/admin/config/visa-listings');
     revalidatePath('/admin/config/visa-listings/new');
+    await revalidateListingPublic(processId);
 
     return {
       success: true,
@@ -850,6 +879,7 @@ export async function createComponents(processId: string, data: CreateComponents
     revalidatePath(`/admin/config/visa-listings/${processId}/docs`);
     revalidatePath('/admin/config/visa-listings');
     revalidatePath('/admin/config/visa-listings/new');
+    await revalidateListingPublic(processId);
 
     return {
       success: true,
@@ -912,6 +942,7 @@ export async function updateComponent(componentId: string, data: ComponentRequir
     revalidatePath(`/admin/config/visa-listings/${processId}/docs`);
     revalidatePath('/admin/config/visa-listings');
     revalidatePath('/admin/config/visa-listings/new');
+    await revalidateListingPublic(processId);
 
     return {
       success: true,
@@ -952,6 +983,7 @@ export async function deleteComponent(componentId: string) {
     revalidatePath(`/admin/config/visa-listings/${processId}/docs`);
     revalidatePath('/admin/config/visa-listings');
     revalidatePath('/admin/config/visa-listings/new');
+    await revalidateListingPublic(processId);
 
     return {
       success: true,
@@ -985,6 +1017,7 @@ export async function reorderComponents(processId: string, componentIds: string[
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/docs`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return {
       success: true,
@@ -1026,6 +1059,7 @@ export async function createFaq(processId: string, data: FAQ) {
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/content`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return { success: true, message: 'FAQ created successfully' };
   } catch (error) {
@@ -1064,6 +1098,7 @@ export async function updateFaq(faqId: string, data: FAQ) {
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/content`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return { success: true, message: 'FAQ updated successfully' };
   } catch (error) {
@@ -1094,6 +1129,7 @@ export async function deleteFaq(faqId: string) {
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/content`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return { success: true, message: 'FAQ deleted successfully' };
   } catch (error) {
@@ -1121,6 +1157,7 @@ export async function reorderFaqs(processId: string, faqIds: string[]) {
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/content`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return { success: true, message: 'FAQs reordered successfully' };
   } catch (error) {
@@ -1158,6 +1195,7 @@ export async function createPostCheckoutStep(processId: string, data: PostChecko
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/content`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return { success: true, message: 'Post-checkout step created successfully' };
   } catch (error) {
@@ -1195,6 +1233,7 @@ export async function updatePostCheckoutStep(stepId: string, data: PostCheckoutS
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/content`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return { success: true, message: 'Post-checkout step updated successfully' };
   } catch (error) {
@@ -1225,6 +1264,7 @@ export async function deletePostCheckoutStep(stepId: string) {
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/content`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return { success: true, message: 'Post-checkout step deleted successfully' };
   } catch (error) {
@@ -1252,6 +1292,7 @@ export async function reorderPostCheckoutSteps(processId: string, stepIds: strin
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/content`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return { success: true, message: 'Post-checkout steps reordered successfully' };
   } catch (error) {
@@ -1290,6 +1331,7 @@ export async function addMultiTripCountry(processId: string, data: MultiCountry)
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/content`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return { success: true, message: 'Multi-trip country added successfully' };
   } catch (error) {
@@ -1322,6 +1364,7 @@ export async function removeMultiTripCountry(countryId: string) {
     revalidatePath(`/admin/config/visa-listings/${processId}`);
     revalidatePath(`/admin/config/visa-listings/${processId}/content`);
     revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
 
     return { success: true, message: 'Multi-trip country removed successfully' };
   } catch (error) {
@@ -1388,6 +1431,7 @@ export async function publishFormVersion(listingId: string) {
     revalidatePath(`/admin/config/visa-listings/${listingId}/forms`);
     revalidatePath(`/admin/config/visa-listings/${listingId}/docs`);
     revalidatePath(`/admin/config/visa-listings/${listingId}`);
+    await revalidateListingPublic(listingId);
 
     return {
       success: true,

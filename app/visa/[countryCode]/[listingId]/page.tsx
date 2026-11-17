@@ -15,8 +15,12 @@ import {
 } from '@/lib/seo/jsonld';
 import { withSearchQuery } from '@/lib/visa/listingSlug';
 
-/** Static at build; refresh hourly or when admin emits catalog revalidation. */
-export const revalidate = 3600;
+/**
+ * Statically rendered at build time with ISR on-demand revalidation.
+ * When changes are made from admin or user panels, revalidatePublicVisaCatalog() immediately purges and refreshes the cache.
+ */
+export const revalidate = 86400;
+export const dynamicParams = true;
 
 interface PageProps {
   params: Promise<{
@@ -27,13 +31,28 @@ interface PageProps {
 }
 
 export async function generateStaticParams() {
-  const countries = await getEnabledCountriesWithProcesses();
-  return countries.flatMap((country) =>
-    country.visaListings.map((listing) => ({
-      countryCode: country.iso2Code.toLowerCase(),
-      listingId: listing.slug,
-    }))
-  );
+  try {
+    const countries = await getEnabledCountriesWithProcesses();
+    return countries.flatMap((country) =>
+      country.visaListings.flatMap((listing) => [
+        {
+          countryCode: country.iso2Code.toLowerCase(),
+          listingId: listing.slug,
+        },
+        ...(listing.id && listing.id !== listing.slug
+          ? [
+              {
+                countryCode: country.iso2Code.toLowerCase(),
+                listingId: listing.id,
+              },
+            ]
+          : []),
+      ])
+    );
+  } catch (error) {
+    console.error('generateStaticParams error in visa/[countryCode]/[listingId]:', error);
+    return [];
+  }
 }
 
 export async function generateMetadata({
