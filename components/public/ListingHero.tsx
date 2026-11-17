@@ -282,7 +282,7 @@ export function ListingHero({
           <div className="mt-6 flex flex-col gap-2.5">
             <a
               href="#pricing"
-              className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#2563EB] px-5 py-3.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.28)] transition-colors hover:bg-[#1749B5]"
+              className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-portrait-ink px-5 py-3.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.28)] transition-colors hover:bg-fog"
             >
               Apply now
               <ArrowRight className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-1" />
@@ -333,7 +333,7 @@ export function ListingHero({
             <div className="mt-8 flex items-center gap-3">
               <a
                 href="#pricing"
-                className="group inline-flex items-center justify-center gap-2 rounded-full bg-[#2563EB] px-6 py-3.5 text-base font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.28)] transition-colors duration-200 hover:bg-[#1749B5] active:scale-[0.98]"
+                className="group inline-flex items-center justify-center gap-2 rounded-full bg-portrait-ink px-6 py-3.5 text-base font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.28)] transition-colors duration-200 active:scale-[0.98]"
               >
                 {applyLabel}
                 <ArrowRight className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-1" />
