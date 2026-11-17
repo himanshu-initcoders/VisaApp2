@@ -171,6 +171,7 @@ export function UnderlineField({
                 value={isoValue}
                 min={min}
                 max={max}
+                autoComplete="off"
                 aria-label={`Pick ${label}`}
                 onChange={(event) => {
                   const next = event.target.value;
@@ -230,6 +231,7 @@ export function UnderlineSelect({
       <div className="relative mt-1 border-b border-ash pb-2">
         <select
           value={value}
+          autoComplete="off"
           onChange={(event) => onChange(event.target.value)}
           className="w-full appearance-none bg-transparent text-base text-portrait-ink outline-none"
         >

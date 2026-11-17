@@ -1326,7 +1326,11 @@ export function ApplyVisaWizard({
   }
 
   return (
-    <div className="relative min-h-dvh bg-[#f4f7fb]">
+    <form
+      autoComplete="off"
+      onSubmit={(event) => event.preventDefault()}
+      className="relative min-h-dvh bg-[#f4f7fb]"
+    >
       <header className="relative z-20 px-4 pb-2 pt-4 sm:px-8 sm:pt-5">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
           <button
@@ -1616,6 +1620,6 @@ export function ApplyVisaWizard({
         />
       )}
 
-    </div>
+    </form>
   );
 }

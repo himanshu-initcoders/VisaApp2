@@ -65,6 +65,7 @@ export function AddTravellerCard({
       <input
         value={name}
         autoFocus
+        autoComplete="off"
         placeholder="Full name"
         disabled={selectingProfile}
         onChange={(event) =>

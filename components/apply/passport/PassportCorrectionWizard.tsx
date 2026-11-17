@@ -207,6 +207,7 @@ export function PassportCorrectionWizard({
                       })),
                     ]}
                     value={values[item.targetKey] || ''}
+                    autoComplete="off"
                     onChange={(event) =>
                       setValues((prev) => ({
                         ...prev,
@@ -218,6 +219,7 @@ export function PassportCorrectionWizard({
                   <Input
                     type={type === 'date' ? 'date' : 'text'}
                     value={values[item.targetKey] || ''}
+                    autoComplete="off"
                     onChange={(event) =>
                       setValues((prev) => ({
                         ...prev,

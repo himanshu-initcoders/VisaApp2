@@ -87,7 +87,7 @@ export function BasicInformationStep({
                   }}
                   placeholder="Enter your full name"
                   autoFocus
-                  autoComplete="name"
+                  autoComplete="off"
                   className="min-w-0 flex-1 bg-transparent py-2 font-switzer text-sm text-portrait-ink outline-none placeholder:text-fog sm:text-base"
                 />
                 <button

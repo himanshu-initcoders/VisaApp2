@@ -777,7 +777,11 @@ export function ApplyPassportWizard({
   };
 
   return (
-    <div className="relative min-h-dvh bg-[#f4f7fb] pb-28">
+    <form
+      autoComplete="off"
+      onSubmit={(event) => event.preventDefault()}
+      className="relative min-h-dvh bg-[#f4f7fb] pb-28"
+    >
       <ApplicationSubmittedModal
         open={Boolean(submittedRedirect)}
         product="passport"
@@ -1070,7 +1074,7 @@ export function ApplyPassportWizard({
           )}
         </div>
       </footer>
-    </div>
+    </form>
   );
 }
 
@@ -1154,6 +1158,7 @@ function QuestionField({
             ...question.options.map((o) => ({ value: o.value, label: o.label })),
           ]}
           value={typeof value === 'string' ? value : ''}
+          autoComplete="off"
           onChange={(e) => onChange(e.target.value)}
         />
       </div>
@@ -1200,6 +1205,7 @@ function QuestionField({
             rows={4}
             placeholder={description || undefined}
             value={typeof value === 'string' ? value : ''}
+            autoComplete="off"
             onChange={(e) => onChange(e.target.value)}
             required={required}
           />
@@ -1214,6 +1220,7 @@ function QuestionField({
           placeholder={description || undefined}
           type="text"
           value={typeof value === 'string' ? value : ''}
+          autoComplete="off"
           onChange={(e) => onChange(e.target.value)}
           required={required}
         />
@@ -1232,6 +1239,7 @@ function QuestionField({
       <Input
         type={question.questionType === 'date' ? 'date' : 'text'}
         value={typeof value === 'string' ? value : ''}
+        autoComplete="off"
         onChange={(e) => onChange(e.target.value)}
         required={required}
       />
