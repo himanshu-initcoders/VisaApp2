@@ -3,7 +3,7 @@ import {
   CONTACT_PHONE,
   CONTACT_PHONE_DISPLAY,
 } from '@/lib/contact';
-import { LOGO_CID } from '@/lib/email/send';
+import { LOGO_CID, SOCIAL_ICON_CIDS } from '@/lib/email/send';
 import { SITE_NAME, SOCIAL_PROFILES } from '@/lib/seo/site';
 
 const INK = '#08304c';
@@ -72,9 +72,9 @@ function renderEmailHeader(): string {
       </td>
     </tr>
     <tr>
-      <td style="padding:28px 28px 20px;">
-        <a href="${escapeHtml(appBaseUrl())}" style="text-decoration:none;">
-          <img src="cid:${LOGO_CID}" alt="${escapeHtml(SITE_NAME)}" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" style="display:block;width:${LOGO_WIDTH}px;height:${LOGO_HEIGHT}px;max-width:100%;border:0;outline:none;text-decoration:none;" />
+      <td align="center" style="padding:28px 28px 20px;text-align:center;">
+        <a href="${escapeHtml(appBaseUrl())}" style="display:inline-block;text-decoration:none;">
+          <img src="cid:${LOGO_CID}" alt="${escapeHtml(SITE_NAME)}" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" style="display:block;margin:0 auto;width:${LOGO_WIDTH}px;height:${LOGO_HEIGHT}px;max-width:100%;border:0;outline:none;text-decoration:none;" />
         </a>
       </td>
     </tr>
@@ -90,21 +90,18 @@ function renderEmailHeader(): string {
   </table>`;
 }
 
-const SOCIAL_BADGE: Record<(typeof SOCIAL_PROFILES)[number]['network'], string> = {
-  instagram: 'IG',
-  linkedin: 'in',
-  facebook: 'f',
-};
+const SOCIAL_ICON_SIZE = 36;
 
 function renderSocialLinks(): string {
-  const links = SOCIAL_PROFILES.map(
-    (profile) => `<td style="padding:0 6px;vertical-align:top;">
+  const links = SOCIAL_PROFILES.map((profile) => {
+    const cid = SOCIAL_ICON_CIDS[profile.network];
+    return `<td style="padding:0 8px;vertical-align:top;">
         <a href="${escapeHtml(profile.href)}" style="display:inline-block;text-decoration:none;text-align:center;" title="${escapeHtml(profile.label)}">
-          <span style="display:inline-block;width:36px;height:36px;line-height:36px;border-radius:9999px;background:${INK};color:${WHITE};font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;text-align:center;">${SOCIAL_BADGE[profile.network]}</span>
+          <img src="cid:${cid}" alt="${escapeHtml(profile.label)}" width="${SOCIAL_ICON_SIZE}" height="${SOCIAL_ICON_SIZE}" style="display:block;margin:0 auto;width:${SOCIAL_ICON_SIZE}px;height:${SOCIAL_ICON_SIZE}px;border:0;outline:none;text-decoration:none;" />
           <span style="display:block;margin-top:6px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.3;color:${MUTED};">${escapeHtml(profile.label)}</span>
         </a>
-      </td>`
-  ).join('');
+      </td>`;
+  }).join('');
 
   return `<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:0 auto 18px;">
     <tr>
@@ -248,9 +245,9 @@ export function renderEmail(input: {
 
   const button =
     input.buttonLabel && input.buttonHref
-      ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 12px;">
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:8px 0 12px;">
           <tr>
-            <td align="left" style="border-radius:28px;background:${INK};">
+            <td align="center" style="text-align:center;">
               <a href="${escapeHtml(absoluteUrl(input.buttonHref))}" style="display:inline-block;padding:13px 24px;background:${INK};color:${WHITE};font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:600;text-decoration:none;border-radius:28px;">${escapeHtml(input.buttonLabel)}</a>
             </td>
           </tr>

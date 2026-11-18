@@ -9,11 +9,41 @@ import {
 
 export const LOGO_CID = 'viserv-logo';
 
+/** Inline social icons for the shared email footer (PNG, not SVG — Outlook-safe). */
+export const SOCIAL_ICON_CIDS = {
+  instagram: 'viserv-instagram',
+  linkedin: 'viserv-linkedin',
+  facebook: 'viserv-facebook',
+} as const;
+
 export type EmailFileAttachment = {
   filename: string;
   content: Buffer;
   contentType?: string;
 };
+
+const INLINE_IMAGE_ATTACHMENTS = [
+  {
+    filename: 'logo.png',
+    path: path.join(process.cwd(), 'public', 'logo.png'),
+    cid: LOGO_CID,
+  },
+  {
+    filename: 'instagram.png',
+    path: path.join(process.cwd(), 'public', 'email', 'instagram.png'),
+    cid: SOCIAL_ICON_CIDS.instagram,
+  },
+  {
+    filename: 'linkedin.png',
+    path: path.join(process.cwd(), 'public', 'email', 'linkedin.png'),
+    cid: SOCIAL_ICON_CIDS.linkedin,
+  },
+  {
+    filename: 'facebook.png',
+    path: path.join(process.cwd(), 'public', 'email', 'facebook.png'),
+    cid: SOCIAL_ICON_CIDS.facebook,
+  },
+] as const;
 
 export async function sendEmail(input: {
   to: string;
@@ -27,13 +57,13 @@ export async function sendEmail(input: {
   }
 
   const attachments = [
-    {
-      filename: 'logo.png',
-      path: path.join(process.cwd(), 'public', 'logo.png'),
-      cid: LOGO_CID,
+    ...INLINE_IMAGE_ATTACHMENTS.map((image) => ({
+      filename: image.filename,
+      path: image.path,
+      cid: image.cid,
       contentDisposition: 'inline' as const,
       contentType: 'image/png',
-    },
+    })),
     ...(input.fileAttachments ?? []).map((file) => ({
       filename: file.filename,
       content: file.content,
