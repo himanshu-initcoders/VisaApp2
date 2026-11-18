@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -33,21 +34,49 @@ export function AnimatedTabs({
   className,
 }: AnimatedTabsProps) {
   const reduceMotion = useReducedMotion();
+  const listRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+
+  useEffect(() => {
+    const list = listRef.current;
+    const active = tabRefs.current.get(value);
+    if (!list || !active) return;
+
+    // Keep the active tab in view (and prefer centering) as Continue advances past
+    // the first few tabs on narrow screens.
+    const listRect = list.getBoundingClientRect();
+    const tabRect = active.getBoundingClientRect();
+    const tabCenter = tabRect.left + tabRect.width / 2;
+    const listCenter = listRect.left + listRect.width / 2;
+    const delta = tabCenter - listCenter;
+    const maxScroll = list.scrollWidth - list.clientWidth;
+    if (maxScroll <= 0) return;
+
+    const nextLeft = Math.max(0, Math.min(maxScroll, list.scrollLeft + delta));
+    if (Math.abs(nextLeft - list.scrollLeft) < 1) return;
+
+    list.scrollTo({
+      left: nextLeft,
+      behavior: reduceMotion ? 'auto' : 'smooth',
+    });
+  }, [value, items.length, reduceMotion]);
 
   if (items.length < 2) return null;
 
   const isDark = tone === 'dark';
-  // Apply form can show up to 6 sections; stretch so the row stays centered/full-width
-  const stretch = items.length <= 6;
+  // 4+ tabs overflow on narrow screens — keep content width + horizontal scroll there.
+  const manyTabs = items.length > 3;
+  const stretchDesktop = items.length <= 6;
 
   return (
     <LayoutGroup id={layoutId}>
       <div
+        ref={listRef}
         role="tablist"
         aria-label={ariaLabel}
         className={cn(
           'relative flex w-full gap-1 overflow-x-auto rounded-full p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-          stretch ? '' : 'justify-center',
+          manyTabs ? 'justify-start sm:justify-center' : '',
           isDark ? 'bg-white/10' : 'bg-[#f3f4f6]',
           className
         )}
@@ -59,6 +88,10 @@ export function AnimatedTabs({
           return (
             <button
               key={item.id}
+              ref={(node) => {
+                if (node) tabRefs.current.set(item.id, node);
+                else tabRefs.current.delete(item.id);
+              }}
               type="button"
               role="tab"
               aria-selected={isActive}
@@ -70,7 +103,11 @@ export function AnimatedTabs({
               }}
               className={cn(
                 'relative z-10 rounded-full px-3 py-2 text-sm font-medium transition-colors',
-                stretch ? 'flex-1' : 'shrink-0',
+                manyTabs
+                  ? stretchDesktop
+                    ? 'shrink-0 sm:flex-1'
+                    : 'shrink-0'
+                  : 'flex-1',
                 isDisabled && 'cursor-not-allowed opacity-40',
                 isActive
                   ? isDark

@@ -91,7 +91,7 @@ export function ReviewStep({
   const selectedStarted = selected ? isTravellerStarted(selected) : false;
 
   return (
-    <section className="mx-auto max-w-5xl pt-2 sm:pt-4">
+    <section className="mx-auto max-w-5xl pb-4 pt-2 sm:pb-0 sm:pt-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <TravellerSidebar
           travellers={travellers}

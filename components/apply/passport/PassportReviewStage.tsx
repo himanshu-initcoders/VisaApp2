@@ -893,7 +893,7 @@ export function PassportReviewStage({
     ) || 'Traveller';
 
   return (
-    <div ref={stageRootRef} className="min-h-dvh bg-white">
+    <div ref={stageRootRef} className="min-h-dvh bg-white pb-28 sm:pb-0">
       <input
         ref={frontInputRef}
         type="file"
@@ -928,46 +928,48 @@ export function PassportReviewStage({
         </div>
       )}
 
-      <header className="relative flex items-center justify-between px-4 py-4 sm:px-6">
-        <button
-          type="button"
-          onClick={goBack}
-          className="inline-flex items-center gap-1.5 rounded-full border border-ash bg-white px-3 py-1.5 text-sm text-portrait-ink shadow-sm"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back
-        </button>
-        <div className="pointer-events-none absolute left-1/2 top-1/2 max-w-[min(70%,20rem)] -translate-x-1/2 -translate-y-1/2 text-center sm:max-w-md">
-          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-helper sm:text-xs">
-            Complete application
-          </p>
-          <h1 className="truncate font-basier text-xl text-portrait-ink sm:text-2xl">
-            {displayName}
-          </h1>
-        </div>
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          className="rounded-full border border-ash p-2 text-slate-helper hover:text-portrait-ink"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </header>
+      <div className="sticky top-0 z-20 border-b border-ash-divider/60 bg-white/95 backdrop-blur">
+        <header className="relative flex items-center justify-between px-4 py-4 sm:px-6">
+          <button
+            type="button"
+            onClick={goBack}
+            className="inline-flex items-center gap-1.5 rounded-full border border-ash bg-white px-3 py-1.5 text-sm text-portrait-ink shadow-sm"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back
+          </button>
+          <div className="pointer-events-none absolute left-1/2 top-1/2 max-w-[min(70%,20rem)] -translate-x-1/2 -translate-y-1/2 text-center sm:max-w-md">
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-helper sm:text-xs">
+              Complete application
+            </p>
+            <h1 className="truncate font-basier text-xl text-portrait-ink sm:text-2xl">
+              {displayName}
+            </h1>
+          </div>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="rounded-full border border-ash p-2 text-slate-helper hover:text-portrait-ink"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
 
-      <div className="mx-auto flex w-full max-w-6xl justify-center px-4 sm:px-6">
-        <AnimatedTabs
-          items={tabMeta.map((item) => ({
-            ...item,
-            disabled: !unlocked[item.id],
-          }))}
-          value={tab}
-          onChange={(id) => selectTab(id as ApplicationFormTabId)}
-          tone="light"
-          layoutId="passport-application-tabs"
-          ariaLabel="Application sections"
-          className="max-w-4xl"
-        />
+        <div className="mx-auto flex w-full max-w-6xl justify-center px-4 pb-3 sm:px-6">
+          <AnimatedTabs
+            items={tabMeta.map((item) => ({
+              ...item,
+              disabled: !unlocked[item.id],
+            }))}
+            value={tab}
+            onChange={(id) => selectTab(id as ApplicationFormTabId)}
+            tone="light"
+            layoutId="passport-application-tabs"
+            ariaLabel="Application sections"
+            className="max-w-4xl"
+          />
+        </div>
       </div>
 
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
@@ -1068,11 +1070,13 @@ export function PassportReviewStage({
 
         <FormTabFooter
           continueLabel={continueLabel}
+          continueLabelMobile={tab === 'review' ? 'Submit' : undefined}
           continueDisabled={continueDisabled}
           hint={footerHint}
           onContinue={goNext}
           onBack={goBack}
           backLabel={tab === firstTab ? 'Close' : 'Previous'}
+          fixedOnMobile
         />
       </div>
     </div>

@@ -706,9 +706,18 @@ export function CheckoutPayStep({
             : quote
               ? `Pay ${totalLabel} & submit`
               : 'Pay & submit';
+  // Narrow fixed footer: keep status labels, shorten the paid CTA.
+  const payLabelMobile =
+    !isAuthed ||
+    submitting ||
+    successId ||
+    (!quoteConfirmed && quoting) ||
+    quote?.free
+      ? payLabel
+      : 'Proceed to payment';
 
   return (
-    <section className="mx-auto max-w-xl pt-8 sm:pt-12">
+    <section className="mx-auto max-w-xl pb-28 pt-8 sm:pb-0 sm:pt-12">
       <ApplicationSubmittedModal
         open={showSubmittedModal}
         product="visa"
@@ -807,7 +816,7 @@ export function CheckoutPayStep({
             {error}
           </p>
         )}
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+        <div className="mt-6 hidden flex-col gap-3 sm:flex sm:flex-row sm:justify-center">
           <button
             type="button"
             onClick={onBack}
@@ -823,6 +832,27 @@ export function CheckoutPayStep({
             className="rounded-full bg-portrait-ink px-6 py-2.5 font-switzer text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             {payLabel}
+          </button>
+        </div>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-ash-divider bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden">
+        <div className="mx-auto flex max-w-xl gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={submitting}
+            className="flex-1 rounded-full border border-ash bg-white px-5 py-3 font-switzer text-sm font-medium text-slate-helper hover:text-portrait-ink disabled:opacity-50"
+          >
+            Back
+          </button>
+          <button
+            type="button"
+            onClick={() => void handlePay()}
+            disabled={!canPay}
+            className="flex-[1.4] rounded-full bg-portrait-ink px-6 py-3 font-switzer text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {payLabelMobile}
           </button>
         </div>
       </div>

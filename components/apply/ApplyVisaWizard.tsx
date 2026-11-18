@@ -1519,7 +1519,7 @@ export function ApplyVisaWizard({
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto max-w-5xl px-4 pb-16 pt-8 sm:px-8">
+      <main className="relative z-10 mx-auto max-w-5xl px-4 pb-28 pt-8 sm:px-8 sm:pb-16">
         {onBehalfOfUserId && onBehalfOfLabel && (
           <div className="mb-4 rounded-[20px] border border-nautical-teal/30 bg-sky-wash/50 px-4 py-3 text-center">
             <p className="font-switzer text-sm text-portrait-ink">
