@@ -18,6 +18,7 @@ import type {
 import { PassportScanStage } from './PassportScanStage';
 import { PassportReviewStage, type PassportApplicationPayload } from './PassportReviewStage';
 import type {
+  ApplicationFormTabId,
   ApplyFormConfig,
   TravellerDocumentUpload,
   TravellerTripDetails,
@@ -45,6 +46,8 @@ interface PassportCaptureFlowProps {
     documents?: TravellerDocumentUpload[];
     draftFileRefs?: DraftFileRef[];
   };
+  preferredFormTab?: ApplicationFormTabId | null;
+  onFormTabChange?: (tab: ApplicationFormTabId) => void;
   onClose: () => void;
   onProgress?: (payload: PassportApplicationPayload) => void;
   /** Persist draft when Continue advances a traveller form tab. */
@@ -167,6 +170,8 @@ export function PassportCaptureFlow({
   arrivalPrefill,
   tripSources,
   resume,
+  preferredFormTab = null,
+  onFormTabChange,
   onClose,
   onProgress,
   onStepCommit,
@@ -386,6 +391,8 @@ export function PassportCaptureFlow({
           onProgress={onProgress}
           onStepCommit={onStepCommit}
           onContinue={onComplete}
+          preferredFormTab={preferredFormTab}
+          onFormTabChange={onFormTabChange}
         />
       </div>
     );

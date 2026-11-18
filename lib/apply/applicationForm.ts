@@ -983,6 +983,29 @@ export function firstIncompleteTab(input: {
   return input.visibleTabs[input.visibleTabs.length - 1] ?? 'review';
 }
 
+/**
+ * Prefer a saved form tab on refresh when it is still unlocked
+ * (at or before the first incomplete tab).
+ */
+export function resolvePreferredFormTab(
+  preferred: ApplicationFormTabId | null | undefined,
+  input: {
+    visibleTabs: ApplicationFormTabId[];
+    generalComplete: boolean;
+    tripComplete: boolean;
+    additionalComplete: boolean;
+    documentsComplete: boolean;
+  }
+): ApplicationFormTabId {
+  const fallback = firstIncompleteTab(input);
+  if (!preferred || !input.visibleTabs.includes(preferred)) return fallback;
+  const preferredIndex = input.visibleTabs.indexOf(preferred);
+  const fallbackIndex = input.visibleTabs.indexOf(fallback);
+  if (preferredIndex < 0) return fallback;
+  if (fallbackIndex < 0 || preferredIndex <= fallbackIndex) return preferred;
+  return fallback;
+}
+
 export function isAllowedPassportFile(file: File) {
   return (
     file.type.startsWith('image/') ||

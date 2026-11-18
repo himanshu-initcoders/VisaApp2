@@ -11,7 +11,6 @@ import { ReviewStep } from '@/components/apply/review/ReviewStep';
 import { PassportCaptureFlow } from '@/components/apply/passport/PassportCaptureFlow';
 import { CheckoutPayStep } from '@/components/apply/CheckoutPayStep';
 import type { PassportApplicationPayload } from '@/components/apply/passport/PassportReviewStage';
-import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 import {
   defaultApplyFormConfig,
   hasPassportBackImage,
@@ -20,11 +19,17 @@ import {
   isDocumentsComplete,
   isMultiStopComplete,
   resolveDocumentSlotsWithPassportBack,
+  type ApplicationFormTabId,
+  type ApplyFormConfig,
 } from '@/lib/apply/applicationForm';
 import { getVisibleDocumentSlots } from '@/lib/document-conditions';
 import { isReviewComplete } from '@/lib/passport/schema';
 import type { ApplyStep, ApplyTraveller } from '@/lib/apply/types';
-import { isTravellerFilled, travellerDisplayName } from '@/lib/apply/reviewFields';
+import {
+  isTravellerFilled,
+  isTravellerStarted,
+  travellerDisplayName,
+} from '@/lib/apply/reviewFields';
 import {
   clearApplyDraftAsync,
   migrateLegacyDraftBinaries,
@@ -37,6 +42,13 @@ import {
   type ApplyDraftDeparture,
 } from '@/lib/apply/draftStorage';
 import type { DraftScopeInput } from '@/lib/apply/draftScope';
+import {
+  clearVisaWizardStepCursor,
+  isVisaApplyLiveSession,
+  markVisaApplyLiveSession,
+  readVisaWizardStepCursor,
+  writeVisaWizardStepCursor,
+} from '@/lib/apply/wizardStepCursor';
 import {
   deleteApplicationDraft,
   getApplicationDraft,
@@ -261,6 +273,8 @@ export function ApplyVisaWizard({
   );
   const [passportResume, setPassportResume] = useState(false);
   const [passportFile, setPassportFile] = useState<File | null>(null);
+  const [preferredFormTab, setPreferredFormTab] =
+    useState<ApplicationFormTabId | null>(null);
   const [departure, setDeparture] = useState<ApplyDraftDeparture>({
     ...departureMeta,
     label: departureLabel,
@@ -291,9 +305,35 @@ export function ApplyVisaWizard({
   travellersRef.current = travellers;
   const stepRef = useRef(step);
   stepRef.current = step;
+  const passportTravellerIdRef = useRef(passportTravellerId);
+  passportTravellerIdRef.current = passportTravellerId;
+  const preferredFormTabRef = useRef(preferredFormTab);
+  preferredFormTabRef.current = preferredFormTab;
   const applicationIdRef = useRef<string | null>(null);
   const referenceNumberRef = useRef<string | null>(null);
   const enterTrackedRef = useRef(false);
+
+  const persistStepCursor = (overrides?: {
+    step?: ApplyStep;
+    formTab?: ApplicationFormTabId | null;
+    activeTravellerId?: string | null;
+  }) => {
+    writeVisaWizardStepCursor(
+      {
+        listingId,
+        step: overrides?.step ?? stepRef.current,
+        formTab:
+          overrides && 'formTab' in overrides
+            ? overrides.formTab
+            : preferredFormTabRef.current,
+        activeTravellerId:
+          overrides && 'activeTravellerId' in overrides
+            ? overrides.activeTravellerId
+            : passportTravellerIdRef.current,
+      },
+      sessionUserId
+    );
+  };
 
   useEffect(() => {
     if (lifecycle !== 'ready' || enterTrackedRef.current) return;
@@ -608,7 +648,13 @@ export function ApplyVisaWizard({
 
         if (cancelled) return;
 
-        if (local && !resume && !onBehalfOfUserId) {
+        const cursor = readVisaWizardStepCursor(listingId, sessionUserId);
+        const sameTabRefresh = isVisaApplyLiveSession(listingId);
+        const shouldAutoResume =
+          Boolean(local) &&
+          (resume || Boolean(onBehalfOfUserId) || sameTabRefresh);
+
+        if (local && !shouldAutoResume && !onBehalfOfUserId) {
           setResumeChoiceDraft(local);
           setLifecycle('ready');
           // LocalStorage profiles only for guests — never for signed-in applicants.
@@ -618,8 +664,26 @@ export function ApplyVisaWizard({
           return;
         }
 
-        if (local && (resume || onBehalfOfUserId)) {
+        if (local && shouldAutoResume) {
           await applyDraftToUi(local);
+          if (cursor?.formTab) {
+            setPreferredFormTab(cursor.formTab);
+            preferredFormTabRef.current = cursor.formTab;
+          }
+          const activeId = cursor?.activeTravellerId;
+          if (activeId) {
+            const traveller = (
+              travellersRef.current.length
+                ? travellersRef.current
+                : local.travellers
+            ).find((item) => item.id === activeId);
+            if (traveller && isTravellerStarted(traveller)) {
+              setPassportTravellerId(activeId);
+              passportTravellerIdRef.current = activeId;
+              setPassportResume(true);
+              setPassportFile(null);
+            }
+          }
         } else if (!local) {
           setDeparture({
             ...departureMeta,
@@ -635,6 +699,7 @@ export function ApplyVisaWizard({
         console.warn('Draft hydrate failed', error);
       } finally {
         if (!cancelled) {
+          markVisaApplyLiveSession(listingId);
           setLifecycle('ready');
         }
       }
@@ -722,6 +787,7 @@ export function ApplyVisaWizard({
       },
       { sessionUserId, onBehalfOfUserId }
     );
+    persistStepCursor({ step });
   }, [
     lifecycle,
     resumeChoiceDraft,
@@ -736,6 +802,24 @@ export function ApplyVisaWizard({
     interestedInInsurance,
     sessionUserId,
     onBehalfOfUserId,
+  ]);
+
+  // Keep form-tab / open-traveller cursor in localStorage for refresh restore.
+  useEffect(() => {
+    if (lifecycle !== 'ready' || resumeChoiceDraft) return;
+    persistStepCursor({
+      step,
+      formTab: preferredFormTab,
+      activeTravellerId: passportTravellerId,
+    });
+  }, [
+    lifecycle,
+    resumeChoiceDraft,
+    listingId,
+    sessionUserId,
+    step,
+    preferredFormTab,
+    passportTravellerId,
   ]);
 
   const persistNamedProfile = (traveller: ApplyTraveller, visaType = processName) => {
@@ -1093,6 +1177,8 @@ export function ApplyVisaWizard({
     setPassportResume(resume);
     setPassportFile(file ?? null);
     setPassportTravellerId(id);
+    passportTravellerIdRef.current = id;
+    persistStepCursor({ activeTravellerId: id });
   };
 
   const openFillApplication = (id: string) => {
@@ -1503,6 +1589,7 @@ export function ApplyVisaWizard({
             draftScope={draftScope()}
             onBack={() => setStep('documents')}
             onSubmitSuccess={() => {
+              clearVisaWizardStepCursor(listingId, sessionUserId);
               setLifecycle('submitted');
             }}
             onSubmitFailed={() => {
@@ -1525,11 +1612,37 @@ export function ApplyVisaWizard({
           onResume={() => {
             const draft = resumeChoiceDraft;
             setResumeChoiceDraft(null);
-            void applyDraftToUi(draft);
+            void (async () => {
+              await applyDraftToUi(draft);
+              const cursor = readVisaWizardStepCursor(listingId, sessionUserId);
+              if (cursor?.formTab) {
+                setPreferredFormTab(cursor.formTab);
+                preferredFormTabRef.current = cursor.formTab;
+              }
+              const activeId = cursor?.activeTravellerId;
+              if (activeId) {
+                const traveller = travellersRef.current.find(
+                  (item) => item.id === activeId
+                );
+                if (traveller && isTravellerStarted(traveller)) {
+                  setPassportTravellerId(activeId);
+                  passportTravellerIdRef.current = activeId;
+                  setPassportResume(true);
+                  setPassportFile(null);
+                }
+              }
+              markVisaApplyLiveSession(listingId);
+              persistStepCursor({
+                step: draft.step,
+                formTab: cursor?.formTab ?? null,
+                activeTravellerId: activeId ?? null,
+              });
+            })();
           }}
           onStartNew={() => {
             void (async () => {
               await clearApplyDraftAsync(draftScope());
+              clearVisaWizardStepCursor(listingId, sessionUserId);
               if (sessionStatus === 'authenticated' && !onBehalfOfUserId) {
                 try {
                   await deleteApplicationDraft(listingId);
@@ -1538,6 +1651,12 @@ export function ApplyVisaWizard({
                 }
               }
               setResumeChoiceDraft(null);
+              setPreferredFormTab(null);
+              preferredFormTabRef.current = null;
+              setPassportTravellerId(null);
+              passportTravellerIdRef.current = null;
+              setPassportResume(false);
+              setPassportFile(null);
               setStep('travellers');
               setPrimaryName('');
               setTravellers(createInitialTravellers(initialTravellerCount));
@@ -1546,6 +1665,7 @@ export function ApplyVisaWizard({
                 label: departureLabel,
               });
               setInterestedInInsurance(false);
+              markVisaApplyLiveSession(listingId);
             })();
           }}
         />
@@ -1561,6 +1681,12 @@ export function ApplyVisaWizard({
           ownerUserId={onBehalfOfUserId}
           initialFile={passportFile ?? undefined}
           formConfig={formConfig}
+          preferredFormTab={preferredFormTab}
+          onFormTabChange={(tab) => {
+            setPreferredFormTab(tab);
+            preferredFormTabRef.current = tab;
+            persistStepCursor({ formTab: tab });
+          }}
           arrivalPrefill={departure.departure}
           tripSources={travellers.flatMap((traveller, index) => {
             if (traveller.id === passportTravellerId || !traveller.tripDetails) {
@@ -1605,8 +1731,10 @@ export function ApplyVisaWizard({
           }
           onClose={() => {
             setPassportTravellerId(null);
+            passportTravellerIdRef.current = null;
             setPassportResume(false);
             setPassportFile(null);
+            persistStepCursor({ activeTravellerId: null });
           }}
           onProgress={(payload) => {
             savePassportProgress(passportTravellerId, payload);

@@ -16,7 +16,6 @@ import {
   DOCUMENT_FILE_ACCEPT,
   defaultApplyFormConfig,
   emptyTripDetails,
-  firstIncompleteTab,
   getAdditionalQuestionIssues,
   getCoreTripIssues,
   getMultiStopIssues,
@@ -29,6 +28,7 @@ import {
   isMultiStopComplete,
   isWithinUploadLimit,
   resolveDocumentSlotsWithPassportBack,
+  resolvePreferredFormTab,
   tabUnlockState,
   type ApplicationFormTabId,
   type ApplyFormConfig,
@@ -108,6 +108,10 @@ interface PassportReviewStageProps {
    */
   onStepCommit?: (data: PassportApplicationPayload) => void | Promise<void>;
   onContinue: (data: PassportApplicationPayload) => void;
+  /** Restore this form tab after refresh when still unlocked. */
+  preferredFormTab?: ApplicationFormTabId | null;
+  /** Notify parent so localStorage can keep the current form tab. */
+  onFormTabChange?: (tab: ApplicationFormTabId) => void;
 }
 
 function revokeIfObjectUrl(url?: string) {
@@ -241,6 +245,8 @@ export function PassportReviewStage({
   onProgress,
   onStepCommit,
   onContinue,
+  preferredFormTab = null,
+  onFormTabChange,
 }: PassportReviewStageProps) {
   const formConfig = formConfigProp ?? defaultApplyFormConfig();
   const visibleTabs = useMemo(
@@ -758,7 +764,7 @@ export function PassportReviewStage({
         uploads: savedDocuments,
       })
     );
-    return firstIncompleteTab({
+    return resolvePreferredFormTab(preferredFormTab, {
       visibleTabs,
       generalComplete: formConfig.showGeneralInfo
         ? isReviewComplete(form)
@@ -776,6 +782,20 @@ export function PassportReviewStage({
       ),
     });
   });
+
+  const selectTab = useCallback(
+    (next: ApplicationFormTabId) => {
+      setTab(next);
+      onFormTabChange?.(next);
+    },
+    [onFormTabChange]
+  );
+
+  useEffect(() => {
+    onFormTabChange?.(tab);
+    // Announce the restored tab once on mount for localStorage cursor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const stageRootRef = useRef<HTMLDivElement>(null);
 
@@ -817,7 +837,7 @@ export function PassportReviewStage({
     }
     const payload = buildPayload();
 
-    const advance = () => setTab(next);
+    const advance = () => selectTab(next);
     const commit = onStepCommitRef.current;
     if (!commit) {
       onProgressRef.current?.(payload);
@@ -842,7 +862,7 @@ export function PassportReviewStage({
       onBack();
       return;
     }
-    setTab(visibleTabs[index - 1]);
+    selectTab(visibleTabs[index - 1]);
   };
 
   const continueLabel =
@@ -942,7 +962,7 @@ export function PassportReviewStage({
             disabled: !unlocked[item.id],
           }))}
           value={tab}
-          onChange={(id) => setTab(id as ApplicationFormTabId)}
+          onChange={(id) => selectTab(id as ApplicationFormTabId)}
           tone="light"
           layoutId="passport-application-tabs"
           ariaLabel="Application sections"
@@ -1037,7 +1057,7 @@ export function PassportReviewStage({
             passportBackFilename={backFilename}
             showGeneralInfo={formConfig.showGeneralInfo}
             showTripDetails={formConfig.showTripDetails}
-            onEditSection={setTab}
+            onEditSection={selectTab}
             listingId={listingId}
             travellerId={travellerId}
             draftFileRefs={draftFileRefsProp}

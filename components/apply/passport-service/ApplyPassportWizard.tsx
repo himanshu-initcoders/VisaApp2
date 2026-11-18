@@ -30,6 +30,11 @@ import {
   loadPassportDraft,
   savePassportDraft,
 } from '@/lib/apply/passportDraftActions';
+import {
+  clearPassportWizardStepCursor,
+  readPassportWizardStepCursor,
+  writePassportWizardStepCursor,
+} from '@/lib/apply/wizardStepCursor';
 import { PassportApplyDocumentsPanel } from '@/components/apply/passport-service/PassportApplyDocumentsPanel';
 import { ApplicationSubmittedModal } from '@/components/apply/ApplicationSubmittedModal';
 import { cn } from '@/lib/utils';
@@ -117,11 +122,30 @@ export function ApplyPassportWizard({
   const selectedPrice =
     prices.find((price) => price.id === priceOptionId) || prices[0];
   const [macro, setMacro] = useState<MacroStage>(() => {
+    const localCursor = readPassportWizardStepCursor(listingId);
+    if (localCursor) {
+      if (
+        localCursor.macro === 'documents' &&
+        formConfig.documentSlots.length === 0
+      ) {
+        return 'review';
+      }
+      return localCursor.macro;
+    }
     if (formConfig.steps.length > 0) return 'form';
     if (formConfig.documentSlots.length > 0) return 'documents';
     return 'review';
   });
-  const [stepIndex, setStepIndex] = useState(0);
+  const [stepIndex, setStepIndex] = useState(() => {
+    const localCursor = readPassportWizardStepCursor(listingId);
+    if (localCursor && localCursor.stepIndex >= 0) {
+      return Math.min(
+        localCursor.stepIndex,
+        Math.max(formConfig.steps.length - 1, 0)
+      );
+    }
+    return 0;
+  });
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [uploadedDocuments, setUploadedDocuments] = useState<
     Record<string, PassportDraftUpload>
@@ -287,6 +311,14 @@ export function ApplyPassportWizard({
       setMacro('review');
     }
   }, [macro, hasDocuments]);
+
+  useEffect(() => {
+    writePassportWizardStepCursor({
+      listingId,
+      macro,
+      stepIndex,
+    });
+  }, [listingId, macro, stepIndex]);
 
   useEffect(() => {
     if (!priceOptionId) return;
@@ -568,6 +600,7 @@ export function ApplyPassportWizard({
     referenceNumber?: string | null;
   }) => {
     const ref = input.referenceNumber || input.applicationId;
+    clearPassportWizardStepCursor(listingId);
     setSubmittedRedirect({
       href: `/applications/passport/${ref}`,
       referenceHint:
