@@ -603,8 +603,7 @@ export function ApplyPassportWizard({
     clearPassportWizardStepCursor(listingId);
     setSubmittedRedirect({
       href: `/applications/passport/${ref}`,
-      referenceHint:
-        ref.length > 10 ? `${ref.slice(0, 10)}…` : ref,
+      referenceHint: ref,
     });
   };
 

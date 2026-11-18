@@ -390,9 +390,7 @@ export function CheckoutPayStep({
     await clearLocalDraftAfterSubmit(draftScope);
     setSuccessId(applicationId);
     setSuccessHref(`/applications/visa/${ref}`);
-    setSuccessReferenceHint(
-      ref.length > 10 ? `${ref.slice(0, 10)}…` : ref
-    );
+    setSuccessReferenceHint(ref);
     setSubmitting(false);
     setShowSubmittedModal(true);
   };
