@@ -1,7 +1,9 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { documents, visaApplications } from '@/lib/db/schema';
-import { formatDocumentTitle } from '@/lib/apply/applicationForm';
+import { componentsRequired } from '@/lib/db/schema-extended';
+import { resolveDocumentSlotLabel } from '@/lib/apply/applicationForm';
+import { documentTypeLabel } from '@/lib/document-types';
 import { uploadService } from '@/lib/upload';
 import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
@@ -102,6 +104,53 @@ function applicationLabel(app: {
 }): string {
   const country = app.country || app.countryCode || 'Visa';
   return `${country} · ${app.visaType || 'Application'}`;
+}
+
+/**
+ * Upload slots often store `components_required.key` (a UUID) in
+ * `documents.document_type`. Resolve those to applicant-facing labels.
+ */
+async function buildSlotLabelMap(
+  slotKeys: Iterable<string>
+): Promise<Map<string, string>> {
+  const unique = Array.from(
+    new Set(
+      Array.from(slotKeys)
+        .map((key) => key.trim())
+        .filter(Boolean)
+    )
+  );
+  const map = new Map<string, string>();
+  if (unique.length === 0) return map;
+
+  const rows = await db
+    .select({
+      key: componentsRequired.key,
+      label: componentsRequired.label,
+      documentType: componentsRequired.documentType,
+    })
+    .from(componentsRequired)
+    .where(inArray(componentsRequired.key, unique));
+
+  for (const row of rows) {
+    const key = row.key?.trim();
+    if (!key || map.has(key)) continue;
+    const label =
+      row.label?.trim() ||
+      (row.documentType ? documentTypeLabel(row.documentType) : '') ||
+      '';
+    if (label) map.set(key, label);
+  }
+
+  return map;
+}
+
+function labelForSlot(
+  slotKey: string,
+  labelBySlotKey: Map<string, string>
+): string {
+  const key = slotKey.trim();
+  return labelBySlotKey.get(key) || resolveDocumentSlotLabel(key);
 }
 
 type MutableProfile = {
@@ -249,11 +298,26 @@ export async function getPassengerProfilesForUser(
     .orderBy(desc(documents.uploadedAt));
 
   const docsByApp = new Map<string, typeof dbDocs>();
+  const slotKeys = new Set<string>();
   for (const doc of dbDocs) {
     const list = docsByApp.get(doc.applicationId) ?? [];
     list.push(doc);
     docsByApp.set(doc.applicationId, list);
+    if (doc.documentType) slotKeys.add(doc.documentType);
   }
+
+  for (const app of apps) {
+    const travellers: StoredTraveller[] = Array.isArray(app.travellers)
+      ? (app.travellers as StoredTraveller[])
+      : [];
+    for (const traveller of travellers) {
+      for (const tdoc of traveller.documents ?? []) {
+        if (tdoc.slotKey) slotKeys.add(tdoc.slotKey);
+      }
+    }
+  }
+
+  const labelBySlotKey = await buildSlotLabelMap(slotKeys);
 
   const profiles = new Map<string, MutableProfile>();
   /** passengerId → profile id (for matching documents table rows) */
@@ -284,7 +348,7 @@ export async function getPassengerProfilesForUser(
           documentDbId: doc.id,
           storageKey: doc.s3Key,
           slotKey: doc.documentType,
-          label: formatDocumentTitle(doc.documentType),
+          label: labelForSlot(doc.documentType, labelBySlotKey),
           filename: doc.filename,
           mimeType: doc.mimeType,
           previewUrl: uploadService.getUrl(doc.s3Key),
@@ -315,7 +379,7 @@ export async function getPassengerProfilesForUser(
           documentDbId: null,
           storageKey: key,
           slotKey,
-          label: formatDocumentTitle(slotKey),
+          label: labelForSlot(slotKey, labelBySlotKey),
           filename: tdoc.filename || slotKey,
           mimeType: tdoc.mimeType || null,
           previewUrl,
@@ -347,7 +411,7 @@ export async function getPassengerProfilesForUser(
         documentDbId: doc.id,
         storageKey: doc.s3Key,
         slotKey: doc.documentType,
-        label: formatDocumentTitle(doc.documentType),
+        label: labelForSlot(doc.documentType, labelBySlotKey),
         filename: doc.filename,
         mimeType: doc.mimeType,
         previewUrl: uploadService.getUrl(doc.s3Key),
