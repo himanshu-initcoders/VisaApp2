@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ReviewStepFooter } from '@/components/apply/review/ReviewStepFooter';
 import { TravellerDetailPane } from '@/components/apply/review/TravellerDetailPane';
 import { TravellerSidebar } from '@/components/apply/review/TravellerSidebar';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   isTravellerFilled,
   isTravellerStarted,
@@ -13,7 +14,10 @@ import type {
   ApplyDocumentSlot,
   ApplyTripQuestion,
 } from '@/lib/apply/applicationForm';
-import type { TravellerProfile } from '@/lib/apply/travellerProfiles';
+import {
+  formatProfileName,
+  type TravellerProfile,
+} from '@/lib/apply/travellerProfiles';
 import type { ApplyTraveller } from '@/lib/apply/types';
 
 interface ReviewStepProps {
@@ -66,6 +70,10 @@ export function ReviewStep({
   const [selectedId, setSelectedId] = useState<string | null>(
     travellers[0]?.id ?? null
   );
+  const [pendingRemove, setPendingRemove] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const previousCount = useRef(travellers.length);
   const filledCount = travellers.filter(isTravellerFilled).length;
   const selected =
@@ -89,6 +97,24 @@ export function ReviewStep({
     : 0;
   const selectedFilled = selected ? isTravellerFilled(selected) : false;
   const selectedStarted = selected ? isTravellerStarted(selected) : false;
+  const pendingRemoveLabel =
+    formatProfileName(pendingRemove?.name ?? '') || 'this traveller';
+
+  const requestRemoveTraveller = (id: string) => {
+    const index = travellers.findIndex((item) => item.id === id);
+    if (index < 0) return;
+    const traveller = travellers[index]!;
+    setPendingRemove({
+      id,
+      name: travellerDisplayName(traveller, index),
+    });
+  };
+
+  const confirmRemoveTraveller = () => {
+    if (!pendingRemove) return;
+    onRemoveTraveller(pendingRemove.id);
+    setPendingRemove(null);
+  };
 
   return (
     <section className="mx-auto max-w-5xl pb-4 pt-2 sm:pb-0 sm:pt-4">
@@ -104,7 +130,7 @@ export function ReviewStep({
           onSelect={(id) => setSelectedId(id)}
           onAdd={onAddTraveller}
           onSelectProfile={onSelectProfile}
-          onRemove={onRemoveTraveller}
+          onRemove={requestRemoveTraveller}
         />
 
         {selected && (
@@ -130,6 +156,17 @@ export function ReviewStep({
         filledCount={filledCount}
         totalCount={travellers.length}
         onProceedCheckout={onProceedCheckout}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingRemove)}
+        onClose={() => setPendingRemove(null)}
+        onConfirm={confirmRemoveTraveller}
+        title="Remove traveller?"
+        message={`Remove ${pendingRemoveLabel} from this application? Their draft form answers and uploaded documents will be deleted. This cannot be undone.`}
+        confirmText="Remove"
+        cancelText="Keep traveller"
+        destructive
       />
     </section>
   );

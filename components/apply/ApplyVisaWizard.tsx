@@ -68,6 +68,7 @@ import {
   syncDraftFilesToServer,
 } from '@/lib/apply/syncDraftFiles';
 import { ResumeOrNewModal } from '@/components/apply/ResumeOrNewModal';
+import { deleteServerDraftFile } from '@/lib/apply/deleteDraftFileClient';
 import {
   PASSPORT_BACK_SLOT,
   PASSPORT_FRONT_SLOT,
@@ -1216,15 +1217,71 @@ export function ApplyVisaWizard({
   };
 
   const removeTraveller = (id: string) => {
-    setTravellers((current) => {
-      if (current.length <= 1) return current;
-      return current.filter((item) => item.id !== id);
-    });
-    if (isIdbAvailable()) {
-      void deletePassengerFiles(draftScope(), id).catch((error) => {
-        console.warn('Could not clear traveller files', error);
-      });
+    const current = travellersRef.current;
+    if (current.length <= 1) return;
+
+    const removed = current.find((item) => item.id === id);
+    if (!removed) return;
+
+    const next = current.filter((item) => item.id !== id);
+    travellersRef.current = next;
+    setTravellers(next);
+
+    if (passportTravellerIdRef.current === id) {
+      setPassportTravellerId(null);
+      passportTravellerIdRef.current = null;
+      setPassportFile(null);
+      setPassportResume(false);
+      setPreferredFormTab(null);
     }
+
+    // Wipe this traveller's draft form + files (local + server), then sync draft.
+    void (async () => {
+      try {
+        if (isIdbAvailable()) {
+          await deletePassengerFiles(draftScope(), id);
+        }
+
+        const storageKeys = new Set<string>();
+        for (const ref of removed.draftFileRefs ?? []) {
+          if (ref.storageKey) storageKeys.add(ref.storageKey);
+        }
+        for (const doc of removed.documents ?? []) {
+          if (doc.storageKey) storageKeys.add(doc.storageKey);
+        }
+
+        await Promise.all(
+          [...storageKeys].map((storageKey) =>
+            deleteServerDraftFile({
+              storageKey,
+              ownerUserId: onBehalfOfUserId,
+              applicationId: applicationIdRef.current,
+            })
+          )
+        );
+
+        await writeApplyDraftAsync(
+          {
+            version: 1,
+            updatedAt: new Date().toISOString(),
+            countryCode,
+            countryName,
+            listingId,
+            processName,
+            step: stepRef.current,
+            primaryName: primaryNameRef.current,
+            travellers: next,
+            departure: departureRef.current,
+            travellersCount: next.length,
+            interestedInInsurance: interestedInInsuranceRef.current,
+          },
+          { sessionUserId, onBehalfOfUserId }
+        );
+        quietPushDraftToServer();
+      } catch (error) {
+        console.warn('Could not clear traveller draft', error);
+      }
+    })();
   };
 
   const openPassport = (id: string, resume = false, file?: File) => {
