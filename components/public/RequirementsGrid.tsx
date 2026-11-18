@@ -31,46 +31,25 @@ export function RequirementsGrid({
 
         return (
           <MotionReveal key={item.id} delayMs={index * 60}>
-            {/* Mobile: compact horizontal row */}
-            <div className="group flex items-start gap-4 rounded-2xl border border-ash-divider bg-white p-4 shadow-card sm:hidden">
+            <div className="group relative flex h-full items-start gap-4 overflow-hidden rounded-2xl border border-ash-divider bg-white p-4 shadow-card transition-all duration-300 sm:flex-col sm:rounded-[28px] sm:p-6 sm:hover:-translate-y-1 sm:hover:shadow-elevated">
               <div
                 className={cn(
-                  'mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+                  'mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:mb-5 sm:mt-0 sm:inline-flex sm:h-12 sm:w-12 sm:rounded-full',
                   item.chargeable ? 'bg-peach-wash/80' : 'bg-sky-wash/80'
                 )}
               >
-                <Icon className="h-4 w-4 text-portrait-ink" />
+                <Icon className="h-4 w-4 text-portrait-ink sm:h-5 sm:w-5" />
               </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-[15px] font-medium text-portrait-ink">
+              <div className="min-w-0 flex-1 space-y-0.5 sm:space-y-2">
+                <h3 className="text-[15px] font-medium text-portrait-ink sm:text-lg">
                   {item.title}
                 </h3>
-                <p className="mt-0.5 text-sm leading-5 text-slate-helper">
+                <p className="text-sm leading-5 text-slate-helper sm:leading-6">
                   {item.description}
                 </p>
-              </div>
-            </div>
-
-            {/* Desktop: tall card with hover reveal */}
-            <div className="group relative hidden h-full overflow-hidden rounded-[28px] border border-ash-divider bg-white p-6 shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-elevated sm:block">
-              <div
-                className={cn(
-                  'mb-5 inline-flex h-12 w-12 items-center justify-center rounded-full',
-                  item.chargeable ? 'bg-peach-wash/80' : 'bg-sky-wash/80'
-                )}
-              >
-                <Icon className="h-5 w-5 text-portrait-ink" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-lg font-medium text-portrait-ink">
-                  {item.title}
-                </h3>
-                <p className="text-sm leading-6 text-slate-helper">
-                  {item.description}
-                </p>
-              </div>
-              <div className="mt-5 rounded-[20px] bg-[#f8fafc] px-4 py-3 text-sm text-portrait-ink opacity-70 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-                {item.helper}
+                <div className="mt-3 hidden rounded-[20px] bg-[#f8fafc] px-4 py-3 text-sm text-portrait-ink opacity-70 transition-all duration-300 group-hover:opacity-100 sm:mt-5 sm:block">
+                  {item.helper}
+                </div>
               </div>
             </div>
           </MotionReveal>

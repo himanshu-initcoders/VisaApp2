@@ -7,7 +7,12 @@ const DEFAULT_DESCRIPTION = SITE_DESCRIPTION;
 export type JsonLdDocument = Record<string, unknown>;
 
 export function getSiteUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim() || 'https://viserv.com';
+  // Prefer public origin; fall back to Auth.js URL, then production domain.
+  // Never default to viserv.com — live site is viserv.in.
+  const raw =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.NEXTAUTH_URL?.trim() ||
+    'https://viserv.in';
   return raw.replace(/\/$/, '');
 }
 

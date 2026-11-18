@@ -108,7 +108,7 @@ function mapProcess(process: {
   const startingPrice = first?.totalAmount ?? 0;
   const entryValidity = first?.entryValidity ?? null;
   const stayDuration = first?.stayDuration ?? null;
-  // Card / listing price: government fee ₹0 counts as free (service fee is separate).
+  // DIY / visa-free destinations: govt fee ₹0. Service fee (e.g. ₹118) may still apply.
   const isFree = governmentFeeAmount === 0;
 
   return {

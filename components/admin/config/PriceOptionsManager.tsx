@@ -68,6 +68,13 @@ function PriceFormFields({
 }: {
   form: ReturnType<typeof useForm<VisaListingPriceInput>>;
 }) {
+  const govt = parseFloat(form.watch('governmentFeeAmount') || '0');
+  const service = parseFloat(form.watch('serviceFeeAmount') || '0');
+  const gst = parseFloat(form.watch('governmentGstFeeAmount') || '0');
+  const total = govt + service + gst;
+  // Catch placeholder typos like AE ₹100 while allowing true DIY (govt ₹0) packages.
+  const suspiciouslyLowPaid = govt > 0 && total > 0 && total < 500;
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
@@ -100,7 +107,7 @@ function PriceFormFields({
           label="Visa Fee (₹)"
           type="number"
           step="0.01"
-          helperText="Government fee"
+          helperText="Government fee — use ₹0 for DIY / visa-free"
           error={form.formState.errors.governmentFeeAmount?.message}
           {...form.register('governmentFeeAmount')}
         />
@@ -119,6 +126,15 @@ function PriceFormFields({
           {...form.register('governmentGstFeeAmount')}
         />
       </div>
+
+      {suspiciouslyLowPaid ? (
+        <p className="rounded-2xl border border-peach-wash bg-peach-wash/60 px-4 py-3 text-sm text-portrait-ink">
+          Total is ₹{total.toLocaleString('en-IN')} with a non-zero visa fee.
+          Confirm this isn&apos;t a missing digit — paid listings usually start much
+          higher. DIY / free visas should keep Visa Fee at ₹0 and put your fee in
+          Service Fee.
+        </p>
+      ) : null}
     </div>
   );
 }

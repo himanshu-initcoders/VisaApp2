@@ -13,53 +13,30 @@ export function ProcessTimeline({
   }>;
 }) {
   return (
-    <>
-      {/* Mobile: vertical timeline with connecting line */}
-      <div className="relative space-y-0 sm:hidden">
-        {steps.map((step, index) => (
-          <MotionReveal key={step.id} delayMs={index * 80}>
-            <div className="relative flex gap-4 pb-6 last:pb-0">
-              {/* Vertical line */}
-              {index < steps.length - 1 && (
-                <div className="absolute left-[21px] top-11 bottom-0 w-px bg-ash-divider" />
-              )}
-              <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-portrait-ink text-sm font-semibold text-white">
+    <div className="relative space-y-0 sm:grid sm:grid-cols-2 sm:gap-5 sm:space-y-0 lg:grid-cols-4">
+      {steps.map((step, index) => (
+        <MotionReveal key={step.id} delayMs={index * 80}>
+          <div className="relative flex gap-4 pb-6 last:pb-0 sm:h-full sm:flex-col sm:gap-0 sm:rounded-[28px] sm:border sm:border-ash-divider sm:bg-white sm:p-6 sm:pb-6 sm:shadow-card">
+            {index < steps.length - 1 && (
+              <div className="absolute left-[21px] top-11 bottom-0 w-px bg-ash-divider sm:hidden" />
+            )}
+            <div className="mb-0 flex items-center gap-3 sm:mb-6">
+              <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-portrait-ink text-sm font-semibold text-white sm:h-11 sm:w-11">
                 {String(step.stepNumber).padStart(2, '0')}
               </div>
-              <div className="pt-2">
-                <h3 className="text-[15px] font-semibold text-portrait-ink">
-                  {step.title}
-                </h3>
-                <p className="mt-1 text-sm leading-6 text-slate-helper">
-                  {step.description}
-                </p>
-              </div>
+              <div className="hidden h-px flex-1 bg-gradient-to-r from-portrait-ink/40 to-transparent sm:block" />
             </div>
-          </MotionReveal>
-        ))}
-      </div>
-
-      {/* Desktop: horizontal cards */}
-      <div className="hidden gap-5 sm:grid lg:grid-cols-4">
-        {steps.map((step, index) => (
-          <MotionReveal key={step.id} delayMs={index * 80}>
-            <div className="relative h-full rounded-[28px] border border-ash-divider bg-white p-6 shadow-card">
-              <div className="mb-6 flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-portrait-ink text-sm font-semibold text-white">
-                  {String(step.stepNumber).padStart(2, '0')}
-                </div>
-                <div className="h-px flex-1 bg-gradient-to-r from-portrait-ink/40 to-transparent" />
-              </div>
-              <h3 className="text-xl font-semibold text-portrait-ink">
+            <div className="pt-2 sm:pt-0">
+              <h3 className="text-[15px] font-semibold text-portrait-ink sm:text-xl">
                 {step.title}
               </h3>
-              <p className="mt-3 text-sm leading-7 text-slate-helper">
+              <p className="mt-1 text-sm leading-6 text-slate-helper sm:mt-3 sm:leading-7">
                 {step.description}
               </p>
             </div>
-          </MotionReveal>
-        ))}
-      </div>
-    </>
+          </div>
+        </MotionReveal>
+      ))}
+    </div>
   );
 }

@@ -77,7 +77,7 @@ export async function generateMetadata({
 
   if (!data) return {};
 
-  const title = `${data.process.processName} for ${data.country.name}`;
+  const title = `${data.process.processName} for Indians – Price, Documents & Processing Time`;
   const description = `${data.process.processName} for Indian travelers. See pricing, timeline, and document requirements before you start.`;
   const ogImage = getCountryOgImage(data.country.images);
   const ogImages = ogImage
@@ -125,7 +125,7 @@ export default async function PublicProcessPage({ params, searchParams }: PagePr
     permanentRedirect(withSearchQuery(data.href, query));
   }
 
-  const title = `${data.process.processName} for ${data.country.name}`;
+  const title = `${data.process.processName} for Indians – Price, Documents & Processing Time`;
   const description = `${data.process.processName} for Indian travelers. See pricing, timeline, and document requirements before you start.`;
   const price = data.page.pricing.priceOptions[0]?.totalAmount;
   const faqSchema = buildFaqPageJsonLd(

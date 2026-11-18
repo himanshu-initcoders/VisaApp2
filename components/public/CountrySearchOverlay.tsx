@@ -224,7 +224,7 @@ export function CountrySearchOverlay({
                         {country.flagUrl ? (
                           <MediaImage
                             src={country.flagUrl}
-                            alt=""
+                            alt={`${country.name} flag`}
                             width={20}
                             height={14}
                             className="h-3.5 w-5 rounded-sm object-cover"

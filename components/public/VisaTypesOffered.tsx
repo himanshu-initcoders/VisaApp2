@@ -264,30 +264,25 @@ function PackageCard({
       </p>
 
       {processText ? (
-        selected ? (
-          <div className="mt-4 pl-7">
-            <div className="inline-flex items-center gap-3 rounded-xl border border-nautical-teal/35 bg-sky-wash px-3.5 py-2.5 text-[13px] text-portrait-ink sm:rounded-2xl">
-              <span>
-                Visa in{' '}
-                <span className="font-semibold">
-                  {processingEta?.trim().replace(/^in\s+/i, '')}
-                </span>
-              </span>
-              <span className="font-semibold tabular-nums">
-                {option.formattedTotal}
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-3 pl-7">
-            <span className="inline-flex rounded-full bg-sky-wash px-3 py-1 text-[12px] text-portrait-ink">
+        <div className={selected ? 'mt-4 pl-7' : 'mt-3 pl-7'}>
+          <div
+            className={
+              selected
+                ? 'inline-flex items-center gap-3 rounded-xl border border-nautical-teal/35 bg-sky-wash px-3.5 py-2.5 text-[13px] text-portrait-ink sm:rounded-2xl'
+                : 'inline-flex items-center gap-2 rounded-full bg-sky-wash px-3 py-1 text-[12px] text-portrait-ink'
+            }
+          >
+            <span>
               Visa in{' '}
-              <span className="ml-1 font-semibold">
+              <span className="font-semibold">
                 {processingEta?.trim().replace(/^in\s+/i, '')}
               </span>
             </span>
+            <span className="font-semibold tabular-nums">
+              {option.formattedTotal}
+            </span>
           </div>
-        )
+        </div>
       ) : null}
     </button>
   );
