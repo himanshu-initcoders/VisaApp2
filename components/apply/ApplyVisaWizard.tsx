@@ -983,6 +983,13 @@ export function ApplyVisaWizard({
       ) ||
       Boolean(payload.passportData);
 
+    const frontFromRefs = draftFileRefs.find(
+      (ref) => ref.slotKey === PASSPORT_FRONT_SLOT
+    );
+    const backFromRefs = draftFileRefs.find(
+      (ref) => ref.slotKey === PASSPORT_BACK_SLOT
+    );
+
     const draftTraveller: ApplyTraveller = {
       ...base,
       name: displayName.toUpperCase(),
@@ -990,8 +997,12 @@ export function ApplyVisaWizard({
       tripDetails: payload.tripDetails ?? undefined,
       passportUploaded: hasPassport,
       photoUploaded: hasPhoto,
-      passportFrontUrl: payload.passportFrontUrl || undefined,
-      passportBackUrl: payload.passportBackUrl || undefined,
+      // Prefer staged media URLs; fall back to draft refs so Documents/General
+      // still render a preview after previous-profile autofill.
+      passportFrontUrl:
+        payload.passportFrontUrl || frontFromRefs?.url || undefined,
+      passportBackUrl:
+        payload.passportBackUrl || backFromRefs?.url || undefined,
       documents,
       draftFileRefs,
       applicationComplete: false,
@@ -1767,8 +1778,16 @@ export function ApplyVisaWizard({
                     countryOfIssue: 'IND',
                   },
                   frontPreviewUrl:
-                    activePassportTraveller?.passportFrontUrl ?? '',
-                  backPreviewUrl: activePassportTraveller?.passportBackUrl,
+                    activePassportTraveller?.passportFrontUrl ||
+                    activePassportTraveller?.draftFileRefs?.find(
+                      (ref) => ref.slotKey === PASSPORT_FRONT_SLOT
+                    )?.url ||
+                    '',
+                  backPreviewUrl:
+                    activePassportTraveller?.passportBackUrl ||
+                    activePassportTraveller?.draftFileRefs?.find(
+                      (ref) => ref.slotKey === PASSPORT_BACK_SLOT
+                    )?.url,
                   tripDetails: activePassportTraveller?.tripDetails,
                   documents: activePassportTraveller?.documents,
                   draftFileRefs: activePassportTraveller?.draftFileRefs,

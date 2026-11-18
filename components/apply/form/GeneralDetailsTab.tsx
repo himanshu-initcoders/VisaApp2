@@ -2,14 +2,13 @@
 
 import { Upload } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { DocumentSlotThumb } from '@/components/apply/DocumentSlotThumb';
 import {
   UnderlineField,
   UnderlineSelect,
   displayToIso,
 } from '@/components/apply/form/UnderlineField';
 import { CorrectionGate } from '@/components/apply/form/CorrectionGate';
-import { PdfFirstPageThumbnail } from '@/components/apply/PdfFirstPageThumbnail';
-import { isPdfPreviewSource } from '@/lib/apply/pdfFirstPagePreview';
 import type { IndianPassportFields } from '@/lib/passport/types';
 import {
   earliestFutureDateIso,
@@ -18,13 +17,6 @@ import {
   pastDateError,
 } from '@/lib/passport/schema';
 
-function isImagePreview(mimeType?: string, filename?: string) {
-  if (mimeType?.startsWith('image/')) return true;
-  if (isPdfPreviewSource(mimeType, filename)) return false;
-  // OCR canvas blobs are images; unknown mime defaults to image.
-  return !mimeType || mimeType.startsWith('image/');
-}
-
 function PassportSideMedia({
   previewUrl,
   mimeType,
@@ -32,6 +24,13 @@ function PassportSideMedia({
   alt,
   emptyLabel,
   minHeightClass,
+  listingId,
+  travellerId,
+  slotKey,
+  storageKey,
+  storageUrl,
+  sessionUserId,
+  ownerUserId,
 }: {
   previewUrl?: string;
   mimeType?: string;
@@ -39,8 +38,18 @@ function PassportSideMedia({
   alt: string;
   emptyLabel: string;
   minHeightClass: string;
+  listingId?: string;
+  travellerId?: string;
+  slotKey?: string;
+  storageKey?: string;
+  storageUrl?: string;
+  sessionUserId?: string | null;
+  ownerUserId?: string | null;
 }) {
-  if (!previewUrl) {
+  const hasSource = Boolean(
+    previewUrl || storageUrl || storageKey || (listingId && travellerId && slotKey)
+  );
+  if (!hasSource) {
     return (
       <div
         className={`flex ${minHeightClass} items-center justify-center px-6 text-center text-sm text-slate-helper`}
@@ -50,33 +59,22 @@ function PassportSideMedia({
     );
   }
 
-  if (isPdfPreviewSource(mimeType, filename)) {
-    return (
-      <PdfFirstPageThumbnail
-        src={previewUrl}
-        alt={alt}
-        fallbackName={filename || 'PDF uploaded'}
-        className={`flex ${minHeightClass} w-full flex-col items-center justify-center gap-2 px-6 text-center`}
-        imgClassName="w-full object-contain"
-      />
-    );
-  }
-
-  if (!isImagePreview(mimeType, filename)) {
-    return (
-      <div
-        className={`flex ${minHeightClass} flex-col items-center justify-center gap-2 px-6 text-center`}
-      >
-        <p className="text-sm font-medium text-portrait-ink">
-          {filename || 'Document uploaded'}
-        </p>
-      </div>
-    );
-  }
-
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={previewUrl} alt={alt} className="w-full object-contain" />
+    <DocumentSlotThumb
+      title={alt}
+      previewUrl={previewUrl}
+      mimeType={mimeType}
+      filename={filename}
+      listingId={listingId}
+      travellerId={travellerId}
+      slotKey={slotKey}
+      storageKey={storageKey}
+      storageUrl={storageUrl || previewUrl}
+      sessionUserId={sessionUserId}
+      ownerUserId={ownerUserId}
+      className={`flex ${minHeightClass} w-full items-center justify-center overflow-hidden bg-white`}
+      imgClassName="w-full object-contain"
+    />
   );
 }
 
@@ -89,6 +87,14 @@ interface GeneralDetailsTabProps {
   backMimeType?: string;
   frontFilename?: string;
   backFilename?: string;
+  frontStorageKey?: string;
+  backStorageKey?: string;
+  frontStorageUrl?: string;
+  backStorageUrl?: string;
+  listingId?: string;
+  travellerId?: string;
+  sessionUserId?: string | null;
+  ownerUserId?: string | null;
   warnings?: string[];
   onEditFront: () => void;
   onEditBack?: () => void;
@@ -116,6 +122,14 @@ export function GeneralDetailsTab({
   backMimeType,
   frontFilename,
   backFilename,
+  frontStorageKey,
+  backStorageKey,
+  frontStorageUrl,
+  backStorageUrl,
+  listingId,
+  travellerId,
+  sessionUserId = null,
+  ownerUserId = null,
   warnings,
   onEditFront,
   onEditBack,
@@ -166,6 +180,13 @@ export function GeneralDetailsTab({
             alt="Passport front"
             emptyLabel="Passport preview unavailable — use Reupload to try again"
             minHeightClass="min-h-[220px]"
+            listingId={listingId}
+            travellerId={travellerId}
+            slotKey="passport-front"
+            storageKey={frontStorageKey}
+            storageUrl={frontStorageUrl}
+            sessionUserId={sessionUserId}
+            ownerUserId={ownerUserId}
           />
           {!frontLocked && (
             <button
@@ -185,7 +206,10 @@ export function GeneralDetailsTab({
             {comments['passport-front']}
           </p>
         )}
-        {(backPreviewUrl || (editableKeys?.has('passport-back') ?? false)) && (
+        {(backPreviewUrl ||
+          backStorageKey ||
+          backStorageUrl ||
+          (editableKeys?.has('passport-back') ?? false)) && (
           <div className="relative overflow-hidden rounded-2xl bg-white">
             <PassportSideMedia
               previewUrl={backPreviewUrl}
@@ -194,6 +218,13 @@ export function GeneralDetailsTab({
               alt="Passport back"
               emptyLabel="Passport back is not on file yet"
               minHeightClass="min-h-[160px]"
+              listingId={listingId}
+              travellerId={travellerId}
+              slotKey="passport-back"
+              storageKey={backStorageKey}
+              storageUrl={backStorageUrl}
+              sessionUserId={sessionUserId}
+              ownerUserId={ownerUserId}
             />
             {!backLocked && onEditBack && (
               <button

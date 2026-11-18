@@ -1,8 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Camera, Check, Download, Trash2, Upload } from 'lucide-react';
+import { Camera, Check, Download, Eye, Loader2, Trash2, Upload } from 'lucide-react';
 import { DocumentSlotThumb } from '@/components/apply/DocumentSlotThumb';
+import {
+  DocumentPreviewModal,
+  type DocumentPreviewItem,
+} from '@/components/apply/review/DocumentPreviewModal';
 import { PassportPhotoCaptureDialog } from '@/components/apply/form/PassportPhotoCaptureDialog';
 import type {
   ApplyDocumentSlot,
@@ -23,6 +27,7 @@ import {
   putFile,
 } from '@/lib/apply/idbDraftStorage';
 import { deleteServerDraftFile } from '@/lib/apply/deleteDraftFileClient';
+import { resolveDocumentPreviewUrl } from '@/lib/apply/resolveDocumentPreview';
 import type { DraftFileRef } from '@/lib/apply/types';
 import { trackEvent } from '@/lib/analytics/gtm';
 
@@ -73,9 +78,11 @@ function PassportPreviewCard({
   storageUrl,
   sessionUserId,
   ownerUserId,
+  onView,
+  viewBusy,
 }: {
   title: string;
-  previewUrl: string;
+  previewUrl?: string;
   mimeType?: string;
   filename?: string;
   busy?: boolean;
@@ -87,9 +94,14 @@ function PassportPreviewCard({
   storageUrl?: string;
   sessionUserId?: string | null;
   ownerUserId?: string | null;
+  onView?: () => void;
+  viewBusy?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const canView = Boolean(
+    previewUrl || storageUrl || storageKey || (listingId && travellerId && slotKey)
+  );
 
   const acceptFile = (file: File) => {
     if (!isAllowedPassportFile(file)) {
@@ -128,33 +140,48 @@ function PassportPreviewCard({
         className="mt-3 flex max-h-44 min-h-[11rem] items-center justify-center overflow-hidden rounded-2xl bg-white"
         imgClassName="mt-3 max-h-44 w-full rounded-2xl object-contain bg-white"
       />
-      {onReplace && (
-        <>
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/jpg,application/pdf"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = '';
-              if (!file) return;
-              acceptFile(file);
-            }}
-          />
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {onView && (
+          <button
+            type="button"
+            disabled={!canView || viewBusy || busy}
+            onClick={onView}
+            className="inline-flex items-center gap-2 rounded-full border border-ash bg-white px-4 py-2 text-sm font-medium text-portrait-ink transition-colors hover:bg-sky-wash disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {viewBusy ? (
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+            ) : (
+              <Eye className="h-4 w-4 shrink-0" />
+            )}
+            View
+          </button>
+        )}
+        {onReplace && (
+          <>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/jpg,application/pdf"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (!file) return;
+                acceptFile(file);
+              }}
+            />
             <button
               type="button"
               disabled={busy}
               onClick={() => inputRef.current?.click()}
               className="inline-flex items-center gap-2 rounded-full bg-sky-wash px-4 py-2 text-sm font-medium text-portrait-ink transition-colors hover:bg-portrait-ink/10 disabled:opacity-60"
             >
-              <Upload className="h-4 w-4" />
+              <Upload className="h-4 w-4 shrink-0" />
               Replace file
             </button>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
       {error && <p className="mt-2 text-xs text-[#ff4940]">{error}</p>}
     </div>
   );
@@ -347,7 +374,21 @@ export function DocumentsTab({
 }: DocumentsTabProps) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
+  const [activePreview, setActivePreview] = useState<DocumentPreviewItem | null>(
+    null
+  );
+  const [viewBusyKey, setViewBusyKey] = useState<string | null>(null);
   const byKey = new Map(uploads.map((item) => [item.key, item]));
+  const frontRef = draftFileRefs?.find(
+    (ref) => ref.slotKey === PASSPORT_FRONT_SLOT
+  );
+  const backRef = draftFileRefs?.find(
+    (ref) => ref.slotKey === PASSPORT_BACK_SLOT
+  );
+  const frontPreview =
+    passportPreviewUrl?.trim() || frontRef?.url || undefined;
+  const backPreview =
+    passportBackPreviewUrl?.trim() || backRef?.url || undefined;
   const scope: DraftScopeInput = {
     listingId,
     sessionUserId,
@@ -364,6 +405,40 @@ export function DocumentsTab({
   const resolveServerDraftKey = (slotKey: string, upload?: TravellerDocumentUpload) =>
     upload?.storageKey ||
     draftFileRefs?.find((ref) => ref.slotKey === slotKey)?.storageKey;
+
+  const openPassportPreview = async (input: {
+    title: string;
+    slotKey: string;
+    previewUrl?: string;
+    storageUrl?: string;
+    storageKey?: string;
+    mimeType?: string;
+    filename?: string;
+  }) => {
+    setViewBusyKey(input.slotKey);
+    try {
+      const resolved = await resolveDocumentPreviewUrl({
+        listingId,
+        travellerId: passengerId,
+        slotKey: input.slotKey,
+        storageKey: input.storageKey,
+        ownerUserId: ownerUserId ?? undefined,
+        sessionUserId,
+        previewUrl: input.previewUrl,
+        storageUrl: input.storageUrl,
+        filename: input.filename,
+      });
+      if (!resolved?.url) return;
+      setActivePreview({
+        title: input.title,
+        name: input.filename || input.title,
+        previewUrl: resolved.url,
+        mimeType: resolved.mimeType || input.mimeType,
+      });
+    } finally {
+      setViewBusyKey(null);
+    }
+  };
 
   const handleFile = async (slot: ApplyDocumentSlot, file: File) => {
     if (editableKeys && !editableKeys.has(slot.key)) return;
@@ -476,30 +551,16 @@ export function DocumentsTab({
         </p>
       )}
 
-      {(passportPreviewUrl || passportBackPreviewUrl) && (
+      {(frontPreview || frontRef || backPreview || backRef) && (
         <div className="grid gap-4 sm:grid-cols-2">
-          {passportPreviewUrl && (
+          {(frontPreview || frontRef) && (
             <PassportPreviewCard
               title="Passport bio page"
-              previewUrl={passportPreviewUrl}
-              mimeType={
-                passportFrontMimeType ||
-                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_FRONT_SLOT)
-                  ?.mimeType
-              }
-              filename={
-                passportFrontFilename ||
-                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_FRONT_SLOT)
-                  ?.filename
-              }
-              storageKey={
-                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_FRONT_SLOT)
-                  ?.storageKey
-              }
-              storageUrl={
-                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_FRONT_SLOT)
-                  ?.url
-              }
+              previewUrl={frontPreview}
+              mimeType={passportFrontMimeType || frontRef?.mimeType}
+              filename={passportFrontFilename || frontRef?.filename}
+              storageKey={frontRef?.storageKey}
+              storageUrl={frontRef?.url || frontPreview}
               listingId={listingId}
               travellerId={passengerId}
               slotKey={PASSPORT_FRONT_SLOT}
@@ -507,30 +568,28 @@ export function DocumentsTab({
               ownerUserId={ownerUserId}
               busy={passportReplaceBusy === 'front'}
               onReplace={onReplacePassportFront}
+              viewBusy={viewBusyKey === PASSPORT_FRONT_SLOT}
+              onView={() =>
+                void openPassportPreview({
+                  title: 'Passport bio page',
+                  slotKey: PASSPORT_FRONT_SLOT,
+                  previewUrl: frontPreview,
+                  storageUrl: frontRef?.url || frontPreview,
+                  storageKey: frontRef?.storageKey,
+                  mimeType: passportFrontMimeType || frontRef?.mimeType,
+                  filename: passportFrontFilename || frontRef?.filename,
+                })
+              }
             />
           )}
-          {passportBackPreviewUrl && (
+          {(backPreview || backRef) && (
             <PassportPreviewCard
               title="Passport back page"
-              previewUrl={passportBackPreviewUrl}
-              mimeType={
-                passportBackMimeType ||
-                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_BACK_SLOT)
-                  ?.mimeType
-              }
-              filename={
-                passportBackFilename ||
-                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_BACK_SLOT)
-                  ?.filename
-              }
-              storageKey={
-                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_BACK_SLOT)
-                  ?.storageKey
-              }
-              storageUrl={
-                draftFileRefs?.find((ref) => ref.slotKey === PASSPORT_BACK_SLOT)
-                  ?.url
-              }
+              previewUrl={backPreview}
+              mimeType={passportBackMimeType || backRef?.mimeType}
+              filename={passportBackFilename || backRef?.filename}
+              storageKey={backRef?.storageKey}
+              storageUrl={backRef?.url || backPreview}
               listingId={listingId}
               travellerId={passengerId}
               slotKey={PASSPORT_BACK_SLOT}
@@ -538,10 +597,28 @@ export function DocumentsTab({
               ownerUserId={ownerUserId}
               busy={passportReplaceBusy === 'back'}
               onReplace={onReplacePassportBack}
+              viewBusy={viewBusyKey === PASSPORT_BACK_SLOT}
+              onView={() =>
+                void openPassportPreview({
+                  title: 'Passport back page',
+                  slotKey: PASSPORT_BACK_SLOT,
+                  previewUrl: backPreview,
+                  storageUrl: backRef?.url || backPreview,
+                  storageKey: backRef?.storageKey,
+                  mimeType: passportBackMimeType || backRef?.mimeType,
+                  filename: passportBackFilename || backRef?.filename,
+                })
+              }
             />
           )}
         </div>
       )}
+
+      <DocumentPreviewModal
+        open={Boolean(activePreview)}
+        item={activePreview}
+        onClose={() => setActivePreview(null)}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
         {[...slots]

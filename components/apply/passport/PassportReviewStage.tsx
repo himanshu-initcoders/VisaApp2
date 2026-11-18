@@ -293,11 +293,21 @@ export function PassportReviewStage({
   const [documents, setDocuments] = useState<TravellerDocumentUpload[]>(
     savedDocuments ?? []
   );
-  const [frontPreviewUrl, setFrontPreviewUrl] = useState(
-    initial.frontPreviewUrl
-  );
+  const [frontPreviewUrl, setFrontPreviewUrl] = useState(() => {
+    const fromResume = initial.frontPreviewUrl?.trim();
+    if (fromResume) return fromResume;
+    return (
+      draftFileRefsProp?.find((ref) => ref.slotKey === PASSPORT_FRONT_SLOT)
+        ?.url || ''
+    );
+  });
   const [backPreviewUrl, setBackPreviewUrl] = useState<string | undefined>(
-    initial.backPreviewUrl
+    () => {
+      const fromResume = initial.backPreviewUrl?.trim();
+      if (fromResume) return fromResume;
+      return draftFileRefsProp?.find((ref) => ref.slotKey === PASSPORT_BACK_SLOT)
+        ?.url;
+    }
   );
   // OCR crops are images; replace can switch to PDF. Prefer draft refs after refresh.
   const [frontMimeType, setFrontMimeType] = useState(
@@ -983,11 +993,40 @@ export function PassportReviewStage({
             backMimeType={backMimeType}
             frontFilename={frontFilename}
             backFilename={backFilename}
+            frontStorageKey={
+              draftFileRefsProp?.find(
+                (ref) => ref.slotKey === PASSPORT_FRONT_SLOT
+              )?.storageKey
+            }
+            backStorageKey={
+              draftFileRefsProp?.find(
+                (ref) => ref.slotKey === PASSPORT_BACK_SLOT
+              )?.storageKey
+            }
+            frontStorageUrl={
+              draftFileRefsProp?.find(
+                (ref) => ref.slotKey === PASSPORT_FRONT_SLOT
+              )?.url
+            }
+            backStorageUrl={
+              draftFileRefsProp?.find(
+                (ref) => ref.slotKey === PASSPORT_BACK_SLOT
+              )?.url
+            }
+            listingId={listingId}
+            travellerId={travellerId}
+            sessionUserId={sessionUserId}
+            ownerUserId={ownerUserId}
             warnings={ocrWarnings}
             replaceBusy={replaceBusy}
             onEditFront={() => frontInputRef.current?.click()}
             onEditBack={
-              backPreviewUrl ? () => backInputRef.current?.click() : undefined
+              backPreviewUrl ||
+              draftFileRefsProp?.some(
+                (ref) => ref.slotKey === PASSPORT_BACK_SLOT
+              )
+                ? () => backInputRef.current?.click()
+                : undefined
             }
           />
         )}
@@ -1030,7 +1069,10 @@ export function PassportReviewStage({
               void replacePassportImage('front', file);
             }}
             onReplacePassportBack={
-              backPreviewUrl
+              backPreviewUrl ||
+              draftFileRefsProp?.some(
+                (ref) => ref.slotKey === PASSPORT_BACK_SLOT
+              )
                 ? (file) => {
                     void replacePassportImage('back', file);
                   }
