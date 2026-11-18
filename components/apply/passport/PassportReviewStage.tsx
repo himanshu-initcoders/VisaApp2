@@ -9,6 +9,8 @@ import { FormTabFooter } from '@/components/apply/form/FormTabFooter';
 import { GeneralDetailsTab } from '@/components/apply/form/GeneralDetailsTab';
 import { TripDetailsTab } from '@/components/apply/form/TripDetailsTab';
 import { ReviewSubmitTab } from '@/components/apply/form/ReviewSubmitTab';
+import { PassportScanStage } from '@/components/apply/passport/PassportScanStage';
+import { createPdfFirstPagePreviewUrl } from '@/lib/apply/pdfFirstPagePreview';
 import {
   APPLICATION_FORM_TABS,
   DOCUMENT_FILE_ACCEPT,
@@ -45,13 +47,24 @@ import {
   idbErrorMessage,
   isIdbAvailable,
   putFile,
+  urlToBlob,
 } from '@/lib/apply/idbDraftStorage';
 import { deleteServerDraftFile } from '@/lib/apply/deleteDraftFileClient';
 import type { DraftFileRef } from '@/lib/apply/types';
 import { formatProfileName } from '@/lib/apply/travellerProfiles';
-import type { IndianPassportFields } from '@/lib/passport/types';
+import {
+  extractIndianPassport,
+  IndianPassportError,
+} from '@/lib/passport/extractIndianPassport';
+import { isPdfFile } from '@/lib/passport/pdfToImage';
+import type {
+  IndianPassportExtraction,
+  IndianPassportFields,
+} from '@/lib/passport/types';
 import { isReviewComplete } from '@/lib/passport/schema';
 import { isPassportBackDocument } from '@/lib/document-types';
+import { sniffFileKind } from '@/lib/apply/sniffFileType';
+import { extensionFromMime } from '@/lib/upload/applicationKey';
 
 export interface PassportApplicationPayload {
   fields: IndianPassportFields;
@@ -101,6 +114,113 @@ function revokeIfObjectUrl(url?: string) {
   if (url?.startsWith('blob:')) {
     URL.revokeObjectURL(url);
   }
+}
+
+/**
+ * Keep the uploaded file as the front preview for images.
+ * PDFs already expose full-page rasters from OCR (front + optional back).
+ */
+function withUploadPreviews(
+  result: IndianPassportExtraction,
+  originalPreviewUrl: string | null,
+  input: File | Blob
+): IndianPassportExtraction {
+  if (isPdfFile(input)) return result;
+
+  if (!originalPreviewUrl) return result;
+
+  if (result.frontPreviewUrl !== originalPreviewUrl) {
+    revokeIfObjectUrl(result.frontPreviewUrl);
+  }
+  if (result.backPreviewUrl) {
+    revokeIfObjectUrl(result.backPreviewUrl);
+  }
+
+  return {
+    ...result,
+    frontPreviewUrl: originalPreviewUrl,
+    backPreviewUrl: undefined,
+  };
+}
+
+function fieldsFromExtraction(
+  current: IndianPassportFields,
+  extraction: IndianPassportExtraction,
+  which: 'front' | 'back'
+): IndianPassportFields {
+  if (which === 'back') {
+    return {
+      ...current,
+      fathersName: extraction.fathersName || current.fathersName,
+      mothersName: extraction.mothersName || current.mothersName,
+      spouseName: extraction.spouseName || current.spouseName,
+      address: extraction.address || current.address,
+      fileNumber: extraction.fileNumber || current.fileNumber,
+      oldPassportNumber:
+        extraction.oldPassportNumber || current.oldPassportNumber,
+      oldPassportDateOfIssue:
+        extraction.oldPassportDateOfIssue || current.oldPassportDateOfIssue,
+      oldPassportPlaceOfIssue:
+        extraction.oldPassportPlaceOfIssue || current.oldPassportPlaceOfIssue,
+    };
+  }
+
+  return {
+    passportNumber: extraction.passportNumber,
+    surname: extraction.surname,
+    givenNames: extraction.givenNames,
+    nationality: extraction.nationality || current.nationality || 'IND',
+    dateOfBirth: extraction.dateOfBirth,
+    sex: extraction.sex,
+    dateOfExpiry: extraction.dateOfExpiry,
+    documentType: extraction.documentType || 'P',
+    countryOfIssue: extraction.countryOfIssue || 'IND',
+    fathersName: extraction.fathersName || '',
+    mothersName: extraction.mothersName || '',
+    spouseName: extraction.spouseName || '',
+    dateOfIssue: extraction.dateOfIssue || '',
+    placeOfBirth: extraction.placeOfBirth || '',
+    placeOfIssue: extraction.placeOfIssue || '',
+    address: extraction.address || '',
+    fileNumber: extraction.fileNumber || '',
+    oldPassportNumber: extraction.oldPassportNumber || '',
+    oldPassportDateOfIssue: extraction.oldPassportDateOfIssue || '',
+    oldPassportPlaceOfIssue: extraction.oldPassportPlaceOfIssue || '',
+    email: current.email,
+    phone: current.phone,
+  };
+}
+
+async function putPassportSlotBlob(input: {
+  scope: DraftScopeInput;
+  travellerId: string;
+  slotKey: typeof PASSPORT_FRONT_SLOT | typeof PASSPORT_BACK_SLOT;
+  blob: Blob;
+  mimeHint?: string;
+  filenameHint?: string;
+}) {
+  const buffer = await input.blob.arrayBuffer();
+  const sniffed = sniffFileKind(
+    buffer,
+    input.mimeHint || input.blob.type,
+    input.filenameHint
+  );
+  const ext = extensionFromMime(sniffed.mimeType, input.filenameHint);
+  const fallbackName =
+    input.slotKey === PASSPORT_FRONT_SLOT
+      ? `passport-front.${ext}`
+      : `passport-back.${ext}`;
+  let filename = input.filenameHint || fallbackName;
+  if (input.filenameHint) {
+    filename = input.filenameHint.replace(/\.[^.]+$/i, '') + `.${ext}`;
+  }
+  const typed = new Blob([buffer], { type: sniffed.mimeType });
+  await putFile(input.scope, input.travellerId, input.slotKey, {
+    blob: typed,
+    mimeType: sniffed.mimeType,
+    filename,
+  });
+  return { mimeType: sniffed.mimeType, filename, blob: typed };
 }
 
 export function PassportReviewStage({
@@ -196,11 +316,18 @@ export function PassportReviewStage({
   );
   const [replaceBusy, setReplaceBusy] = useState<'front' | 'back' | null>(null);
   const [replaceError, setReplaceError] = useState<string | null>(null);
+  const [reuploadScanPreview, setReuploadScanPreview] = useState<string | null>(
+    null
+  );
+  const [ocrWarnings, setOcrWarnings] = useState<string[]>(
+    () => initial.warnings ?? []
+  );
   const [invalidateDraftSlots, setInvalidateDraftSlots] = useState<string[]>(
     []
   );
   const draftFileRefsRef = useRef(draftFileRefsProp);
   draftFileRefsRef.current = draftFileRefsProp;
+  const replaceGenRef = useRef(0);
 
   const frontInputRef = useRef<HTMLInputElement>(null);
   const backInputRef = useRef<HTMLInputElement>(null);
@@ -269,6 +396,56 @@ export function PassportReviewStage({
     if (backUpload.name) setBackFilename(backUpload.name);
   }, [documents, initial.backPreviewUrl]);
 
+  const invalidateSlot = useCallback(
+    (slotKey: string) => {
+      const previousRef = draftFileRefsRef.current?.find(
+        (ref) => ref.slotKey === slotKey
+      );
+      if (previousRef?.storageKey) {
+        void deleteServerDraftFile({
+          storageKey: previousRef.storageKey,
+          ownerUserId,
+        });
+      }
+      setInvalidateDraftSlots((prev) =>
+        prev.includes(slotKey) ? prev : [...prev, slotKey]
+      );
+    },
+    [ownerUserId]
+  );
+
+  const syncDocumentsBack = useCallback(
+    (nextUrl: string, mimeType: string, filename: string, size: number) => {
+      setDocuments((prev) => {
+        const hasBackSlot = prev.some((item) =>
+          isPassportBackDocument({ key: item.key })
+        );
+        if (!hasBackSlot) return prev;
+        return prev.map((item) =>
+          isPassportBackDocument({ key: item.key })
+            ? {
+                ...item,
+                name: filename,
+                previewUrl: nextUrl,
+                mimeType,
+                size,
+                storedInIdb: true,
+                storageKey: undefined,
+                storageUrl: undefined,
+              }
+            : item
+        );
+      });
+    },
+    []
+  );
+
+  const cancelReuploadScan = useCallback(() => {
+    replaceGenRef.current += 1;
+    setReplaceBusy(null);
+    setReuploadScanPreview(null);
+  }, []);
+
   const replacePassportImage = useCallback(
     async (which: 'front' | 'back', file: File) => {
       if (!isAllowedPassportFile(file)) {
@@ -284,79 +461,219 @@ export function PassportReviewStage({
         return;
       }
 
+      const gen = ++replaceGenRef.current;
+      const isActive = () => gen === replaceGenRef.current;
+
       setReplaceBusy(which);
       setReplaceError(null);
-      const slotKey = which === 'front' ? PASSPORT_FRONT_SLOT : PASSPORT_BACK_SLOT;
-      const mimeType = file.type || 'application/octet-stream';
-      const filename = file.name || `${slotKey}.bin`;
+
+      const originalPreviewUrl = URL.createObjectURL(file);
+      let ownedOriginalPreview = true;
+      let pdfScanPreview: string | null = null;
+      let extraction: IndianPassportExtraction | null = null;
+      const orphanedOcrUrls: string[] = [];
+
+      // Show the same scanner stage as the initial passport capture.
+      setReuploadScanPreview(isPdfFile(file) ? null : originalPreviewUrl);
 
       try {
-        await putFile(draftScope, travellerId, slotKey, {
-          blob: file,
-          mimeType,
-          filename,
-        });
+        const pdfPreviewPromise = isPdfFile(file)
+          ? createPdfFirstPagePreviewUrl(file, { maxEdge: 1600 })
+          : Promise.resolve<string | null>(null);
 
-        const previousRef = draftFileRefsRef.current?.find(
-          (ref) => ref.slotKey === slotKey
-        );
-        if (previousRef?.storageKey) {
-          void deleteServerDraftFile({
-            storageKey: previousRef.storageKey,
-            ownerUserId,
-          });
+        try {
+          const [raw, pdfPreview] = await Promise.all([
+            extractIndianPassport(file),
+            pdfPreviewPromise,
+          ]);
+          if (!isActive()) {
+            if (pdfPreview) revokeIfObjectUrl(pdfPreview);
+            revokeIfObjectUrl(raw.frontPreviewUrl);
+            revokeIfObjectUrl(raw.backPreviewUrl);
+            return;
+          }
+          if (pdfPreview) {
+            pdfScanPreview = pdfPreview;
+            setReuploadScanPreview(pdfPreview);
+          }
+          extraction = withUploadPreviews(raw, originalPreviewUrl, file);
+          if (extraction.frontPreviewUrl === originalPreviewUrl) {
+            ownedOriginalPreview = false;
+          }
+        } catch (error) {
+          const pdfPreview = await pdfPreviewPromise.catch(() => null);
+          if (!isActive()) {
+            if (pdfPreview) revokeIfObjectUrl(pdfPreview);
+            return;
+          }
+          if (pdfPreview) {
+            pdfScanPreview = pdfPreview;
+            setReuploadScanPreview(pdfPreview);
+          }
+          // Still store the file when OCR fails. Back-only pages often have no
+          // MRZ and fail closed — keep the upload and let the user type fields.
+          const message =
+            error instanceof IndianPassportError
+              ? error.message
+              : error instanceof Error
+                ? error.message
+                : 'Could not read this passport. Try a clearer image.';
+          setOcrWarnings(
+            which === 'front'
+              ? [
+                  message,
+                  'We could not auto-fill from this scan. Please enter your details manually.',
+                ]
+              : [
+                  message,
+                  'Back page uploaded. Enter address and parent details if needed.',
+                ]
+          );
         }
-        setInvalidateDraftSlots((prev) =>
-          prev.includes(slotKey) ? prev : [...prev, slotKey]
-        );
 
-        const nextUrl = URL.createObjectURL(file);
+        if (!isActive()) return;
+
         if (which === 'front') {
+          const frontUrl = extraction?.frontPreviewUrl ?? originalPreviewUrl;
+          const frontBlob =
+            (await urlToBlob(frontUrl)) ||
+            (file.type ? file : new Blob([file], { type: file.type }));
+          if (!isActive()) return;
+          const savedFront = await putPassportSlotBlob({
+            scope: draftScope,
+            travellerId,
+            slotKey: PASSPORT_FRONT_SLOT,
+            blob: frontBlob,
+            mimeHint: frontBlob.type || file.type,
+            filenameHint: file.name || 'passport-front.bin',
+          });
+          if (!isActive()) return;
+          invalidateSlot(PASSPORT_FRONT_SLOT);
+
           setFrontPreviewUrl((prev) => {
             if (prev !== initial.frontPreviewUrl) revokeIfObjectUrl(prev);
-            return nextUrl;
+            return frontUrl;
           });
-          setFrontMimeType(mimeType);
-          setFrontFilename(filename);
+          setFrontMimeType(savedFront.mimeType);
+          setFrontFilename(savedFront.filename);
+          if (frontUrl === originalPreviewUrl) ownedOriginalPreview = false;
+
+          const ocrBackUrl = extraction?.backPreviewUrl;
+          if (ocrBackUrl) {
+            const backBlob = await urlToBlob(ocrBackUrl);
+            if (!isActive()) return;
+            if (backBlob) {
+              const savedBack = await putPassportSlotBlob({
+                scope: draftScope,
+                travellerId,
+                slotKey: PASSPORT_BACK_SLOT,
+                blob: backBlob,
+                mimeHint: backBlob.type || 'image/jpeg',
+                filenameHint: 'passport-back.jpg',
+              });
+              if (!isActive()) return;
+              invalidateSlot(PASSPORT_BACK_SLOT);
+              setBackPreviewUrl((prev) => {
+                if (prev && prev !== initial.backPreviewUrl) {
+                  revokeIfObjectUrl(prev);
+                }
+                return ocrBackUrl;
+              });
+              setBackMimeType(savedBack.mimeType);
+              setBackFilename(savedBack.filename);
+              syncDocumentsBack(
+                ocrBackUrl,
+                savedBack.mimeType,
+                savedBack.filename,
+                backBlob.size
+              );
+            } else {
+              orphanedOcrUrls.push(ocrBackUrl);
+            }
+          }
+
+          if (extraction) {
+            setForm((current) =>
+              fieldsFromExtraction(current, extraction!, 'front')
+            );
+            setOcrWarnings(extraction.warnings ?? []);
+          }
         } else {
+          // Back reupload: keep the uploaded file as the back image. If OCR also
+          // found a separate back page in a multi-page PDF, prefer that page.
+          const backUrl =
+            extraction?.backPreviewUrl || originalPreviewUrl;
+          const backBlob =
+            (await urlToBlob(backUrl)) ||
+            (file.type ? file : new Blob([file], { type: file.type }));
+          if (!isActive()) return;
+          const savedBack = await putPassportSlotBlob({
+            scope: draftScope,
+            travellerId,
+            slotKey: PASSPORT_BACK_SLOT,
+            blob: backBlob,
+            mimeHint: backBlob.type || file.type,
+            filenameHint: file.name || 'passport-back.bin',
+          });
+          if (!isActive()) return;
+          invalidateSlot(PASSPORT_BACK_SLOT);
+
           setBackPreviewUrl((prev) => {
             if (prev && prev !== initial.backPreviewUrl) revokeIfObjectUrl(prev);
-            return nextUrl;
+            return backUrl;
           });
-          setBackMimeType(mimeType);
-          setBackFilename(filename);
-          // Keep documents-slot back upload in sync when present.
-          setDocuments((prev) => {
-            const hasBackSlot = prev.some((item) =>
-              isPassportBackDocument({ key: item.key })
+          setBackMimeType(savedBack.mimeType);
+          setBackFilename(savedBack.filename);
+          syncDocumentsBack(
+            backUrl,
+            savedBack.mimeType,
+            savedBack.filename,
+            backBlob.size
+          );
+          if (backUrl === originalPreviewUrl) ownedOriginalPreview = false;
+
+          // OCR may still emit a front crop for a full booklet PDF — do not
+          // overwrite the stored front when the user only reuploaded the back.
+          if (extraction?.frontPreviewUrl) {
+            orphanedOcrUrls.push(extraction.frontPreviewUrl);
+          }
+          if (extraction?.backPreviewUrl && extraction.backPreviewUrl !== backUrl) {
+            orphanedOcrUrls.push(extraction.backPreviewUrl);
+          }
+
+          if (extraction) {
+            setForm((current) =>
+              fieldsFromExtraction(current, extraction!, 'back')
             );
-            if (!hasBackSlot) return prev;
-            return prev.map((item) =>
-              isPassportBackDocument({ key: item.key })
-                ? {
-                    ...item,
-                    name: filename,
-                    previewUrl: nextUrl,
-                    mimeType,
-                    size: file.size,
-                    storedInIdb: true,
-                    storageKey: undefined,
-                    storageUrl: undefined,
-                  }
-                : item
-            );
-          });
+            if (extraction.warnings?.length) {
+              setOcrWarnings(extraction.warnings);
+            }
+          }
         }
       } catch (error) {
+        if (!isActive()) return;
         setReplaceError(idbErrorMessage(error));
+        if (extraction?.frontPreviewUrl) {
+          orphanedOcrUrls.push(extraction.frontPreviewUrl);
+        }
+        if (extraction?.backPreviewUrl) {
+          orphanedOcrUrls.push(extraction.backPreviewUrl);
+        }
       } finally {
-        setReplaceBusy(null);
+        if (isActive()) {
+          setReplaceBusy(null);
+          setReuploadScanPreview(null);
+        }
+        if (ownedOriginalPreview) revokeIfObjectUrl(originalPreviewUrl);
+        if (pdfScanPreview) revokeIfObjectUrl(pdfScanPreview);
+        for (const url of orphanedOcrUrls) revokeIfObjectUrl(url);
       }
     },
     [
       draftScope,
       travellerId,
-      ownerUserId,
+      invalidateSlot,
+      syncDocumentsBack,
       initial.frontPreviewUrl,
       initial.backPreviewUrl,
     ]
@@ -563,6 +880,17 @@ export function PassportReviewStage({
         }}
       />
 
+      {replaceBusy && (
+        <div className="fixed inset-0 z-[100] overflow-hidden bg-white">
+          <PassportScanStage
+            previewUrl={reuploadScanPreview}
+            statusText="Reading your details…"
+            onBack={cancelReuploadScan}
+            onClose={cancelReuploadScan}
+          />
+        </div>
+      )}
+
       <header className="relative flex items-center justify-between px-4 py-4 sm:px-6">
         <button
           type="button"
@@ -616,7 +944,8 @@ export function PassportReviewStage({
             backMimeType={backMimeType}
             frontFilename={frontFilename}
             backFilename={backFilename}
-            warnings={initial.warnings}
+            warnings={ocrWarnings}
+            replaceBusy={replaceBusy}
             onEditFront={() => frontInputRef.current?.click()}
             onEditBack={
               backPreviewUrl ? () => backInputRef.current?.click() : undefined

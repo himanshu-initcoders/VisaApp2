@@ -40,7 +40,7 @@ interface DocumentsTabProps {
   passportBackMimeType?: string;
   passportFrontFilename?: string;
   passportBackFilename?: string;
-  /** Image-only replace (no OCR). */
+  /** Reupload passport side (OCR runs in the review stage). */
   onReplacePassportFront?: (file: File) => void;
   onReplacePassportBack?: (file: File) => void;
   passportReplaceBusy?: 'front' | 'back' | null;

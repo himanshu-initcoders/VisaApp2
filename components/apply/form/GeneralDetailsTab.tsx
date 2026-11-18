@@ -1,6 +1,6 @@
 'use client';
 
-import { Pencil } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import type { ReactNode } from 'react';
 import {
   UnderlineField,
@@ -92,6 +92,8 @@ interface GeneralDetailsTabProps {
   warnings?: string[];
   onEditFront: () => void;
   onEditBack?: () => void;
+  /** Which passport side is currently being reuploaded / OCR'd. */
+  replaceBusy?: 'front' | 'back' | null;
   /** When set, only these `passport.*` and passport image keys stay editable. */
   editableKeys?: ReadonlySet<string>;
   comments?: Record<string, string>;
@@ -117,6 +119,7 @@ export function GeneralDetailsTab({
   warnings,
   onEditFront,
   onEditBack,
+  replaceBusy = null,
   editableKeys,
   comments,
 }: GeneralDetailsTabProps) {
@@ -124,6 +127,8 @@ export function GeneralDetailsTab({
   const futureMin = earliestFutureDateIso();
   const frontLocked = Boolean(editableKeys && !editableKeys.has('passport-front'));
   const backLocked = Boolean(editableKeys && !editableKeys.has('passport-back'));
+  const frontBusy = replaceBusy === 'front';
+  const backBusy = replaceBusy === 'back';
 
   const set =
     (key: keyof IndianPassportFields) =>
@@ -159,17 +164,19 @@ export function GeneralDetailsTab({
             mimeType={frontMimeType}
             filename={frontFilename}
             alt="Passport front"
-            emptyLabel="Passport preview unavailable — use the edit button to re-upload"
+            emptyLabel="Passport preview unavailable — use Reupload to try again"
             minHeightClass="min-h-[220px]"
           />
           {!frontLocked && (
             <button
               type="button"
-              aria-label="Re-upload front"
+              aria-label="Reupload passport front"
+              disabled={Boolean(replaceBusy)}
               onClick={onEditFront}
-              className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-[#3b82f6] text-white shadow-md"
+              className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-[#3b82f6] px-3 py-2 text-xs font-medium text-white shadow-md disabled:opacity-60"
             >
-              <Pencil className="h-4 w-4" />
+              <Upload className="h-3.5 w-3.5 shrink-0" />
+              {frontBusy ? 'Reading…' : 'Reupload'}
             </button>
           )}
         </div>
@@ -191,11 +198,13 @@ export function GeneralDetailsTab({
             {!backLocked && onEditBack && (
               <button
                 type="button"
-                aria-label="Re-upload back"
+                aria-label="Reupload passport back"
+                disabled={Boolean(replaceBusy)}
                 onClick={onEditBack}
-                className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-[#3b82f6] text-white shadow-md"
+                className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-[#3b82f6] px-3 py-2 text-xs font-medium text-white shadow-md disabled:opacity-60"
               >
-                <Pencil className="h-4 w-4" />
+                <Upload className="h-3.5 w-3.5 shrink-0" />
+                {backBusy ? 'Reading…' : 'Reupload'}
               </button>
             )}
           </div>

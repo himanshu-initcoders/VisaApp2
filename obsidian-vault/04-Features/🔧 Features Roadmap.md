@@ -70,6 +70,7 @@
 - [x] Apply step 2: traveller profiles, passport-first fill, accordion review
 - [x] Passport capture + Indian MRZ/OCR review (client-side)
 - [x] Passport OCR hardened against real upload layouts (extra pages, rotations, visa pages, PIN-as-MRZ) — see [[Passport OCR]]
+- [x] Personal details Reupload (front/back) re-runs OCR; front multi-page PDF also refreshes back — see [[Passport OCR]]
 - [x] After passport scan, application form uses AnimatedTabs: General details / Trip details / Documents / Review & submit
 - [x] Traveller form tab Continue flushes local draft + quiet server sync into `visa_applications` with `status=draft` (signed-in only; no login interrupt)
 - [x] Drafts unified into main tables: visa + passport use `status=draft`, reference number at create, final storage path from first upload; payment flips to `submitted` (no promote/copy)

@@ -57,4 +57,11 @@ npx tsx scripts/passport-samples/debugCrops.ts "Dilip Passport.pdf"
 npx tsx scripts/passport-samples/accuracy.ts [nameFilter]
 ```
 
-**Last updated:** 2026-10-12
+## Complete application — personal details reupload
+
+On the Personal details tab, front/back **Reupload** re-runs `extractIndianPassport`:
+
+- **Front reupload**: refreshes identity fields (keeps email/phone). If the file has a separate back page (typical multi-page PDF), the back preview and back fields update too. Image-only / front-only uploads update front only.
+- **Back reupload**: replaces the back image and merges back-page fields when OCR can read them; does not overwrite the stored front.
+
+**Last updated:** 2026-11-18
