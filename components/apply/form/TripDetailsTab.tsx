@@ -1,5 +1,6 @@
 'use client';
 
+import { Wand2 } from 'lucide-react';
 import { UnderlineField } from '@/components/apply/form/UnderlineField';
 import { CorrectionGate } from '@/components/apply/form/CorrectionGate';
 import {
@@ -130,7 +131,7 @@ export function TripDetailsTab({
             Visa type is already selected.
           </p>
           {tripSources.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap items-center justify-start gap-2">
               {tripSources.map((source) => (
                 <button
                   key={source.id}
@@ -143,9 +144,10 @@ export function TripDetailsTab({
                       })
                     )
                   }
-                  className="inline-flex items-center rounded-full border border-ash bg-white px-3 py-1.5 text-sm text-nautical-teal hover:text-portrait-ink"
+                  className="inline-flex items-center gap-2 rounded-full bg-portrait-ink px-4 py-2 text-sm font-medium text-white shadow-[0_6px_16px_rgba(59,130,246,0.28)] transition-opacity hover:opacity-90"
                 >
-                  Same as {source.name}
+                  <Wand2 className="h-4 w-4 shrink-0" aria-hidden />
+                  Auto Fill from {source.name}
                 </button>
               ))}
             </div>
