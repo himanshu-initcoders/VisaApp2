@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { redirectStaffToAdmin } from '@/lib/auth-utils';
 import { db } from '@/lib/db';
 import { visaApplications, passportServices, payments } from '@/lib/db/schema';
 import { and, eq, desc } from 'drizzle-orm';
@@ -40,6 +41,7 @@ export default async function DashboardPage({
   if (!session) {
     redirect('/signin');
   }
+  redirectStaffToAdmin(session.user.role);
 
   const params = searchParams ? await searchParams : {};
   const submittedId = params.submitted;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -37,6 +38,10 @@ import {
 } from '@/lib/apply/wizardStepCursor';
 import { PassportApplyDocumentsPanel } from '@/components/apply/passport-service/PassportApplyDocumentsPanel';
 import { ApplicationSubmittedModal } from '@/components/apply/ApplicationSubmittedModal';
+import {
+  postSubmitHomeHref,
+  submittedApplicationHref,
+} from '@/lib/apply/postSubmitPaths';
 import { cn } from '@/lib/utils';
 
 type PackagePrice = {
@@ -116,6 +121,7 @@ export function ApplyPassportWizard({
   isSignedIn,
 }: ApplyPassportWizardProps) {
   const router = useRouter();
+  const { data: session } = useSession();
   const [submitId] = useState(() => crypto.randomUUID());
   const applicationIdRef = useRef<string | null>(null);
   const hasDocuments = formConfig.documentSlots.length > 0;
@@ -602,7 +608,11 @@ export function ApplyPassportWizard({
     const ref = input.referenceNumber || input.applicationId;
     clearPassportWizardStepCursor(listingId);
     setSubmittedRedirect({
-      href: `/applications/passport/${ref}`,
+      href: submittedApplicationHref({
+        product: 'passport',
+        referenceOrId: ref,
+        role: session?.user?.role,
+      }),
       referenceHint: ref,
     });
   };
@@ -619,7 +629,7 @@ export function ApplyPassportWizard({
     if (redirectingRef.current) return;
     redirectingRef.current = true;
     setSubmittedRedirect(null);
-    router.push('/');
+    router.push(postSubmitHomeHref(session?.user?.role));
   };
 
   const handlePay = async () => {

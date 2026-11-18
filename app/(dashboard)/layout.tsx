@@ -19,10 +19,8 @@ export default async function DashboardLayout({
     redirect('/signin');
   }
 
-  // Staff should use admin panel
-  if (session.user.role === 'admin' || session.user.role === 'reviewer') {
-    redirect('/admin');
-  }
+  // Staff may open application detail pages after submit (or via deep link).
+  // List/home pages under this group still call redirectStaffToAdmin().
 
   const notices = await listNotifications(session.user.id);
 

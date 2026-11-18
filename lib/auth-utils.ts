@@ -62,6 +62,16 @@ export function canAccessAdmin(user: { role?: string }): boolean {
 }
 
 /**
+ * Keep staff on the admin panel for applicant-area list/home pages.
+ * Application detail routes intentionally omit this so post-submit redirects work.
+ */
+export function redirectStaffToAdmin(role?: string | null) {
+  if (role === 'admin' || role === 'reviewer') {
+    redirect('/admin');
+  }
+}
+
+/**
  * Check if user can access a specific application
  *
  * Rules:

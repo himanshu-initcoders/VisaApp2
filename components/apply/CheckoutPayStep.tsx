@@ -20,6 +20,10 @@ import {
 } from '@/lib/payments/actions';
 import { formatInrFromPaise } from '@/lib/payments/money';
 import { trackEvent } from '@/lib/analytics/gtm';
+import {
+  postSubmitHomeHref,
+  submittedApplicationHref,
+} from '@/lib/apply/postSubmitPaths';
 import { cn } from '@/lib/utils';
 import { Toggle } from '@/components/ui/Toggle';
 import { ApplicationSubmittedModal } from '@/components/apply/ApplicationSubmittedModal';
@@ -389,7 +393,13 @@ export function CheckoutPayStep({
     onSubmitSuccess?.();
     await clearLocalDraftAfterSubmit(draftScope);
     setSuccessId(applicationId);
-    setSuccessHref(`/applications/visa/${ref}`);
+    setSuccessHref(
+      submittedApplicationHref({
+        product: 'visa',
+        referenceOrId: ref,
+        role: session?.user?.role,
+      })
+    );
     setSuccessReferenceHint(ref);
     setSubmitting(false);
     setShowSubmittedModal(true);
@@ -406,7 +416,7 @@ export function CheckoutPayStep({
     if (redirectingRef.current) return;
     redirectingRef.current = true;
     setShowSubmittedModal(false);
-    router.push('/');
+    router.push(postSubmitHomeHref(session?.user?.role));
   };
 
   const handlePay = async () => {

@@ -2,12 +2,14 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui';
+import { redirectStaffToAdmin } from '@/lib/auth-utils';
 import { getPassengerProfilesForUser } from '@/lib/dashboard/passengerProfiles';
 import { PassengerProfilesView } from '@/components/dashboard/PassengerProfilesView';
 
 export default async function DocumentsPage() {
   const session = await auth();
   if (!session) redirect('/signin');
+  redirectStaffToAdmin(session.user.role);
 
   const profiles = await getPassengerProfilesForUser(session.user.id);
 

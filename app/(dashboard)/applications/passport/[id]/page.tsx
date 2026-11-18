@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { auth } from '@/lib/auth';
+import { canAccessApplication } from '@/lib/auth-utils';
 import { getApplicationDetails } from '@/lib/admin-queries';
 import {
   Card,
@@ -56,7 +57,14 @@ export default async function UserPassportApplicationDetailPage({
   const { tab: initialTab } = await searchParams;
   const details = await getApplicationDetails(id, 'passport');
 
-  if (!details || details.user.id !== session.user.id) {
+  if (
+    !details ||
+    !canAccessApplication(
+      session.user.id,
+      details.user.id,
+      session.user.role || 'user'
+    )
+  ) {
     notFound();
   }
 

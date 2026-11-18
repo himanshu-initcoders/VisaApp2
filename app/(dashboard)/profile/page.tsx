@@ -1,10 +1,12 @@
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { redirectStaffToAdmin } from '@/lib/auth-utils';
 import { ProfileEditForm } from '@/components/dashboard/ProfileEditForm';
 
 export default async function ProfilePage() {
   const session = await auth();
   if (!session) redirect('/signin');
+  redirectStaffToAdmin(session.user.role);
 
   return (
     <div className="space-y-6">
