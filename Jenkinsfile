@@ -18,16 +18,21 @@ pipeline {
         sh '''
           set -e
           mkdir -p "${APP_DIR}"
+          # Keep server-only artifacts: .env, dumps, backups, jenkins_home.
+          # backups/ is often root-owned (pg_dump); --delete must not touch it.
           if command -v rsync >/dev/null 2>&1; then
             rsync -rlD --delete \
               --exclude '.env' \
               --exclude 'neon.dump' \
+              --exclude 'docker-db.dump' \
+              --exclude 'backups/' \
               --exclude '.git' \
               --exclude 'jenkins_home' \
               ./ "${APP_DIR}/"
           else
             find "${APP_DIR}" -mindepth 1 -maxdepth 1 \
-              ! -name '.env' ! -name 'neon.dump' ! -name '.git' \
+              ! -name '.env' ! -name 'neon.dump' ! -name 'docker-db.dump' \
+              ! -name 'backups' ! -name '.git' ! -name 'jenkins_home' \
               -exec rm -rf {} +
             cp -rT ./ "${APP_DIR}/" 2>/dev/null || cp -a ./ "${APP_DIR}/"
           fi
