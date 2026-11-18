@@ -1,10 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui';
 import type { ActionResponse } from '@/types/admin';
 import type { CommentView } from '@/lib/visa/corrections';
+
+/** ~4 message cards (padding + meta + body + gaps) before the list scrolls. */
+const MESSAGE_LIST_MAX_HEIGHT =
+  'max-h-[calc(4*5.25rem+3*0.75rem)]';
 
 interface ConversationThreadProps {
   applicationId: string;
@@ -21,9 +25,18 @@ export function ConversationThread({
   postComment,
 }: ConversationThreadProps) {
   const router = useRouter();
+  const listRef = useRef<HTMLOListElement>(null);
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const ordered = [...comments].reverse();
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    list.scrollTop = list.scrollHeight;
+  }, [ordered.length]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -46,8 +59,6 @@ export function ConversationThread({
     }
   };
 
-  const ordered = [...comments].reverse();
-
   return (
     <div className="space-y-4">
       {ordered.length === 0 ? (
@@ -55,7 +66,10 @@ export function ConversationThread({
           No messages yet. Comments here are visible to the applicant and the review team.
         </p>
       ) : (
-        <ol className="space-y-3">
+        <ol
+          ref={listRef}
+          className={`${MESSAGE_LIST_MAX_HEIGHT} space-y-3 overflow-y-auto overscroll-contain pr-1`}
+        >
           {ordered.map((comment) => (
             <li
               key={comment.id}

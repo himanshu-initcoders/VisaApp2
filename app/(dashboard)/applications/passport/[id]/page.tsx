@@ -25,6 +25,7 @@ import { hasUnreadStaffComment } from '@/lib/notifications';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }
 
 function Field({
@@ -46,11 +47,13 @@ function Field({
 
 export default async function UserPassportApplicationDetailPage({
   params,
+  searchParams,
 }: PageProps) {
   const session = await auth();
   if (!session) redirect('/signin');
 
   const { id } = await params;
+  const { tab: initialTab } = await searchParams;
   const details = await getApplicationDetails(id, 'passport');
 
   if (!details || details.user.id !== session.user.id) {
@@ -108,6 +111,7 @@ export default async function UserPassportApplicationDetailPage({
             hasUnreadConversation={hasUnreadConversation}
             comments={comments}
             payments={details.payments}
+            initialTab={initialTab}
             postComment={postApplicantComment}
           >
             <Card>

@@ -15,11 +15,20 @@ import { markApplicantConversationRead } from '@/app/(dashboard)/actions';
 import type { CommentView } from '@/lib/visa/corrections';
 import type { ActionResponse, ApplicationPaymentItem } from '@/types/admin';
 
+const APPLICANT_TABS = new Set(['application', 'conversation', 'payments']);
+
+function resolveApplicantTab(value?: string | null) {
+  if (value && APPLICANT_TABS.has(value)) return value;
+  return 'application';
+}
+
 interface ApplicantActivityTabsProps {
   applicationId: string;
   hasUnreadConversation: boolean;
   comments: CommentView[];
   payments: ApplicationPaymentItem[];
+  /** Deep-link from notifications (`?tab=conversation`). */
+  initialTab?: string | null;
   postComment: (input: {
     applicationId: string;
     body: string;
@@ -32,12 +41,21 @@ export function ApplicantActivityTabs({
   hasUnreadConversation,
   comments,
   payments,
+  initialTab,
   postComment,
   children,
 }: ApplicantActivityTabsProps) {
-  const [tab, setTab] = useState('application');
+  const [tab, setTab] = useState(() => resolveApplicantTab(initialTab));
   const [showDot, setShowDot] = useState(hasUnreadConversation);
   const markedRef = useRef(false);
+
+  useEffect(() => {
+    const next = resolveApplicantTab(initialTab);
+    setTab(next);
+    if (next === 'conversation') {
+      setShowDot(false);
+    }
+  }, [initialTab]);
 
   useEffect(() => {
     if (tab !== 'conversation' || !hasUnreadConversation || markedRef.current) {

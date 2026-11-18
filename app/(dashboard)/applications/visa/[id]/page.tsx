@@ -36,6 +36,7 @@ import {
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }
 
 type StoredTraveller = {
@@ -71,11 +72,13 @@ function Field({
 
 export default async function UserVisaApplicationDetailPage({
   params,
+  searchParams,
 }: PageProps) {
   const session = await auth();
   if (!session) redirect('/signin');
 
   const { id } = await params;
+  const { tab: initialTab } = await searchParams;
   const details = await getApplicationDetails(id, 'visa');
 
   if (!details || details.user.id !== session.user.id) {
@@ -157,6 +160,7 @@ export default async function UserVisaApplicationDetailPage({
               hasUnreadConversation={hasUnreadConversation}
               comments={comments}
               payments={details.payments}
+              initialTab={initialTab}
               postComment={postApplicantComment}
             >
               <Card>

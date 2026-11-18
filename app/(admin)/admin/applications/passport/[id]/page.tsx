@@ -37,6 +37,7 @@ import { markApplicationNotificationsRead } from '@/lib/notifications';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }
 
 const DETAIL_TABS = [
@@ -67,10 +68,14 @@ function Field({
 
 export default async function PassportApplicationDetailPage({
   params,
+  searchParams,
 }: PageProps) {
   const session = await requireRole(['admin', 'reviewer']);
 
   const { id } = await params;
+  const { tab } = await searchParams;
+  const initialTab =
+    tab && DETAIL_TABS.some((item) => item.id === tab) ? tab : 'application';
   const details = await getApplicationDetails(id, 'passport');
 
   if (!details) {
@@ -143,7 +148,8 @@ export default async function PassportApplicationDetailPage({
         <div className="lg:col-span-2">
           <Tabs
             items={[...DETAIL_TABS]}
-            defaultValue="application"
+            key={initialTab}
+            defaultValue={initialTab}
             tone="light"
             layoutId={`passport-app-detail-tabs-${app.id}`}
             ariaLabel="Application detail sections"
@@ -239,11 +245,18 @@ export default async function PassportApplicationDetailPage({
             </TabsPanel>
 
             <TabsPanel id="conversation">
-              <ConversationThread
-                applicationId={app.id}
-                comments={comments}
-                postComment={postStaffComment}
-              />
+              <Card>
+                <CardHeader>
+                  <CardTitle>Conversation</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ConversationThread
+                    applicationId={app.id}
+                    comments={comments}
+                    postComment={postStaffComment}
+                  />
+                </CardContent>
+              </Card>
             </TabsPanel>
           </Tabs>
         </div>

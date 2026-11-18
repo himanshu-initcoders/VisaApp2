@@ -605,8 +605,8 @@ export async function notifyCommentEvent(input: {
     const applicantName = passportApplicantLabel(passport);
     const toApplicant = input.authorRole !== 'applicant';
     const href = toApplicant
-      ? `/applications/passport/${ref}`
-      : `/admin/applications/passport/${ref}`;
+      ? `/applications/passport/${ref}?tab=conversation`
+      : `/admin/applications/passport/${ref}?tab=conversation`;
     const title = `New comment from ${input.authorName}`;
 
     if (toApplicant) {
@@ -696,8 +696,8 @@ export async function notifyCommentEvent(input: {
   const excerpt = input.body.length > 280 ? `${input.body.slice(0, 277)}...` : input.body;
   const toApplicant = input.authorRole !== 'applicant';
   const href = toApplicant
-    ? `/applications/visa/${visa.referenceNumber}`
-    : `/admin/applications/visa/${visa.referenceNumber}`;
+    ? `/applications/visa/${visa.referenceNumber}?tab=conversation`
+    : `/admin/applications/visa/${visa.referenceNumber}?tab=conversation`;
   const title = `New comment from ${input.authorName}`;
 
   if (toApplicant) {
@@ -1130,11 +1130,18 @@ export async function notifyVisaOutcomeDeliveredEvent(input: {
   }
 }
 
+/** Ensure comment notifications deep-link into the Conversation tab. */
+function withConversationTab(href: string, type: string): string {
+  if (type !== 'staff_comment' && type !== 'applicant_comment') return href;
+  if (href.includes('tab=conversation')) return href;
+  return `${href}${href.includes('?') ? '&' : '?'}tab=conversation`;
+}
+
 export async function listNotifications(
   userId: string,
   limit = 8
 ): Promise<{ unread: number; items: AppNotice[] }> {
-  const [items, unreadRows] = await Promise.all([
+  const [rows, unreadRows] = await Promise.all([
     db
       .select({
         id: notifications.id,
@@ -1154,6 +1161,11 @@ export async function listNotifications(
       .from(notifications)
       .where(and(eq(notifications.userId, userId), isNull(notifications.readAt))),
   ]);
+
+  const items = rows.map((row) => ({
+    ...row,
+    href: withConversationTab(row.href, row.type),
+  }));
 
   return { unread: unreadRows.length, items };
 }

@@ -820,11 +820,14 @@ export async function listStaffAttention(input: {
   }
   for (const row of unreadComments) {
     if (!row.applicationId || byApplication.has(row.applicationId)) continue;
+    const href = row.href.includes('tab=conversation')
+      ? row.href
+      : `${row.href}${row.href.includes('?') ? '&' : '?'}tab=conversation`;
     byApplication.set(row.applicationId, {
       applicationId: row.applicationId,
       title: row.title,
       body: row.body,
-      href: row.href,
+      href,
     });
   }
   return [...byApplication.values()];
