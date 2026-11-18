@@ -138,4 +138,10 @@ export function applicationPublicId(objectKey: string): string {
   return objectKey.replace(/\.[^/.]+$/, '');
 }
 
+/** Passenger id from `.../passengers/{id}/...`, or null for legacy keys. */
+export function extractPassengerIdFromObjectKey(objectKey: string): string | null {
+  const match = objectKey.match(/\/passengers\/([^/]+)\//);
+  return match?.[1] ?? null;
+}
+
 export const APPLICATION_UPLOAD_FOLDER = 'applications' as const;

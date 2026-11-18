@@ -25,6 +25,8 @@ import {
   normalizePassportReferenceNumber,
   resolvePassportApplicationId,
 } from '@/lib/passport/reference-number';
+import { extractPassengerIdFromObjectKey } from '@/lib/upload/applicationKey';
+import { upsertApplicationDocumentRow } from '@/lib/upload/upsertApplicationDocumentRow';
 import type {
   ApplicationListItem,
   ApplicationFilters,
@@ -648,6 +650,9 @@ export async function getApplicationDetails(
     }
   }
 
+  if (type === 'visa') {
+    await restoreMissingTravellerDocumentRows(resolvedId, application);
+  }
   const docs = await getDocumentsByApplicationId(resolvedId, type);
   const history = await getStatusHistoryByApplicationId(resolvedId, type);
   const notes = await getApplicationNotes(resolvedId, type);
@@ -764,6 +769,81 @@ export async function getApplicationCallLogs(
     adminName: r.adminName,
     createdAt: r.createdAt,
   }));
+}
+
+/**
+ * A prior upsert bug overwrote traveller-1 rows when traveller-2 uploaded the
+ * same slot. Travellers JSON still has the correct keys — re-insert missing
+ * documents rows so the admin Documents panel can filter per passenger.
+ */
+async function restoreMissingTravellerDocumentRows(
+  applicationId: string,
+  application: unknown
+): Promise<void> {
+  if (!application || typeof application !== 'object') return;
+  const travellers = (application as { travellers?: unknown }).travellers;
+  if (!Array.isArray(travellers) || travellers.length === 0) return;
+
+  const existing = await db
+    .select({ s3Key: documents.s3Key })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.applicationId, applicationId),
+        eq(documents.applicationType, 'visa')
+      )
+    );
+  const existingKeys = new Set(existing.map((row) => row.s3Key));
+  const now = new Date();
+
+  for (const traveller of travellers) {
+    if (!traveller || typeof traveller !== 'object') continue;
+    const record = traveller as {
+      passengerId?: unknown;
+      documents?: unknown;
+    };
+    const docs = Array.isArray(record.documents) ? record.documents : [];
+    for (const item of docs) {
+      if (!item || typeof item !== 'object') continue;
+      const doc = item as {
+        key?: unknown;
+        slotKey?: unknown;
+        filename?: unknown;
+        mimeType?: unknown;
+        size?: unknown;
+        passengerId?: unknown;
+      };
+      const key = typeof doc.key === 'string' ? doc.key : '';
+      const slotKey = typeof doc.slotKey === 'string' ? doc.slotKey : '';
+      if (!key || !slotKey || existingKeys.has(key)) continue;
+
+      const passengerId =
+        (typeof record.passengerId === 'string' && record.passengerId) ||
+        (typeof doc.passengerId === 'string' && doc.passengerId) ||
+        extractPassengerIdFromObjectKey(key) ||
+        '';
+      if (!passengerId) continue;
+
+      await upsertApplicationDocumentRow(db, {
+        applicationId,
+        applicationType: 'visa',
+        passengerId,
+        slotKey,
+        key,
+        filename:
+          typeof doc.filename === 'string' && doc.filename
+            ? doc.filename
+            : key.split('/').pop() || slotKey,
+        size: typeof doc.size === 'number' ? doc.size : 0,
+        mimeType:
+          typeof doc.mimeType === 'string' && doc.mimeType
+            ? doc.mimeType
+            : 'application/octet-stream',
+        now,
+      });
+      existingKeys.add(key);
+    }
+  }
 }
 
 /** Original upload order: traveller documents, then the application document list. */
@@ -984,9 +1064,7 @@ function toDocumentRow(
 /** Same passenger match as documentBelongsToTraveller. */
 function documentBelongsToPassenger(s3Key: string, passengerId: string): boolean {
   if (!passengerId) return false;
-  const needle = `/passengers/${passengerId}/`;
-  if (s3Key.includes(needle)) return true;
-  return s3Key.includes(passengerId);
+  return s3Key.includes(`/passengers/${passengerId}/`);
 }
 
 type StoredPassenger = {

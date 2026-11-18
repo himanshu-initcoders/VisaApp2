@@ -10,7 +10,6 @@ import { auth } from '@/lib/auth';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { db } from '@/lib/db';
 import {
-  documents,
   payments,
   statusHistory,
   users,
@@ -34,6 +33,8 @@ import {
 } from '@/lib/apply/validateSubmitTravellers';
 import { quoteVisaListing } from '@/lib/payments/quote';
 import { attachPaymentsToApplication } from '@/lib/payments/record';
+import { upsertApplicationDocumentRow } from '@/lib/upload/upsertApplicationDocumentRow';
+import { extractPassengerIdFromObjectKey } from '@/lib/upload/applicationKey';
 
 export type { SubmitTravellerPayload } from '@/lib/apply/validateSubmitTravellers';
 
@@ -427,49 +428,20 @@ export async function submitApplication(
         );
 
       for (const result of uploadResults) {
-        const existingDocs = await tx
-          .select({ id: documents.id, s3Key: documents.s3Key })
-          .from(documents)
-          .where(
-            and(
-              eq(documents.applicationId, applicationId),
-              eq(documents.applicationType, 'visa'),
-              eq(documents.documentType, result.slotKey)
-            )
-          );
-
-        const match =
-          existingDocs.find((row) => row.s3Key === result.key) ||
-          existingDocs.find((row) =>
-            row.s3Key.includes(`/passengers/${result.passengerId}/`)
-          ) ||
-          (existingDocs.length === 1 ? existingDocs[0] : undefined);
-
-        if (match) {
-          await tx
-            .update(documents)
-            .set({
-              s3Key: result.key,
-              filename: result.filename,
-              fileSize: result.size,
-              mimeType: result.mimeType,
-              verified: null,
-              uploadedAt: now,
-            })
-            .where(eq(documents.id, match.id));
-        } else {
-          await tx.insert(documents).values({
-            applicationId,
-            applicationType: 'visa',
-            documentType: result.slotKey,
-            s3Key: result.key,
-            filename: result.filename,
-            fileSize: result.size,
-            mimeType: result.mimeType,
-            verified: null,
-            uploadedAt: now,
-          });
-        }
+        await upsertApplicationDocumentRow(tx, {
+          applicationId,
+          applicationType: 'visa',
+          passengerId:
+            result.passengerId ||
+            extractPassengerIdFromObjectKey(result.key) ||
+            '',
+          slotKey: result.slotKey,
+          key: result.key,
+          filename: result.filename,
+          size: result.size,
+          mimeType: result.mimeType,
+          now,
+        });
       }
 
       const existingTravellers = await tx

@@ -1,10 +1,14 @@
 /**
  * Update an existing documents row for a passenger+slot, or insert when missing.
  * Avoids accumulating duplicate rows on every correction reupload.
+ *
+ * Never steals another passenger's row for the same slot — multi-traveller
+ * apps share document_type values (e.g. passport-front) across passengers.
  */
 
 import { and, eq } from 'drizzle-orm';
 import { documents } from '@/lib/db/schema';
+import { extractPassengerIdFromObjectKey } from '@/lib/upload/applicationKey';
 
 type DbLike = {
   // Drizzle transaction and db share these query builders.
@@ -15,6 +19,14 @@ type DbLike = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   update: (...args: any[]) => any;
 };
+
+function rowBelongsToPassenger(
+  s3Key: string,
+  passengerId: string
+): boolean {
+  if (!passengerId) return false;
+  return s3Key.includes(`/passengers/${passengerId}/`);
+}
 
 export async function upsertApplicationDocumentRow(
   tx: DbLike,
@@ -48,12 +60,15 @@ export async function upsertApplicationDocumentRow(
       (row: { s3Key: string }) =>
         Boolean(input.previousKey) && row.s3Key === input.previousKey
     ) ||
-    rows.find(
-      (row: { s3Key: string }) =>
-        row.s3Key.includes(`/passengers/${input.passengerId}/`) ||
-        row.s3Key.includes(input.passengerId)
+    rows.find((row: { s3Key: string }) =>
+      rowBelongsToPassenger(row.s3Key, input.passengerId)
     ) ||
-    (rows.length === 1 ? rows[0] : undefined);
+    // Legacy single-file apps stored keys without /passengers/{id}/.
+    // Only reuse that lone row when it has no passenger segment.
+    (rows.length === 1 &&
+    extractPassengerIdFromObjectKey(rows[0].s3Key) == null
+      ? rows[0]
+      : undefined);
 
   if (match) {
     await tx

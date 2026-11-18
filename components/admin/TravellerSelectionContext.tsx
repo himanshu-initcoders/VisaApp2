@@ -38,10 +38,7 @@ export function documentBelongsToTraveller(
   passengerId: string
 ): boolean {
   if (!passengerId) return false;
-  const needle = `/passengers/${passengerId}/`;
-  if (doc.s3Key.includes(needle)) return true;
-  // Fallback: filename/metadata sometimes embeds passenger id
-  return doc.s3Key.includes(passengerId);
+  return doc.s3Key.includes(`/passengers/${passengerId}/`);
 }
 
 export function TravellerSelectionProvider({

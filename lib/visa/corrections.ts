@@ -190,7 +190,14 @@ export function buildCorrectableTargets(
     });
   }
 
+  const seenDocumentKeys = new Set(
+    targets.filter((t) => t.kind === 'document').map((t) => t.targetKey)
+  );
   for (const slot of config?.documentSlots ?? []) {
+    // Passport front/back are already added above when showGeneral is on;
+    // documentSlots also keeps passport-back for OCR-miss capture.
+    if (seenDocumentKeys.has(slot.key)) continue;
+    seenDocumentKeys.add(slot.key);
     targets.push({
       kind: 'document',
       targetKey: slot.key,
