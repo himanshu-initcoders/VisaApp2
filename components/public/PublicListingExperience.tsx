@@ -253,7 +253,10 @@ export function PublicListingExperience({
             onVisaKindSelect={onVisaKindSelect}
           />
 
-          <section id="requirements" className="space-y-5 sm:space-y-8">
+          <section
+            id="requirements"
+            className="scroll-mt-32 space-y-5 sm:scroll-mt-36 sm:space-y-8"
+          >
             <MotionReveal className="max-w-2xl space-y-2 sm:space-y-3">
               <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
                 Required to apply
@@ -288,7 +291,10 @@ export function PublicListingExperience({
           )}
 
           {hasExemption && (
-            <section id="exemption" className="space-y-5 sm:space-y-8">
+            <section
+              id="exemption"
+              className="scroll-mt-32 space-y-5 sm:scroll-mt-36 sm:space-y-8"
+            >
               <MotionReveal className="max-w-2xl space-y-2 sm:space-y-3">
                 <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
                   Visa exemption
@@ -307,7 +313,10 @@ export function PublicListingExperience({
           )}
 
           {hasFaqs && (
-            <section id="faqs" className="space-y-5 sm:space-y-8">
+            <section
+              id="faqs"
+              className="scroll-mt-32 space-y-5 sm:scroll-mt-36 sm:space-y-8"
+            >
               <MotionReveal className="max-w-2xl space-y-2 sm:space-y-3">
                 <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
                   Frequently asked questions

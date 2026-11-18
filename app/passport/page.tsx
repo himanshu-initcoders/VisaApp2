@@ -465,7 +465,7 @@ export default async function PassportPage() {
           <StickySectionNav items={sectionItems} />
         </div>
 
-        <section id="overview" className="px-4 pt-10 sm:px-6 sm:pt-14 lg:px-8">
+        <section id="overview" className="scroll-mt-32 px-4 pt-10 sm:scroll-mt-36 sm:px-6 sm:pt-14 lg:px-8">
           <div className="mx-auto max-w-7xl space-y-6">
             <MotionReveal className="max-w-2xl space-y-3">
               <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
@@ -507,7 +507,7 @@ export default async function PassportPage() {
           </div>
         </section>
 
-        <section id="timelines" className="px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+        <section id="timelines" className="scroll-mt-32 px-4 py-10 sm:scroll-mt-36 sm:px-6 sm:py-14 lg:px-8">
           <div className="mx-auto max-w-7xl space-y-6">
             <MotionReveal className="max-w-2xl space-y-3">
               <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
@@ -545,7 +545,7 @@ export default async function PassportPage() {
           </div>
         </section>
 
-        <section id="documents" className="px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+        <section id="documents" className="scroll-mt-32 px-4 py-10 sm:scroll-mt-36 sm:px-6 sm:py-14 lg:px-8">
           <div className="mx-auto max-w-7xl space-y-6">
             <MotionReveal className="max-w-3xl space-y-3">
               <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
@@ -599,7 +599,7 @@ export default async function PassportPage() {
           </div>
         </section>
 
-        <section id="process" className="px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+        <section id="process" className="scroll-mt-32 px-4 py-10 sm:scroll-mt-36 sm:px-6 sm:py-14 lg:px-8">
           <div className="mx-auto max-w-7xl space-y-6">
             <MotionReveal className="max-w-2xl space-y-3">
               <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
@@ -618,7 +618,7 @@ export default async function PassportPage() {
           </div>
         </section>
 
-        <section id="fees" className="px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+        <section id="fees" className="scroll-mt-32 px-4 py-10 sm:scroll-mt-36 sm:px-6 sm:py-14 lg:px-8">
           <div className="mx-auto max-w-7xl space-y-6">
             <MotionReveal className="max-w-3xl space-y-3">
               <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
@@ -670,7 +670,7 @@ export default async function PassportPage() {
           </div>
         </section>
 
-        <section id="purposes" className="px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+        <section id="purposes" className="scroll-mt-32 px-4 py-10 sm:scroll-mt-36 sm:px-6 sm:py-14 lg:px-8">
           <div className="mx-auto max-w-7xl space-y-6">
             <MotionReveal className="max-w-2xl space-y-3">
               <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
@@ -706,7 +706,7 @@ export default async function PassportPage() {
           </div>
         </section>
 
-        <section id="faqs" className="px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+        <section id="faqs" className="scroll-mt-32 px-4 py-10 sm:scroll-mt-36 sm:px-6 sm:py-14 lg:px-8">
           <div className="mx-auto max-w-7xl space-y-6">
             <MotionReveal className="max-w-2xl space-y-3">
               <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">

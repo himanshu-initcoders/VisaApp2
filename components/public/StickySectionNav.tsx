@@ -46,10 +46,20 @@ export function StickySectionNav({
     return () => observer.disconnect();
   }, [itemIds]);
 
+  const scrollToSection = (id: string) => {
+    const section = document.getElementById(id);
+    if (!section) return;
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setActiveId(id);
+    // Keep the hash in sync without a second native jump.
+    window.history.replaceState(null, '', `#${id}`);
+  };
+
   return (
     <div
       className={cn(
-        'sticky top-[60px] z-30 border-b border-ash-divider/70 bg-white/90 backdrop-blur sm:top-[55px]',
+        // Must clear the fixed Header when scrolled (py-2.5 + lg logo ≈ 64px).
+        'sticky top-16 z-30 border-b border-ash-divider/70 bg-white/90 backdrop-blur',
         className
       )}
     >
@@ -58,6 +68,10 @@ export function StickySectionNav({
           <a
             key={item.id}
             href={`#${item.id}`}
+            onClick={(event) => {
+              event.preventDefault();
+              scrollToSection(item.id);
+            }}
             className={cn(
               'relative shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors active:scale-95',
               activeId === item.id

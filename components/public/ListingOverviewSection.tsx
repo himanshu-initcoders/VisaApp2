@@ -62,7 +62,7 @@ export function ListingOverviewSection({
   return (
     <section
       id="overview"
-      className="space-y-6 sm:space-y-0 lg:grid lg:grid-cols-[1fr_0.95fr] lg:gap-8"
+      className="scroll-mt-32 space-y-6 sm:scroll-mt-36 sm:space-y-0 lg:grid lg:grid-cols-[1fr_0.95fr] lg:gap-8"
     >
       <MotionReveal>
         <VisaTypesOffered
