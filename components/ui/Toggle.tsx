@@ -9,6 +9,9 @@ export interface ToggleProps {
   label?: string;
   disabled?: boolean;
   className?: string;
+  /** On-state track color. Default mint matches admin toggles; ink for applicant checkout. */
+  activeTone?: 'mint' | 'ink';
+  'aria-label'?: string;
 }
 
 /**
@@ -16,8 +19,8 @@ export interface ToggleProps {
  *
  * A pill-shaped toggle switch following the Portrait design system.
  * - Height: 28px (pill shape)
- * - Enabled: Mint Wash background (#d7ffe2)
- * - Disabled: Fog Edge background (#c7c7c7)
+ * - Enabled: Mint Wash (#d7ffe2) or Portrait Ink (#08304c)
+ * - Off: Fog (#c7c7c7) — ink tone adds an ink outline so it stays visible on white
  * - Smooth transition animation
  *
  * @example
@@ -28,7 +31,18 @@ export interface ToggleProps {
  * />
  */
 export const Toggle = React.forwardRef<HTMLButtonElement, ToggleProps>(
-  ({ enabled, onChange, label, disabled, className }, ref) => {
+  (
+    {
+      enabled,
+      onChange,
+      label,
+      disabled,
+      className,
+      activeTone = 'mint',
+      'aria-label': ariaLabel,
+    },
+    ref
+  ) => {
     const handleToggle = () => {
       if (!disabled) {
         onChange(!enabled);
@@ -53,22 +67,24 @@ export const Toggle = React.forwardRef<HTMLButtonElement, ToggleProps>(
           type="button"
           role="switch"
           aria-checked={enabled}
-          aria-label={label || 'Toggle'}
+          aria-label={ariaLabel || label || 'Toggle'}
           disabled={disabled}
           onClick={handleToggle}
           className={cn(
-            // Base styles
-            'relative inline-flex items-center h-7 w-12 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-portrait-ink focus:ring-offset-2',
-            // Background colors
-            enabled ? 'bg-mint-wash' : 'bg-fog-edge',
-            // Disabled state
-            disabled && 'opacity-50 cursor-not-allowed'
+            'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-portrait-ink focus:ring-offset-2',
+            enabled
+              ? activeTone === 'ink'
+                ? 'border-portrait-ink bg-portrait-ink'
+                : 'border-mint-wash bg-mint-wash'
+              : activeTone === 'ink'
+                ? 'border-portrait-ink/40 bg-mist'
+                : 'border-fog bg-fog',
+            disabled && 'cursor-not-allowed opacity-50'
           )}
         >
-          {/* Toggle knob */}
           <span
             className={cn(
-              'inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200',
+              'inline-block h-5 w-5 transform rounded-full bg-white shadow-[0_1px_3px_rgba(8,48,76,0.28)] transition-transform duration-200',
               enabled ? 'translate-x-6' : 'translate-x-1'
             )}
           />

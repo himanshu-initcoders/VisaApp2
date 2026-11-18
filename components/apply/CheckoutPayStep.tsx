@@ -21,8 +21,25 @@ import {
 import { formatInrFromPaise } from '@/lib/payments/money';
 import { trackEvent } from '@/lib/analytics/gtm';
 import { cn } from '@/lib/utils';
-import { Checkbox } from '@/components/ui/Checkbox';
+import { Toggle } from '@/components/ui/Toggle';
 import { ApplicationSubmittedModal } from '@/components/apply/ApplicationSubmittedModal';
+
+export interface CheckoutQuote {
+  amountPaise: number;
+  free: boolean;
+  governmentFeePaise: number;
+  serviceFeePaise: number;
+  gstFeePaise: number;
+  travellerCount: number;
+}
+
+/** Per-traveller fee snapshot from the listing page (display-only until server confirms). */
+export interface CheckoutFeeSnapshot {
+  priceOptionId: string | null;
+  governmentFeePaise: number;
+  serviceFeePaise: number;
+  gstFeePaise: number;
+}
 
 interface CheckoutPayStepProps {
   countryName: string;
@@ -34,6 +51,12 @@ interface CheckoutPayStepProps {
   onInterestedInInsuranceChange?: (value: boolean) => void;
   draftScope: DraftScopeInput;
   processName?: string;
+  /** Locked price option from apply URL / draft — avoids IndexedDB before first paint. */
+  priceOptionId?: string | null;
+  /** SSR/listing fees so total can render before the server quote returns. */
+  feeSnapshot?: CheckoutFeeSnapshot | null;
+  /** Prefetched server quote from the wizard (preferred over feeSnapshot). */
+  initialQuote?: CheckoutQuote | null;
   /** Known draft application id from the wizard (optional; checkout can create). */
   applicationId?: string | null;
   onBack: () => void;
@@ -47,13 +70,40 @@ interface CheckoutPayStepProps {
   onApplicationId?: (applicationId: string, referenceNumber: string) => void;
 }
 
-interface CheckoutQuote {
-  amountPaise: number;
-  free: boolean;
-  governmentFeePaise: number;
-  serviceFeePaise: number;
-  gstFeePaise: number;
-  travellerCount: number;
+function quoteFromFeeSnapshot(
+  snapshot: CheckoutFeeSnapshot,
+  travellerCount: number
+): CheckoutQuote {
+  const perTraveller =
+    snapshot.governmentFeePaise +
+    snapshot.serviceFeePaise +
+    snapshot.gstFeePaise;
+  return {
+    amountPaise: perTraveller * travellerCount,
+    free: perTraveller === 0,
+    governmentFeePaise: snapshot.governmentFeePaise,
+    serviceFeePaise: snapshot.serviceFeePaise,
+    gstFeePaise: snapshot.gstFeePaise,
+    travellerCount,
+  };
+}
+
+function resolveSeedQuote(input: {
+  initialQuote?: CheckoutQuote | null;
+  feeSnapshot?: CheckoutFeeSnapshot | null;
+  filledCount: number;
+}): CheckoutQuote | null {
+  if (
+    input.initialQuote &&
+    input.initialQuote.travellerCount === input.filledCount
+  ) {
+    return input.initialQuote;
+  }
+  if (input.feeSnapshot && input.filledCount >= 1) {
+    return quoteFromFeeSnapshot(input.feeSnapshot, input.filledCount);
+  }
+  if (input.initialQuote) return input.initialQuote;
+  return null;
 }
 
 interface RazorpaySuccess {
@@ -120,6 +170,9 @@ export function CheckoutPayStep({
   onInterestedInInsuranceChange,
   draftScope,
   processName = '',
+  priceOptionId = null,
+  feeSnapshot = null,
+  initialQuote = null,
   applicationId: initialApplicationId = null,
   onBack,
   onSubmitting,
@@ -131,7 +184,15 @@ export function CheckoutPayStep({
   const router = useRouter();
   const isAuthed = status === 'authenticated' && Boolean(session?.user?.id);
   const [quoting, setQuoting] = useState(false);
-  const [quote, setQuote] = useState<CheckoutQuote | null>(null);
+  const [quote, setQuote] = useState<CheckoutQuote | null>(() =>
+    resolveSeedQuote({ initialQuote, feeSnapshot, filledCount })
+  );
+  const [quoteConfirmed, setQuoteConfirmed] = useState(
+    () =>
+      Boolean(
+        initialQuote && initialQuote.travellerCount === filledCount
+      )
+  );
   const [submitting, setSubmitting] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -140,12 +201,52 @@ export function CheckoutPayStep({
   const submitIdRef = useRef<string | null>(null);
   const applicationIdRef = useRef<string | null>(initialApplicationId);
   const redirectingRef = useRef(false);
+  const beginCheckoutTrackedRef = useRef(false);
   const [insuranceChecked, setInsuranceChecked] = useState(interestedInInsurance);
   const lastEmittedInsuranceRef = useRef(interestedInInsurance);
 
   useEffect(() => {
     applicationIdRef.current = initialApplicationId;
   }, [initialApplicationId]);
+
+  // Keep optimistic/prefetched total in sync when traveller count or seed props change.
+  useEffect(() => {
+    if (initialQuote && initialQuote.travellerCount === filledCount) {
+      setQuote((prev) => {
+        if (
+          prev &&
+          prev.amountPaise === initialQuote.amountPaise &&
+          prev.travellerCount === initialQuote.travellerCount &&
+          prev.governmentFeePaise === initialQuote.governmentFeePaise &&
+          prev.serviceFeePaise === initialQuote.serviceFeePaise &&
+          prev.gstFeePaise === initialQuote.gstFeePaise
+        ) {
+          return prev;
+        }
+        return initialQuote;
+      });
+      setQuoteConfirmed(true);
+      return;
+    }
+
+    const seeded = resolveSeedQuote({ initialQuote, feeSnapshot, filledCount });
+    if (!seeded) return;
+
+    setQuote((prev) => {
+      if (
+        prev &&
+        prev.amountPaise === seeded.amountPaise &&
+        prev.travellerCount === seeded.travellerCount &&
+        prev.governmentFeePaise === seeded.governmentFeePaise &&
+        prev.serviceFeePaise === seeded.serviceFeePaise &&
+        prev.gstFeePaise === seeded.gstFeePaise
+      ) {
+        return prev;
+      }
+      return seeded;
+    });
+    setQuoteConfirmed(false);
+  }, [initialQuote, feeSnapshot, filledCount]);
 
   const insuranceInterest =
     showInsuranceInterest && insuranceChecked === true;
@@ -163,22 +264,32 @@ export function CheckoutPayStep({
   }, [interestedInInsurance]);
 
   useEffect(() => {
+    // Server quote requires auth; unauthenticated checkout still shows feeSnapshot.
     if (!isAuthed || filledCount < 1) return;
     let cancelled = false;
 
     async function run() {
       setQuoting(true);
-      const draft = await readApplyDraftAsync(draftScope);
-      const travellerCount = draft?.travellers?.length || filledCount;
+      // Prefer props — only fall back to draft if price option was never passed in.
+      let resolvedPriceOptionId = priceOptionId ?? null;
+      let travellerCount = filledCount;
+      if (resolvedPriceOptionId == null) {
+        const draft = await readApplyDraftAsync(draftScope);
+        if (cancelled) return;
+        resolvedPriceOptionId = draft?.departure?.priceOption ?? null;
+        travellerCount = draft?.travellers?.length || filledCount;
+      }
+
       const result = await quoteVisaCheckout({
         listingId,
-        priceOptionId: draft?.departure?.priceOption ?? null,
+        priceOptionId: resolvedPriceOptionId,
         travellerCount,
       });
       if (cancelled) return;
       if (!result.success) {
-        setQuote(null);
+        // Keep optimistic quote visible; surface the error for pay disable path.
         setError(result.error);
+        setQuoteConfirmed(false);
       } else {
         setQuote({
           amountPaise: result.amountPaise,
@@ -188,23 +299,27 @@ export function CheckoutPayStep({
           gstFeePaise: result.gstFeePaise,
           travellerCount: result.travellerCount,
         });
+        setQuoteConfirmed(true);
         setError(null);
-        trackEvent('begin_checkout', {
-          listing_id: listingId,
-          country_code: countryCode,
-          currency: 'INR',
-          value: result.amountPaise / 100,
-          traveller_count: result.travellerCount,
-          items: [
-            {
-              item_id: listingId,
-              item_name: countryName,
-              item_category: countryCode,
-              price: result.amountPaise / 100,
-              quantity: result.travellerCount,
-            },
-          ],
-        });
+        if (!beginCheckoutTrackedRef.current) {
+          beginCheckoutTrackedRef.current = true;
+          trackEvent('begin_checkout', {
+            listing_id: listingId,
+            country_code: countryCode,
+            currency: 'INR',
+            value: result.amountPaise / 100,
+            traveller_count: result.travellerCount,
+            items: [
+              {
+                item_id: listingId,
+                item_name: countryName,
+                item_category: countryCode,
+                price: result.amountPaise / 100,
+                quantity: result.travellerCount,
+              },
+            ],
+          });
+        }
       }
       setQuoting(false);
     }
@@ -213,11 +328,13 @@ export function CheckoutPayStep({
     return () => {
       cancelled = true;
     };
-    // draftScope identity fields — avoid object-identity loops
   }, [
     isAuthed,
     listingId,
     filledCount,
+    priceOptionId,
+    countryCode,
+    countryName,
     draftScope.listingId,
     draftScope.sessionUserId,
     draftScope.onBehalfOfUserId,
@@ -544,13 +661,20 @@ export function CheckoutPayStep({
   };
 
   const totalLabel = quote ? formatInrFromPaise(quote.amountPaise) : null;
+  const canPay =
+    isAuthed &&
+    !submitting &&
+    quoteConfirmed &&
+    Boolean(quote) &&
+    quote?.travellerCount === filledCount &&
+    !successId;
   const payLabel = !isAuthed
     ? 'Login required to pay'
     : submitting
       ? uploadStatus || (quote?.free ? 'Submitting…' : 'Processing…')
       : successId
         ? 'Submitted'
-        : quoting
+        : !quoteConfirmed && quoting
           ? 'Calculating fee…'
           : quote?.free
             ? 'Submit application'
@@ -605,13 +729,24 @@ export function CheckoutPayStep({
 
       {showInsuranceInterest && (
         <div className="mt-8 rounded-[24px] border border-ash bg-white p-5 text-left shadow-sm">
-          <Checkbox
-            label="Are you looking for visa insurance also?"
-            description="Optional — tell us if you are interested in travel insurance for this trip."
-            checked={insuranceChecked}
-            disabled={submitting || Boolean(successId)}
-            onChange={handleInsuranceChange}
-          />
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="font-switzer text-sm font-medium text-portrait-ink">
+                Are you looking for visa insurance also?
+              </p>
+              <p className="mt-1 text-sm text-slate-helper">
+                Optional — tell us if you are interested in travel insurance for
+                this trip.
+              </p>
+            </div>
+            <Toggle
+              enabled={insuranceChecked}
+              onChange={handleInsuranceChange}
+              disabled={submitting || Boolean(successId)}
+              activeTone="ink"
+              aria-label="Are you looking for visa insurance also?"
+            />
+          </div>
         </div>
       )}
 
@@ -630,8 +765,8 @@ export function CheckoutPayStep({
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-helper">
           Total
         </p>
-        <p className="mt-2 font-basier text-4xl text-portrait-ink">
-          {quoting || !quote ? '—' : totalLabel}
+        <p className="mt-2 font-basier text-4xl text-portrait-ink tabular-nums">
+          {quote ? totalLabel : '—'}
         </p>
         {quote && !quote.free && (
           <p className="mt-2 text-xs text-slate-helper">
@@ -662,7 +797,7 @@ export function CheckoutPayStep({
           <button
             type="button"
             onClick={() => void handlePay()}
-            disabled={!isAuthed || submitting || quoting || !quote || Boolean(successId)}
+            disabled={!canPay}
             className="rounded-full bg-portrait-ink px-6 py-2.5 font-switzer text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             {payLabel}

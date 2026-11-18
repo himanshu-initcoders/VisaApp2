@@ -163,6 +163,15 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
 
   const applyPath = `${data.href}/apply`;
 
+  const checkoutFeeSnapshot = selectedPrice
+    ? {
+        priceOptionId: selectedPrice.id,
+        governmentFeePaise: Math.round(selectedPrice.governmentFeeAmount * 100),
+        serviceFeePaise: Math.round(selectedPrice.serviceFeeAmount * 100),
+        gstFeePaise: Math.round(selectedPrice.governmentGstFeeAmount * 100),
+      }
+    : null;
+
   return (
     <>
       <JsonLd
@@ -195,8 +204,9 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
           departure: query.departure,
           month: query.month,
           label: departureLabel,
-          priceOption: query.priceOption,
+          priceOption: query.priceOption ?? selectedPrice?.id,
         }}
+        checkoutFeeSnapshot={checkoutFeeSnapshot}
         formConfig={data.page.applyForm}
         resume={resume}
         isAuthenticated={isAuthenticated}

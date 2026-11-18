@@ -9,7 +9,12 @@ import { ApplyStepper } from '@/components/apply/ApplyStepper';
 import { BasicInformationStep } from '@/components/apply/BasicInformationStep';
 import { ReviewStep } from '@/components/apply/review/ReviewStep';
 import { PassportCaptureFlow } from '@/components/apply/passport/PassportCaptureFlow';
-import { CheckoutPayStep } from '@/components/apply/CheckoutPayStep';
+import {
+  CheckoutPayStep,
+  type CheckoutFeeSnapshot,
+  type CheckoutQuote,
+} from '@/components/apply/CheckoutPayStep';
+import { quoteVisaCheckout } from '@/lib/payments/actions';
 import type { PassportApplicationPayload } from '@/components/apply/passport/PassportReviewStage';
 import {
   defaultApplyFormConfig,
@@ -162,6 +167,8 @@ interface ApplyVisaWizardProps {
   departureLabel: string | null;
   departureMeta?: ApplyDraftDeparture;
   formConfig?: ApplyFormConfig;
+  /** Listing fee snapshot so checkout can show totals before the server quote. */
+  checkoutFeeSnapshot?: CheckoutFeeSnapshot | null;
   resume?: boolean;
   isAuthenticated?: boolean;
   previousProfiles?: TravellerProfile[];
@@ -248,6 +255,7 @@ export function ApplyVisaWizard({
   departureLabel,
   departureMeta,
   formConfig = defaultApplyFormConfig(countryName, processName),
+  checkoutFeeSnapshot = null,
   resume = false,
   isAuthenticated = false,
   previousProfiles = [],
@@ -280,6 +288,7 @@ export function ApplyVisaWizard({
     label: departureLabel,
   });
   const [interestedInInsurance, setInterestedInInsurance] = useState(false);
+  const [checkoutQuote, setCheckoutQuote] = useState<CheckoutQuote | null>(null);
   const [lifecycle, setLifecycle] = useState<WizardLifecycle>('initializing');
   const [resumeChoiceDraft, setResumeChoiceDraft] = useState<ApplyDraft | null>(
     null
@@ -548,6 +557,40 @@ export function ApplyVisaWizard({
   const activePassportTraveller = travellers.find(
     (item) => item.id === passportTravellerId
   );
+
+  // Prefetch checkout quote once travellers are filled so the pay step has no dash delay.
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated' || !session?.user?.id) return;
+    if (filledTravellers.length < 1) return;
+    let cancelled = false;
+    const priceOptionId = departure.priceOption ?? null;
+
+    void quoteVisaCheckout({
+      listingId,
+      priceOptionId,
+      travellerCount: filledTravellers.length,
+    }).then((result) => {
+      if (cancelled || !result.success) return;
+      setCheckoutQuote({
+        amountPaise: result.amountPaise,
+        free: result.free,
+        governmentFeePaise: result.governmentFeePaise,
+        serviceFeePaise: result.serviceFeePaise,
+        gstFeePaise: result.gstFeePaise,
+        travellerCount: result.travellerCount,
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    sessionStatus,
+    session?.user?.id,
+    listingId,
+    departure.priceOption,
+    filledTravellers.length,
+  ]);
 
   const applyDraftToUi = async (draft: ApplyDraft) => {
     const scope = draftScope();
@@ -1583,6 +1626,9 @@ export function ApplyVisaWizard({
               referenceNumberRef.current = referenceNumber;
             }}
             filledCount={filledTravellers.length}
+            priceOptionId={departure.priceOption ?? null}
+            feeSnapshot={checkoutFeeSnapshot}
+            initialQuote={checkoutQuote}
             showInsuranceInterest={Boolean(formConfig.showInsuranceInterest)}
             interestedInInsurance={interestedInInsurance}
             onInterestedInInsuranceChange={setInterestedInInsurance}
