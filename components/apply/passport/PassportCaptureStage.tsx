@@ -160,7 +160,7 @@ export function PassportCaptureStage({
               handleFiles(event.dataTransfer.files);
             }}
             onClick={() => inputRef.current?.click()}
-            className="flex flex-1 cursor-pointer flex-col items-center justify-center rounded-[28px] border border-dashed border-fog bg-[#f5f6f8] px-6 py-16 transition-colors hover:border-[#3b82f6] hover:bg-sky-wash/40"
+            className="flex flex-1 cursor-pointer flex-col items-center justify-center rounded-[28px] border border-dashed border-fog bg-[#f5f6f8] px-6 py-16 transition-colors hover:border-portrait-ink hover:bg-sky-wash/40"
           >
             <Upload className="h-8 w-8 text-slate-helper" />
             <p className="mt-4 text-base font-medium text-portrait-ink">

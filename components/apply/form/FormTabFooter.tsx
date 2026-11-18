@@ -82,7 +82,7 @@ export function FormTabFooter({
             disabled={continueDisabled}
             onClick={onContinue}
             className={cn(
-              'rounded-full bg-[#3b82f6] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45',
+              'rounded-full bg-portrait-ink px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45',
               fixedOnMobile && 'flex-[1.4] sm:flex-none'
             )}
           >

@@ -30,7 +30,7 @@ export function TravellerSidebarItem({
     <div
       className={cn(
         'group flex items-center gap-2 rounded-2xl px-3 py-2.5 transition-colors',
-        selected ? 'bg-[#eef4ff]' : 'hover:bg-white'
+        selected ? 'bg-sky-wash' : 'hover:bg-white'
       )}
     >
       <button
@@ -48,7 +48,7 @@ export function TravellerSidebarItem({
         <span
           className={cn(
             'truncate text-sm font-medium',
-            selected ? 'text-[#3b82f6]' : 'text-portrait-ink'
+            selected ? 'text-portrait-ink' : 'text-portrait-ink'
           )}
         >
           {displayName}

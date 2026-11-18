@@ -109,7 +109,7 @@ export function TravellerDetailPane({
           <button
             type="button"
             onClick={onEdit}
-            className="inline-flex items-center gap-1.5 rounded-full bg-[#eef4ff] px-4 py-2 text-sm font-medium text-[#3b82f6] transition-colors hover:bg-[#dce8ff]"
+            className="inline-flex items-center gap-1.5 rounded-full bg-sky-wash px-4 py-2 text-sm font-medium text-portrait-ink transition-colors hover:bg-portrait-ink/10"
           >
             <Pencil className="h-3.5 w-3.5" />
             Edit application
@@ -199,7 +199,7 @@ export function TravellerDetailPane({
           <button
             type="button"
             onClick={onEdit}
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#3b82f6] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-portrait-ink px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
           >
             <FileText className="h-4 w-4" />
             Continue application
@@ -224,7 +224,7 @@ export function TravellerDetailPane({
               setFileError(null);
               inputRef.current?.click();
             }}
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#3b82f6] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-portrait-ink px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
           >
             <Upload className="h-4 w-4" />
             Upload passport
@@ -242,7 +242,7 @@ export function TravellerDetailPane({
           <button
             type="button"
             onClick={onFillApplication}
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#3b82f6] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-portrait-ink px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
           >
             <FileText className="h-4 w-4" />
             Fill Application

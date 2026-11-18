@@ -147,7 +147,7 @@ function PassportPreviewCard({
               type="button"
               disabled={busy}
               onClick={() => inputRef.current?.click()}
-              className="inline-flex items-center gap-2 rounded-full bg-[#eef4ff] px-4 py-2 text-sm font-medium text-[#3b82f6] transition-colors hover:bg-[#dce8ff] disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-full bg-sky-wash px-4 py-2 text-sm font-medium text-portrait-ink transition-colors hover:bg-portrait-ink/10 disabled:opacity-60"
             >
               <Upload className="h-4 w-4" />
               Replace file
@@ -230,7 +230,7 @@ function SlotCard({
               target="_blank"
               rel="noreferrer"
               download={slot.sampleFilename || undefined}
-              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-[#3b82f6] underline-offset-2 hover:underline"
+              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-portrait-ink underline-offset-2 hover:underline"
             >
               <Download className="h-3.5 w-3.5" />
               Download sample
@@ -278,7 +278,7 @@ function SlotCard({
           type="button"
           disabled={busy}
           onClick={() => inputRef.current?.click()}
-          className="inline-flex items-center gap-2 rounded-full bg-[#eef4ff] px-4 py-2 text-sm font-medium text-[#3b82f6] transition-colors hover:bg-[#dce8ff] disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-full bg-sky-wash px-4 py-2 text-sm font-medium text-portrait-ink transition-colors hover:bg-portrait-ink/10 disabled:opacity-60"
         >
           <Upload className="h-4 w-4" />
           {upload ? 'Replace file' : 'Upload from device'}

@@ -341,7 +341,7 @@ export function PassportCaptureFlow({
         <button
           type="button"
           onClick={() => reuploadRef.current?.click()}
-          className="mt-6 rounded-full bg-[#3b82f6] px-5 py-2.5 text-sm font-medium text-white"
+          className="mt-6 rounded-full bg-portrait-ink px-5 py-2.5 text-sm font-medium text-white"
         >
           Choose another file
         </button>

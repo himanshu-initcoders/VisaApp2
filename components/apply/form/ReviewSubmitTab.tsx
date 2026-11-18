@@ -66,7 +66,7 @@ function ReviewSection({
             type="button"
             aria-label={`Edit ${title}`}
             onClick={onEdit}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eef4ff] text-[#3b82f6] transition-colors hover:bg-[#dce8ff]"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-wash text-portrait-ink transition-colors hover:bg-portrait-ink/10"
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>

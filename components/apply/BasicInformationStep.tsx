@@ -44,7 +44,7 @@ export function BasicInformationStep({
         <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
           <div className="min-w-0">
             <div className="flex items-start gap-3 sm:gap-4">
-              <span className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#eef4ff] text-[#3b82f6]">
+              <span className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-sky-wash text-portrait-ink">
                 <UserRound className="h-6 w-6" />
               </span>
               <div>
@@ -69,7 +69,7 @@ export function BasicInformationStep({
                   'flex items-center gap-2 rounded-full border bg-white pl-4 pr-1.5 py-1.5 transition-colors',
                   attempted && empty
                     ? 'border-[#ff4940]'
-                    : 'border-ash focus-within:border-[#3b82f6]'
+                    : 'border-ash focus-within:border-portrait-ink'
                 )}
               >
                 <UserRound className="h-4 w-4 shrink-0 text-fog" />
@@ -93,7 +93,7 @@ export function BasicInformationStep({
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#3b82f6] px-4 py-2 text-sm font-medium text-white shadow-[0_6px_16px_rgba(59,130,246,0.28)] transition-opacity hover:opacity-90"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-portrait-ink px-4 py-2 text-sm font-medium text-white shadow-[0_6px_16px_rgba(8,48,76,0.22)] transition-opacity hover:opacity-90"
                 >
                   Next
                   <ArrowRight className="h-3.5 w-3.5" />

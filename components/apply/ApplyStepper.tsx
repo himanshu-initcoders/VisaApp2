@@ -54,10 +54,10 @@ export function ApplyStepper({
                   className={cn(
                     'absolute left-[calc(50%+18px)] right-[calc(-50%+18px)] top-[15px] h-[2px]',
                     completed
-                      ? 'bg-[#3b82f6]'
+                      ? 'bg-portrait-ink'
                       : active
-                        ? 'bg-gradient-to-r from-[#3b82f6] to-[#dbe4f0]'
-                        : 'bg-[#dbe4f0]'
+                        ? 'bg-gradient-to-r from-portrait-ink to-ash'
+                        : 'bg-ash'
                   )}
                 />
               )}
@@ -72,8 +72,8 @@ export function ApplyStepper({
                   className={cn(
                     'flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-colors',
                     active || completed
-                      ? 'bg-[#3b82f6] text-white shadow-[0_8px_20px_rgba(59,130,246,0.28)]'
-                      : 'border-[1.5px] border-[#cfd8e6] bg-white text-[#9aa7b8]'
+                      ? 'bg-portrait-ink text-white shadow-[0_8px_20px_rgba(8,48,76,0.22)]'
+                      : 'border-[1.5px] border-fog bg-white text-slate-helper'
                   )}
                 >
                   {index + 1}
@@ -81,7 +81,7 @@ export function ApplyStepper({
                 <span
                   className={cn(
                     'max-w-[88px] text-center text-[11px] font-medium leading-tight sm:max-w-none sm:whitespace-nowrap sm:text-[13px]',
-                    active ? 'text-[#3b82f6]' : 'text-[#9aa7b8]'
+                    active ? 'text-portrait-ink' : 'text-slate-helper'
                   )}
                 >
                   {item.label}

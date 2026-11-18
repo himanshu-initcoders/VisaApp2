@@ -266,7 +266,7 @@ export function PassportApplyDocumentsPanel({
                 {!readOnly ? (
                   <label
                     className={[
-                      'inline-flex cursor-pointer items-center gap-2 rounded-full bg-[#eef4ff] px-4 py-2 text-sm font-medium text-[#3b82f6] transition-colors hover:bg-[#dce8ff]',
+                      'inline-flex cursor-pointer items-center gap-2 rounded-full bg-sky-wash px-4 py-2 text-sm font-medium text-portrait-ink transition-colors hover:bg-portrait-ink/10',
                       disabled || uploading || !isSignedIn
                         ? 'pointer-events-none opacity-60'
                         : '',
@@ -299,7 +299,7 @@ export function PassportApplyDocumentsPanel({
                     type="button"
                     disabled={disabled || uploading || previewLoading}
                     onClick={() => void openPreview(slot, upload)}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-[#eef4ff] px-3 py-2 text-sm font-medium text-[#3b82f6] transition-colors hover:bg-[#dce8ff] disabled:opacity-60"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-sky-wash px-3 py-2 text-sm font-medium text-portrait-ink transition-colors hover:bg-portrait-ink/10 disabled:opacity-60"
                   >
                     {previewLoading ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />

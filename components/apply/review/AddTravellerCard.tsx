@@ -50,7 +50,7 @@ export function AddTravellerCard({
         type="button"
         disabled={disabled || selectingProfile}
         onClick={() => setOpen(true)}
-        className="inline-flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-medium text-[#3b82f6] transition-colors hover:bg-[#eef4ff] disabled:cursor-not-allowed disabled:opacity-40"
+        className="inline-flex w-full items-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-medium text-portrait-ink transition-colors hover:bg-sky-wash disabled:cursor-not-allowed disabled:opacity-40"
       >
         <Plus className="h-4 w-4" />
         Add traveller
@@ -78,7 +78,7 @@ export function AddTravellerCard({
             setName('');
           }
         }}
-        className="w-full rounded-full border border-ash bg-white px-3 py-2 text-sm text-portrait-ink outline-none placeholder:text-fog focus:border-[#3b82f6] disabled:opacity-60"
+        className="w-full rounded-full border border-ash bg-white px-3 py-2 text-sm text-portrait-ink outline-none placeholder:text-fog focus:border-portrait-ink disabled:opacity-60"
       />
       <div className="mt-2 flex gap-2">
         <button
@@ -96,7 +96,7 @@ export function AddTravellerCard({
           type="button"
           disabled={!name.trim() || selectingProfile}
           onClick={commit}
-          className="flex-1 rounded-full bg-[#3b82f6] px-2 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+          className="flex-1 rounded-full bg-portrait-ink px-2 py-1.5 text-xs font-medium text-white disabled:opacity-40"
         >
           Add
         </button>
@@ -120,7 +120,7 @@ export function AddTravellerCard({
                     type="button"
                     disabled={selectingProfile}
                     onClick={() => pickProfile(profile)}
-                    className="group flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-left transition-colors hover:bg-[#eef4ff] disabled:cursor-wait disabled:opacity-60"
+                    className="group flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-left transition-colors hover:bg-sky-wash disabled:cursor-wait disabled:opacity-60"
                   >
                     <ProfileAvatar
                       name={profile.name}
@@ -136,7 +136,7 @@ export function AddTravellerCard({
                         <span className="truncate">{profile.nationality}</span>
                       </span>
                     </span>
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-fog transition-colors group-hover:text-[#3b82f6]" />
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-fog transition-colors group-hover:text-portrait-ink" />
                   </button>
                 </li>
               ))}

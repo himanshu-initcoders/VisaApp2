@@ -217,7 +217,7 @@ export function DocumentPreviewModal({
                 href={viewer.url}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-3 inline-flex text-sm font-medium text-[#3b82f6] hover:underline"
+                className="mt-3 inline-flex text-sm font-medium text-portrait-ink hover:underline"
               >
                 Open file
               </a>

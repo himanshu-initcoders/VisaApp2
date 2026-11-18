@@ -144,7 +144,7 @@ export function TripDetailsTab({
                       })
                     )
                   }
-                  className="inline-flex items-center gap-2 rounded-full bg-portrait-ink px-4 py-2 text-sm font-medium text-white shadow-[0_6px_16px_rgba(59,130,246,0.28)] transition-opacity hover:opacity-90"
+                  className="inline-flex items-center gap-2 rounded-full bg-portrait-ink px-4 py-2 text-sm font-medium text-white shadow-[0_6px_16px_rgba(8,48,76,0.22)] transition-opacity hover:opacity-90"
                 >
                   <Wand2 className="h-4 w-4 shrink-0" aria-hidden />
                   Auto Fill from {source.name}

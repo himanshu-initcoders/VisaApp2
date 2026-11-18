@@ -121,13 +121,13 @@ export function PreviousProfilesCarousel({
                   <span className="truncate font-switzer text-sm font-semibold text-portrait-ink">
                     {profile.name}
                   </span>
-                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-fog transition-colors group-hover:text-[#3b82f6]" />
+                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-fog transition-colors group-hover:text-portrait-ink" />
                 </span>
                 <span className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-helper">
                   <span aria-hidden>{getFlagEmoji(profile.countryCode)}</span>
                   {profile.nationality}
                 </span>
-                <span className="mt-2 inline-flex rounded-full bg-[#eef4ff] px-2.5 py-0.5 text-[11px] font-medium text-[#3b82f6]">
+                <span className="mt-2 inline-flex rounded-full bg-sky-wash px-2.5 py-0.5 text-[11px] font-medium text-portrait-ink">
                   {profile.visaType}
                   {profile.applicationCount && profile.applicationCount > 1
                     ? ` · ${profile.applicationCount} apps`

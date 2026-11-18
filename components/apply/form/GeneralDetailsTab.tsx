@@ -173,7 +173,7 @@ export function GeneralDetailsTab({
               aria-label="Reupload passport front"
               disabled={Boolean(replaceBusy)}
               onClick={onEditFront}
-              className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-[#3b82f6] px-3 py-2 text-xs font-medium text-white shadow-md disabled:opacity-60"
+              className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-portrait-ink px-3 py-2 text-xs font-medium text-white shadow-md disabled:opacity-60"
             >
               <Upload className="h-3.5 w-3.5 shrink-0" />
               {frontBusy ? 'Reading…' : 'Reupload'}
@@ -201,7 +201,7 @@ export function GeneralDetailsTab({
                 aria-label="Reupload passport back"
                 disabled={Boolean(replaceBusy)}
                 onClick={onEditBack}
-                className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-[#3b82f6] px-3 py-2 text-xs font-medium text-white shadow-md disabled:opacity-60"
+                className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-portrait-ink px-3 py-2 text-xs font-medium text-white shadow-md disabled:opacity-60"
               >
                 <Upload className="h-3.5 w-3.5 shrink-0" />
                 {backBusy ? 'Reading…' : 'Reupload'}

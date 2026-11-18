@@ -472,7 +472,7 @@ export function DocumentsReviewSection({
                   type="button"
                   disabled={!canView || busy}
                   onClick={() => void openPreview(item)}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#eef4ff] px-3 py-1.5 text-xs font-medium text-[#3b82f6] transition-colors hover:bg-[#dce8ff] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-wash px-3 py-1.5 text-xs font-medium text-portrait-ink transition-colors hover:bg-portrait-ink/10 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {busy ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
