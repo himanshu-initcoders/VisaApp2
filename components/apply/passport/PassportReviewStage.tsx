@@ -777,6 +777,23 @@ export function PassportReviewStage({
     });
   });
 
+  const stageRootRef = useRef<HTMLDivElement>(null);
+
+  // Keep each tab starting at the top of the scrollable overlay.
+  useEffect(() => {
+    const root = stageRootRef.current;
+    let node: HTMLElement | null = root?.parentElement ?? null;
+    while (node) {
+      const { overflowY } = window.getComputedStyle(node);
+      if (overflowY === 'auto' || overflowY === 'scroll') {
+        node.scrollTop = 0;
+        return;
+      }
+      node = node.parentElement;
+    }
+    window.scrollTo(0, 0);
+  }, [tab]);
+
   const goNext = () => {
     if (stepCommitting) return;
     const index = visibleTabs.indexOf(tab);
@@ -856,7 +873,7 @@ export function PassportReviewStage({
     ) || 'Traveller';
 
   return (
-    <div className="min-h-dvh bg-white">
+    <div ref={stageRootRef} className="min-h-dvh bg-white">
       <input
         ref={frontInputRef}
         type="file"
