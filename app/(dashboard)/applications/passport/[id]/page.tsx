@@ -84,10 +84,10 @@ export default async function UserPassportApplicationDetailPage({
   return (
     <div className="space-y-6">
       <Link
-        href="/applications"
+        href="/applications/passport"
         className="inline-flex items-center font-switzer text-sm text-nautical-teal transition-colors hover:text-portrait-ink"
       >
-        ← Back to Applications
+        ← Back to Passport applications
       </Link>
 
       <div>

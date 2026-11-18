@@ -59,71 +59,81 @@ export function DraftApplicationsList({
           {description}
         </p>
       </div>
-      <ul className="space-y-3">
-        {drafts.map((draft) => {
-          const isPassport = draft.kind === 'passport';
-          const processName =
-            draft.payload.processName ||
-            draft.payload.countryName ||
-            (isPassport ? 'Passport application' : 'Visa application');
-          const country =
-            draft.payload.countryName ||
-            draft.countryCode ||
-            draft.payload.countryCode ||
-            (isPassport ? 'India' : '');
-          const travellers =
-            draft.payload.travellersCount ||
-            (Array.isArray(draft.payload.travellers)
-              ? draft.payload.travellers.length
-              : 1);
-          const code = isPassport ? 'IN' : draftCountryCode(draft);
+      <div className="overflow-hidden rounded-[24px] border border-ash bg-white">
+        <ul>
+          {drafts.map((draft, index) => {
+            const isPassport = draft.kind === 'passport';
+            const processName =
+              draft.payload.processName ||
+              draft.payload.countryName ||
+              (isPassport ? 'Passport application' : 'Visa application');
+            const country =
+              draft.payload.countryName ||
+              draft.countryCode ||
+              draft.payload.countryCode ||
+              (isPassport ? 'India' : '');
+            const travellers =
+              draft.payload.travellersCount ||
+              (Array.isArray(draft.payload.travellers)
+                ? draft.payload.travellers.length
+                : 1);
+            const code = isPassport ? 'IN' : draftCountryCode(draft);
+            const titleLine = country
+              ? `${country} · ${processName}`
+              : processName;
+            const meta = [
+              draft.referenceNumber,
+              isPassport
+                ? null
+                : `${travellers} traveller${travellers === 1 ? '' : 's'}`,
+              draft.updatedAt
+                ? `Saved ${formatDraftUpdatedAt(draft.updatedAt)}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · ');
+            const isLast = index === drafts.length - 1;
 
-          return (
-            <li
-              key={draft.id}
-              className="flex flex-wrap items-center justify-between gap-4 rounded-[20px] border border-ash bg-white px-5 py-4"
-            >
-              <div className="flex min-w-0 items-start gap-3">
-                <FlagLogo
-                  countryCode={code}
-                  flagUrl={flagUrlFor(flagUrls, code)}
-                  alt={country || code}
-                  size="md"
-                  className="mt-0.5"
-                />
-                <div className="min-w-0">
-                  <p className="font-switzer text-xs uppercase tracking-wide text-slate-helper">
-                    Draft · {isPassport ? 'Passport' : 'Visa'}
-                    {draft.referenceNumber
-                      ? ` · ${draft.referenceNumber}`
-                      : ''}
-                  </p>
-                  <p className="mt-1 truncate font-switzer text-sm font-medium text-portrait-ink">
-                    {country ? `${country} · ${processName}` : processName}
-                  </p>
-                  <p className="mt-1 font-switzer text-xs text-slate-helper">
-                    {isPassport
-                      ? 'Continue your passport application'
-                      : `${travellers} traveller${travellers === 1 ? '' : 's'}`}
-                    {draft.updatedAt
-                      ? ` · Saved ${formatDraftUpdatedAt(draft.updatedAt)}`
-                      : ''}
-                  </p>
+            return (
+              <li
+                key={draft.id}
+                className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 ${
+                  isLast ? '' : 'border-b border-ash'
+                }`}
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <FlagLogo
+                    countryCode={code}
+                    flagUrl={flagUrlFor(flagUrls, code)}
+                    alt={country || code}
+                    size="md"
+                    className="shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate font-switzer text-sm font-medium text-portrait-ink">
+                      {titleLine}
+                    </p>
+                    {meta ? (
+                      <p className="mt-0.5 truncate font-switzer text-xs text-slate-helper">
+                        {meta}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-3">
-                <DiscardDraftButton listingId={draft.listingId} />
-                <Link
-                  href={continueHref(draft)}
-                  className="inline-flex items-center rounded-button border-[1.5px] border-portrait-ink px-4 py-2 font-switzer text-sm font-medium text-portrait-ink hover:bg-portrait-ink hover:text-white"
-                >
-                  Continue
-                </Link>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <DiscardDraftButton listingId={draft.listingId} />
+                  <Link
+                    href={continueHref(draft)}
+                    className="inline-flex items-center rounded-button border-[1.5px] border-portrait-ink px-3.5 py-1.5 font-switzer text-sm font-medium text-portrait-ink hover:bg-portrait-ink hover:text-white"
+                  >
+                    Continue
+                  </Link>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </section>
   );
 }

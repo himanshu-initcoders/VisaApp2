@@ -168,6 +168,7 @@ export default async function DashboardPage({
         kind: 'visa' as const,
         title: `${app.country || app.countryCode || 'Visa'} · ${app.visaType}`,
         countryCode: app.countryCode,
+        referenceNumber: app.referenceNumber,
         status: app.status,
         travellerCount: summary?.travellerCount ?? 0,
         approvedTravellerCount: summary?.approvedCount ?? 0,
@@ -181,6 +182,7 @@ export default async function DashboardPage({
       kind: 'passport' as const,
       title: `Passport · ${app.serviceType}`,
       countryCode: null as string | null,
+      referenceNumber: app.referenceNumber,
       status: app.status,
       travellerCount: 0,
       approvedTravellerCount: 0,
@@ -234,7 +236,7 @@ export default async function DashboardPage({
                 Browse destinations
               </Button>
             </Link>
-            <Link href="/applications">
+            <Link href="/applications/visa">
               <Button variant="ghost" size="md">
                 View applications
               </Button>
@@ -304,7 +306,7 @@ export default async function DashboardPage({
           </div>
           {totalApplications > 0 && (
             <Link
-              href="/applications"
+              href="/applications/visa"
               className="font-switzer text-sm text-nautical-teal hover:text-portrait-ink"
             >
               See all
@@ -331,54 +333,63 @@ export default async function DashboardPage({
             </CardContent>
           </Card>
         ) : (
-          <ul className="space-y-3">
-            {recent.map((item) => (
-              <li key={`${item.kind}-${item.id}`}>
-                <Link
-                  href={item.href}
-                  className="flex items-center justify-between gap-4 rounded-[20px] border border-ash bg-white px-5 py-4 transition-colors hover:bg-sky-wash/30"
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    {item.kind === 'visa' ? (
-                      <FlagLogo
-                        countryCode={item.countryCode}
-                        flagUrl={flagUrlFor(flagUrls, item.countryCode)}
-                        alt={item.title}
-                        size="md"
-                        className="mt-0.5"
-                      />
-                    ) : null}
-                    <div className="min-w-0">
-                      <p className="truncate font-switzer text-sm font-medium text-portrait-ink">
-                        {item.title}
-                      </p>
-                      <p className="mt-1 font-switzer text-xs text-slate-helper">
-                        {new Date(item.date).toLocaleDateString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          timeZone: 'Asia/Kolkata',
-                        })}
-                      </p>
+          <div className="overflow-hidden rounded-[24px] border border-ash bg-white">
+            <ul>
+              {recent.map((item, index) => (
+                <li key={`${item.kind}-${item.id}`}>
+                  <Link
+                    href={item.href}
+                    className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-3 transition-colors hover:bg-sky-wash/25 sm:grid-cols-[minmax(0,1.5fr)_minmax(8rem,1fr)_auto] ${
+                      index === recent.length - 1 ? '' : 'border-b border-ash'
+                    }`}
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      {item.kind === 'visa' ? (
+                        <FlagLogo
+                          countryCode={item.countryCode}
+                          flagUrl={flagUrlFor(flagUrls, item.countryCode)}
+                          alt={item.title}
+                          size="md"
+                          className="shrink-0"
+                        />
+                      ) : (
+                        <span
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-wash/60 font-switzer text-[10px] font-semibold text-nautical-teal"
+                          aria-hidden
+                        >
+                          PP
+                        </span>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate font-switzer text-sm font-medium text-portrait-ink">
+                          {item.title}
+                        </p>
+                        <p className="mt-0.5 truncate font-mono font-switzer text-xs text-nautical-teal sm:hidden">
+                          {item.referenceNumber || item.id.slice(0, 8)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <ApplicationStatusCell
-                      status={item.status}
-                      travellerCount={item.travellerCount}
-                      approvedTravellerCount={item.approvedTravellerCount}
-                      readable
-                    />
-                    {item.hasVisaDocument ? (
-                      <span className="font-switzer text-xs text-nautical-teal">
-                        Document ready
-                      </span>
-                    ) : null}
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                    <p className="hidden truncate font-mono font-switzer text-xs text-nautical-teal sm:block">
+                      {item.referenceNumber || item.id.slice(0, 8)}
+                    </p>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <ApplicationStatusCell
+                        status={item.status}
+                        travellerCount={item.travellerCount}
+                        approvedTravellerCount={item.approvedTravellerCount}
+                        readable
+                      />
+                      {item.hasVisaDocument ? (
+                        <span className="font-switzer text-[11px] text-nautical-teal">
+                          Document ready
+                        </span>
+                      ) : null}
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </section>
 

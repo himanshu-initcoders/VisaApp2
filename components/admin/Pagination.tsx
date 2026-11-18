@@ -84,32 +84,34 @@ export function Pagination({
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
   return (
-    <div className="flex items-center justify-between border-t border-ash pt-4 mt-6">
+    <div className="flex flex-wrap items-center justify-between gap-4 border-t border-ash pt-4 mt-6">
       {/* Items count */}
-      <div className="flex items-center gap-4">
-        <p className="font-switzer text-sm text-slate-helper">
+      <div className="flex shrink-0 flex-wrap items-center gap-4">
+        <p className="whitespace-nowrap font-switzer text-sm text-slate-helper">
           Showing {startItem}-{endItem} of {totalItems}
         </p>
-        <div className="flex items-center gap-2">
-          <span className="font-switzer text-sm text-slate-helper">
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="whitespace-nowrap font-switzer text-sm text-slate-helper">
             Items per page:
           </span>
-          <Select
-            options={[
-              { value: '10', label: '10' },
-              { value: '25', label: '25' },
-              { value: '50', label: '50' },
-              { value: '100', label: '100' },
-            ]}
-            value={itemsPerPage.toString()}
-            onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-            className="w-20"
-          />
+          {/* Select's root is `w-full`; pin width here so the label cannot shrink. */}
+          <div className="w-20 shrink-0">
+            <Select
+              options={[
+                { value: '10', label: '10' },
+                { value: '25', label: '25' },
+                { value: '50', label: '50' },
+                { value: '100', label: '100' },
+              ]}
+              value={itemsPerPage.toString()}
+              onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
+            />
+          </div>
         </div>
       </div>
 
       {/* Page navigation */}
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         {/* Previous button */}
         <Button
           variant="ghost"

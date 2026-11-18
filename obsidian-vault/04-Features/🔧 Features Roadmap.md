@@ -91,7 +91,7 @@
 - [ ] Staff draft-on-behalf for passport (parity with visa)
 
 ### Application Management
-- [x] Dashboard with all applications (`/applications` list)
+- [x] Dashboard applications split: `/applications/visa` + `/applications/passport` (server `ref` search, pagination 10, reference on each row)
 - [x] Application detail view-only (visa + passport; mirrors admin UI, no admin actions)
 - [x] Application status tracking (customer-facing status history)
 - [x] Document library with auto passenger profiles (`/documents`)

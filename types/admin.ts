@@ -76,6 +76,8 @@ export interface ApplicationFilters {
   userId?: string; // filter by specific user
   /** When set, only visa applications assigned to this reviewer are returned. */
   assignedReviewerId?: string;
+  /** Exclude draft rows (user dashboard lists drafts separately). */
+  excludeDraft?: boolean;
   page?: number;
   limit?: number;
   sortBy?: 'submittedAt' | 'createdAt' | 'status';

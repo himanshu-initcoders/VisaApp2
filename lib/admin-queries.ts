@@ -13,7 +13,7 @@ import {
   visaApplicationTravellers,
   payments,
 } from '@/lib/db/schema';
-import { eq, and, or, like, gte, lte, desc, sql, count, ilike, inArray } from 'drizzle-orm';
+import { eq, and, or, ne, like, gte, lte, desc, sql, count, ilike, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
 import { passengerProfileKey } from '@/lib/dashboard/passengerProfiles';
@@ -90,6 +90,7 @@ export async function getApplicationsWithFilters(
     dateTo,
     userId,
     assignedReviewerId,
+    excludeDraft = false,
     page = 1,
     limit = 20,
     sortBy = 'submittedAt',
@@ -118,6 +119,8 @@ export async function getApplicationsWithFilters(
 
     if (status) {
       visaConditions.push(eq(visaApplications.status, status));
+    } else if (excludeDraft) {
+      visaConditions.push(ne(visaApplications.status, 'draft'));
     }
     if (userId) {
       visaConditions.push(eq(visaApplications.userId, userId));
@@ -257,6 +260,8 @@ export async function getApplicationsWithFilters(
 
     if (status) {
       passportConditions.push(eq(passportServices.status, status));
+    } else if (excludeDraft) {
+      passportConditions.push(ne(passportServices.status, 'draft'));
     }
     if (userId) {
       passportConditions.push(eq(passportServices.userId, userId));

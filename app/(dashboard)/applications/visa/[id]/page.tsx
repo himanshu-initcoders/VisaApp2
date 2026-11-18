@@ -130,10 +130,10 @@ export default async function UserVisaApplicationDetailPage({
   return (
     <div className="space-y-6">
       <Link
-        href="/applications"
+        href="/applications/visa"
         className="inline-flex items-center font-switzer text-sm text-nautical-teal transition-colors hover:text-portrait-ink"
       >
-        ← Back to Applications
+        ← Back to Visa applications
       </Link>
 
       <div>
