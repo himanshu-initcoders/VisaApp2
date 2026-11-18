@@ -153,7 +153,7 @@ export async function loadEnabledCountriesWithProcesses() {
         orderBy: [visaListings.processName],
       },
     },
-    orderBy: [countries.name],
+    orderBy: [countries.sortOrder, countries.name],
   });
 
   return enabledCountries

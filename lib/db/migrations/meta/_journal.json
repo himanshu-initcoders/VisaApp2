@@ -267,6 +267,13 @@
       "when": 1794900000000,
       "tag": "0037_country_exemption",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1795000000000,
+      "tag": "0038_country_sort_order",
+      "breakpoints": true
     }
   ]
 }

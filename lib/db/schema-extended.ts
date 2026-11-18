@@ -79,6 +79,8 @@ export const countries = pgTable('countries', {
   iso2Code: char('iso2_code', { length: 2 }).notNull().unique(),
   supported: boolean('supported').default(true).notNull(),
   enabled: boolean('enabled').default(true).notNull(),
+  /** Display order on public catalog / homepage (lower = first) */
+  sortOrder: integer('sort_order').default(0).notNull(),
 
   // Images - All stored as JSON for better structure
   images: jsonb('images').$type<{

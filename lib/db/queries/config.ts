@@ -27,7 +27,7 @@ import { rewriteCountryImages, toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 /**
  * Get all countries with visa listing counts
- * Sorted by enabled status (enabled first), then alphabetically
+ * Sorted by admin display order (sortOrder), then name
  */
 export async function getCountriesWithProcessCounts() {
   const rows = await db.query.countries.findMany({
@@ -36,7 +36,7 @@ export async function getCountriesWithProcessCounts() {
         columns: { id: true }
       }
     },
-    orderBy: [desc(countries.enabled), countries.name]
+    orderBy: [countries.sortOrder, countries.name]
   });
   return rows.map((country) => ({
     ...country,

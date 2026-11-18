@@ -36,8 +36,9 @@ export default async function CountriesPage() {
               Countries
             </h1>
             <p className="text-base text-slate-helper">
-              Manage visa destination countries and their availability. Enable or disable countries
-              to control which visas are offered to users.
+              Manage visa destination countries and their availability. Drag rows to set the order
+              shown on the homepage and destinations catalog. Enable or disable countries to control
+              which visas are offered to users.
             </p>
           </div>
           <Link href="/admin/config/countries/new">

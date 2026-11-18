@@ -111,6 +111,7 @@
 - [ ] Document verification
 - [ ] User management
 - [x] Add Country (admin config create flow)
+- [x] Country drag-and-drop indexing (admin Countries page → homepage / destinations order)
 - [x] Country exemption content (TinyMCE on visa-listings country card; public Exemption tab above FAQs)
 - [x] Add Visa listing (admin config create flow)
 - [x] Passport listings admin (basic, pricing, forms/steps, docs, FAQs)

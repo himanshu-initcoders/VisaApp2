@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { countries } from '@/lib/db/schema-extended';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth-utils';
 import {
   countryMetadataSchema,
@@ -36,11 +36,17 @@ export async function createCountry(data: unknown) {
       return { error: `A country with ISO2 code ${validated.iso2Code} already exists` };
     }
 
+    const [maxRow] = await db
+      .select({ maxSort: sql<number>`coalesce(max(${countries.sortOrder}), -1)` })
+      .from(countries);
+    const nextSortOrder = (maxRow?.maxSort ?? -1) + 1;
+
     await db.insert(countries).values({
       name: validated.name,
       iso2Code: validated.iso2Code,
       enabled: validated.enabled,
       supported: validated.supported,
+      sortOrder: nextSortOrder,
     });
 
     revalidatePath('/admin/config/countries');
@@ -61,6 +67,36 @@ export async function createCountry(data: unknown) {
     }
 
     return { error: 'Failed to create country' };
+  }
+}
+
+/**
+ * Reorder countries (drag-and-drop on admin Countries page)
+ */
+export async function reorderCountries(countryIds: string[]) {
+  await requireRole(['admin']);
+
+  try {
+    if (!Array.isArray(countryIds) || countryIds.length === 0) {
+      return { error: 'No countries provided' };
+    }
+
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < countryIds.length; i++) {
+        await tx
+          .update(countries)
+          .set({ sortOrder: i, updatedAt: new Date() })
+          .where(eq(countries.id, countryIds[i]));
+      }
+    });
+
+    revalidatePath('/admin/config/countries');
+    revalidatePublicVisaCatalog();
+
+    return { success: true, message: 'Countries reordered successfully' };
+  } catch (error) {
+    console.error('Error reordering countries:', error);
+    return { error: 'Failed to reorder countries' };
   }
 }
 
