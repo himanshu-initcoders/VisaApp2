@@ -1,14 +1,19 @@
 import { Mail, MapPin, Phone, ArrowUpRight } from 'lucide-react';
 import { MotionReveal } from '@/components/public/MotionReveal';
+import {
+  CONTACT_ADDRESS,
+  CONTACT_EMAIL,
+  CONTACT_MAPS_URL,
+  CONTACT_PHONE,
+} from '@/lib/contact';
 import { cn } from '@/lib/utils';
 
-export const CONTACT_PHONE = '+917019902821';
-export const CONTACT_EMAIL = 'hello@viserv.in';
-export const CONTACT_ADDRESS =
-  'Viserv, No 5/1, 1st Cross, RRMR Extn, KH Road, Bengaluru, Karnataka 560027';
-export const CONTACT_MAPS_URL = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-  CONTACT_ADDRESS
-)}`;
+export {
+  CONTACT_ADDRESS,
+  CONTACT_EMAIL,
+  CONTACT_MAPS_URL,
+  CONTACT_PHONE,
+} from '@/lib/contact';
 
 interface ContactBarProps {
   className?: string;
