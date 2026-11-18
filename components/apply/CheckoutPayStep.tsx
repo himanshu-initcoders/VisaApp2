@@ -197,9 +197,14 @@ export function CheckoutPayStep({
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
+  const [successHref, setSuccessHref] = useState<string | null>(null);
+  const [successReferenceHint, setSuccessReferenceHint] = useState<string | null>(
+    null
+  );
   const [showSubmittedModal, setShowSubmittedModal] = useState(false);
   const submitIdRef = useRef<string | null>(null);
   const applicationIdRef = useRef<string | null>(initialApplicationId);
+  const referenceNumberRef = useRef<string | null>(null);
   const redirectingRef = useRef(false);
   const beginCheckoutTrackedRef = useRef(false);
   const [insuranceChecked, setInsuranceChecked] = useState(interestedInInsurance);
@@ -344,9 +349,16 @@ export function CheckoutPayStep({
     onSubmitFailed?.();
   };
 
-  const finishSubmitted = async (applicationId: string) => {
+  const finishSubmitted = async (
+    applicationId: string,
+    referenceNumber?: string | null
+  ) => {
     const value = (quote?.amountPaise ?? 0) / 100;
     const travellerCount = quote?.travellerCount ?? filledCount;
+    const ref =
+      referenceNumber ||
+      referenceNumberRef.current ||
+      applicationId;
     trackEvent('purchase', {
       transaction_id: applicationId,
       currency: 'INR',
@@ -377,15 +389,26 @@ export function CheckoutPayStep({
     onSubmitSuccess?.();
     await clearLocalDraftAfterSubmit(draftScope);
     setSuccessId(applicationId);
+    setSuccessHref(`/applications/visa/${ref}`);
+    setSuccessReferenceHint(
+      ref.length > 10 ? `${ref.slice(0, 10)}…` : ref
+    );
     setSubmitting(false);
     setShowSubmittedModal(true);
   };
 
   const continueAfterSubmit = () => {
-    if (!successId || redirectingRef.current) return;
+    if (!successHref || redirectingRef.current) return;
     redirectingRef.current = true;
     setShowSubmittedModal(false);
-    router.push(`/dashboard?submitted=${successId}`);
+    router.push(successHref);
+  };
+
+  const goHomeAfterSubmit = () => {
+    if (redirectingRef.current) return;
+    redirectingRef.current = true;
+    setShowSubmittedModal(false);
+    router.push('/');
   };
 
   const handlePay = async () => {
@@ -437,6 +460,7 @@ export function CheckoutPayStep({
         return;
       }
       applicationIdRef.current = saved.applicationId;
+      referenceNumberRef.current = saved.referenceNumber;
       onApplicationId?.(saved.applicationId, saved.referenceNumber);
 
       // FormData sync into the final application path (no promote later).
@@ -513,7 +537,10 @@ export function CheckoutPayStep({
 
       if (created.kind === 'already_submitted') {
         setUploadStatus(null);
-        await finishSubmitted(created.applicationId);
+        await finishSubmitted(
+          created.applicationId,
+          referenceNumberRef.current
+        );
         return;
       }
 
@@ -537,7 +564,7 @@ export function CheckoutPayStep({
           return;
         }
         setUploadStatus(null);
-        await finishSubmitted(result.applicationId);
+        await finishSubmitted(result.applicationId, result.referenceNumber);
         return;
       }
 
@@ -562,7 +589,7 @@ export function CheckoutPayStep({
           return;
         }
         setUploadStatus(null);
-        await finishSubmitted(result.applicationId);
+        await finishSubmitted(result.applicationId, result.referenceNumber);
         return;
       }
 
@@ -615,7 +642,7 @@ export function CheckoutPayStep({
               return;
             }
             setUploadStatus(null);
-            await finishSubmitted(result.applicationId);
+            await finishSubmitted(result.applicationId, result.referenceNumber);
           })();
         },
         modal: {
@@ -687,12 +714,9 @@ export function CheckoutPayStep({
       <ApplicationSubmittedModal
         open={showSubmittedModal}
         product="visa"
-        referenceHint={
-          successId && successId.length > 8
-            ? `${successId.slice(0, 8)}…`
-            : successId
-        }
+        referenceHint={successReferenceHint}
         onContinue={continueAfterSubmit}
+        onHome={goHomeAfterSubmit}
       />
       <div className="text-center">
         <h1 className="font-basier text-3xl text-portrait-ink sm:text-4xl">

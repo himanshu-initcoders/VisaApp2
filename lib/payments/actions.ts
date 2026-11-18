@@ -572,7 +572,12 @@ async function insertPendingPayment(input: {
 export async function verifyVisaCheckout(
   input: unknown
 ): Promise<
-  | { success: true; applicationId: string; alreadySubmitted?: boolean }
+  | {
+      success: true;
+      applicationId: string;
+      referenceNumber?: string;
+      alreadySubmitted?: boolean;
+    }
   | { success: false; error: string }
 > {
   try {
@@ -688,6 +693,7 @@ export async function verifyVisaCheckout(
     return {
       success: true,
       applicationId: submitted.applicationId,
+      referenceNumber: submitted.referenceNumber,
       alreadySubmitted: submitted.alreadySubmitted,
     };
   } catch (error) {

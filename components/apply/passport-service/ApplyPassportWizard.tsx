@@ -616,6 +616,13 @@ export function ApplyPassportWizard({
     router.push(href);
   };
 
+  const goHomeAfterPassportSubmit = () => {
+    if (redirectingRef.current) return;
+    redirectingRef.current = true;
+    setSubmittedRedirect(null);
+    router.push('/');
+  };
+
   const handlePay = async () => {
     if (!isSignedIn) {
       trackEvent('passport_apply_login_prompt', {
@@ -820,6 +827,7 @@ export function ApplyPassportWizard({
         product="passport"
         referenceHint={submittedRedirect?.referenceHint}
         onContinue={continueAfterPassportSubmit}
+        onHome={goHomeAfterPassportSubmit}
       />
       <header className="relative z-20 px-4 pb-2 pt-4 sm:px-8 sm:pt-5">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
