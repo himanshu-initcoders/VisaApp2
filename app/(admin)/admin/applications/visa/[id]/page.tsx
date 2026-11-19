@@ -23,6 +23,7 @@ import { NotesPanel } from '@/components/admin/NotesPanel';
 import { PortalCredentialsPanel } from '@/components/admin/PortalCredentialsPanel';
 import { CorrectionsCard } from '@/components/admin/CorrectionsCard';
 import { StaffEditsCard } from '@/components/admin/StaffEditsCard';
+import { OutcomeDocumentField } from '@/components/admin/OutcomeDocumentField';
 import { ConversationThread } from '@/components/visa/ConversationThread';
 import { TravellersSection } from '@/components/admin/TravellersSection';
 import { TravellerSelectionProvider } from '@/components/admin/TravellerSelectionContext';
@@ -293,6 +294,11 @@ export default async function VisaApplicationDetailPage({
                       <Field
                         label="Interested in insurance"
                         value={app.interestedInInsurance ? 'Yes' : 'No'}
+                      />
+                      <OutcomeDocumentField
+                        documents={details.documents}
+                        applicationType="visa"
+                        applicationStatus={app.status}
                       />
                     </dl>
                   </CardContent>

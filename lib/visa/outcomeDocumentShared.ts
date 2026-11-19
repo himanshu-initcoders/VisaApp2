@@ -1,9 +1,20 @@
 /** Client-safe constants for approved-visa delivery documents. */
 
 export const VISA_OUTCOME_SLOT = 'visa_outcome';
+export const PASSPORT_OUTCOME_SLOT = 'passport_outcome';
 
 export function visaOutcomeLabel(): string {
   return 'Visa document';
+}
+
+export function passportOutcomeLabel(): string {
+  return 'Passport document';
+}
+
+export function isOutcomeDocumentSlot(documentType: string): boolean {
+  return (
+    documentType === VISA_OUTCOME_SLOT || documentType === PASSPORT_OUTCOME_SLOT
+  );
 }
 
 export function isPdfMime(mimeType: string | null | undefined): boolean {

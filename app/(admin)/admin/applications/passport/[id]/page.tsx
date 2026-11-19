@@ -19,6 +19,7 @@ import { NotesPanel } from '@/components/admin/NotesPanel';
 import { PortalCredentialsPanel } from '@/components/admin/PortalCredentialsPanel';
 import { CorrectionsCard } from '@/components/admin/CorrectionsCard';
 import { StaffEditsCard } from '@/components/admin/StaffEditsCard';
+import { OutcomeDocumentField } from '@/components/admin/OutcomeDocumentField';
 import { ConversationThread } from '@/components/visa/ConversationThread';
 import { PaymentHistory } from '@/components/applications/PaymentHistory';
 import {
@@ -190,6 +191,11 @@ export default async function PassportApplicationDetailPage({
                             })
                           : 'Not submitted'
                       }
+                    />
+                    <OutcomeDocumentField
+                      documents={details.documents}
+                      applicationType="passport"
+                      applicationStatus={app.status}
                     />
                   </dl>
                 </CardContent>
