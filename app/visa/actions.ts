@@ -11,8 +11,9 @@ import {
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
 import {
   getApplyPreviousProfiles,
-  getPassengerAutofillForListing,
+  getTravelerAutofillForListing,
   type ApplyPreviousProfile,
+  type TravelerAutofillPayload,
   type PassengerAutofillPayload,
 } from '@/lib/apply/previousProfilesAutofill';
 import { stageAutofillDocumentsToDraft } from '@/lib/apply/stageAutofillDocuments';
@@ -22,40 +23,56 @@ import {
   upsertApplicationDraft,
   upsertApplicationDraftForUser,
 } from '@/lib/apply/serverDraft';
+import { extractApplicationIdFromObjectKey } from '@/lib/upload/applicationKey';
 import { readStoredObject } from '@/lib/upload/readStoredObject';
 import type { ActionResponse } from '@/types/admin';
 
-export type { ApplyPreviousProfile, PassengerAutofillPayload };
+export type {
+  ApplyPreviousProfile,
+  TravelerAutofillPayload,
+  PassengerAutofillPayload,
+};
 
 async function assertDocumentOwnedByUser(
   userId: string,
-  doc: { applicationId: string; s3Key: string }
+  doc: {
+    s3Key: string;
+    userId?: string | null;
+  }
 ): Promise<boolean> {
-  const [visaOwner] = await db
-    .select({ id: visaApplications.id })
-    .from(visaApplications)
-    .where(
-      and(
-        eq(visaApplications.id, doc.applicationId),
-        eq(visaApplications.userId, userId)
+  if (doc.userId && doc.userId === userId) return true;
+
+  const applicationId = extractApplicationIdFromObjectKey(doc.s3Key);
+  if (applicationId) {
+    const [visaOwner] = await db
+      .select({ id: visaApplications.id })
+      .from(visaApplications)
+      .where(
+        and(
+          eq(visaApplications.id, applicationId),
+          eq(visaApplications.userId, userId)
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (visaOwner) return true;
+    if (visaOwner) return true;
 
-  const [passportOwner] = await db
-    .select({ id: passportServices.id })
-    .from(passportServices)
-    .where(
-      and(
-        eq(passportServices.id, doc.applicationId),
-        eq(passportServices.userId, userId)
+    const [passportOwner] = await db
+      .select({ id: passportServices.id })
+      .from(passportServices)
+      .where(
+        and(
+          eq(passportServices.id, applicationId),
+          eq(passportServices.userId, userId)
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  return Boolean(passportOwner);
+    if (passportOwner) return true;
+  }
+
+  // Profile vault path: users/{userId}/profiles/...
+  return doc.s3Key.includes(`/${userId}/`);
 }
 
 /**
@@ -105,7 +122,7 @@ export async function getMyPassengerAutofill(input: {
   countryCode: string;
   travellerId: string;
   ownerUserId?: string | null;
-}): Promise<ActionResponse<PassengerAutofillPayload>> {
+}): Promise<ActionResponse<TravelerAutofillPayload>> {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -132,7 +149,7 @@ export async function getMyPassengerAutofill(input: {
       return { success: false, message: 'Missing profile or draft target' };
     }
 
-    const payload = await getPassengerAutofillForListing({
+    const payload = await getTravelerAutofillForListing({
       userId,
       profileId,
       formConfig: input.formConfig,
@@ -252,7 +269,7 @@ export async function fetchMyDocumentBlob(input: {
       s3Key = doc.s3Key;
       mimeType = doc.mimeType || mimeType;
       filename = doc.filename || filename;
-      applicationId = doc.applicationId;
+      applicationId = extractApplicationIdFromObjectKey(doc.s3Key);
     } else if (s3Key) {
       // Resolve ownership via matching documents row or visa app path userId segment
       const [doc] = await db
@@ -268,7 +285,7 @@ export async function fetchMyDocumentBlob(input: {
         }
         mimeType = doc.mimeType || mimeType;
         filename = doc.filename || filename;
-        applicationId = doc.applicationId;
+        applicationId = extractApplicationIdFromObjectKey(doc.s3Key);
       } else {
         // Path must include this user id: applications/.../{userId}/...
         const userSegment = `/${session.user.id}/`;

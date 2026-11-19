@@ -1,10 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { documents, passportServices, visaApplications } from '@/lib/db/schema';
 
-/**
- * Reviewers may only read or change applications assigned to them.
- */
 export async function reviewerOwnsVisa(
   reviewerId: string,
   applicationId: string
@@ -61,10 +58,7 @@ export async function reviewerOwnsDocument(
     .from(documents)
     .innerJoin(
       visaApplications,
-      and(
-        eq(documents.applicationId, visaApplications.id),
-        eq(documents.applicationType, 'visa')
-      )
+      sql`${documents.s3Key} LIKE ${sql`'%' || ${visaApplications.id}::text || '%'`}`
     )
     .where(
       and(
@@ -81,10 +75,7 @@ export async function reviewerOwnsDocument(
     .from(documents)
     .innerJoin(
       passportServices,
-      and(
-        eq(documents.applicationId, passportServices.id),
-        eq(documents.applicationType, 'passport')
-      )
+      sql`${documents.s3Key} LIKE ${sql`'%' || ${passportServices.id}::text || '%'`}`
     )
     .where(
       and(

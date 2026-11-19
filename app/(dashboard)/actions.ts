@@ -17,7 +17,13 @@ import {
 } from '@/lib/db/schema';
 import { uploadService } from '@/lib/upload';
 import { uploadApplicationDocuments } from '@/lib/upload/application-actions';
+import { extractApplicationIdFromObjectKey } from '@/lib/upload/applicationKey';
 import { upsertApplicationDocumentRow } from '@/lib/upload/upsertApplicationDocumentRow';
+import {
+  ensureTravelerProfile,
+  IncompleteTravelerIdentityError,
+} from '@/lib/dashboard/travelerProfileStore';
+import { upsertProfileDocument } from '@/lib/upload/profileDocumentVault';
 import { updateProfileSchema } from '@/lib/validations/auth';
 import type { ActionResponse } from '@/types/admin';
 import type { ApplyFormConfig } from '@/lib/apply/applicationForm';
@@ -152,29 +158,38 @@ export async function getMyDocumentPreviewUrl(
       return { success: false, message: 'Document not found' };
     }
 
-    const [visaOwner] = await db
-      .select({ id: visaApplications.id })
-      .from(visaApplications)
-      .where(
-        and(
-          eq(visaApplications.id, doc.applicationId),
-          eq(visaApplications.userId, session.user.id)
+    let owned = doc.userId === session.user.id;
+    const pathApplicationId = extractApplicationIdFromObjectKey(doc.s3Key);
+    if (!owned && pathApplicationId) {
+      const [visaOwner] = await db
+        .select({ id: visaApplications.id })
+        .from(visaApplications)
+        .where(
+          and(
+            eq(visaApplications.id, pathApplicationId),
+            eq(visaApplications.userId, session.user.id)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    const [passportOwner] = await db
-      .select({ id: passportServices.id })
-      .from(passportServices)
-      .where(
-        and(
-          eq(passportServices.id, doc.applicationId),
-          eq(passportServices.userId, session.user.id)
+      const [passportOwner] = await db
+        .select({ id: passportServices.id })
+        .from(passportServices)
+        .where(
+          and(
+            eq(passportServices.id, pathApplicationId),
+            eq(passportServices.userId, session.user.id)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (!visaOwner && !passportOwner) {
+      owned = Boolean(visaOwner || passportOwner);
+    }
+    if (!owned && doc.s3Key.includes(`/${session.user.id}/`)) {
+      owned = true;
+    }
+
+    if (!owned) {
       return { success: false, message: 'Unauthorized' };
     }
 
@@ -445,7 +460,10 @@ export async function submitCorrection(
       ? (application.travellers as StoredTraveller[])
       : [];
     const travellerIndex = storedTravellers.findIndex(
-      (item) => item.passengerId === traveller.passengerId
+      (item) =>
+        item.passengerId === traveller.formTravellerId ||
+        item.travellerId === traveller.formTravellerId ||
+        item.id === traveller.formTravellerId
     );
     if (travellerIndex < 0) {
       return { success: false, message: 'Traveller details were not found' };
@@ -489,12 +507,22 @@ export async function submitCorrection(
       return { success: false, message: 'This application cannot accept new files' };
     }
 
-    const previousKeys = new Map<string, string>();
-    for (const file of files) {
-      const current = (nextTraveller.documents ?? []).find(
-        (item) => item.slotKey === file.slotKey
-      );
-      if (current?.key) previousKeys.set(file.slotKey, current.key);
+    let profile;
+    try {
+      profile = await ensureTravelerProfile(db, application.userId, {
+        passengerId: traveller.formTravellerId,
+        name: nextTraveller.name,
+        passportData: nextTraveller.passportData ?? null,
+      });
+    } catch (error) {
+      if (error instanceof IncompleteTravelerIdentityError) {
+        return {
+          success: false,
+          message:
+            'Name, date of birth, and passport number are required to update documents',
+        };
+      }
+      throw error;
     }
 
     const uploadResult = files.length
@@ -502,11 +530,12 @@ export async function submitCorrection(
           countryCode: application.countryCode,
           listingId: application.visaListingId,
           applicationId,
+          profileId: profile.id,
           // Keep prior correction files in storage; live DB pointer moves to the new key.
           preserveExistingObjects: true,
           revisionToken: open.request.id,
           documents: files.map((file) => ({
-            passengerId: traveller.passengerId,
+            passengerId: traveller.formTravellerId,
             slotKey: file.slotKey,
             filename: file.filename,
             mimeType: file.mimeType,
@@ -523,50 +552,70 @@ export async function submitCorrection(
     }
 
     const now = new Date();
-    for (const uploaded of uploadResult.results) {
-      nextTraveller = replaceTravellerDocument(nextTraveller, uploaded.slotKey, {
-        slotKey: uploaded.slotKey,
-        key: uploaded.key,
-        url: uploaded.url,
-        mimeType: uploaded.mimeType,
-        filename: uploaded.filename,
-        size: uploaded.size,
-      });
-    }
-
-    const nextTravellers = storedTravellers.map((item, index) =>
-      index === travellerIndex ? nextTraveller : item
-    );
-    const summary = Array.isArray(application.documents)
-      ? [...(application.documents as Array<Record<string, unknown>>)]
-      : [];
-    for (const uploaded of uploadResult.results) {
-      const entry = {
-        key: uploaded.key,
-        url: uploaded.url,
-        slotKey: uploaded.slotKey,
-        passengerId: uploaded.passengerId,
-      };
-      const existing = summary.findIndex(
-        (item) =>
-          item.slotKey === uploaded.slotKey &&
-          item.passengerId === uploaded.passengerId
-      );
-      if (existing >= 0) summary[existing] = entry;
-      else summary.push(entry);
-    }
-
-    const personal =
-      application.personalInfo &&
-      typeof application.personalInfo === 'object' &&
-      !Array.isArray(application.personalInfo)
-        ? { ...(application.personalInfo as Record<string, unknown>) }
-        : null;
-    if (personal && Array.isArray(personal.travellers)) {
-      personal.travellers = nextTravellers;
-    }
+    const vaultIds = new Map<string, string>();
 
     await db.transaction(async (tx) => {
+      for (const uploaded of uploadResult.results) {
+        const vault = await upsertProfileDocument(tx, {
+          userId: application.userId,
+          profileId: profile.id,
+          slotKey: uploaded.slotKey,
+          key: uploaded.key,
+          filename: uploaded.filename,
+          size: uploaded.size,
+          mimeType: uploaded.mimeType,
+          mode: 'replace',
+          now,
+        });
+        vaultIds.set(uploaded.slotKey, vault.document.id);
+        nextTraveller = replaceTravellerDocument(
+          nextTraveller,
+          uploaded.slotKey,
+          {
+            documentId: vault.document.id,
+            slotKey: uploaded.slotKey,
+            key: uploaded.key,
+            url: uploaded.url,
+            mimeType: uploaded.mimeType,
+            filename: uploaded.filename,
+            size: uploaded.size,
+          }
+        );
+      }
+
+      const nextTravellers = storedTravellers.map((item, index) =>
+        index === travellerIndex ? nextTraveller : item
+      );
+      const summary = Array.isArray(application.documents)
+        ? [...(application.documents as Array<Record<string, unknown>>)]
+        : [];
+      for (const uploaded of uploadResult.results) {
+        const entry = {
+          documentId: vaultIds.get(uploaded.slotKey),
+          key: uploaded.key,
+          url: uploaded.url,
+          slotKey: uploaded.slotKey,
+          passengerId: uploaded.passengerId,
+        };
+        const existing = summary.findIndex(
+          (item) =>
+            item.slotKey === uploaded.slotKey &&
+            item.passengerId === uploaded.passengerId
+        );
+        if (existing >= 0) summary[existing] = entry;
+        else summary.push(entry);
+      }
+
+      const personal =
+        application.personalInfo &&
+        typeof application.personalInfo === 'object' &&
+        !Array.isArray(application.personalInfo)
+          ? { ...(application.personalInfo as Record<string, unknown>) }
+          : null;
+      if (personal && Array.isArray(personal.travellers)) {
+        personal.travellers = nextTravellers;
+      }
+
       await tx
         .update(visaApplications)
         .set({
@@ -576,20 +625,6 @@ export async function submitCorrection(
           updatedAt: now,
         })
         .where(eq(visaApplications.id, applicationId));
-
-      for (const uploaded of uploadResult.results) {
-        await upsertApplicationDocumentRow(tx, {
-          applicationId,
-          passengerId: uploaded.passengerId,
-          slotKey: uploaded.slotKey,
-          previousKey: previousKeys.get(uploaded.slotKey),
-          key: uploaded.key,
-          filename: uploaded.filename,
-          size: uploaded.size,
-          mimeType: uploaded.mimeType,
-          now,
-        });
-      }
 
       for (const item of open.items) {
         const newValue =

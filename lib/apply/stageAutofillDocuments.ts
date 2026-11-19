@@ -3,7 +3,7 @@
  * Browser only receives draft storage keys + media URLs (no base64 / IndexedDB).
  */
 
-import type { PassengerAutofillPayload } from '@/lib/apply/previousProfilesAutofill';
+import type { TravelerAutofillPayload } from '@/lib/apply/previousProfilesAutofill';
 import { copyOwnedFileToDraft } from '@/lib/upload/copyOwnedFileToDraft';
 import {
   PASSPORT_BACK_SLOT,
@@ -16,11 +16,11 @@ export async function stageAutofillDocumentsToDraft(input: {
   listingId: string;
   applicationId: string;
   travellerId: string;
-  payload: PassengerAutofillPayload;
-}): Promise<PassengerAutofillPayload> {
+  payload: TravelerAutofillPayload;
+}): Promise<TravelerAutofillPayload> {
   const failedSlots: string[] = [];
-  const stagedDocs: PassengerAutofillPayload['documents'] = [];
-  const draftFileRefs: NonNullable<PassengerAutofillPayload['draftFileRefs']> =
+  const stagedDocs: TravelerAutofillPayload['documents'] = [];
+  const draftFileRefs: NonNullable<TravelerAutofillPayload['draftFileRefs']> =
     [];
   let passportFrontUrl: string | null = null;
   let passportBackUrl: string | null = null;

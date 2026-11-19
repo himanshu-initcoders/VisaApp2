@@ -24,6 +24,22 @@ export function isApplicationMediaKey(key: string): boolean {
   return key.startsWith('applications/');
 }
 
+/** Profile vault uploads: users/{userId}/profiles/{profileId}/... */
+export function isProfileMediaKey(key: string): boolean {
+  return key.startsWith('users/') && key.includes('/profiles/');
+}
+
+/** Private object keys that require a signed-in session. */
+export function isPrivateMediaKey(key: string): boolean {
+  return isApplicationMediaKey(key) || isProfileMediaKey(key);
+}
+
+/** userId segment from users/{userId}/profiles/... or null. */
+export function extractProfileMediaUserId(key: string): string | null {
+  const match = key.match(/^users\/([^/]+)\/profiles\//);
+  return match?.[1] ?? null;
+}
+
 /** Validate object key for /api/media (no traversal). */
 export function assertSafeMediaKey(raw: string): string {
   const trimmed = raw.trim().replace(/\\/g, '/').replace(/^\/+/, '');
@@ -33,7 +49,11 @@ export function assertSafeMediaKey(raw: string): string {
   if (trimmed.includes('..') || trimmed.includes('\0') || /^[a-zA-Z]:/.test(trimmed)) {
     throw new Error('Invalid media key');
   }
-  if (!isPublicMediaKey(trimmed) && !isApplicationMediaKey(trimmed)) {
+  if (
+    !isPublicMediaKey(trimmed) &&
+    !isApplicationMediaKey(trimmed) &&
+    !isProfileMediaKey(trimmed)
+  ) {
     throw new Error('Media key not allowed');
   }
   return trimmed;

@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     'status',
     'travellerStatus',
     'submittedAt',
-    'passengerNames',
+    'travellerNames',
     'formVersion',
     'visaType',
     'arrivalDate',
@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
             ? new Date(r.submittedAt).toISOString()
             : ''
         ),
-        csvEscape(r.passengerNames || ''),
+        csvEscape(r.travellerNames || ''),
         csvEscape(
           r.formVersionNumber != null ? String(r.formVersionNumber) : ''
         ),

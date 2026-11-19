@@ -14,7 +14,7 @@ const key = buildApplicationObjectKey({
   listingId: 'listing-uuid',
   userId: 'user-uuid',
   applicationId: 'app-uuid',
-  passengerId: 'pax-1',
+  travellerId: 'pax-1',
   slotKey: 'Passport Front!',
   ext: 'JPG',
 });

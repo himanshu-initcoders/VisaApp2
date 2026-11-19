@@ -5,7 +5,7 @@
 
 import 'server-only';
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { documents } from '@/lib/db/schema';
 import {
@@ -16,6 +16,7 @@ import {
   deleteOtherSlotExtensionKeys,
   deleteReplacedObjectKey,
 } from '@/lib/upload/deleteSlotSiblings';
+import { listDocumentsForApplicationPath } from '@/lib/upload/documentsByApplicationPath';
 import { uploadService } from '@/lib/upload';
 import { assertSafeStorageKey } from '@/lib/upload/safeStorageKey';
 import { VISA_OUTCOME_SLOT } from '@/lib/visa/outcomeDocumentShared';
@@ -54,11 +55,14 @@ export function assertVisaOutcomeKeyForPassenger(
 ): string {
   const safe = assertSafeStorageKey(key);
   const appNeedle = `/${input.applicationId}/`;
-  const passengerNeedle = `/passengers/${input.passengerId}/`;
+  const travellerNeedles = [
+    `/passengers/${input.passengerId}/`,
+    `/travellers/${input.passengerId}/`,
+  ];
   if (!safe.includes(appNeedle)) {
     throw new Error('Document key does not match this application');
   }
-  if (!safe.includes(passengerNeedle)) {
+  if (!travellerNeedles.some((needle) => safe.includes(needle))) {
     throw new Error('Document key does not match this traveller');
   }
   if (!safe.includes(`/${VISA_OUTCOME_SLOT}.`)) {
@@ -80,21 +84,15 @@ export async function upsertVisaOutcomeDocumentRow(input: {
   now?: Date;
 }): Promise<{ id: string; s3Key: string; filename: string; mimeType: string }> {
   const now = input.now ?? new Date();
-  const rows = await db
-    .select()
-    .from(documents)
-    .where(
-      and(
-        eq(documents.applicationId, input.applicationId),
-        eq(documents.applicationType, 'visa'),
-        eq(documents.documentType, VISA_OUTCOME_SLOT)
-      )
-    );
+  const rows = await listDocumentsForApplicationPath(db, input.applicationId, {
+    documentType: VISA_OUTCOME_SLOT,
+  });
 
   const match =
     rows.find(
       (row) =>
         row.s3Key.includes(`/passengers/${input.passengerId}/`) ||
+        row.s3Key.includes(`/travellers/${input.passengerId}/`) ||
         row.s3Key.includes(input.passengerId)
     ) || undefined;
 
@@ -125,14 +123,13 @@ export async function upsertVisaOutcomeDocumentRow(input: {
   const [inserted] = await db
     .insert(documents)
     .values({
-      applicationId: input.applicationId,
-      applicationType: 'visa',
       documentType: VISA_OUTCOME_SLOT,
       s3Key: input.key,
       filename: input.filename,
       fileSize: input.size,
       mimeType: input.mimeType,
       verified: true,
+      visibility: 'active',
       uploadedAt: now,
     })
     .returning({
@@ -155,17 +152,14 @@ export async function loadVisaOutcomePresence(
   applicationIds: string[]
 ): Promise<Set<string>> {
   if (applicationIds.length === 0) return new Set();
-  const rows = await db
-    .select({ applicationId: documents.applicationId })
-    .from(documents)
-    .where(
-      and(
-        inArray(documents.applicationId, applicationIds),
-        eq(documents.applicationType, 'visa'),
-        eq(documents.documentType, VISA_OUTCOME_SLOT)
-      )
-    );
-  return new Set(rows.map((row) => row.applicationId));
+  const present = new Set<string>();
+  for (const applicationId of applicationIds) {
+    const rows = await listDocumentsForApplicationPath(db, applicationId, {
+      documentType: VISA_OUTCOME_SLOT,
+    });
+    if (rows.length > 0) present.add(applicationId);
+  }
+  return present;
 }
 
 /** Best-effort delete of a just-uploaded object when the parent action fails. */

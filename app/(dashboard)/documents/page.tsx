@@ -3,15 +3,15 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui';
 import { redirectStaffToAdmin } from '@/lib/auth-utils';
-import { getPassengerProfilesForUser } from '@/lib/dashboard/passengerProfiles';
-import { PassengerProfilesView } from '@/components/dashboard/PassengerProfilesView';
+import { getTravelerProfilesForUser } from '@/lib/dashboard/travelerProfiles';
+import { TravelerProfilesView } from '@/components/dashboard/TravelerProfilesView';
 
 export default async function DocumentsPage() {
   const session = await auth();
   if (!session) redirect('/signin');
   redirectStaffToAdmin(session.user.role);
 
-  const profiles = await getPassengerProfilesForUser(session.user.id);
+  const profiles = await getTravelerProfilesForUser(session.user.id);
 
   return (
     <div className="space-y-6">
@@ -21,13 +21,14 @@ export default async function DocumentsPage() {
             Documents
           </h1>
           <p className="mt-2 font-switzer text-slate-helper">
-            Passenger profiles are created automatically from your applications.
-            Same passport across trips merges into one profile.
+            Personal documents for each traveller (passport, photo, supporting
+            papers). Visa/passport outcomes stay on the application — they are
+            not edited here.
           </p>
         </div>
         {profiles.length > 0 && (
           <p className="font-switzer text-sm text-slate-helper">
-            {profiles.length} passenger
+            {profiles.length} traveller
             {profiles.length === 1 ? '' : 's'}
           </p>
         )}
@@ -36,11 +37,11 @@ export default async function DocumentsPage() {
       {profiles.length === 0 ? (
         <div className="rounded-[24px] border border-ash bg-white px-6 py-14 text-center">
           <p className="font-switzer text-portrait-ink">
-            No passenger profiles yet
+            No traveller profiles yet
           </p>
           <p className="mt-2 font-switzer text-sm text-slate-helper">
-            Submit a visa application and profiles will appear here with their
-            uploaded documents.
+            Upload documents on a visa application and they will appear here in
+            your traveller vault.
           </p>
           <div className="mt-6">
             <Link href="/">
@@ -51,7 +52,7 @@ export default async function DocumentsPage() {
           </div>
         </div>
       ) : (
-        <PassengerProfilesView profiles={profiles} />
+        <TravelerProfilesView profiles={profiles} />
       )}
     </div>
   );

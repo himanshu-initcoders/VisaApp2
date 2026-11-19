@@ -17,6 +17,11 @@ import {
   extensionFromMime,
   isDraftObjectKey,
 } from '@/lib/upload/applicationKey';
+import {
+  buildProfileObjectKey,
+  isProfileObjectKey,
+  PROFILE_UPLOAD_FOLDER,
+} from '@/lib/upload/profileKey';
 import { readStoredObject } from '@/lib/upload/readStoredObject';
 import { assertSafeStorageKey } from '@/lib/upload/safeStorageKey';
 import { deleteOtherSlotExtensionKeys } from '@/lib/upload/deleteSlotSiblings';
@@ -43,8 +48,12 @@ export interface ApplicationDocumentUploadInput {
   preserveExistingObjects?: boolean;
   /** Used when preserveExistingObjects is true (e.g. correction request id). */
   revisionToken?: string;
+  /**
+   * When set, store under the profile vault path instead of applications/.
+   * Used for visa correction / profile-owned uploads.
+   */
+  profileId?: string;
 }
-
 export interface ApplicationDocumentUploadResult {
   passengerId: string;
   slotKey: string;
@@ -99,19 +108,29 @@ export async function uploadApplicationDocuments(
               Date.now().toString(36),
             ].join('-')
           : undefined;
-        const explicitKey = buildApplicationObjectKey({
-          countryCode: input.countryCode,
-          listingId: input.listingId,
-          userId,
-          applicationId: input.applicationId,
-          passengerId: doc.passengerId,
-          slotKey: doc.slotKey,
-          ext,
-          revision,
-        });
+        const explicitKey = input.profileId
+          ? buildProfileObjectKey({
+              userId,
+              profileId: input.profileId,
+              slotKey: doc.slotKey,
+              ext,
+              revision,
+            })
+          : buildApplicationObjectKey({
+              countryCode: input.countryCode,
+              listingId: input.listingId,
+              userId,
+              applicationId: input.applicationId,
+              passengerId: doc.passengerId,
+              slotKey: doc.slotKey,
+              ext,
+              revision,
+            });
 
         const result = await uploadService.upload(buffer, {
-          folder: APPLICATION_UPLOAD_FOLDER,
+          folder: input.profileId
+            ? PROFILE_UPLOAD_FOLDER
+            : APPLICATION_UPLOAD_FOLDER,
           filename: doc.filename,
           explicitKey,
           maxSizeMB: mimeType === 'application/pdf' ? 10 : 5,
@@ -127,6 +146,7 @@ export async function uploadApplicationDocuments(
             slotKey: doc.slotKey,
             applicationId: input.applicationId,
             listingId: input.listingId,
+            ...(input.profileId ? { profileId: input.profileId } : {}),
           },
         });
 
@@ -342,8 +362,9 @@ export async function fetchDraftDocumentBlob(input: {
     }
 
     const underOwner =
-      storageKey.startsWith('applications/') &&
-      storageKey.includes(`/${ownerUserId}/`);
+      (storageKey.startsWith('applications/') &&
+        storageKey.includes(`/${ownerUserId}/`)) ||
+      isProfileObjectKey(storageKey, ownerUserId);
     if (!underOwner && !isDraftObjectKey(storageKey, ownerUserId)) {
       return { success: false, error: 'Unauthorized' };
     }

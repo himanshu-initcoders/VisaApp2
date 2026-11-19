@@ -247,6 +247,12 @@ export {
   APPLICATION_UPLOAD_FOLDER,
 } from './applicationKey';
 export {
+  buildProfileObjectKey,
+  isProfileObjectKey,
+  extractProfileIdFromObjectKey,
+  PROFILE_UPLOAD_FOLDER,
+} from './profileKey';
+export {
   buildDocumentSampleObjectKey,
   documentSamplePublicId,
   sampleExtensionFromUpload,

@@ -132,12 +132,12 @@ export const visaApplications = pgTable(
     /** Phase 3: published form version pointer + frozen config */
     formVersionId: uuid('form_version_id').references(() => formVersions.id),
     formSnapshot: jsonb('form_snapshot'),
-    /** Multi-passenger payload (one row per submission) */
+    /** Multi-traveller payload (one row per submission) */
     travellers: jsonb('travellers'),
     /** Denormalized filter columns */
     applicantName: varchar('applicant_name', { length: 255 }),
     applicantPhone: varchar('applicant_phone', { length: 20 }),
-    passengerNames: text('passenger_names'),
+    travellerNames: text('traveller_names'),
     /** Client idempotency key for checkout / submit */
     submitId: uuid('submit_id'),
     /** Applicant opted in to visa insurance interest at checkout (optional). */
@@ -191,8 +191,13 @@ export const visaApplicationTravellers = pgTable(
     applicationId: uuid('application_id')
       .references(() => visaApplications.id, { onDelete: 'cascade' })
       .notNull(),
-    /** Matches the JSON passengerId (or `legacy-{applicationId}` / `traveller-{index}`). */
-    passengerId: varchar('passenger_id', { length: 100 }).notNull(),
+    /**
+     * Form/client slot id — matches travellers JSON (`id` / legacy `passengerId`)
+     * and the `/passengers/{id}/` storage path segment.
+     * Not traveler_profiles.id; not this row's UUID `id`.
+     * Named form_traveller_id because plain traveller_id already means this row's UUID FK elsewhere.
+     */
+    formTravellerId: varchar('form_traveller_id', { length: 100 }).notNull(),
     name: varchar('name', { length: 255 }).notNull(),
     status: varchar('status', { length: 50 }).notNull().default('submitted'),
     reviewedAt: timestamp('reviewed_at'),
@@ -201,9 +206,9 @@ export const visaApplicationTravellers = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex('visa_application_travellers_app_passenger_unique').on(
+    uniqueIndex('visa_application_travellers_app_form_traveller_unique').on(
       table.applicationId,
-      table.passengerId
+      table.formTravellerId
     ),
     index('visa_application_travellers_application_id_idx').on(
       table.applicationId
@@ -301,22 +306,56 @@ export const passportServices = pgTable(
   ]
 );
 
+/** Re-export — table lives in schema-traveler-profiles.ts (cycle-safe). */
+export {
+  travelerProfiles,
+  type TravelerProfileRow,
+  type NewTravelerProfileRow,
+} from './schema-traveler-profiles';
+import { travelerProfiles } from './schema-traveler-profiles';
+
 /**
- * Documents table - stores references to uploaded documents
+ * Documents table - traveler vault rows (+ application-path rows without app FKs).
+ * User-facing library uses profileId + visibility=active.
+ * Applications attach by storing documentId + frozen s3Key in JSON.
  */
-export const documents = pgTable('documents', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  applicationId: uuid('application_id').notNull(), // references visa or passport application
-  applicationType: varchar('application_type', { length: 50 }).notNull(), // 'visa' or 'passport'
-  documentType: varchar('document_type', { length: 100 }).notNull(), // passport_copy, photo, etc.
-  s3Key: varchar('s3_key', { length: 500 }).notNull(),
-  filename: varchar('filename', { length: 255 }).notNull(),
-  fileSize: integer('file_size'),
-  mimeType: varchar('mime_type', { length: 100 }),
-  verified: boolean('verified'), // null = unverified, true = verified, false = rejected
-  verificationNotes: text('verification_notes'),
-  uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
-});
+export const documents = pgTable(
+  'documents',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    /** Owner account when known (vault + backfilled visa docs). */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    /** Traveler profile vault owner; null for passport/outcome-only rows. */
+    profileId: uuid('profile_id').references(() => travelerProfiles.id, {
+      onDelete: 'set null',
+    }),
+    documentType: varchar('document_type', { length: 100 }).notNull(), // slot key
+    s3Key: varchar('s3_key', { length: 500 }).notNull(),
+    filename: varchar('filename', { length: 255 }).notNull(),
+    fileSize: integer('file_size'),
+    mimeType: varchar('mime_type', { length: 100 }),
+    verified: boolean('verified'), // null = unverified, true = verified, false = rejected
+    verificationNotes: text('verification_notes'),
+    /** active = shown on user profile; hidden = soft-unassigned (kept for app history). */
+    visibility: varchar('visibility', { length: 20 }).notNull().default('active'),
+    supersededByDocumentId: uuid('superseded_by_document_id'),
+    uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('documents_user_id_idx').on(table.userId),
+    index('documents_profile_id_idx').on(table.profileId),
+    index('documents_profile_slot_visibility_idx').on(
+      table.profileId,
+      table.documentType,
+      table.visibility
+    ),
+    foreignKey({
+      columns: [table.supersededByDocumentId],
+      foreignColumns: [table.id],
+      name: 'documents_superseded_by_document_id_fk',
+    }),
+  ]
+);
 
 /**
  * Payments table.

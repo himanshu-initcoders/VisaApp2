@@ -5,7 +5,7 @@
 
 'use server';
 
-import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, like, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { auth } from '@/lib/auth';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
@@ -208,7 +208,7 @@ async function upsertDraftApplication(input: {
 
   const now = new Date();
   const primaryName = (payload.primaryName || 'Applicant').slice(0, 255);
-  const passengerNames = Array.isArray(payload.travellers)
+  const travellerNames = Array.isArray(payload.travellers)
     ? payload.travellers
         .map((t) => {
           if (!t || typeof t !== 'object') return '';
@@ -254,7 +254,7 @@ async function upsertDraftApplication(input: {
           travelInfo: payload.departure,
           personalInfo,
           applicantName: primaryName,
-          passengerNames,
+          travellerNames,
           interestedInInsurance: payload.interestedInInsurance ?? false,
           savedByUserId: input.savedByUserId,
           documents: collectDocumentRefs(payload.travellers),
@@ -290,7 +290,7 @@ async function upsertDraftApplication(input: {
         travelInfo: payload.departure,
         personalInfo,
         applicantName: primaryName,
-        passengerNames,
+        travellerNames,
         interestedInInsurance: payload.interestedInInsurance ?? false,
         savedByUserId: input.savedByUserId,
         documents: collectDocumentRefs(payload.travellers),
@@ -380,16 +380,12 @@ async function deleteDraftApplicationAndFiles(input: {
     travellers: input.travellers,
   });
 
-  // Also wipe any documents table rows + leftover keys on the application.
+  // Draft delete cleanup only: wipe leftover path objects for this draft id.
+  // Not used as a read/source-of-truth path for submitted apps.
   const docRows = await db
-    .select({ s3Key: documents.s3Key })
+    .select({ id: documents.id, s3Key: documents.s3Key })
     .from(documents)
-    .where(
-      and(
-        eq(documents.applicationId, input.id),
-        eq(documents.applicationType, 'visa')
-      )
-    );
+    .where(like(documents.s3Key, `%/${input.id}/%`));
 
   for (const row of docRows) {
     try {
@@ -399,14 +395,14 @@ async function deleteDraftApplicationAndFiles(input: {
     }
   }
 
-  await db
-    .delete(documents)
-    .where(
-      and(
-        eq(documents.applicationId, input.id),
-        eq(documents.applicationType, 'visa')
+  if (docRows.length > 0) {
+    await db.delete(documents).where(
+      inArray(
+        documents.id,
+        docRows.map((r) => r.id)
       )
     );
+  }
 
   await db.delete(visaApplications).where(eq(visaApplications.id, input.id));
 }

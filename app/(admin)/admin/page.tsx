@@ -84,10 +84,7 @@ export default async function AdminDashboardPage() {
           .from(documents)
           .innerJoin(
             visaApplications,
-            and(
-              eq(documents.applicationId, visaApplications.id),
-              eq(documents.applicationType, 'visa')
-            )
+            sql`${documents.s3Key} LIKE ${sql`'%' || ${visaApplications.id}::text || '%'`}`
           )
           .where(and(isNull(documents.verified), visaScope))
       : db

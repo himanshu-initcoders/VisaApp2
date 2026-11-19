@@ -16,6 +16,19 @@ export interface SubmitTravellerPayload {
     name?: string;
     mimeType?: string;
     size?: number;
+    storageKey?: string;
+    storageUrl?: string;
+    slotKey?: string;
+    filename?: string;
+  }>;
+  /** Server draft object refs — preferred submit source alongside draftStorageKeys. */
+  draftFileRefs?: Array<{
+    slotKey: string;
+    storageKey: string;
+    url?: string;
+    mimeType?: string;
+    filename?: string;
+    size?: number;
   }>;
   passportUploaded?: boolean;
   photoUploaded?: boolean;

@@ -19,7 +19,8 @@ export type UploadFolder =
   | 'document-samples'
   | 'passports'
   | 'photos'
-  | 'applications';
+  | 'applications'
+  | 'users';
 
 export interface UploadResult {
   url: string;           // Public URL to access the file

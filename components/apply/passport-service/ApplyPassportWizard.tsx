@@ -38,7 +38,6 @@ import {
 } from '@/lib/apply/wizardStepCursor';
 import { PassportApplyDocumentsPanel } from '@/components/apply/passport-service/PassportApplyDocumentsPanel';
 import { ApplicationSubmittedModal } from '@/components/apply/ApplicationSubmittedModal';
-import { PrivateServiceDisclaimer } from '@/components/public/PrivateServiceDisclaimer';
 import {
   postSubmitHomeHref,
   submittedApplicationHref,
@@ -1071,10 +1070,6 @@ export function ApplyPassportWizard({
                 </p>
               ) : null}
 
-              <PrivateServiceDisclaimer
-                variant="passport-compact"
-                className="mt-5 border-t border-ash-divider pt-4"
-              />
             </div>
           </section>
         )}

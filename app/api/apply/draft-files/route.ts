@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq, or } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { canAccessAdmin } from '@/lib/auth-utils';
@@ -23,6 +23,7 @@ import {
   isApplicationObjectKey,
   isDraftObjectKey,
 } from '@/lib/upload/applicationKey';
+import { isProfileObjectKey } from '@/lib/upload/profileKey';
 import { readStoredObject } from '@/lib/upload/readStoredObject';
 import { assertSafeStorageKey } from '@/lib/upload/safeStorageKey';
 import { deleteOtherSlotExtensionKeys } from '@/lib/upload/deleteSlotSiblings';
@@ -135,6 +136,9 @@ function keyBelongsToOwner(
   ownerUserId: string,
   applicationId?: string | null
 ): boolean {
+  if (isProfileObjectKey(key, ownerUserId)) {
+    return true;
+  }
   if (applicationId && isApplicationObjectKey(key, ownerUserId, applicationId)) {
     return true;
   }
@@ -211,15 +215,6 @@ export async function POST(request: NextRequest) {
       effectiveMime = 'application/pdf';
     }
     const ext = extensionFromMime(effectiveMime, file.name);
-    const explicitKey = buildApplicationObjectKey({
-      countryCode: resolvedCountryCode,
-      listingId: resolvedListingId,
-      userId: owner.ownerUserId,
-      applicationId,
-      passengerId,
-      slotKey,
-      ext,
-    });
 
     const previousStorageKeyRaw = form.get('previousStorageKey');
     const previousStorageKey =
@@ -234,6 +229,18 @@ export async function POST(request: NextRequest) {
       }
       return `${slotKey}.${ext}`;
     })();
+
+    // Draft uploads stay application-scoped. Traveler profiles are created
+    // only on submit/payment once name + DOB + passport are known.
+    const explicitKey = buildApplicationObjectKey({
+      countryCode: resolvedCountryCode,
+      listingId: resolvedListingId,
+      userId: owner.ownerUserId,
+      applicationId,
+      passengerId,
+      slotKey,
+      ext,
+    });
 
     const result = await uploadService.upload(buffer, {
       folder: APPLICATION_UPLOAD_FOLDER,
@@ -280,6 +287,7 @@ export async function POST(request: NextRequest) {
       filename: result.filename || uploadFilename,
       size: result.size,
       mimeType: result.mimeType || effectiveMime,
+      userId: owner.ownerUserId,
       now: new Date(),
     });
 
@@ -441,20 +449,7 @@ export async function DELETE(request: NextRequest) {
 
     await uploadService.delete({ key: storageKey });
 
-    if (body?.applicationId) {
-      await db
-        .delete(documents)
-        .where(
-          and(
-            eq(documents.applicationId, body.applicationId),
-            eq(documents.s3Key, storageKey),
-            or(
-              eq(documents.applicationType, 'visa'),
-              eq(documents.applicationType, 'passport')
-            )
-          )
-        );
-    }
+    await db.delete(documents).where(eq(documents.s3Key, storageKey));
 
     return NextResponse.json({ success: true });
   } catch (error) {

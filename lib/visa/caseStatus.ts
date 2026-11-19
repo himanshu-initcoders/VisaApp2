@@ -88,23 +88,34 @@ export function rollupCaseStatus(statuses: string[]): CaseStatusRollup {
   };
 }
 
-export function attachStatusToTravellers<T extends { passengerId?: string }>(
+export function attachStatusToTravellers<
+  T extends { passengerId?: string; id?: string; travellerId?: string },
+>(
   stored: T[],
-  rows: Array<{ id: string; passengerId: string; name: string; status: string }>
+  rows: Array<{
+    id: string;
+    formTravellerId: string;
+    name: string;
+    status: string;
+  }>
 ): Array<T & { status?: string; travellerRowId?: string }> {
   if (stored.length === 0) {
     return rows.map((row) => ({
-      passengerId: row.passengerId,
+      passengerId: row.formTravellerId,
       name: row.name,
       status: row.status,
       travellerRowId: row.id,
     })) as unknown as Array<T & { status?: string; travellerRowId?: string }>;
   }
 
-  const byPassenger = new Map(rows.map((row) => [row.passengerId, row]));
+  const byFormId = new Map(rows.map((row) => [row.formTravellerId, row]));
   return stored.map((traveller, index) => {
-    const key = traveller.passengerId || `traveller-${index}`;
-    const row = byPassenger.get(key);
+    const key =
+      traveller.passengerId ||
+      traveller.travellerId ||
+      traveller.id ||
+      `traveller-${index}`;
+    const row = byFormId.get(key);
     return {
       ...traveller,
       status: row?.status,

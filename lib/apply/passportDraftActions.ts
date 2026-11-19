@@ -4,7 +4,7 @@
 
 'use server';
 
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray, like } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { db } from '@/lib/db';
@@ -79,14 +79,9 @@ async function deletePassportDraftFiles(applicationId: string, documentsJson: un
   }
 
   const rows = await db
-    .select({ s3Key: documents.s3Key })
+    .select({ id: documents.id, s3Key: documents.s3Key })
     .from(documents)
-    .where(
-      and(
-        eq(documents.applicationId, applicationId),
-        eq(documents.applicationType, 'passport')
-      )
-    );
+    .where(like(documents.s3Key, `%/${applicationId}/%`));
   for (const row of rows) keys.add(row.s3Key);
 
   for (const key of keys) {
@@ -97,14 +92,14 @@ async function deletePassportDraftFiles(applicationId: string, documentsJson: un
     }
   }
 
-  await db
-    .delete(documents)
-    .where(
-      and(
-        eq(documents.applicationId, applicationId),
-        eq(documents.applicationType, 'passport')
+  if (rows.length > 0) {
+    await db.delete(documents).where(
+      inArray(
+        documents.id,
+        rows.map((r) => r.id)
       )
     );
+  }
 }
 
 export async function savePassportDraft(input: {

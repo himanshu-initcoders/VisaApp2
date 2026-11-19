@@ -84,6 +84,10 @@ import {
 import { uploadService } from '@/lib/upload';
 import { uploadApplicationDocuments } from '@/lib/upload/application-actions';
 import {
+  extractApplicationIdFromObjectKey,
+  inferApplicationTypeFromObjectKey,
+} from '@/lib/upload/applicationKey';
+import {
   deleteOtherSlotExtensionKeys,
   deleteReplacedObjectKey,
 } from '@/lib/upload/deleteSlotSiblings';
@@ -332,7 +336,7 @@ export async function updateApplicationStatus(
     // Get current application
     let currentStatus: string;
     let travellerReviewedAt: Date | null = null;
-    let travellerPassengerId: string | null = null;
+    let travellerFormId: string | null = null;
     if (applicationType === 'visa') {
       const result = await db
         .select()
@@ -355,7 +359,7 @@ export async function updateApplicationStatus(
 
       currentStatus = result[0].status;
       travellerReviewedAt = result[0].reviewedAt;
-      travellerPassengerId = result[0].passengerId;
+      travellerFormId = result[0].formTravellerId;
     } else {
       const result = await db
         .select()
@@ -415,7 +419,7 @@ export async function updateApplicationStatus(
       applicationType === 'visa' &&
       newStatus === 'approved' &&
       deliveryDocumentKey &&
-      travellerPassengerId
+      travellerFormId
     ) {
       const [appOwner] = await db
         .select({ userId: visaApplications.userId })
@@ -432,14 +436,14 @@ export async function updateApplicationStatus(
       try {
         const safeKey = assertVisaOutcomeKeyForPassenger(deliveryDocumentKey, {
           applicationId,
-          passengerId: travellerPassengerId,
+          passengerId: travellerFormId,
           userId: appOwner.userId,
         });
         const filename = deliveryFilename || 'visa-document.pdf';
         const mimeType = normalizeVisaOutcomeMime(deliveryMimeType, filename);
         const row = await upsertVisaOutcomeDocumentRow({
           applicationId,
-          passengerId: travellerPassengerId,
+          passengerId: travellerFormId,
           key: safeKey,
           filename,
           size: deliveryFileSize || 0,
@@ -843,14 +847,14 @@ export async function attachVisaOutcomeDocument(
     try {
       const safeKey = assertVisaOutcomeKeyForPassenger(deliveryDocumentKey, {
         applicationId,
-        passengerId: traveller.passengerId,
+        passengerId: traveller.formTravellerId,
         userId: appOwner.userId,
       });
       const filename = deliveryFilename || 'visa-document.pdf';
       const mimeType = normalizeVisaOutcomeMime(deliveryMimeType, filename);
       const row = await upsertVisaOutcomeDocumentRow({
         applicationId,
-        passengerId: traveller.passengerId,
+        passengerId: traveller.formTravellerId,
         key: safeKey,
         filename,
         size: deliveryFileSize || 0,
@@ -960,9 +964,13 @@ export async function verifyDocument(
       .limit(1);
 
     if (doc && doc.length > 0) {
-      revalidatePath(
-        `/admin/applications/${doc[0].applicationType}/${doc[0].applicationId}`
-      );
+      const applicationId = extractApplicationIdFromObjectKey(doc[0].s3Key);
+      const applicationType = inferApplicationTypeFromObjectKey(doc[0].s3Key);
+      if (applicationId && applicationType) {
+        revalidatePath(
+          `/admin/applications/${applicationType}/${applicationId}`
+        );
+      }
     }
 
     return {
@@ -1940,7 +1948,10 @@ export async function requestCorrection(
       ? (application.travellers as StoredTraveller[])
       : [];
     const stored = storedTravellers.find(
-      (item) => item.passengerId === traveller.passengerId
+      (item) =>
+        item.passengerId === traveller.formTravellerId ||
+        item.travellerId === traveller.formTravellerId ||
+        item.id === traveller.formTravellerId
     );
     const now = new Date();
     const role = staffRole(session.user.role);
@@ -2269,7 +2280,10 @@ export async function applyStaffFieldEdit(
       ? (application.travellers as StoredTraveller[])
       : [];
     const travellerIndex = storedTravellers.findIndex(
-      (item) => item.passengerId === traveller.passengerId
+      (item) =>
+        item.passengerId === traveller.formTravellerId ||
+        item.travellerId === traveller.formTravellerId ||
+        item.id === traveller.formTravellerId
     );
     if (travellerIndex < 0) {
       return { success: false, message: 'Traveller details were not found' };
@@ -2338,7 +2352,7 @@ export async function applyStaffFieldEdit(
         applicationId,
         documents: [
           {
-            passengerId: traveller.passengerId,
+            passengerId: traveller.formTravellerId,
             slotKey: targetKey,
             filename: replacement.filename,
             mimeType: replacement.mimeType,

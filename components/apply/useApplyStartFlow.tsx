@@ -7,10 +7,15 @@ import { ApplyLoginModal } from '@/components/apply/ApplyLoginModal';
 import { ResumeOrNewModal } from '@/components/apply/ResumeOrNewModal';
 import {
   clearApplyDraft,
-  hasApplyDraft,
   readApplyDraft,
   type ApplyDraft,
+  type ApplyStep,
 } from '@/lib/apply/draftStorage';
+import {
+  deleteApplicationDraft,
+  getApplicationDraft,
+} from '@/lib/apply/serverDraft';
+import { clearVisaApplyLiveSession } from '@/lib/apply/wizardStepCursor';
 import { trackEvent } from '@/lib/analytics/gtm';
 
 interface UseApplyStartFlowOptions {
@@ -36,6 +41,56 @@ function canStartApply(role: string | undefined | null) {
   return Boolean(role && ALLOWED_APPLY_ROLES.has(role));
 }
 
+function serverPayloadToApplyDraft(input: {
+  payload: {
+    version: number;
+    updatedAt: string;
+    countryCode: string;
+    countryName: string;
+    listingId: string;
+    processName: string;
+    step: string;
+    primaryName: string;
+    travellers: unknown[];
+    departure: unknown;
+    travellersCount: number;
+    interestedInInsurance?: boolean;
+  };
+  updatedAt: string;
+}): ApplyDraft {
+  const p = input.payload;
+  const step =
+    p.step === 'documents' || p.step === 'pay' || p.step === 'travellers'
+      ? (p.step as ApplyStep)
+      : 'travellers';
+  return {
+    version: 1,
+    updatedAt: input.updatedAt || p.updatedAt,
+    countryCode: p.countryCode,
+    countryName: p.countryName,
+    listingId: p.listingId,
+    processName: p.processName,
+    step,
+    primaryName: p.primaryName || '',
+    travellers: (p.travellers || []) as ApplyDraft['travellers'],
+    departure: (p.departure || {}) as ApplyDraft['departure'],
+    travellersCount: p.travellersCount || 1,
+    interestedInInsurance: p.interestedInInsurance,
+  };
+}
+
+function pickNewerDraft(
+  local: ApplyDraft | null,
+  remote: ApplyDraft | null
+): ApplyDraft | null {
+  if (local && remote) {
+    const localTs = Date.parse(local.updatedAt) || 0;
+    const remoteTs = Date.parse(remote.updatedAt) || 0;
+    return remoteTs >= localTs ? remote : local;
+  }
+  return remote || local;
+}
+
 export function useApplyStartFlow({
   countryCode,
   listingId,
@@ -50,6 +105,7 @@ export function useApplyStartFlow({
   const [choiceOpen, setChoiceOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [draft, setDraft] = useState<ApplyDraft | null>(null);
+  const [checkingDraft, setCheckingDraft] = useState(false);
   const publicSegment = listingSlug || listingId;
   const pendingAfterLoginRef = useRef(false);
   const pendingQueryRef = useRef<PendingApplyQuery | null>(null);
@@ -82,24 +138,51 @@ export function useApplyStartFlow({
     [countryCode, priceOptionId, publicSegment, router, travellers]
   );
 
-  const continueStart = useCallback(() => {
+  const resolveExistingDraft = useCallback(async (): Promise<ApplyDraft | null> => {
+    const local = readApplyDraft(listingId);
+    let remote: ApplyDraft | null = null;
+
+    if (sessionStatus === 'authenticated' && canStartApply(session?.user?.role)) {
+      try {
+        const result = await getApplicationDraft(listingId);
+        if (result.success && result.draft) {
+          remote = serverPayloadToApplyDraft({
+            payload: result.draft.payload,
+            updatedAt: result.draft.updatedAt,
+          });
+        }
+      } catch {
+        // Fall back to local only
+      }
+    }
+
+    return pickNewerDraft(local, remote);
+  }, [listingId, session?.user?.role, sessionStatus]);
+
+  const continueStart = useCallback(async () => {
     const pending = pendingQueryRef.current;
     if (pending?.resume) {
       goToApply(true);
       return;
     }
 
-    const existing = readApplyDraft(listingId);
-    if (existing) {
-      setDraft(existing);
-      setChoiceOpen(true);
-      return;
+    setCheckingDraft(true);
+    try {
+      const existing = await resolveExistingDraft();
+      if (existing && Array.isArray(existing.travellers) && existing.travellers.length > 0) {
+        setDraft(existing);
+        setChoiceOpen(true);
+        return;
+      }
+      clearVisaApplyLiveSession(listingId);
+      goToApply(false);
+    } finally {
+      setCheckingDraft(false);
     }
-    goToApply(false);
-  }, [goToApply, listingId]);
+  }, [goToApply, listingId, resolveExistingDraft]);
 
   const requestStart = useCallback(() => {
-    if (sessionStatus === 'loading') return;
+    if (sessionStatus === 'loading' || checkingDraft) return;
 
     trackEvent('visa_apply_start_click', {
       country_code: countryCode,
@@ -119,8 +202,9 @@ export function useApplyStartFlow({
       return;
     }
 
-    continueStart();
+    void continueStart();
   }, [
+    checkingDraft,
     continueStart,
     countryCode,
     listingId,
@@ -144,7 +228,7 @@ export function useApplyStartFlow({
 
     pendingAfterLoginRef.current = false;
     setLoginOpen(false);
-    continueStart();
+    void continueStart();
   }, [continueStart, session?.user?.role, sessionStatus]);
 
   // Proxy redirects unauthenticated /apply hits here with ?startApply=1 (+ apply query).
@@ -184,7 +268,7 @@ export function useApplyStartFlow({
     );
 
     if (canStartApply(session?.user?.role)) {
-      continueStart();
+      void continueStart();
       return;
     }
 
@@ -214,10 +298,20 @@ export function useApplyStartFlow({
 
   const handleStartNew = useCallback(() => {
     clearApplyDraft(listingId);
+    clearVisaApplyLiveSession(listingId);
     setDraft(null);
     setChoiceOpen(false);
-    goToApply(false);
-  }, [goToApply, listingId]);
+    void (async () => {
+      if (sessionStatus === 'authenticated') {
+        try {
+          await deleteApplicationDraft(listingId);
+        } catch {
+          // Local clear already done — still open a fresh apply.
+        }
+      }
+      goToApply(false);
+    })();
+  }, [goToApply, listingId, sessionStatus]);
 
   const closeChoice = useCallback(() => {
     setChoiceOpen(false);
@@ -252,6 +346,7 @@ export function useApplyStartFlow({
   return {
     requestStart,
     modals,
-    hasDraft: hasApplyDraft(listingId),
+    hasDraft: Boolean(draft) || choiceOpen,
+    checkingDraft,
   };
 }

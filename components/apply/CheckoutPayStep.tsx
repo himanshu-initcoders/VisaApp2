@@ -27,8 +27,6 @@ import {
 import { cn } from '@/lib/utils';
 import { Toggle } from '@/components/ui/Toggle';
 import { ApplicationSubmittedModal } from '@/components/apply/ApplicationSubmittedModal';
-import { PrivateServiceDisclaimer } from '@/components/public/PrivateServiceDisclaimer';
-
 export interface CheckoutQuote {
   amountPaise: number;
   free: boolean;
@@ -817,7 +815,6 @@ export function CheckoutPayStep({
             {formatInrFromPaise(quote.gstFeePaise)}
           </p>
         )}
-        <PrivateServiceDisclaimer variant="general" className="mt-4 text-left" />
         {uploadStatus && !error && (
           <p className="mt-4 text-sm text-slate-helper" aria-live="polite">
             {uploadStatus}

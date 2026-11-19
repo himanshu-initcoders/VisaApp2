@@ -117,6 +117,7 @@ export type RequestCorrectionInput = z.infer<typeof requestCorrectionSchema>;
 export type SubmitCorrectionInput = z.infer<typeof submitCorrectionSchema>;
 
 export interface StoredTravellerDoc {
+  documentId?: string;
   slotKey?: string;
   key?: string;
   url?: string;
@@ -126,7 +127,10 @@ export interface StoredTravellerDoc {
 }
 
 export interface StoredTraveller {
+  /** @deprecated Prefer travellerId / id — kept for older JSON rows */
   passengerId?: string;
+  travellerId?: string;
+  id?: string;
   name?: string;
   passportData?: Record<string, unknown> | null;
   tripDetails?: Record<string, unknown> | null;

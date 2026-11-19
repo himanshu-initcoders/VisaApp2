@@ -3,9 +3,15 @@ import postgres from 'postgres';
 import * as schema from './schema';
 import * as schemaExtended from './schema-extended';
 import * as schemaPassport from './schema-passport';
+import * as schemaTravelerProfiles from './schema-traveler-profiles';
 
 // Combine all schema tables + relations for typed db.query.*
-const allSchema = { ...schema, ...schemaExtended, ...schemaPassport };
+const allSchema = {
+  ...schema,
+  ...schemaExtended,
+  ...schemaPassport,
+  ...schemaTravelerProfiles,
+};
 
 export type Database = PostgresJsDatabase<typeof allSchema>;
 

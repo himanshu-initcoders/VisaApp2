@@ -13,7 +13,9 @@ import {
 import { clearApplyDraftAsync } from '@/lib/apply/draftStorage';
 
 export interface DraftStorageKeyItem {
-  passengerId: string;
+  travellerId: string;
+  /** @deprecated Use travellerId */
+  passengerId?: string;
   slotKey: string;
   storageKey: string;
   filename?: string;
@@ -43,8 +45,8 @@ export function collectDraftStorageKeysForSubmit(
   const seen = new Set<string>();
 
   for (const traveller of travellers) {
-    const documentKeys = new Set(
-      (traveller.documents ?? []).map((doc) => doc.key)
+    const documentSlotKeys = new Set(
+      (traveller.documents ?? []).map((doc) => doc.key).filter(Boolean)
     );
     const refs: Array<{
       slotKey: string;
@@ -53,16 +55,16 @@ export function collectDraftStorageKeysForSubmit(
       mimeType?: string;
       size?: number;
     }> = [
+      // draftFileRefs already carry storageKey (upload + autofill copy).
+      // Do not require documents[].storageKey — autofill often only sets the ref.
       ...(traveller.draftFileRefs ?? []).filter((ref) => {
+        if (!ref.storageKey) return false;
         const isPassport =
           ref.slotKey === PASSPORT_FRONT_SLOT ||
           ref.slotKey === PASSPORT_BACK_SLOT;
         if (isPassport) return true;
-        const doc = traveller.documents?.find((d) => d.key === ref.slotKey);
-        // Drop refs for removed slots or locally replaced docs (no storageKey yet).
-        if (!doc || !documentKeys.has(ref.slotKey)) return false;
-        if (!doc.storageKey) return false;
-        return true;
+        // Keep only slots still present on the traveller documents list.
+        return documentSlotKeys.has(ref.slotKey);
       }),
       ...(traveller.documents ?? [])
         .filter((d) => d.storageKey)
@@ -81,6 +83,7 @@ export function collectDraftStorageKeysForSubmit(
       if (seen.has(dedupe)) continue;
       seen.add(dedupe);
       items.push({
+        travellerId: traveller.id,
         passengerId: traveller.id,
         slotKey: ref.slotKey,
         storageKey: ref.storageKey,
@@ -107,16 +110,16 @@ export async function findUnsyncedIdbSlotsError(
   const scope = normalizeScope(listingIdOrScope, maybeScope);
   const keyed = new Set(
     collectDraftStorageKeysForSubmit(travellers).map(
-      (r) => `${r.passengerId}:${r.slotKey}`
+      (r) => `${r.travellerId || r.passengerId}:${r.slotKey}`
     )
   );
 
   const missing: string[] = [];
 
-  async function check(passengerId: string, slotKey: string, label: string) {
-    const dedupe = `${passengerId}:${slotKey}`;
+  async function check(travellerId: string, slotKey: string, label: string) {
+    const dedupe = `${travellerId}:${slotKey}`;
     if (keyed.has(dedupe)) return;
-    const record = await getFile(scope, passengerId, slotKey);
+    const record = await getFile(scope, travellerId, slotKey);
     if (record?.blob) missing.push(label);
   }
 

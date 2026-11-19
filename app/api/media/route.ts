@@ -13,7 +13,9 @@ import {
 import { auth } from '@/lib/auth';
 import {
   assertSafeMediaKey,
-  isApplicationMediaKey,
+  extractProfileMediaUserId,
+  isPrivateMediaKey,
+  isProfileMediaKey,
   isPublicMediaKey,
   sniffMediaContentType,
 } from '@/lib/upload/mediaUrl';
@@ -22,6 +24,7 @@ import {
   setCachedPublicMedia,
 } from '@/lib/upload/publicMediaCache';
 import { UPLOADS_ROOT } from '@/lib/upload/safeStorageKey';
+import { canAccessAdmin } from '@/lib/auth-utils';
 
 export const runtime = 'nodejs';
 
@@ -102,10 +105,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (isApplicationMediaKey(key) && !isPublicMediaKey(key)) {
+    if (isPrivateMediaKey(key) && !isPublicMediaKey(key)) {
       const session = await auth();
       if (!session?.user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      // Profile vault keys embed the owner userId — require match (staff ok).
+      if (isProfileMediaKey(key)) {
+        const ownerId = extractProfileMediaUserId(key);
+        const isOwner = ownerId && ownerId === session.user.id;
+        if (!isOwner && !canAccessAdmin(session.user)) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
       }
     }
 

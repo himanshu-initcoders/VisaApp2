@@ -79,7 +79,7 @@ export async function uploadVisaOutcomeFile(input: {
     const [traveller] = await db
       .select({
         id: visaApplicationTravellers.id,
-        passengerId: visaApplicationTravellers.passengerId,
+        formTravellerId: visaApplicationTravellers.formTravellerId,
         applicationId: visaApplicationTravellers.applicationId,
       })
       .from(visaApplicationTravellers)
@@ -124,7 +124,7 @@ export async function uploadVisaOutcomeFile(input: {
       listingId: app.visaListingId || 'unknown',
       userId: app.userId,
       applicationId: app.id,
-      passengerId: traveller.passengerId,
+      passengerId: traveller.formTravellerId,
       mimeType,
       filename: input.filename,
     });
@@ -136,7 +136,7 @@ export async function uploadVisaOutcomeFile(input: {
       maxSizeMB,
       allowedTypes: [...VISA_OUTCOME_UPLOAD_TYPES],
       metadata: {
-        passengerId: traveller.passengerId,
+        passengerId: traveller.formTravellerId,
         slotKey: 'visa_outcome',
         applicationId: app.id,
       },

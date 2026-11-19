@@ -281,6 +281,20 @@
       "when": 1795100000000,
       "tag": "0039_drop_users_email_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1795200000000,
+      "tag": "0040_passenger_profiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1795300000000,
+      "tag": "0041_form_traveller_id_naming",
+      "breakpoints": true
     }
   ]
 }

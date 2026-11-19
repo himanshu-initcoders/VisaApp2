@@ -5,17 +5,19 @@
 
 'use server';
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { db } from '@/lib/db';
 import {
+  documents,
   payments,
   statusHistory,
   users,
   visaApplicationTravellers,
   visaApplications,
 } from '@/lib/db/schema';
+import { resolveFormTravellerId } from '@/lib/apply/formTravellerId';
 import { visaListings, countries } from '@/lib/db/schema-extended';
 import { ensureFormVersionForSubmit } from '@/lib/db/queries/formVersions';
 import {
@@ -33,13 +35,19 @@ import {
 } from '@/lib/apply/validateSubmitTravellers';
 import { quoteVisaListing } from '@/lib/payments/quote';
 import { attachPaymentsToApplication } from '@/lib/payments/record';
-import { upsertApplicationDocumentRow } from '@/lib/upload/upsertApplicationDocumentRow';
-import { extractPassengerIdFromObjectKey } from '@/lib/upload/applicationKey';
+import {
+  ensureTravelerProfile,
+  IncompleteTravelerIdentityError,
+} from '@/lib/dashboard/travelerProfileStore';
+import { upsertProfileDocument } from '@/lib/upload/profileDocumentVault';
+import { uploadService } from '@/lib/upload';
 
 export type { SubmitTravellerPayload } from '@/lib/apply/validateSubmitTravellers';
 
 export interface DraftStorageKeySubmitItem {
-  passengerId: string;
+  travellerId?: string;
+  /** @deprecated Use travellerId */
+  passengerId?: string;
   slotKey: string;
   storageKey: string;
   filename?: string;
@@ -76,7 +84,7 @@ function isUuid(value: string): boolean {
   );
 }
 
-function buildPassengerNames(travellers: SubmitTravellerPayload[]): string {
+function buildTravellerNames(travellers: SubmitTravellerPayload[]): string {
   return travellers
     .map((t) => (t.name || '').trim().toLowerCase())
     .filter(Boolean)
@@ -148,6 +156,7 @@ type UploadResultRow = {
   mimeType: string;
   filename: string;
   size: number;
+  documentId?: string;
 };
 
 function resolveDocumentKeys(
@@ -157,11 +166,13 @@ function resolveDocumentKeys(
   const covered = new Set<string>();
 
   for (const item of draftStorageKeys) {
-    const dedupe = `${item.passengerId}:${item.slotKey}`;
+    const travellerId = item.travellerId || item.passengerId || '';
+    if (!travellerId) continue;
+    const dedupe = `${travellerId}:${item.slotKey}`;
     if (covered.has(dedupe)) continue;
     covered.add(dedupe);
     results.push({
-      passengerId: item.passengerId,
+      passengerId: travellerId,
       slotKey: item.slotKey,
       key: item.storageKey,
       url: '',
@@ -172,6 +183,109 @@ function resolveDocumentKeys(
   }
 
   return results;
+}
+
+/**
+ * Submit document source of truth: client draft refs only.
+ * Prefer draftStorageKeys; fill gaps from the same-request travellers payload.
+ * No DB draft JSON merge and no s3_key LIKE path hunt.
+ */
+async function collectSubmitUploadRows(input: {
+  travellers: SubmitTravellerPayload[];
+  draftStorageKeys: DraftStorageKeySubmitItem[];
+}): Promise<UploadResultRow[]> {
+  const bySlot = new Map<string, UploadResultRow>();
+
+  const remember = (row: UploadResultRow) => {
+    if (!row.passengerId || !row.slotKey || !row.key) return;
+    const dedupe = `${row.passengerId}:${row.slotKey}`;
+    if (!bySlot.has(dedupe)) bySlot.set(dedupe, row);
+  };
+
+  for (const row of resolveDocumentKeys(input.draftStorageKeys)) {
+    remember(row);
+  }
+
+  for (const traveller of input.travellers) {
+    const passengerId = resolveFormTravellerId({
+      id: traveller.id,
+      passengerId: (traveller as { passengerId?: string }).passengerId,
+    });
+    if (!passengerId) continue;
+
+    const draftFileRefs = Array.isArray(traveller.draftFileRefs)
+      ? traveller.draftFileRefs
+      : [];
+    for (const ref of draftFileRefs) {
+      if (!ref || typeof ref !== 'object') continue;
+      const r = ref as Record<string, unknown>;
+      const slotKey = typeof r.slotKey === 'string' ? r.slotKey : '';
+      const key = typeof r.storageKey === 'string' ? r.storageKey : '';
+      if (!slotKey || !key) continue;
+      remember({
+        passengerId,
+        slotKey,
+        key,
+        url: typeof r.url === 'string' ? r.url : '',
+        mimeType:
+          typeof r.mimeType === 'string'
+            ? r.mimeType
+            : 'application/octet-stream',
+        filename:
+          typeof r.filename === 'string' ? r.filename : `${slotKey}.bin`,
+        size: typeof r.size === 'number' ? r.size : 0,
+      });
+    }
+
+    const docs = Array.isArray(traveller.documents) ? traveller.documents : [];
+    for (const doc of docs) {
+      if (!doc || typeof doc !== 'object') continue;
+      const d = doc as Record<string, unknown>;
+      const slotKey =
+        (typeof d.key === 'string' && d.key) ||
+        (typeof d.slotKey === 'string' && d.slotKey) ||
+        '';
+      const storageKey =
+        typeof d.storageKey === 'string' && d.storageKey.includes('/')
+          ? d.storageKey
+          : typeof d.key === 'string' && d.key.includes('/')
+            ? d.key
+            : '';
+      if (!slotKey || !storageKey) continue;
+      remember({
+        passengerId,
+        slotKey,
+        key: storageKey,
+        url: typeof d.storageUrl === 'string' ? d.storageUrl : '',
+        mimeType:
+          typeof d.mimeType === 'string'
+            ? d.mimeType
+            : 'application/octet-stream',
+        filename:
+          typeof d.name === 'string'
+            ? d.name
+            : typeof d.filename === 'string'
+              ? d.filename
+              : `${slotKey}.bin`,
+        size: typeof d.size === 'number' ? d.size : 0,
+      });
+    }
+  }
+
+  const rows = Array.from(bySlot.values());
+  const keys = [...new Set(rows.map((r) => r.key).filter(Boolean))];
+  if (keys.length === 0) return rows;
+
+  const existing = await db
+    .select({ id: documents.id, s3Key: documents.s3Key })
+    .from(documents)
+    .where(inArray(documents.s3Key, keys));
+  const idByKey = new Map(existing.map((r) => [r.s3Key, r.id]));
+
+  return rows.map((row) => ({
+    ...row,
+    documentId: row.documentId || idByKey.get(row.key),
+  }));
 }
 
 export async function submitApplication(
@@ -346,38 +460,19 @@ export async function submitApplication(
       return { success: false, error: 'User not found.' };
     }
 
-    const uploadResults = resolveDocumentKeys(input.draftStorageKeys ?? []);
-    const uploadsByPassenger = new Map<string, UploadResultRow[]>();
-    for (const result of uploadResults) {
-      const list = uploadsByPassenger.get(result.passengerId) ?? [];
-      list.push(result);
-      uploadsByPassenger.set(result.passengerId, list);
-    }
-
-    const travellersJson = input.travellers.map((traveller) => {
-      const uploaded = uploadsByPassenger.get(traveller.id) ?? [];
-      return {
-        passengerId: traveller.id,
-        name: traveller.name.trim(),
-        passportData: traveller.passportData ?? null,
-        tripDetails: traveller.tripDetails ?? null,
-        documents: uploaded.map((u) => ({
-          slotKey: u.slotKey,
-          key: u.key,
-          url: u.url,
-          mimeType: u.mimeType,
-          filename: u.filename,
-          size: u.size,
-        })),
-        passportUploaded: traveller.passportUploaded,
-        photoUploaded: traveller.photoUploaded,
-        applicationComplete: traveller.applicationComplete,
-      };
-    });
+    const uploadResults = (
+      await collectSubmitUploadRows({
+        travellers: input.travellers,
+        draftStorageKeys: input.draftStorageKeys ?? [],
+      })
+    ).map((row) => ({
+      ...row,
+      url: row.url || uploadService.getUrl(row.key),
+    }));
 
     const primaryName =
-      travellersJson[0]?.name || userRow.name || 'Applicant';
-    const passengerNames = buildPassengerNames(input.travellers);
+      input.travellers[0]?.name?.trim() || userRow.name || 'Applicant';
+    const travellerNames = buildTravellerNames(input.travellers);
     const resolvedVisaType =
       listing.processTypeLabel ||
       listing.processType ||
@@ -388,7 +483,98 @@ export async function submitApplication(
     const applicationId = draftApp.id;
     const referenceNumber = draftApp.referenceNumber;
 
+    let travellersJson: Array<{
+      passengerId: string;
+      name: string;
+      passportData: Record<string, unknown> | null;
+      tripDetails: unknown;
+      documents: Array<{
+        documentId?: string;
+        slotKey: string;
+        key: string;
+        url: string;
+        mimeType: string;
+        filename: string;
+        size: number;
+      }>;
+      passportUploaded: boolean;
+      photoUploaded: boolean;
+      applicationComplete: boolean;
+    }> = [];
+
     await db.transaction(async (tx) => {
+      const uploadsByPassenger = new Map<string, UploadResultRow[]>();
+      const passengerProfileIds = new Map<string, string>();
+
+      for (const traveller of input.travellers) {
+        try {
+          const profile = await ensureTravelerProfile(tx, userId, {
+            passengerId: traveller.id,
+            name: traveller.name.trim(),
+            passportData: traveller.passportData ?? null,
+          });
+          passengerProfileIds.set(traveller.id, profile.id);
+        } catch (error) {
+          if (error instanceof IncompleteTravelerIdentityError) {
+            throw new Error(
+              `Traveller "${traveller.name.trim() || traveller.id}" needs name, date of birth, and passport number before submit`
+            );
+          }
+          throw error;
+        }
+      }
+
+      const enrichedUploads: UploadResultRow[] = [];
+      for (const result of uploadResults) {
+        const profileId = passengerProfileIds.get(result.passengerId);
+        if (!profileId) {
+          enrichedUploads.push(result);
+          continue;
+        }
+        const vault = await upsertProfileDocument(tx, {
+          userId,
+          profileId,
+          slotKey: result.slotKey,
+          key: result.key,
+          filename: result.filename,
+          size: result.size,
+          mimeType: result.mimeType,
+          mode: 'submit',
+          now,
+        });
+        const enriched = {
+          ...result,
+          documentId: vault.document.id,
+          url: result.url || uploadService.getUrl(result.key),
+        };
+        enrichedUploads.push(enriched);
+        const list = uploadsByPassenger.get(result.passengerId) ?? [];
+        list.push(enriched);
+        uploadsByPassenger.set(result.passengerId, list);
+      }
+
+      travellersJson = input.travellers.map((traveller) => {
+        const uploaded = uploadsByPassenger.get(traveller.id) ?? [];
+        return {
+          passengerId: traveller.id,
+          name: traveller.name.trim(),
+          passportData: traveller.passportData ?? null,
+          tripDetails: traveller.tripDetails ?? null,
+          documents: uploaded.map((u) => ({
+            documentId: u.documentId,
+            slotKey: u.slotKey,
+            key: u.key,
+            url: u.url,
+            mimeType: u.mimeType,
+            filename: u.filename,
+            size: u.size,
+          })),
+          passportUploaded: Boolean(traveller.passportUploaded),
+          photoUploaded: Boolean(traveller.photoUploaded),
+          applicationComplete: Boolean(traveller.applicationComplete),
+        };
+      });
+
       await tx
         .update(visaApplications)
         .set({
@@ -401,7 +587,7 @@ export async function submitApplication(
           travellers: travellersJson,
           applicantName: primaryName.slice(0, 255),
           applicantPhone: userRow.phone,
-          passengerNames,
+          travellerNames,
           submitId: input.submitId,
           paymentId: resolvedPaymentId,
           interestedInInsurance,
@@ -413,7 +599,8 @@ export async function submitApplication(
             interestedInInsurance,
           },
           travelInfo: travellersJson[0]?.tripDetails ?? null,
-          documents: uploadResults.map((r) => ({
+          documents: enrichedUploads.map((r) => ({
+            documentId: r.documentId,
             key: r.key,
             url: r.url,
             slotKey: r.slotKey,
@@ -427,23 +614,6 @@ export async function submitApplication(
           )
         );
 
-      for (const result of uploadResults) {
-        await upsertApplicationDocumentRow(tx, {
-          applicationId,
-          applicationType: 'visa',
-          passengerId:
-            result.passengerId ||
-            extractPassengerIdFromObjectKey(result.key) ||
-            '',
-          slotKey: result.slotKey,
-          key: result.key,
-          filename: result.filename,
-          size: result.size,
-          mimeType: result.mimeType,
-          now,
-        });
-      }
-
       const existingTravellers = await tx
         .select({ id: visaApplicationTravellers.id })
         .from(visaApplicationTravellers)
@@ -455,7 +625,7 @@ export async function submitApplication(
           .values(
             travellersJson.map((traveller) => ({
               applicationId,
-              passengerId: traveller.passengerId.slice(0, 100),
+              formTravellerId: traveller.passengerId.slice(0, 100),
               name: (traveller.name || 'Traveller').slice(0, 255),
               status: 'submitted',
               updatedAt: now,

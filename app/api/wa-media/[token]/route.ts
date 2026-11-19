@@ -96,11 +96,10 @@ export async function GET(
       .where(eq(documents.id, verified.documentId))
       .limit(1);
 
-    if (
-      !doc ||
-      doc.applicationType !== 'visa' ||
-      doc.documentType !== VISA_OUTCOME_SLOT
-    ) {
+    if (!doc || doc.documentType !== VISA_OUTCOME_SLOT) {
+      return new NextResponse('Not found', { status: 404 });
+    }
+    if (!doc.s3Key.startsWith('applications/')) {
       return new NextResponse('Not found', { status: 404 });
     }
 

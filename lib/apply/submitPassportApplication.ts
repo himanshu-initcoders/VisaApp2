@@ -5,7 +5,7 @@
 
 'use server';
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, like } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
 import { db } from '@/lib/db';
@@ -266,8 +266,7 @@ export async function submitPassportApplication(
         .from(documents)
         .where(
           and(
-            eq(documents.applicationId, applicationId),
-            eq(documents.applicationType, 'passport'),
+            like(documents.s3Key, `%/${applicationId}/%`),
             eq(documents.documentType, row.slotKey)
           )
         );
@@ -290,13 +289,13 @@ export async function submitPassportApplication(
           .where(eq(documents.id, match.id));
       } else {
         await db.insert(documents).values({
-          applicationId,
-          applicationType: 'passport',
+          userId,
           documentType: row.slotKey,
           s3Key: row.key,
           filename: row.filename || `${row.slotKey}.bin`,
           mimeType: row.mimeType || null,
           fileSize: row.size ?? null,
+          visibility: 'active',
           uploadedAt: now,
         });
       }

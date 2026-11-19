@@ -4,6 +4,7 @@ import {
   visaApplications,
   passportServices,
   documents,
+  travelerProfiles,
   statusHistory,
   applicationNotes,
   applicationCallLogs,
@@ -16,7 +17,7 @@ import {
 import { eq, and, or, ne, like, gte, lte, desc, sql, count, ilike, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
-import { passengerProfileKey } from '@/lib/dashboard/passengerProfiles';
+import { isApplicantVaultSlot } from '@/lib/dashboard/vaultDocumentTypes';
 import {
   normalizeVisaReferenceNumber,
   resolveVisaApplicationId,
@@ -25,7 +26,11 @@ import {
   normalizePassportReferenceNumber,
   resolvePassportApplicationId,
 } from '@/lib/passport/reference-number';
-import { extractPassengerIdFromObjectKey } from '@/lib/upload/applicationKey';
+import {
+  extractApplicationIdFromObjectKey,
+  extractPassengerIdFromObjectKey,
+  inferApplicationTypeFromObjectKey,
+} from '@/lib/upload/applicationKey';
 import { upsertApplicationDocumentRow } from '@/lib/upload/upsertApplicationDocumentRow';
 import type {
   ApplicationListItem,
@@ -177,7 +182,7 @@ export async function getApplicationsWithFilters(
     }
     if (passenger?.trim()) {
       visaConditions.push(
-        ilike(visaApplications.passengerNames, `%${passenger.trim()}%`)
+        ilike(visaApplications.travellerNames, `%${passenger.trim()}%`)
       );
     }
     if (phoneDigits.length >= 7) {
@@ -206,7 +211,7 @@ export async function getApplicationsWithFilters(
         createdAt: visaApplications.createdAt,
         applicantName: visaApplications.applicantName,
         applicantPhone: visaApplications.applicantPhone,
-        passengerNames: visaApplications.passengerNames,
+        travellerNames: visaApplications.travellerNames,
         formVersionId: visaApplications.formVersionId,
         formVersionNumber: formVersions.version,
         assignedReviewerId: visaApplications.assignedReviewerId,
@@ -240,7 +245,7 @@ export async function getApplicationsWithFilters(
       visaType: v.visaType,
       applicantName: v.applicantName,
       applicantPhone: v.applicantPhone,
-      passengerNames: v.passengerNames,
+      travellerNames: v.travellerNames,
       formVersionId: v.formVersionId,
       formVersionNumber: v.formVersionNumber,
       assignedReviewerId: v.assignedReviewerId,
@@ -726,7 +731,7 @@ export async function getVisaTravellers(applicationId: string) {
     .select({
       id: visaApplicationTravellers.id,
       applicationId: visaApplicationTravellers.applicationId,
-      passengerId: visaApplicationTravellers.passengerId,
+      formTravellerId: visaApplicationTravellers.formTravellerId,
       name: visaApplicationTravellers.name,
       status: visaApplicationTravellers.status,
     })
@@ -789,15 +794,30 @@ async function restoreMissingTravellerDocumentRows(
   const travellers = (application as { travellers?: unknown }).travellers;
   if (!Array.isArray(travellers) || travellers.length === 0) return;
 
-  const existing = await db
-    .select({ s3Key: documents.s3Key })
-    .from(documents)
-    .where(
-      and(
-        eq(documents.applicationId, applicationId),
-        eq(documents.applicationType, 'visa')
-      )
-    );
+  // Existing rows by exact JSON keys — no path LIKE scan.
+  const jsonKeys: string[] = [];
+  for (const traveller of travellers) {
+    if (!traveller || typeof traveller !== 'object') continue;
+    const docs = Array.isArray(
+      (traveller as { documents?: unknown }).documents
+    )
+      ? ((traveller as { documents: unknown[] }).documents)
+      : [];
+    for (const item of docs) {
+      if (!item || typeof item !== 'object') continue;
+      const key = typeof (item as { key?: unknown }).key === 'string'
+        ? (item as { key: string }).key
+        : '';
+      if (key) jsonKeys.push(key);
+    }
+  }
+  const existing =
+    jsonKeys.length > 0
+      ? await db
+          .select({ s3Key: documents.s3Key })
+          .from(documents)
+          .where(inArray(documents.s3Key, [...new Set(jsonKeys)]))
+      : [];
   const existingKeys = new Set(existing.map((row) => row.s3Key));
   const now = new Date();
 
@@ -805,6 +825,8 @@ async function restoreMissingTravellerDocumentRows(
     if (!traveller || typeof traveller !== 'object') continue;
     const record = traveller as {
       passengerId?: unknown;
+      travellerId?: unknown;
+      id?: unknown;
       documents?: unknown;
     };
     const docs = Array.isArray(record.documents) ? record.documents : [];
@@ -822,17 +844,19 @@ async function restoreMissingTravellerDocumentRows(
       const slotKey = typeof doc.slotKey === 'string' ? doc.slotKey : '';
       if (!key || !slotKey || existingKeys.has(key)) continue;
 
-      const passengerId =
+      const travellerId =
+        (typeof record.travellerId === 'string' && record.travellerId) ||
         (typeof record.passengerId === 'string' && record.passengerId) ||
+        (typeof record.id === 'string' && record.id) ||
         (typeof doc.passengerId === 'string' && doc.passengerId) ||
         extractPassengerIdFromObjectKey(key) ||
         '';
-      if (!passengerId) continue;
+      if (!travellerId) continue;
 
       await upsertApplicationDocumentRow(db, {
         applicationId,
         applicationType: 'visa',
-        passengerId,
+        travellerId,
         slotKey,
         key,
         filename:
@@ -911,24 +935,21 @@ function sortDocumentsBySubmissionOrder(
 }
 
 /**
- * Get documents for an application
+ * Get documents for an application from frozen attachment refs
+ * (travellers/documents JSON + outcomes). Vault library updates do not appear here.
  */
 export async function getDocumentsByApplicationId(
   applicationId: string,
   applicationType: 'visa' | 'passport'
 ): Promise<DocumentWithVerification[]> {
-  const docs = await db
-    .select()
-    .from(documents)
-    .where(
-      and(
-        eq(documents.applicationId, applicationId),
-        eq(documents.applicationType, applicationType)
-      )
-    )
-    .orderBy(desc(documents.uploadedAt));
-
-  return docs as DocumentWithVerification[];
+  const { loadDocumentsForApplication } = await import(
+    '@/lib/documents/applicationAttachments'
+  );
+  const docs = await loadDocumentsForApplication({
+    applicationId,
+    applicationType,
+  });
+  return docs.map(toDocumentRow);
 }
 
 /**
@@ -1053,8 +1074,8 @@ function toDocumentRow(
 ): DocumentWithVerification {
   return {
     id: row.id,
-    applicationId: row.applicationId,
-    applicationType: row.applicationType,
+    applicationId: extractApplicationIdFromObjectKey(row.s3Key),
+    applicationType: inferApplicationTypeFromObjectKey(row.s3Key),
     documentType: row.documentType,
     s3Key: row.s3Key,
     filename: row.filename,
@@ -1064,54 +1085,6 @@ function toDocumentRow(
     verificationNotes: row.verificationNotes,
     uploadedAt: row.uploadedAt,
   };
-}
-
-/** Same passenger match as documentBelongsToTraveller. */
-function documentBelongsToPassenger(s3Key: string, passengerId: string): boolean {
-  if (!passengerId) return false;
-  return s3Key.includes(`/passengers/${passengerId}/`);
-}
-
-type StoredPassenger = {
-  passengerId?: string;
-  name?: string;
-  passportData?: Record<string, unknown> | null;
-};
-
-function asStoredTravellers(value: unknown): StoredPassenger[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item) => {
-    if (!item || typeof item !== 'object') return [];
-    const record = item as {
-      passengerId?: unknown;
-      name?: unknown;
-      passportData?: unknown;
-    };
-    const passportData =
-      record.passportData && typeof record.passportData === 'object'
-        ? (record.passportData as Record<string, unknown>)
-        : null;
-    return [
-      {
-        passengerId:
-          typeof record.passengerId === 'string' ? record.passengerId : undefined,
-        name: typeof record.name === 'string' ? record.name : undefined,
-        passportData,
-      },
-    ];
-  });
-}
-
-/** Same slot and filename across visas is one file. Keep the newest upload. */
-function documentFingerprint(doc: DocumentWithVerification): string {
-  return `${doc.documentType.trim().toLowerCase()}:${doc.filename.trim().toLowerCase()}`;
-}
-
-function newerDocument(
-  current: DocumentWithVerification,
-  next: DocumentWithVerification
-): DocumentWithVerification {
-  return next.uploadedAt.getTime() >= current.uploadedAt.getTime() ? next : current;
 }
 
 function visaPlaceLabel(
@@ -1214,43 +1187,35 @@ export async function getApplicationsForUser(
 }
 
 /**
- * One circle per person across this user's visa applications.
- * The same passport (or name + date of birth) on several visas is one person.
- * Files that share a slot and filename collapse to the newest upload.
- * Files with no passenger id, plus passport-service files, stay in Other.
+ * One circle per persisted passenger profile.
+ * Active vault documents are shown per profile; passport + unowned rows in Other.
  */
 export async function getUserPassengerDocuments(
   userId: string
 ): Promise<UserPassengerDocuments> {
-  const [visaRows, passportRows] = await Promise.all([
+  const [profiles, passportRows] = await Promise.all([
     db
-      .select({
-        id: visaApplications.id,
-        country: visaApplications.country,
-        countryCode: visaApplications.countryCode,
-        visaType: visaApplications.visaType,
-        travellers: visaApplications.travellers,
-      })
-      .from(visaApplications)
-      .where(eq(visaApplications.userId, userId)),
+      .select()
+      .from(travelerProfiles)
+      .where(eq(travelerProfiles.userId, userId)),
     db
       .select({ id: passportServices.id })
       .from(passportServices)
       .where(eq(passportServices.userId, userId)),
   ]);
 
-  const visaIds = visaRows.map((row) => row.id);
+  const profileIds = profiles.map((p) => p.id);
   const passportIds = passportRows.map((row) => row.id);
 
-  const [visaDocs, passportDocs] = await Promise.all([
-    visaIds.length > 0
+  const [vaultDocs, passportDocs, orphanVisaDocs] = await Promise.all([
+    profileIds.length > 0
       ? db
           .select()
           .from(documents)
           .where(
             and(
-              inArray(documents.applicationId, visaIds),
-              eq(documents.applicationType, 'visa')
+              inArray(documents.profileId, profileIds),
+              eq(documents.visibility, 'active')
             )
           )
       : Promise.resolve([]),
@@ -1259,72 +1224,50 @@ export async function getUserPassengerDocuments(
           .select()
           .from(documents)
           .where(
-            and(
-              inArray(documents.applicationId, passportIds),
-              eq(documents.applicationType, 'passport')
+            or(
+              ...passportIds.map((id) => like(documents.s3Key, `%/${id}/%`))
             )
           )
       : Promise.resolve([]),
+    db
+      .select()
+      .from(documents)
+      .where(
+        and(
+          eq(documents.userId, userId),
+          sql`${documents.profileId} IS NULL`,
+          like(documents.s3Key, 'applications/%')
+        )
+      ),
   ]);
 
-  const visaDocuments = visaDocs.map(toDocumentRow);
   const claimed = new Set<string>();
-  const groups = new Map<
-    string,
-    {
-      id: string;
-      label: string;
-      documents: Map<string, DocumentWithVerification>;
-    }
-  >();
-
-  for (const visa of visaRows) {
-    const travellers = asStoredTravellers(visa.travellers);
-
-    travellers.forEach((traveller, index) => {
-      const id = passengerProfileKey(traveller);
-      const name = traveller.name?.trim() || `Traveller ${index + 1}`;
-      let group = groups.get(id);
-      if (!group) {
-        group = { id, label: name, documents: new Map() };
-        groups.set(id, group);
-      } else if (name && !/^traveller \d+$/i.test(name)) {
-        group.label = name;
-      }
-
-      const passengerId = traveller.passengerId?.trim() ?? '';
-      if (!passengerId) return;
-
-      const matched = visaDocuments.filter(
-        (doc) =>
-          !claimed.has(doc.id) &&
-          documentBelongsToPassenger(doc.s3Key, passengerId)
-      );
-
-      for (const doc of matched) {
-        claimed.add(doc.id);
-        const fingerprint = documentFingerprint(doc);
-        const existing = group.documents.get(fingerprint);
-        group.documents.set(
-          fingerprint,
-          existing ? newerDocument(existing, doc) : doc
-        );
-      }
-    });
-  }
-
-  const passengers: UserPassengerDocumentGroup[] = [...groups.values()]
-    .map((group) => ({
-      id: group.id,
-      label: group.label,
-      documents: [...group.documents.values()].sort(
-        (a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime()
-      ),
-    }))
+  const passengers: UserPassengerDocumentGroup[] = profiles
+    .map((profile) => {
+      const docs = vaultDocs
+        .filter(
+          (doc) =>
+            doc.profileId === profile.id &&
+            isApplicantVaultSlot(doc.documentType)
+        )
+        .map((doc) => {
+          claimed.add(doc.id);
+          return toDocumentRow(doc);
+        })
+        .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
+      return {
+        id: profile.id,
+        label: profile.name || 'Traveller',
+        documents: docs,
+      };
+    })
+    .filter((group) => group.documents.length > 0)
     .sort((a, b) => a.label.localeCompare(b.label));
 
   const otherDocuments = [
-    ...visaDocuments.filter((doc) => !claimed.has(doc.id)),
+    ...orphanVisaDocs
+      .filter((doc) => !claimed.has(doc.id))
+      .map(toDocumentRow),
     ...passportDocs.map(toDocumentRow),
   ];
 

@@ -104,7 +104,7 @@ export default async function FixVisaApplicationPage({
 
   const [travellerRow] = await db
     .select({
-      passengerId: visaApplicationTravellers.passengerId,
+      formTravellerId: visaApplicationTravellers.formTravellerId,
     })
     .from(visaApplicationTravellers)
     .where(eq(visaApplicationTravellers.id, selected.travellerId))
@@ -115,7 +115,9 @@ export default async function FixVisaApplicationPage({
     ? (application.travellers as StoredTraveller[])
     : [];
   const matched = travellers.find(
-    (item) => item.passengerId === travellerRow.passengerId
+    (item) =>
+      item.passengerId === travellerRow.formTravellerId ||
+      item.id === travellerRow.formTravellerId
   );
   if (!matched) notFound();
 

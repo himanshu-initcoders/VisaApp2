@@ -37,6 +37,7 @@
 - [x] Visa public `reference_number` (`VI` + 12 digits) for URLs, WhatsApp, admin filter
 - [x] Passport Services table
 - [x] Documents table
+- [x] Passenger profiles + profile-owned document vault ([[Profile Document Vault]])
 - [x] Payments table
 - [x] Status History table
 

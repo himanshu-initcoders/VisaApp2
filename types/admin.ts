@@ -35,7 +35,7 @@ export interface ApplicationListItem {
   visaType?: string | null;
   applicantName?: string | null;
   applicantPhone?: string | null;
-  passengerNames?: string | null;
+  travellerNames?: string | null;
   formVersionId?: string | null;
   formVersionNumber?: number | null;
   // Passport-specific fields
@@ -153,8 +153,8 @@ export interface ApplicationDetail {
  */
 export interface DocumentWithVerification {
   id: string;
-  applicationId: string;
-  applicationType: string;
+  applicationId: string | null;
+  applicationType: string | null;
   documentType: string;
   s3Key: string;
   filename: string;
@@ -171,7 +171,8 @@ export interface DocumentWithVerification {
 export interface VisaTravellerStatus {
   id: string;
   applicationId: string;
-  passengerId: string;
+  /** Form/client slot id — not traveler_profiles.id */
+  formTravellerId: string;
   name: string;
   status: string;
 }

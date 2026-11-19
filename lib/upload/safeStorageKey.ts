@@ -21,7 +21,11 @@ export function assertSafeStorageKey(storageKey: string): string {
   if (trimmed.includes('..') || trimmed.includes('\0')) {
     throw new Error('Invalid document key');
   }
-  if (!trimmed.startsWith('applications/')) {
+  if (
+    !trimmed.startsWith('applications/') &&
+    !trimmed.startsWith('users/') &&
+    !trimmed.startsWith('drafts/')
+  ) {
     throw new Error('Invalid document key');
   }
 

@@ -2,7 +2,11 @@
  * Canonical object keys for applicant documents (S3 / Cloudinary / local).
  *
  * Draft and submitted applications share the same path (status lives in DB):
- * applications/{countryCode}/{listingId}/{userId}/{applicationId}/passengers/{passengerId}/{slotKey}.{ext}
+ * applications/{countryCode}/{listingId}/{userId}/{applicationId}/passengers/{travellerId}/{slotKey}.{ext}
+ *
+ * Folder segment stays `passengers` for existing objects. Readers accept
+ * `/passengers/` and `/travellers/`. New writes keep `passengers` until a
+ * storage migration is planned.
  */
 
 export interface ApplicationObjectKeyInput {
@@ -10,7 +14,10 @@ export interface ApplicationObjectKeyInput {
   listingId: string;
   userId: string;
   applicationId: string;
-  passengerId: string;
+  /** Form/client traveller slot id (not traveler_profiles.id). */
+  travellerId?: string;
+  /** @deprecated Use travellerId */
+  passengerId?: string;
   slotKey: string;
   ext: string;
   /**
@@ -60,6 +67,13 @@ export function extensionFromMime(mimeType: string, filename?: string): string {
   return sanitizeExtension(subtype || 'bin');
 }
 
+function resolveTravellerIdSegment(input: {
+  travellerId?: string;
+  passengerId?: string;
+}): string {
+  return sanitizePathSegment(input.travellerId || input.passengerId || '');
+}
+
 /**
  * Full storage key including extension (S3 / local).
  * Cloudinary public_id should use {@link applicationPublicId} (no extension).
@@ -69,7 +83,7 @@ export function buildApplicationObjectKey(input: ApplicationObjectKeyInput): str
   const listingId = sanitizePathSegment(input.listingId);
   const userId = sanitizePathSegment(input.userId);
   const applicationId = sanitizePathSegment(input.applicationId);
-  const passengerId = sanitizePathSegment(input.passengerId);
+  const travellerId = resolveTravellerIdSegment(input);
   const slotKey = sanitizeSlotKey(input.slotKey);
   const ext = sanitizeExtension(input.ext);
   const revision = input.revision
@@ -83,7 +97,7 @@ export function buildApplicationObjectKey(input: ApplicationObjectKeyInput): str
     userId,
     applicationId,
     'passengers',
-    passengerId,
+    travellerId,
     `${slotKey}${revision}.${ext}`,
   ].join('/');
 }
@@ -112,7 +126,9 @@ export interface DraftObjectKeyInput {
   countryCode: string;
   listingId: string;
   userId: string;
-  passengerId: string;
+  travellerId?: string;
+  /** @deprecated Use travellerId */
+  passengerId?: string;
   slotKey: string;
   ext: string;
 }
@@ -125,7 +141,7 @@ export function buildDraftObjectKey(input: DraftObjectKeyInput): string {
   const countryCode = sanitizePathSegment(input.countryCode).toUpperCase();
   const listingId = sanitizePathSegment(input.listingId);
   const userId = sanitizePathSegment(input.userId);
-  const passengerId = sanitizePathSegment(input.passengerId);
+  const travellerId = resolveTravellerIdSegment(input);
   const slotKey = sanitizeSlotKey(input.slotKey);
   const ext = sanitizeExtension(input.ext);
 
@@ -136,7 +152,7 @@ export function buildDraftObjectKey(input: DraftObjectKeyInput): string {
     userId,
     'drafts',
     'passengers',
-    passengerId,
+    travellerId,
     `${slotKey}.${ext}`,
   ].join('/');
 }
@@ -146,10 +162,42 @@ export function applicationPublicId(objectKey: string): string {
   return objectKey.replace(/\.[^/.]+$/, '');
 }
 
-/** Passenger id from `.../passengers/{id}/...`, or null for legacy keys. */
-export function extractPassengerIdFromObjectKey(objectKey: string): string | null {
-  const match = objectKey.match(/\/passengers\/([^/]+)\//);
+/** Form traveller id from `.../passengers|travellers/{id}/...`, or null. */
+export function extractFormTravellerIdFromObjectKey(
+  objectKey: string
+): string | null {
+  const match = objectKey.match(/\/(?:passengers|travellers)\/([^/]+)\//);
   return match?.[1] ?? null;
+}
+
+/** @deprecated Use extractFormTravellerIdFromObjectKey */
+export const extractPassengerIdFromObjectKey =
+  extractFormTravellerIdFromObjectKey;
+
+/**
+ * Application id from applications/{cc}/{listing}/{userId}/{applicationId}/...
+ * Returns null for vault keys (users/...) or malformed paths.
+ */
+export function extractApplicationIdFromObjectKey(
+  objectKey: string
+): string | null {
+  if (!objectKey.startsWith('applications/')) return null;
+  const parts = objectKey.split('/');
+  // applications / cc / listing / userId / applicationId / ...
+  if (parts.length < 5) return null;
+  const applicationId = parts[4];
+  if (!applicationId || applicationId === 'drafts') return null;
+  return applicationId;
+}
+
+export function inferApplicationTypeFromObjectKey(
+  objectKey: string
+): 'visa' | 'passport' | null {
+  if (!objectKey.startsWith('applications/')) return null;
+  // Passport drafts use PASSPORT country segment; visa uses ISO country codes.
+  const cc = objectKey.split('/')[1]?.toUpperCase() || '';
+  if (cc === 'PASSPORT' || cc === 'IN-PASSPORT') return 'passport';
+  return 'visa';
 }
 
 export const APPLICATION_UPLOAD_FOLDER = 'applications' as const;

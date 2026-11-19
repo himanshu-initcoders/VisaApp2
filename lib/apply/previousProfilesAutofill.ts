@@ -6,9 +6,10 @@
  * IndexedDB is only used later to stage downloaded blobs for the new draft.
  */
 
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { documents, visaApplications } from '@/lib/db/schema';
+import { travelerProfiles } from '@/lib/db/schema-traveler-profiles';
 import {
   emptyTripDetails,
   type ApplyFormConfig,
@@ -22,9 +23,11 @@ import {
   avatarVariantFromName,
   formatVisaTypeLabel,
 } from '@/lib/apply/travellerProfiles';
+import { travelerProfileKey } from '@/lib/dashboard/travelerIdentity';
 import {
-  passengerProfileKey,
-} from '@/lib/dashboard/passengerProfiles';
+  isApplicantVaultSlot,
+  vaultDocumentIdentity,
+} from '@/lib/dashboard/vaultDocumentTypes';
 import type { IndianPassportFields } from '@/lib/passport/types';
 
 type StoredTravellerDoc = {
@@ -68,7 +71,7 @@ export type AutofillDocumentRef = {
   role?: 'passport-front' | 'passport-back' | 'photo' | 'document';
 };
 
-export type PassengerAutofillPayload = {
+export type TravelerAutofillPayload = {
   profileId: string;
   name: string;
   passportData: IndianPassportFields | null;
@@ -88,23 +91,11 @@ export type PassengerAutofillPayload = {
   failedSlots?: string[];
 };
 
+/** @deprecated Use TravelerAutofillPayload */
+export type PassengerAutofillPayload = TravelerAutofillPayload;
+
 function str(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
-}
-
-function displayName(traveller: StoredTraveller): string {
-  const named = str(traveller.name);
-  if (named) return named;
-  const passport = traveller.passportData || {};
-  const given = str(passport.givenNames);
-  const surname = str(passport.surname);
-  const combined = [given, surname].filter(Boolean).join(' ').trim();
-  return combined || 'Traveller';
-}
-
-function extractPassengerIdFromKey(s3Key: string): string | null {
-  const match = s3Key.match(/\/passengers\/([^/]+)\//);
-  return match?.[1] ?? null;
 }
 
 function toPassportFields(
@@ -167,6 +158,10 @@ type SnapshotSlot = {
   documentType?: string | null;
 };
 
+/**
+ * Submitted (non-draft) applications only.
+ * Drafts are in-progress work — never previous-profile / autofill sources.
+ */
 async function loadUserVisaApps(userId: string): Promise<AppRow[]> {
   return db
     .select({
@@ -179,7 +174,12 @@ async function loadUserVisaApps(userId: string): Promise<AppRow[]> {
       formSnapshot: visaApplications.formSnapshot,
     })
     .from(visaApplications)
-    .where(eq(visaApplications.userId, userId))
+    .where(
+      and(
+        eq(visaApplications.userId, userId),
+        ne(visaApplications.status, 'draft')
+      )
+    )
     .orderBy(desc(visaApplications.createdAt));
 }
 
@@ -291,50 +291,52 @@ type MutableApplyProfile = {
 
 /**
  * Carousel-friendly previous profiles for the apply first step.
+ * Source of truth: traveler_profiles (same as /documents). App history only
+ * enriches counts / last visa label — never invents extra travellers.
  */
 export async function getApplyPreviousProfiles(
   userId: string
 ): Promise<ApplyPreviousProfile[]> {
-  const apps = await loadUserVisaApps(userId);
-  if (apps.length === 0) return [];
+  const storedProfiles = await db
+    .select({
+      identityKey: travelerProfiles.identityKey,
+      name: travelerProfiles.name,
+      nationality: travelerProfiles.nationality,
+      passportNumber: travelerProfiles.passportNumber,
+      dateOfBirth: travelerProfiles.dateOfBirth,
+    })
+    .from(travelerProfiles)
+    .where(eq(travelerProfiles.userId, userId));
+
+  if (storedProfiles.length === 0) return [];
 
   const profiles = new Map<string, MutableApplyProfile>();
+  for (const stored of storedProfiles) {
+    if (!stored.identityKey.startsWith('npd:')) continue;
+    profiles.set(stored.identityKey, {
+      id: stored.identityKey,
+      name: stored.name?.trim() || 'Traveller',
+      nationality: stored.nationality?.trim() || null,
+      applicationIds: new Set(),
+      lastVisaLabel: 'Visa',
+      lastCountryCode: 'IN',
+    });
+  }
 
+  const apps = await loadUserVisaApps(userId);
   for (const app of apps) {
     const travellers: StoredTraveller[] = Array.isArray(app.travellers)
       ? (app.travellers as StoredTraveller[])
       : [];
 
-    const entries: StoredTraveller[] =
-      travellers.length > 0
-        ? travellers
-        : [
-            {
-              passengerId: `legacy-${app.id}`,
-              name: app.applicantName || 'Applicant',
-              passportData: null,
-            },
-          ];
-
-    for (const traveller of entries) {
-      const id = passengerProfileKey(traveller);
+    for (const traveller of travellers) {
+      const id = travelerProfileKey(traveller);
+      if (!id) continue;
       const existing = profiles.get(id);
-      if (existing) {
-        existing.applicationIds.add(app.id);
-        const nextName = displayName(traveller);
-        if (nextName && nextName !== 'Traveller') existing.name = nextName;
-        continue;
-      }
-
-      const passport = traveller.passportData || {};
-      profiles.set(id, {
-        id,
-        name: displayName(traveller),
-        nationality: str(passport.nationality) || null,
-        applicationIds: new Set([app.id]),
-        lastVisaLabel: formatVisaTypeLabel(app.visaType || 'Visa'),
-        lastCountryCode: (app.countryCode || 'IN').toUpperCase(),
-      });
+      if (!existing) continue;
+      existing.applicationIds.add(app.id);
+      existing.lastVisaLabel = formatVisaTypeLabel(app.visaType || 'Visa');
+      existing.lastCountryCode = (app.countryCode || 'IN').toUpperCase();
     }
   }
 
@@ -347,7 +349,7 @@ export async function getApplyPreviousProfiles(
       countryCode: p.lastCountryCode || 'IN',
       visaType: p.lastVisaLabel || 'Visa',
       avatarVariant: avatarVariantFromName(p.name),
-      applicationCount: p.applicationIds.size,
+      applicationCount: Math.max(1, p.applicationIds.size),
       isServerProfile: true as const,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -439,19 +441,18 @@ function rememberDoc(
 }
 
 /**
- * Build autofill payload for a passenger profile against the current listing form.
- * Source of truth: past visa applications in Postgres (not IndexedDB).
- * Newest applications win; older apps only fill gaps.
- * Docs/questions match by stable documentType / question label across listings.
+ * Build autofill payload for a traveler profile against the current listing form.
+ *
+ * Documents: traveler vault only (same source as /documents).
+ * Trip / richer passport: optional enrichment from past apps for this identity —
+ * never path LIKE / never attach another traveller's files.
  */
-export async function getPassengerAutofillForListing(input: {
+export async function getTravelerAutofillForListing(input: {
   userId: string;
   profileId: string;
   formConfig: ApplyFormConfig;
-}): Promise<PassengerAutofillPayload | null> {
+}): Promise<TravelerAutofillPayload | null> {
   const { userId, profileId, formConfig } = input;
-  const apps = await loadUserVisaApps(userId);
-  if (apps.length === 0) return null;
 
   const currentSlotKeys = new Set([
     ...formConfig.documentSlots.map((s) => s.key),
@@ -467,13 +468,11 @@ export async function getPassengerAutofillForListing(input: {
     if (docType && !currentSlotByDocType.has(docType)) {
       currentSlotByDocType.set(docType, slot.key);
     }
-    // Face-capture slots are the listing's passport photo even if type differs.
     if (slot.captureFace && !currentSlotByDocType.has('photo')) {
       currentSlotByDocType.set('photo', slot.key);
     }
   }
 
-  // Stable passport / photo fallbacks when the listing has no matching slot row.
   const passportFallbacks: Array<[string, string]> = [
     [PASSPORT_FRONT_SLOT, PASSPORT_FRONT_SLOT],
     [PASSPORT_BACK_SLOT, PASSPORT_BACK_SLOT],
@@ -487,78 +486,109 @@ export async function getPassengerAutofillForListing(input: {
     }
   }
 
-  const appIds = apps.map((a) => a.id);
-  const dbDocs =
-    appIds.length > 0
-      ? await db
-          .select()
-          .from(documents)
-          .where(
-            and(
-              inArray(documents.applicationId, appIds),
-              eq(documents.applicationType, 'visa')
-            )
-          )
-          .orderBy(desc(documents.uploadedAt))
-      : [];
-
-  const docsByApp = new Map<string, typeof dbDocs>();
-  for (const doc of dbDocs) {
-    const list = docsByApp.get(doc.applicationId) ?? [];
-    list.push(doc);
-    docsByApp.set(doc.applicationId, list);
-  }
-
   let name = '';
   let passportData: IndianPassportFields | null = null;
   let tripDetails: TravellerTripDetails | null = null;
   const docsBySlot = new Map<string, AutofillDocumentRef>();
-  let matched = false;
 
+  const [storedProfileRow] = await db
+    .select()
+    .from(travelerProfiles)
+    .where(
+      and(
+        eq(travelerProfiles.userId, userId),
+        eq(travelerProfiles.identityKey, profileId)
+      )
+    )
+    .limit(1);
+
+  if (!storedProfileRow) return null;
+
+  name = storedProfileRow.name?.trim() || name;
+  if (storedProfileRow.passportNumber || storedProfileRow.dateOfBirth) {
+    const sexRaw = (storedProfileRow.sex || '').trim();
+    passportData = {
+      passportNumber: storedProfileRow.passportNumber || '',
+      surname: '',
+      givenNames: '',
+      nationality: storedProfileRow.nationality || 'IND',
+      dateOfBirth: storedProfileRow.dateOfBirth || '',
+      sex: sexRaw === 'M' || sexRaw === 'F' || sexRaw === 'X' ? sexRaw : '',
+      dateOfExpiry: '',
+      documentType: 'P',
+      countryOfIssue: 'IND',
+    };
+  }
+
+  const vaultDocs = await db
+    .select()
+    .from(documents)
+    .where(
+      and(
+        eq(documents.profileId, storedProfileRow.id),
+        eq(documents.visibility, 'active')
+      )
+    )
+    .orderBy(desc(documents.uploadedAt));
+
+  for (const doc of vaultDocs) {
+    if (!isApplicantVaultSlot(doc.documentType)) continue;
+    const identity = vaultDocumentIdentity(doc.documentType, doc.documentType);
+    const slotKey =
+      currentSlotByDocType.get(identity) ||
+      currentSlotByDocType.get(doc.documentType) ||
+      (currentSlotKeys.has(doc.documentType) ? doc.documentType : null) ||
+      (identity === 'passport-front' ||
+      identity === 'passport-back' ||
+      identity === 'photo'
+        ? identity
+        : null);
+    if (!slotKey || docsBySlot.has(slotKey)) continue;
+    rememberDoc(docsBySlot, {
+      slotKey,
+      documentDbId: doc.id,
+      storageKey: doc.s3Key,
+      filename: doc.filename,
+      mimeType: doc.mimeType,
+      size: doc.fileSize ?? undefined,
+      role: docRoleForSlotKey(slotKey, formConfig),
+    });
+  }
+
+  // Trip answers (+ fuller passport MRZ) from past apps for this identity only.
+  const apps = await loadUserVisaApps(userId);
   for (const app of apps) {
     const snapshot = parseFormSnapshot(app.formSnapshot);
     const travellers: StoredTraveller[] = Array.isArray(app.travellers)
       ? (app.travellers as StoredTraveller[])
       : [];
 
-    const resolveSlot = (pastSlotKey: string) =>
-      resolveCurrentDocSlotKey({
-        pastSlotKey,
-        pastSlots: snapshot.documentSlots,
-        currentSlotKeys,
-        currentSlotByDocType,
-      });
-
     if (travellers.length === 0) {
-      const legacyKey = passengerProfileKey({
+      const legacyKey = travelerProfileKey({
         passengerId: `legacy-${app.id}`,
         name: app.applicantName || 'Applicant',
       });
-      if (legacyKey !== profileId) continue;
-      matched = true;
-      if (!name) name = app.applicantName || 'Applicant';
-
-      for (const doc of docsByApp.get(app.id) ?? []) {
-        const slotKey = resolveSlot(doc.documentType);
-        if (!slotKey || docsBySlot.has(slotKey)) continue;
-        rememberDoc(docsBySlot, {
-          slotKey,
-          documentDbId: doc.id,
-          storageKey: doc.s3Key,
-          filename: doc.filename,
-          mimeType: doc.mimeType,
-          role: docRoleForSlotKey(slotKey, formConfig),
-        });
-      }
+      if (!legacyKey || legacyKey !== profileId) continue;
       continue;
     }
 
     for (const traveller of travellers) {
-      if (passengerProfileKey(traveller) !== profileId) continue;
-      matched = true;
-      if (!name) name = displayName(traveller);
+      const key = travelerProfileKey(traveller);
+      if (!key || key !== profileId) continue;
       if (!passportData) {
         passportData = toPassportFields(traveller.passportData);
+      } else {
+        const richer = toPassportFields(traveller.passportData);
+        if (richer) {
+          passportData = {
+            ...passportData,
+            surname: passportData.surname || richer.surname,
+            givenNames: passportData.givenNames || richer.givenNames,
+            dateOfExpiry: passportData.dateOfExpiry || richer.dateOfExpiry,
+            sex: passportData.sex || richer.sex,
+            nationality: passportData.nationality || richer.nationality,
+          };
+        }
       }
       tripDetails = mergeTripDetails(
         tripDetails,
@@ -566,46 +596,12 @@ export async function getPassengerAutofillForListing(input: {
         formConfig.extraQuestions,
         snapshot.extraQuestions
       );
-
-      for (const tdoc of traveller.documents ?? []) {
-        const pastKey = tdoc.slotKey || '';
-        const slotKey = resolveSlot(pastKey);
-        if (!slotKey || docsBySlot.has(slotKey)) continue;
-        if (!tdoc.key && !tdoc.url) continue;
-        rememberDoc(docsBySlot, {
-          slotKey,
-          documentDbId: null,
-          storageKey: tdoc.key || null,
-          filename: tdoc.filename || `${slotKey}.bin`,
-          mimeType: tdoc.mimeType || null,
-          role: docRoleForSlotKey(slotKey, formConfig),
-        });
-      }
-
-      for (const doc of docsByApp.get(app.id) ?? []) {
-        const slotKey = resolveSlot(doc.documentType);
-        if (!slotKey) continue;
-        const passengerId = extractPassengerIdFromKey(doc.s3Key);
-        if (
-          traveller.passengerId &&
-          passengerId &&
-          passengerId !== traveller.passengerId
-        ) {
-          continue;
-        }
-        rememberDoc(docsBySlot, {
-          slotKey,
-          documentDbId: doc.id,
-          storageKey: doc.s3Key,
-          filename: doc.filename,
-          mimeType: doc.mimeType,
-          role: docRoleForSlotKey(slotKey, formConfig),
-        });
-      }
     }
   }
 
-  if (!matched) return null;
+  if (storedProfileRow.name?.trim()) {
+    name = storedProfileRow.name.trim();
+  }
 
   return {
     profileId,
@@ -615,3 +611,6 @@ export async function getPassengerAutofillForListing(input: {
     documents: Array.from(docsBySlot.values()),
   };
 }
+
+/** @deprecated Use getTravelerAutofillForListing */
+export const getPassengerAutofillForListing = getTravelerAutofillForListing;
