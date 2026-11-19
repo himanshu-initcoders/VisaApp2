@@ -5,6 +5,11 @@ import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui';
 import { attachVisaOutcomeDocument } from '@/app/(admin)/actions';
 import { uploadVisaOutcomeFile } from '@/lib/upload/visa-outcome-actions';
+import {
+  isImageFile,
+  isPdfFile,
+  isSendableVisaOutcomeFile,
+} from '@/lib/visa/outcomeDocumentShared';
 import { cn } from '@/lib/utils';
 
 interface AttachVisaOutcomeModalProps {
@@ -42,10 +47,18 @@ export function AttachVisaOutcomeModal({
   onSuccess,
 }: AttachVisaOutcomeModalProps) {
   const [deliveryFile, setDeliveryFile] = useState<File | null>(null);
+  const [deliveryPreviewUrl, setDeliveryPreviewUrl] = useState<string | null>(
+    null
+  );
   const [sendDelivery, setSendDelivery] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [mounted, setMounted] = useState(false);
+  const deliveryIsPdf = Boolean(deliveryFile && isPdfFile(deliveryFile));
+  const deliveryIsImage = Boolean(deliveryFile && isImageFile(deliveryFile));
+  const canSendDelivery = Boolean(
+    deliveryFile && isSendableVisaOutcomeFile(deliveryFile)
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -76,6 +89,18 @@ export function AttachVisaOutcomeModal({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
+  useEffect(() => {
+    if (!deliveryFile) {
+      setDeliveryPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(deliveryFile);
+    setDeliveryPreviewUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [deliveryFile]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -84,21 +109,31 @@ export function AttachVisaOutcomeModal({
       setError('Choose a file to attach');
       return;
     }
-    if (sendDelivery && deliveryFile.type !== 'application/pdf') {
-      setError('Only PDF files can be sent on WhatsApp and email');
+    if (sendDelivery && !isSendableVisaOutcomeFile(deliveryFile)) {
+      setError('Only PDF, JPG, PNG, or WebP can be sent on WhatsApp and email');
       return;
     }
 
     setIsSubmitting(true);
     try {
       const bufferBase64 = await fileToBase64(deliveryFile);
+      const mimeType = isPdfFile(deliveryFile)
+        ? 'application/pdf'
+        : isImageFile(deliveryFile)
+          ? deliveryFile.type ||
+            (/\.png$/i.test(deliveryFile.name)
+              ? 'image/png'
+              : /\.webp$/i.test(deliveryFile.name)
+                ? 'image/webp'
+                : 'image/jpeg')
+          : deliveryFile.type || 'application/octet-stream';
       const uploaded = await uploadVisaOutcomeFile({
         applicationId,
         travellerId,
         filename: deliveryFile.name,
-        mimeType: deliveryFile.type || 'application/octet-stream',
+        mimeType,
         bufferBase64,
-        requirePdf: sendDelivery,
+        requireSendable: sendDelivery,
       });
       if (!uploaded.success) {
         setError(uploaded.error);
@@ -143,7 +178,7 @@ export function AttachVisaOutcomeModal({
           role="dialog"
           aria-modal="true"
           aria-labelledby="attach-outcome-title"
-          className="pointer-events-auto relative w-full max-w-md rounded-[24px] bg-white p-6 shadow-elevated"
+          className="pointer-events-auto relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[24px] bg-white p-6 shadow-elevated"
         >
           <div className="mb-4 flex items-center justify-between">
             <div>
@@ -197,17 +232,47 @@ export function AttachVisaOutcomeModal({
                 onChange={(e) => {
                   const file = e.target.files?.[0] ?? null;
                   setDeliveryFile(file);
-                  if (!file || file.type !== 'application/pdf') {
+                  if (!file || !isSendableVisaOutcomeFile(file)) {
                     setSendDelivery(false);
                   }
                 }}
                 className="block w-full font-switzer text-sm text-portrait-ink file:mr-3 file:rounded-full file:border-0 file:bg-sky-wash file:px-3 file:py-1.5 file:font-switzer file:text-sm file:text-portrait-ink"
               />
               <p className="mt-1 font-switzer text-xs text-slate-helper">
-                Replaces any previous document for this traveller. Sending
-                requires PDF.
+                Replaces any previous document for this traveller. Checking send
+                re-sends the approved WhatsApp/email with this file attached.
               </p>
             </div>
+
+            {deliveryFile && deliveryPreviewUrl ? (
+              <div className="overflow-hidden rounded-[16px] border border-ash bg-[#f8fafc]">
+                <div className="border-b border-ash bg-white px-3 py-2">
+                  <p className="truncate font-switzer text-xs font-semibold text-portrait-ink">
+                    {deliveryFile.name}
+                  </p>
+                </div>
+                <div className="flex min-h-[180px] items-center justify-center p-3">
+                  {deliveryIsImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={deliveryPreviewUrl}
+                      alt={deliveryFile.name}
+                      className="max-h-[240px] max-w-full object-contain"
+                    />
+                  ) : deliveryIsPdf ? (
+                    <iframe
+                      title={deliveryFile.name}
+                      src={deliveryPreviewUrl}
+                      className="h-[240px] w-full rounded-xl bg-white"
+                    />
+                  ) : (
+                    <p className="font-switzer text-sm text-slate-helper">
+                      Preview not available for this file type.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
             <label
               className={cn(
@@ -218,18 +283,14 @@ export function AttachVisaOutcomeModal({
                 type="checkbox"
                 className="mt-1"
                 checked={sendDelivery}
-                disabled={
-                  isSubmitting ||
-                  !deliveryFile ||
-                  deliveryFile.type !== 'application/pdf'
-                }
+                disabled={isSubmitting || !canSendDelivery}
                 onChange={(e) => setSendDelivery(e.target.checked)}
               />
               <span>
                 Send this file on WhatsApp and email
-                {!deliveryFile || deliveryFile.type !== 'application/pdf' ? (
+                {!canSendDelivery ? (
                   <span className="mt-0.5 block text-xs text-slate-helper">
-                    Select a PDF to enable sending.
+                    Select a PDF or image (JPG, PNG, WebP) to enable sending.
                   </span>
                 ) : null}
               </span>

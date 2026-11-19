@@ -71,7 +71,20 @@ export function VisaApplicationActions({
 
   const activeTraveller = selection?.activeTraveller ?? null;
   const statusForUpdate = activeTraveller?.status || currentStatus;
+  const isDraft =
+    currentStatus === 'draft' || statusForUpdate === 'draft';
+  const canUpdateStatus =
+    !isDraft &&
+    statusForUpdate !== 'approved' &&
+    Boolean(activeTraveller?.travellerRowId);
+  const canRequestChanges =
+    !isDraft &&
+    travellers.length > 0 &&
+    correctionTargets.length > 0 &&
+    statusForUpdate !== 'approved' &&
+    statusForUpdate !== 'rejected';
   const canAttachOutcome =
+    !isDraft &&
     Boolean(activeTraveller?.travellerRowId) &&
     (activeTraveller?.status || currentStatus) === 'approved';
   const visibleHistory = useMemo(
@@ -108,14 +121,15 @@ export function VisaApplicationActions({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Button
-            variant="primary"
-            className="w-full"
-            onClick={() => setShowStatusModal(true)}
-            disabled={!activeTraveller?.travellerRowId}
-          >
-            Update Status
-          </Button>
+          {canUpdateStatus ? (
+            <Button
+              variant="primary"
+              className="w-full"
+              onClick={() => setShowStatusModal(true)}
+            >
+              Update Status
+            </Button>
+          ) : null}
           {canAttachOutcome ? (
             <Button
               variant="secondary"
@@ -125,17 +139,18 @@ export function VisaApplicationActions({
               Attach visa document
             </Button>
           ) : null}
-          <Button
-            variant="secondary"
-            className="w-full"
-            onClick={() => {
-              setPrefillSlot(undefined);
-              setShowCorrectionModal(true);
-            }}
-            disabled={travellers.length === 0 || correctionTargets.length === 0}
-          >
-            Request changes
-          </Button>
+          {canRequestChanges ? (
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => {
+                setPrefillSlot(undefined);
+                setShowCorrectionModal(true);
+              }}
+            >
+              Request changes
+            </Button>
+          ) : null}
           <Button
             variant="ghost"
             className="w-full"
@@ -143,6 +158,11 @@ export function VisaApplicationActions({
           >
             Add Internal Note
           </Button>
+          {isDraft ? (
+            <p className="font-switzer text-xs text-slate-helper">
+              Draft applications cannot change status or request corrections.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -168,26 +188,32 @@ export function VisaApplicationActions({
             onDocumentVerified={handleSuccess}
             labelBySlotKey={mergedLabels}
             passportPhotoKeys={passportPhotoKeys}
-            onRequestReupload={(slotKey) => {
-              setPrefillSlot(slotKey);
-              setShowCorrectionModal(true);
-            }}
+            onRequestReupload={
+              canRequestChanges
+                ? (slotKey) => {
+                    setPrefillSlot(slotKey);
+                    setShowCorrectionModal(true);
+                  }
+                : undefined
+            }
           />
         </CardContent>
       </Card>
 
-      <StatusUpdateModal
-        isOpen={showStatusModal}
-        onClose={() => setShowStatusModal(false)}
-        applicationId={applicationId}
-        applicationType="visa"
-        travellerId={activeTraveller?.travellerRowId}
-        travellerName={travellerLabel}
-        currentStatus={statusForUpdate}
-        onSuccess={handleSuccess}
-      />
+      {canUpdateStatus ? (
+        <StatusUpdateModal
+          isOpen={showStatusModal}
+          onClose={() => setShowStatusModal(false)}
+          applicationId={applicationId}
+          applicationType="visa"
+          travellerId={activeTraveller?.travellerRowId}
+          travellerName={travellerLabel}
+          currentStatus={statusForUpdate}
+          onSuccess={handleSuccess}
+        />
+      ) : null}
 
-      {activeTraveller?.travellerRowId ? (
+      {canAttachOutcome && activeTraveller?.travellerRowId ? (
         <AttachVisaOutcomeModal
           isOpen={showAttachModal}
           onClose={() => setShowAttachModal(false)}
@@ -206,16 +232,18 @@ export function VisaApplicationActions({
         onSuccess={handleSuccess}
       />
 
-      <RequestCorrectionModal
-        isOpen={showCorrectionModal}
-        onClose={() => setShowCorrectionModal(false)}
-        applicationId={applicationId}
-        travellers={travellers}
-        targets={correctionTargets}
-        initialTravellerId={activeTraveller?.travellerRowId}
-        initialSlotKey={prefillSlot}
-        onSuccess={handleSuccess}
-      />
+      {canRequestChanges ? (
+        <RequestCorrectionModal
+          isOpen={showCorrectionModal}
+          onClose={() => setShowCorrectionModal(false)}
+          applicationId={applicationId}
+          travellers={travellers}
+          targets={correctionTargets}
+          initialTravellerId={activeTraveller?.travellerRowId}
+          initialSlotKey={prefillSlot}
+          onSuccess={handleSuccess}
+        />
+      ) : null}
     </>
   );
 }

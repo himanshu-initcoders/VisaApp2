@@ -1,9 +1,16 @@
 /**
- * Short-lived path tokens so Twilio can fetch private visa outcome PDFs.
- * Format: base64url(payloadJson).base64url(hmacSha256)
+ * Short-lived tokens so Twilio can fetch private visa outcome files.
+ *
+ * Token format: base64url(payload)~base64url(hmac)
+ * (tilde separator — not in base64url alphabet — so the path has a single
+ * file-extension dot: `{token}.pdf`. Multiple dots break some media fetchers.)
+ *
+ * Twilio Content Template Media URL must be exactly: {{7}}
+ * Variable {{7}} is the full HTTPS download URL.
  */
 
 import { createHmac, timingSafeEqual } from 'crypto';
+import { waMediaPathExtension } from '@/lib/visa/outcomeDocumentShared';
 
 const DEFAULT_TTL_SECONDS = 60 * 60; // 1 hour
 
@@ -44,15 +51,26 @@ export function signWaMediaToken(
   const sig = b64url(
     createHmac('sha256', secret()).update(body).digest()
   );
-  return `${body}.${sig}`;
+  // Tilde is not in base64url (A-Za-z0-9_-), so split is unambiguous.
+  return `${body}~${sig}`;
 }
 
 export function verifyWaMediaToken(
   token: string
 ): { documentId: string } | null {
-  const parts = token.split('.');
-  if (parts.length !== 2) return null;
-  const [body, sig] = parts;
+  // New format: body~sig. Legacy format: body.sig (pre-tilde).
+  const tilde = token.indexOf('~');
+  let body: string;
+  let sig: string;
+  if (tilde > 0) {
+    body = token.slice(0, tilde);
+    sig = token.slice(tilde + 1);
+  } else {
+    const parts = token.split('.');
+    if (parts.length !== 2) return null;
+    body = parts[0]!;
+    sig = parts[1]!;
+  }
   if (!body || !sig) return null;
 
   const expected = createHmac('sha256', secret()).update(body).digest();
@@ -83,28 +101,67 @@ export function verifyWaMediaToken(
   }
 }
 
+/**
+ * Public origin Twilio can HTTPS-fetch.
+ * Prefer WA_MEDIA_PUBLIC_BASE_URL (e.g. https://www.viserv.in) over localhost.
+ */
 export function publicAppBaseUrl(): string {
   const raw =
+    process.env.WA_MEDIA_PUBLIC_BASE_URL?.trim() ||
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
     process.env.NEXTAUTH_URL?.trim() ||
     '';
   return raw.replace(/\/$/, '');
 }
 
+export function isPubliclyReachableMediaBase(base: string): boolean {
+  try {
+    const url = new URL(base);
+    if (url.protocol !== 'https:') return false;
+    const host = url.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local')) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Full URL Twilio fetches: {base}/api/wa-media/{token}.pdf
- * Path ends with `.pdf` because WhatsApp/Twilio media samples require a file suffix.
+ * Builds the downloadable media URL for Twilio variable {{7}}.
+ *
+ * Twilio template Media URL field must be: {{7}}
+ * (the full URL — not https://domain/api/wa-media/{{7}})
+ *
+ * Example {{7}}: https://www.viserv.in/api/wa-media/{token}.pdf
  */
-export function buildWaMediaPublicUrl(documentId: string): {
+export function buildWaMediaPublicUrl(
+  documentId: string,
+  mimeType?: string | null
+): {
   fullUrl: string;
   pathVariable: string;
+  /** Value for Twilio content variable {{7}} — full downloadable HTTPS URL. */
+  mediaUrlVariable: string;
 } | null {
   const base = publicAppBaseUrl();
   if (!base) return null;
   const token = signWaMediaToken(documentId);
-  const pathVariable = `${token}.pdf`;
+  const ext = waMediaPathExtension(mimeType);
+  const pathVariable = `${token}.${ext}`;
+  const fullUrl = `${base}/api/wa-media/${pathVariable}`;
+
+  if (!isPubliclyReachableMediaBase(base)) {
+    console.warn(
+      '[wa-media] Media base is not a public HTTPS URL. Twilio will fail with "No media available". Set WA_MEDIA_PUBLIC_BASE_URL=https://www.viserv.in (or an ngrok HTTPS URL).',
+      { base, fullUrl }
+    );
+  }
+
   return {
-    fullUrl: `${base}/api/wa-media/${pathVariable}`,
+    fullUrl,
     pathVariable,
+    mediaUrlVariable: fullUrl,
   };
 }

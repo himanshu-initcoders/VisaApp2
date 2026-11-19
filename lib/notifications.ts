@@ -40,7 +40,11 @@ import {
 import { passportServiceTypeLabel } from '@/lib/passport/constants';
 import { readStoredObject } from '@/lib/upload/readStoredObject';
 import { buildWaMediaPublicUrl } from '@/lib/wa-media/token';
-import { isPdfMime } from '@/lib/visa/outcomeDocumentShared';
+import {
+  isSendableVisaOutcomeMime,
+  normalizeVisaOutcomeMime,
+  waMediaPathExtension,
+} from '@/lib/visa/outcomeDocumentShared';
 
 const STATUS_EMAILS = new Set(['approved', 'rejected', 'under_review']);
 
@@ -795,24 +799,26 @@ export type StatusDeliveryPayload = {
   sendToChannels: boolean;
 };
 
-async function loadPdfAttachment(delivery: StatusDeliveryPayload): Promise<{
+async function loadDeliveryAttachment(delivery: StatusDeliveryPayload): Promise<{
   filename: string;
   content: Buffer;
   contentType: string;
 } | null> {
-  if (!delivery.sendToChannels || !isPdfMime(delivery.mimeType)) return null;
+  const mime = normalizeVisaOutcomeMime(delivery.mimeType, delivery.filename);
+  if (!delivery.sendToChannels || !isSendableVisaOutcomeMime(mime)) return null;
   const stored = await readStoredObject(delivery.s3Key);
   if (!stored) {
-    console.error('[email] Could not read delivery PDF', delivery.s3Key);
+    console.error('[email] Could not read delivery file', delivery.s3Key);
     return null;
   }
-  const filename = delivery.filename?.endsWith('.pdf')
+  const ext = waMediaPathExtension(mime);
+  const filename = delivery.filename?.includes('.')
     ? delivery.filename
-    : `${delivery.filename || 'visa-document'}.pdf`;
+    : `${delivery.filename || 'visa-document'}.${ext}`;
   return {
     filename,
     content: stored.buffer,
-    contentType: 'application/pdf',
+    contentType: mime,
   };
 }
 
@@ -945,14 +951,17 @@ export async function notifyStatusChangedEvent(input: {
   const sendDelivery =
     input.newStatus === 'approved' &&
     Boolean(input.delivery?.sendToChannels) &&
-    isPdfMime(input.delivery?.mimeType);
+    isSendableVisaOutcomeMime(input.delivery?.mimeType);
   const fileAttachment =
     sendDelivery && input.delivery
-      ? await loadPdfAttachment(input.delivery)
+      ? await loadDeliveryAttachment(input.delivery)
       : null;
   const mediaUrl =
     sendDelivery && input.delivery
-      ? buildWaMediaPublicUrl(input.delivery.documentId)
+      ? buildWaMediaPublicUrl(
+          input.delivery.documentId,
+          input.delivery.mimeType
+        )
       : null;
 
   if (visa.userId !== input.actorId) {
@@ -995,7 +1004,7 @@ export async function notifyStatusChangedEvent(input: {
           visaType: visa.visaType,
           referenceNumber: visa.referenceNumber,
           notes: input.notes,
-          mediaPathVariable: mediaUrl.pathVariable,
+          mediaUrl: mediaUrl.mediaUrlVariable,
         });
       } catch (error) {
         console.error('[email] status approved with document whatsapp failed', error);
@@ -1062,15 +1071,35 @@ export async function notifyStatusChangedEvent(input: {
   ]);
 }
 
-/** Post-approve attach: email + media WA only (no plain status notify). */
+/**
+ * Post-approve attach: re-send the approved message + document on email/WhatsApp
+ * even when the traveller is already approved.
+ */
 export async function notifyVisaOutcomeDeliveredEvent(input: {
   applicationId: string;
   travellerId?: string | null;
   delivery: StatusDeliveryPayload;
 }): Promise<void> {
-  if (!input.delivery.sendToChannels || !isPdfMime(input.delivery.mimeType)) {
+  const mime = normalizeVisaOutcomeMime(
+    input.delivery.mimeType,
+    input.delivery.filename
+  );
+  if (!input.delivery.sendToChannels || !isSendableVisaOutcomeMime(mime)) {
+    console.warn(
+      '[notify] Skipping visa outcome delivery — send flag off or unsupported mime',
+      {
+        sendToChannels: input.delivery.sendToChannels,
+        mimeType: input.delivery.mimeType,
+      }
+    );
     return;
   }
+
+  const delivery: StatusDeliveryPayload = {
+    ...input.delivery,
+    mimeType: mime,
+  };
+
   const visa = await loadVisaContext(input.applicationId);
   if (!visa) return;
   const travellerName = await resolveStatusRecipientName(
@@ -1078,6 +1107,8 @@ export async function notifyVisaOutcomeDeliveredEvent(input: {
     input.travellerId
   );
   const recipientName = travellerName || applicantLabel(visa);
+  const country = countryOf(visa);
+  const approvedNotes = 'Your visa is approved. Your document is attached.';
 
   const href = `/applications/visa/${visa.referenceNumber}`;
   await insertNotifications({
@@ -1087,12 +1118,12 @@ export async function notifyVisaOutcomeDeliveredEvent(input: {
     title: travellerName
       ? `${travellerName}'s visa document is ready`
       : 'Your visa document is ready',
-    body: `${countryOf(visa)} · ${visa.visaType}`,
+    body: `${country} · ${visa.visaType}`,
     href,
   });
 
-  const fileAttachment = await loadPdfAttachment(input.delivery);
-  const mediaUrl = buildWaMediaPublicUrl(input.delivery.documentId);
+  const fileAttachment = await loadDeliveryAttachment(delivery);
+  const mediaUrl = buildWaMediaPublicUrl(delivery.documentId, delivery.mimeType);
   const to = resolveApplicantEmail({
     accountEmail: visa.accountEmail,
     passportEmail: visa.passportEmail,
@@ -1103,7 +1134,7 @@ export async function notifyVisaOutcomeDeliveredEvent(input: {
       notifyVisaOutcomeDelivered({
         to,
         recipientName,
-        country: countryOf(visa),
+        country,
         visaType: visa.visaType,
         referenceNumber: visa.referenceNumber,
         href,
@@ -1111,22 +1142,49 @@ export async function notifyVisaOutcomeDeliveredEvent(input: {
       }),
       'visa outcome email'
     );
+  } else if (to && !fileAttachment) {
+    console.warn(
+      '[notify] Visa outcome email skipped — could not read delivery file',
+      delivery.s3Key
+    );
   }
 
+  // Same approved+document WhatsApp as approve-with-file; fall back if media fails.
+  let sentMediaWhatsApp = false;
   if (mediaUrl) {
     try {
-      await notifyStatusApprovedWithDocumentWhatsApp({
+      sentMediaWhatsApp = await notifyStatusApprovedWithDocumentWhatsApp({
         recipientUserId: visa.userId,
         recipientName,
-        country: countryOf(visa),
+        country,
         visaType: visa.visaType,
         referenceNumber: visa.referenceNumber,
-        notes: 'Your visa document is attached.',
-        mediaPathVariable: mediaUrl.pathVariable,
+        notes: approvedNotes,
+        mediaUrl: mediaUrl.mediaUrlVariable,
       });
     } catch (error) {
-      console.error('[email] visa outcome whatsapp failed', error);
+      console.error('[notify] visa outcome approved-with-document whatsapp failed', error);
     }
+  } else {
+    console.warn(
+      '[notify] Visa outcome media WhatsApp skipped — set WA_MEDIA_PUBLIC_BASE_URL=https://www.viserv.in (public HTTPS)'
+    );
+  }
+
+  if (!sentMediaWhatsApp) {
+    await sendSafely(
+      notifyStatusChangedWhatsApp({
+        recipientUserId: visa.userId,
+        recipientName,
+        country,
+        visaType: visa.visaType,
+        referenceNumber: visa.referenceNumber,
+        newStatus: 'approved',
+        notes: approvedNotes,
+        audience: 'applicant',
+      }),
+      'visa outcome approved status whatsapp fallback'
+    );
   }
 }
 

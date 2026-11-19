@@ -38,8 +38,10 @@ export function PassportApplicationActions({
     router.refresh();
   };
 
+  const isDraft = currentStatus === 'draft';
+  const canUpdateStatus = !isDraft && currentStatus !== 'approved';
   const canRequestChanges =
-    currentStatus !== 'draft' &&
+    !isDraft &&
     currentStatus !== 'approved' &&
     currentStatus !== 'rejected';
 
@@ -50,13 +52,15 @@ export function PassportApplicationActions({
           <CardTitle>Status Management</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Button
-            variant="primary"
-            className="w-full"
-            onClick={() => setShowStatusModal(true)}
-          >
-            Update Status
-          </Button>
+          {canUpdateStatus ? (
+            <Button
+              variant="primary"
+              className="w-full"
+              onClick={() => setShowStatusModal(true)}
+            >
+              Update Status
+            </Button>
+          ) : null}
           {canRequestChanges ? (
             <Button
               variant="secondary"
@@ -76,6 +80,11 @@ export function PassportApplicationActions({
           >
             Add Internal Note
           </Button>
+          {isDraft ? (
+            <p className="font-switzer text-xs text-slate-helper">
+              Draft applications cannot change status or request corrections.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -102,14 +111,16 @@ export function PassportApplicationActions({
         </CardContent>
       </Card>
 
-      <StatusUpdateModal
-        isOpen={showStatusModal}
-        onClose={() => setShowStatusModal(false)}
-        applicationId={applicationId}
-        applicationType="passport"
-        currentStatus={currentStatus}
-        onSuccess={handleSuccess}
-      />
+      {canUpdateStatus ? (
+        <StatusUpdateModal
+          isOpen={showStatusModal}
+          onClose={() => setShowStatusModal(false)}
+          applicationId={applicationId}
+          applicationType="passport"
+          currentStatus={currentStatus}
+          onSuccess={handleSuccess}
+        />
+      ) : null}
 
       <NotesModal
         isOpen={showNotesModal}
@@ -119,16 +130,18 @@ export function PassportApplicationActions({
         onSuccess={handleSuccess}
       />
 
-      <RequestCorrectionModal
-        isOpen={showCorrectionModal}
-        onClose={() => setShowCorrectionModal(false)}
-        applicationId={applicationId}
-        applicationType="passport"
-        travellers={[]}
-        targets={correctionTargets}
-        initialSlotKey={prefillSlot}
-        onSuccess={handleSuccess}
-      />
+      {canRequestChanges ? (
+        <RequestCorrectionModal
+          isOpen={showCorrectionModal}
+          onClose={() => setShowCorrectionModal(false)}
+          applicationId={applicationId}
+          applicationType="passport"
+          travellers={[]}
+          targets={correctionTargets}
+          initialSlotKey={prefillSlot}
+          onSuccess={handleSuccess}
+        />
+      ) : null}
     </>
   );
 }

@@ -588,12 +588,9 @@ export async function notifyPassportStatusChangedWhatsApp(input: {
 }
 
 /**
- * Applicant-only: same body as status_changed plus document media (var 7 = path token).
- * Call instead of plain status WhatsApp when a PDF is delivered with the approve notify.
- */
-/**
- * Returns true when the media template message was accepted by Twilio.
- * False when SID/config is missing or the API fails (caller may fall back).
+ * Applicant-only: approved status + media.
+ * Twilio template Media URL must be exactly {{7}} (full downloadable HTTPS URL).
+ * Returns true when Twilio accepts the media template message.
  */
 export async function notifyStatusApprovedWithDocumentWhatsApp(input: {
   recipientUserId: string;
@@ -602,8 +599,11 @@ export async function notifyStatusApprovedWithDocumentWhatsApp(input: {
   visaType: string;
   referenceNumber: string;
   notes?: string | null;
-  /** Path variable for Twilio media URL (token after /api/wa-media/). */
-  mediaPathVariable: string;
+  /**
+   * Full downloadable media URL for Twilio {{7}}.
+   * Example: https://www.viserv.in/api/wa-media/{token}.pdf
+   */
+  mediaUrl: string;
 }): Promise<boolean> {
   const recipient = await resolveUserWhatsApp(input.recipientUserId);
   if (!recipient) return false;
@@ -616,9 +616,19 @@ export async function notifyStatusApprovedWithDocumentWhatsApp(input: {
     return false;
   }
 
+  const mediaUrl = input.mediaUrl.trim();
+  if (!mediaUrl || !/^https:\/\//i.test(mediaUrl)) {
+    console.warn(
+      '[whatsapp] mediaUrl must be a public HTTPS URL; skipping media status',
+      { mediaUrl }
+    );
+    return false;
+  }
+
   const notes = input.notes?.trim() || '—';
 
   try {
+    console.info('[whatsapp] approved-with-document mediaUrl=', mediaUrl);
     return await sendWhatsAppContent({
       to: recipient.to,
       contentSid,
@@ -629,7 +639,7 @@ export async function notifyStatusApprovedWithDocumentWhatsApp(input: {
         input.country,
         input.visaType,
         input.referenceNumber,
-        input.mediaPathVariable,
+        mediaUrl,
       ]),
       label: 'status approved with document',
     });

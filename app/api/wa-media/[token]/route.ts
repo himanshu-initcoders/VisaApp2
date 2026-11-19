@@ -5,26 +5,47 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { documents } from '@/lib/db/schema';
 import { readStoredObject } from '@/lib/upload/readStoredObject';
-import { VISA_OUTCOME_SLOT } from '@/lib/visa/outcomeDocumentShared';
+import {
+  VISA_OUTCOME_SLOT,
+  isSendableVisaOutcomeMime,
+  normalizeVisaOutcomeMime,
+  waMediaPathExtension,
+} from '@/lib/visa/outcomeDocumentShared';
 import { verifyWaMediaToken } from '@/lib/wa-media/token';
 
 export const runtime = 'nodejs';
 
 /**
  * Fixed tokens for Meta/Twilio template sample approval.
- * Twilio requires the sample path to end with a file extension (e.g. .pdf).
+ * Twilio requires the sample path to end with a file extension.
  */
-const DEMO_MEDIA_TOKENS = new Set(['demo', 'demo.pdf', 'sample', 'sample.pdf']);
+const DEMO_MEDIA_TOKENS = new Set([
+  'demo',
+  'demo.pdf',
+  'sample',
+  'sample.pdf',
+  'demo.jpg',
+  'sample.jpg',
+]);
 
 function normalizeMediaToken(raw: string): string {
-  return decodeURIComponent(raw || '').trim();
+  return decodeMediaToken(raw);
 }
 
-/** Tokens may be submitted as `…/token.pdf` so Twilio sees a PDF suffix. */
-function tokenWithoutPdfSuffix(token: string): string {
-  return token.toLowerCase().endsWith('.pdf')
-    ? token.slice(0, -4)
-    : token;
+/** Tokens may be submitted as `…/token.pdf` (or image ext) so Twilio sees a suffix. */
+function tokenWithoutMediaSuffix(token: string): string {
+  return token.replace(/\.(pdf|jpe?g|png|webp)$/i, '');
+}
+
+/**
+ * Next may give the raw segment; decode once. Keep `~` (token separator) unencoded.
+ */
+function decodeMediaToken(raw: string): string {
+  try {
+    return decodeURIComponent(raw || '').trim();
+  } catch {
+    return (raw || '').trim();
+  }
 }
 
 async function serveDemoPdf(): Promise<NextResponse> {
@@ -45,9 +66,8 @@ async function serveDemoPdf(): Promise<NextResponse> {
 }
 
 /**
- * Public short-TTL media fetch for Twilio WhatsApp document templates.
- * Token is signed; only visa_outcome PDFs are served.
- * Special tokens `demo` / `demo.pdf` serve public/wa-media-sample.pdf for template approval.
+ * Public short-TTL media fetch for Twilio WhatsApp document/image templates.
+ * Token is signed; only visa_outcome PDF/image files are served.
  */
 export async function GET(
   _request: NextRequest,
@@ -64,7 +84,7 @@ export async function GET(
       return serveDemoPdf();
     }
 
-    const signedToken = tokenWithoutPdfSuffix(token);
+    const signedToken = tokenWithoutMediaSuffix(token);
     const verified = verifyWaMediaToken(signedToken);
     if (!verified) {
       return new NextResponse('Not found', { status: 404 });
@@ -84,8 +104,8 @@ export async function GET(
       return new NextResponse('Not found', { status: 404 });
     }
 
-    const mime = (doc.mimeType || '').toLowerCase();
-    if (mime !== 'application/pdf') {
+    const mime = normalizeVisaOutcomeMime(doc.mimeType, doc.filename);
+    if (!isSendableVisaOutcomeMime(mime)) {
       return new NextResponse('Not found', { status: 404 });
     }
 
@@ -94,18 +114,21 @@ export async function GET(
       return new NextResponse('Not found', { status: 404 });
     }
 
-    const filename = doc.filename?.endsWith('.pdf')
+    const ext = waMediaPathExtension(mime);
+    const filename = doc.filename?.includes('.')
       ? doc.filename
-      : `${doc.filename || 'visa-document'}.pdf`;
+      : `${doc.filename || 'visa-document'}.${ext}`;
     const safeName = filename.replace(/"/g, '');
     const body = new Uint8Array(stored.buffer);
+    const disposition =
+      mime === 'application/pdf' ? 'attachment' : 'inline';
 
     return new NextResponse(body, {
       status: 200,
       headers: {
-        'Content-Type': 'application/pdf',
+        'Content-Type': mime,
         'Content-Length': String(body.byteLength),
-        'Content-Disposition': `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`,
+        'Content-Disposition': `${disposition}; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`,
         'Cache-Control': 'private, no-store',
         'Accept-Ranges': 'bytes',
         'X-Content-Type-Options': 'nosniff',

@@ -14,6 +14,7 @@ import { buildVisaOutcomeObjectKey } from '@/lib/visa/outcomeDocument';
 import {
   VISA_OUTCOME_UPLOAD_TYPES,
   isPdfMime,
+  isSendableVisaOutcomeMime,
 } from '@/lib/visa/outcomeDocumentShared';
 
 function decodeBase64(base64: string): Buffer {
@@ -26,7 +27,12 @@ export async function uploadVisaOutcomeFile(input: {
   filename: string;
   mimeType: string;
   bufferBase64: string;
-  /** When true, only application/pdf is accepted. */
+  /**
+   * When true, only WhatsApp/email-sendable types are accepted
+   * (PDF + JPG/PNG/WebP).
+   */
+  requireSendable?: boolean;
+  /** @deprecated Prefer requireSendable — kept for older callers. */
   requirePdf?: boolean;
 }): Promise<
   | {
@@ -52,10 +58,11 @@ export async function uploadVisaOutcomeFile(input: {
     }
 
     const mimeType = (input.mimeType || '').toLowerCase();
-    if (input.requirePdf && !isPdfMime(mimeType)) {
+    const requireSendable = Boolean(input.requireSendable || input.requirePdf);
+    if (requireSendable && !isSendableVisaOutcomeMime(mimeType)) {
       return {
         success: false,
-        error: 'Only PDF files can be sent on WhatsApp and email',
+        error: 'Only PDF, JPG, PNG, or WebP can be sent on WhatsApp and email',
       };
     }
     if (

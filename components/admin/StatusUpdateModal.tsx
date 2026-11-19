@@ -5,6 +5,11 @@ import { createPortal } from 'react-dom';
 import { Button, Badge, Select, getStatusVariant } from '@/components/ui';
 import { updateApplicationStatus } from '@/app/(admin)/actions';
 import { uploadVisaOutcomeFile } from '@/lib/upload/visa-outcome-actions';
+import {
+  isImageFile,
+  isPdfFile,
+  isSendableVisaOutcomeFile,
+} from '@/lib/visa/outcomeDocumentShared';
 import { cn } from '@/lib/utils';
 
 /**
@@ -73,6 +78,9 @@ export function StatusUpdateModal({
   const [newStatus, setNewStatus] = useState(currentStatus);
   const [notes, setNotes] = useState('');
   const [deliveryFile, setDeliveryFile] = useState<File | null>(null);
+  const [deliveryPreviewUrl, setDeliveryPreviewUrl] = useState<string | null>(
+    null
+  );
   const [sendDelivery, setSendDelivery] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -84,6 +92,11 @@ export function StatusUpdateModal({
   );
   const showDelivery =
     applicationType === 'visa' && newStatus === 'approved' && Boolean(travellerId);
+  const deliveryIsPdf = Boolean(deliveryFile && isPdfFile(deliveryFile));
+  const deliveryIsImage = Boolean(deliveryFile && isImageFile(deliveryFile));
+  const canSendDelivery = Boolean(
+    deliveryFile && isSendableVisaOutcomeFile(deliveryFile)
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -127,6 +140,18 @@ export function StatusUpdateModal({
     }
   }, [showDelivery]);
 
+  useEffect(() => {
+    if (!deliveryFile) {
+      setDeliveryPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(deliveryFile);
+    setDeliveryPreviewUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [deliveryFile]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -142,12 +167,16 @@ export function StatusUpdateModal({
     }
 
     if (sendDelivery && !deliveryFile) {
-      setError('Choose a PDF to send on WhatsApp and email');
+      setError('Choose a PDF or image to send on WhatsApp and email');
       return;
     }
 
-    if (sendDelivery && deliveryFile && deliveryFile.type !== 'application/pdf') {
-      setError('Only PDF files can be sent on WhatsApp and email');
+    if (
+      sendDelivery &&
+      deliveryFile &&
+      !isSendableVisaOutcomeFile(deliveryFile)
+    ) {
+      setError('Only PDF, JPG, PNG, or WebP can be sent on WhatsApp and email');
       return;
     }
 
@@ -161,13 +190,23 @@ export function StatusUpdateModal({
 
       if (showDelivery && deliveryFile && travellerId) {
         const bufferBase64 = await fileToBase64(deliveryFile);
+        const mimeType = isPdfFile(deliveryFile)
+          ? 'application/pdf'
+          : isImageFile(deliveryFile)
+            ? deliveryFile.type ||
+              (/\.png$/i.test(deliveryFile.name)
+                ? 'image/png'
+                : /\.webp$/i.test(deliveryFile.name)
+                  ? 'image/webp'
+                  : 'image/jpeg')
+            : deliveryFile.type || 'application/octet-stream';
         const uploaded = await uploadVisaOutcomeFile({
           applicationId,
           travellerId,
           filename: deliveryFile.name,
-          mimeType: deliveryFile.type || 'application/octet-stream',
+          mimeType,
           bufferBase64,
-          requirePdf: sendDelivery,
+          requireSendable: sendDelivery,
         });
         if (!uploaded.success) {
           setError(uploaded.error);
@@ -221,7 +260,7 @@ export function StatusUpdateModal({
           role="dialog"
           aria-modal="true"
           aria-labelledby="status-update-title"
-          className="pointer-events-auto relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[24px] bg-white p-6 shadow-elevated"
+          className="pointer-events-auto relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[24px] bg-white p-6 shadow-elevated"
         >
           <div className="mb-4 flex items-center justify-between">
             <div>
@@ -336,39 +375,69 @@ export function StatusUpdateModal({
                     onChange={(e) => {
                       const file = e.target.files?.[0] ?? null;
                       setDeliveryFile(file);
-                      if (!file || file.type !== 'application/pdf') {
+                      if (!file || !isSendableVisaOutcomeFile(file)) {
                         setSendDelivery(false);
                       }
                     }}
                     className="block w-full font-switzer text-sm text-portrait-ink file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-3 file:py-1.5 file:font-switzer file:text-sm file:text-portrait-ink"
                   />
                   <p className="mt-1 font-switzer text-xs text-slate-helper">
-                    PDF, JPG, PNG, or WebP. Sending on WhatsApp requires PDF.
+                    PDF, JPG, PNG, or WebP. Any of these can be sent on WhatsApp
+                    and email.
                   </p>
-                  {deliveryFile ? (
-                    <p className="mt-1 font-switzer text-xs text-portrait-ink">
-                      Selected: {deliveryFile.name}
-                    </p>
-                  ) : null}
                 </div>
+
+                {deliveryFile && deliveryPreviewUrl ? (
+                  <div className="overflow-hidden rounded-[16px] border border-ash bg-white">
+                    <div className="border-b border-ash px-3 py-2">
+                      <p className="truncate font-switzer text-xs font-semibold text-portrait-ink">
+                        {deliveryFile.name}
+                      </p>
+                      <p className="font-switzer text-[11px] text-slate-helper">
+                        {(deliveryFile.size / 1024).toFixed(1)} KB
+                        {deliveryIsPdf
+                          ? ' · PDF'
+                          : deliveryIsImage
+                            ? ' · Image'
+                            : ''}
+                      </p>
+                    </div>
+                    <div className="flex min-h-[180px] items-center justify-center bg-[#f8fafc] p-3">
+                      {deliveryIsImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={deliveryPreviewUrl}
+                          alt={deliveryFile.name}
+                          className="max-h-[240px] max-w-full object-contain"
+                        />
+                      ) : deliveryIsPdf ? (
+                        <iframe
+                          title={deliveryFile.name}
+                          src={deliveryPreviewUrl}
+                          className="h-[240px] w-full rounded-xl bg-white"
+                        />
+                      ) : (
+                        <p className="font-switzer text-sm text-slate-helper">
+                          Preview not available for this file type.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
 
                 <label className="flex items-start gap-2 font-switzer text-sm text-portrait-ink">
                   <input
                     type="checkbox"
                     className="mt-1"
                     checked={sendDelivery}
-                    disabled={
-                      isSubmitting ||
-                      !deliveryFile ||
-                      deliveryFile.type !== 'application/pdf'
-                    }
+                    disabled={isSubmitting || !canSendDelivery}
                     onChange={(e) => setSendDelivery(e.target.checked)}
                   />
                   <span>
                     Send this file on WhatsApp and email
-                    {!deliveryFile || deliveryFile.type !== 'application/pdf' ? (
+                    {!canSendDelivery ? (
                       <span className="mt-0.5 block text-xs text-slate-helper">
-                        Select a PDF to enable sending.
+                        Select a PDF or image (JPG, PNG, WebP) to enable sending.
                       </span>
                     ) : null}
                   </span>

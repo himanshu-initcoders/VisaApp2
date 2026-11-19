@@ -93,7 +93,10 @@ import {
   cleanupVisaOutcomeUpload,
   upsertVisaOutcomeDocumentRow,
 } from '@/lib/visa/outcomeDocument';
-import { isPdfMime } from '@/lib/visa/outcomeDocumentShared';
+import {
+  isSendableVisaOutcomeMime,
+  normalizeVisaOutcomeMime,
+} from '@/lib/visa/outcomeDocumentShared';
 import {
   reviewerOwnsApplication,
   reviewerOwnsDocument,
@@ -306,15 +309,15 @@ export async function updateApplicationStatus(
       if (!deliveryDocumentKey) {
         return {
           success: false,
-          message: 'Attach a PDF to send on WhatsApp and email',
+          message: 'Attach a PDF or image to send on WhatsApp and email',
           error: 'deliveryDocumentKey required when sendDeliveryToChannels is set',
         };
       }
-      if (!isPdfMime(deliveryMimeType)) {
+      if (!isSendableVisaOutcomeMime(deliveryMimeType)) {
         return {
           success: false,
-          message: 'Only PDF files can be sent on WhatsApp and email',
-          error: 'PDF required when sendDeliveryToChannels is set',
+          message: 'Only PDF, JPG, PNG, or WebP can be sent on WhatsApp and email',
+          error: 'Supported delivery mime required when sendDeliveryToChannels is set',
         };
       }
     }
@@ -432,19 +435,21 @@ export async function updateApplicationStatus(
           passengerId: travellerPassengerId,
           userId: appOwner.userId,
         });
+        const filename = deliveryFilename || 'visa-document.pdf';
+        const mimeType = normalizeVisaOutcomeMime(deliveryMimeType, filename);
         const row = await upsertVisaOutcomeDocumentRow({
           applicationId,
           passengerId: travellerPassengerId,
           key: safeKey,
-          filename: deliveryFilename || 'visa-document.pdf',
+          filename,
           size: deliveryFileSize || 0,
-          mimeType: deliveryMimeType || 'application/pdf',
+          mimeType,
         });
         deliveryPayload = {
           documentId: row.id,
           s3Key: row.s3Key,
           filename: row.filename,
-          mimeType: row.mimeType,
+          mimeType: row.mimeType || mimeType,
           sendToChannels: Boolean(sendDeliveryToChannels),
         };
       } catch (deliveryError) {
@@ -758,12 +763,15 @@ export async function attachVisaOutcomeDocument(
       };
     }
 
-    if (sendDeliveryToChannels && !isPdfMime(deliveryMimeType)) {
+    if (
+      sendDeliveryToChannels &&
+      !isSendableVisaOutcomeMime(deliveryMimeType)
+    ) {
       await cleanupVisaOutcomeUpload(deliveryDocumentKey);
       return {
         success: false,
-        message: 'Only PDF files can be sent on WhatsApp and email',
-        error: 'PDF required when sendDeliveryToChannels is set',
+        message: 'Only PDF, JPG, PNG, or WebP can be sent on WhatsApp and email',
+        error: 'Supported delivery mime required when sendDeliveryToChannels is set',
       };
     }
 
@@ -838,19 +846,21 @@ export async function attachVisaOutcomeDocument(
         passengerId: traveller.passengerId,
         userId: appOwner.userId,
       });
+      const filename = deliveryFilename || 'visa-document.pdf';
+      const mimeType = normalizeVisaOutcomeMime(deliveryMimeType, filename);
       const row = await upsertVisaOutcomeDocumentRow({
         applicationId,
         passengerId: traveller.passengerId,
         key: safeKey,
-        filename: deliveryFilename || 'visa-document.pdf',
+        filename,
         size: deliveryFileSize || 0,
-        mimeType: deliveryMimeType || 'application/pdf',
+        mimeType,
       });
       deliveryPayload = {
         documentId: row.id,
         s3Key: row.s3Key,
         filename: row.filename,
-        mimeType: row.mimeType,
+        mimeType: row.mimeType || mimeType,
         sendToChannels: Boolean(sendDeliveryToChannels),
       };
     } catch (deliveryError) {
@@ -875,6 +885,7 @@ export async function attachVisaOutcomeDocument(
 
     if (deliveryPayload.sendToChannels) {
       try {
+        // Already approved — still re-send approved + document on email/WhatsApp.
         await notifyVisaOutcomeDeliveredEvent({
           applicationId,
           travellerId,
@@ -882,13 +893,18 @@ export async function attachVisaOutcomeDocument(
         });
       } catch (notifyError) {
         console.error('Visa outcome delivery notification failed', notifyError);
+        return {
+          success: true,
+          message:
+            'Visa document attached, but WhatsApp/email delivery failed. Check server logs.',
+        };
       }
     }
 
     return {
       success: true,
       message: deliveryPayload.sendToChannels
-        ? 'Visa document attached and sent'
+        ? 'Visa document attached and approved message sent'
         : 'Visa document attached',
     };
   } catch (error) {
