@@ -18,7 +18,7 @@ export function VisaListingSlugField({
   error,
   registration,
 }: VisaListingSlugFieldProps) {
-  const segment = normalizeVisaListingSlug(value || '') || 'Japan-Tourism-Visa';
+  const segment = normalizeVisaListingSlug(value || '') || 'Australia-Tourism-Visa';
   const code = countryCode.trim();
   const listingPath = code
     ? buildProcessHref(code, segment)
@@ -28,7 +28,7 @@ export function VisaListingSlugField({
     <div className="md:col-span-2">
       <Input
         label="URL slug"
-        placeholder="Japan-Tourism-Visa"
+        placeholder="Australia-Tourism-Visa"
         autoCapitalize="off"
         spellCheck={false}
         error={error}

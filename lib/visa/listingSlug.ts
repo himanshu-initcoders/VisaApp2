@@ -1,6 +1,6 @@
 /**
  * Public visa-listing slugs.
- * Canonical form is title case with hyphens: Japan-Tourism-Visa.
+ * Canonical form is title case with hyphens: Australia-Tourism-Visa.
  */
 
 export const VISA_LISTING_SLUG_PATTERN = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/;
@@ -32,7 +32,7 @@ export function normalizeVisaListingSlug(value: string) {
   return parts.join('-').slice(0, 120).replace(/-+$/g, '');
 }
 
-/** Default slug from destination + purpose, e.g. Japan + tourism → Japan-Tourism-Visa. */
+/** Default slug from destination + purpose, e.g. Australia + tourism → Australia-Tourism-Visa. */
 export function suggestVisaListingSlug(input: {
   countryName: string;
   purpose: string;

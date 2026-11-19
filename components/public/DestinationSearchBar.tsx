@@ -30,7 +30,7 @@ export function DestinationSearchBar({
     placeholder ||
     (isNav || isPanel
       ? 'Search Country'
-      : 'Search destinations like Dubai or Japan');
+      : 'Search destinations like Dubai or Australia');
 
   const shellClass = cn(
     'flex w-full items-center rounded-full border border-ash bg-white text-left transition-shadow',

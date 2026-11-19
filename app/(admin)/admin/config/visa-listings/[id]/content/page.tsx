@@ -116,8 +116,7 @@ export default async function ContentPage({
               Multi-Country Visa Support
             </h2>
             <p className="text-sm text-slate-helper mb-6">
-              Additional countries where this visa is valid (e.g., Japan visa valid for 6 more
-              countries)
+              Additional countries where this visa is valid.
             </p>
             <MultiCountryManager
               processId={id}

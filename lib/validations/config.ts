@@ -72,7 +72,7 @@ export const processBasicInfoSchema = z.object({
     .max(120, 'URL slug is too long')
     .transform((value) => normalizeVisaListingSlug(value))
     .refine((value) => VISA_LISTING_SLUG_PATTERN.test(value), {
-      message: 'Use words separated by hyphens, like Japan-Tourism-Visa',
+      message: 'Use words separated by hyphens, like Australia-Tourism-Visa',
     }),
   processType: z.enum(
     ['electronic_travel_authorisation', 'afc', 'visa', 'appointment', 'visa_on_arrival', 'sticker_visa', 'visa_free'],
