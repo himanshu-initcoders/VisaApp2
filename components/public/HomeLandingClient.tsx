@@ -75,6 +75,20 @@ export function HomeLandingClient({
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const hash = window.location.hash.replace(/^#/, '');
+    if (!hash) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(hash)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
   const availablePurposes = useMemo(() => {
     const seen = new Set<string>();
     for (const country of countries) {
@@ -130,7 +144,7 @@ export function HomeLandingClient({
       )}
 
       <section
-        className="mx-auto max-w-7xl px-4 pb-8 pt-6 sm:px-6 sm:pb-12 sm:pt-8 lg:px-8"
+        className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-8 pt-6 sm:scroll-mt-28 sm:px-6 sm:pb-12 sm:pt-8 lg:px-8"
         id="visas"
       >
         {visibleCountries.length > 0 ? (

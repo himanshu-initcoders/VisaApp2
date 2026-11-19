@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import Link from 'next/link';
+import { FooterNavLink } from '@/components/layout/FooterNavLink';
 import { PrivateServiceDisclaimer } from '@/components/public/PrivateServiceDisclaimer';
 import { BRAND_NAME, Logo } from '@/components/shared/Logo';
 import { SOCIAL_PROFILES } from '@/lib/seo/site';
@@ -36,7 +36,7 @@ export function Footer() {
     {
       title: 'Products',
       links: [
-        { href: '/', label: 'Visa services' },
+        { href: '/#visas', label: 'Visa services' },
         { href: '/passport', label: 'Passport services' },
         { href: '/dashboard', label: 'Track application' },
       ],
@@ -67,12 +67,7 @@ export function Footer() {
               <ul className="space-y-3">
                 {group.links.map((link) => (
                   <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-white/70 hover:text-nautical-teal transition-colors"
-                    >
-                      {link.label}
-                    </Link>
+                    <FooterNavLink href={link.href} label={link.label} />
                   </li>
                 ))}
               </ul>

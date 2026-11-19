@@ -444,8 +444,8 @@ export default async function PassportPage() {
         listingCount={listings.length}
         startingValue={startingValue}
       />
-      <Header cta="account" />
-      <main className="min-h-screen bg-[#f8f6f1] pt-28 sm:pt-32">
+      <Header overlay cta="account" />
+      <main className="min-h-screen bg-[#f8f6f1] pt-20 sm:pt-24">
         <section className="px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <MotionReveal className="overflow-hidden rounded-[32px] border border-ash-divider bg-white shadow-card sm:rounded-[40px]">
