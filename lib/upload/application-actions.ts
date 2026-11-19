@@ -35,6 +35,14 @@ export interface ApplicationDocumentUploadInput {
   listingId: string;
   applicationId: string;
   documents: ApplicationDocumentUploadItem[];
+  /**
+   * Correction resubmits: write a unique object key and do not delete prior
+   * slot objects (history stays reachable via correction_items.previousValue).
+   * Draft / first-upload flows leave this false so replace still cleans siblings.
+   */
+  preserveExistingObjects?: boolean;
+  /** Used when preserveExistingObjects is true (e.g. correction request id). */
+  revisionToken?: string;
 }
 
 export interface ApplicationDocumentUploadResult {
@@ -79,10 +87,18 @@ export async function uploadApplicationDocuments(
     const results: ApplicationDocumentUploadResult[] = [];
 
     try {
+      const preserveExisting = Boolean(input.preserveExistingObjects);
       for (const doc of input.documents) {
         const buffer = decodeBase64(doc.bufferBase64);
         const mimeType = doc.mimeType || 'application/octet-stream';
         const ext = extensionFromMime(mimeType, doc.filename);
+        const revision = preserveExisting
+          ? [
+              input.revisionToken?.trim() || 'corr',
+              doc.slotKey,
+              Date.now().toString(36),
+            ].join('-')
+          : undefined;
         const explicitKey = buildApplicationObjectKey({
           countryCode: input.countryCode,
           listingId: input.listingId,
@@ -91,6 +107,7 @@ export async function uploadApplicationDocuments(
           passengerId: doc.passengerId,
           slotKey: doc.slotKey,
           ext,
+          revision,
         });
 
         const result = await uploadService.upload(buffer, {
@@ -125,7 +142,10 @@ export async function uploadApplicationDocuments(
         });
 
         // Same slot + different extension would otherwise orphan the prior object.
-        await deleteOtherSlotExtensionKeys(result.key);
+        // Correction resubmits keep older objects on purpose.
+        if (!preserveExisting) {
+          await deleteOtherSlotExtensionKeys(result.key);
+        }
       }
 
       return { success: true, results };

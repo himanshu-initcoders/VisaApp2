@@ -228,6 +228,8 @@ export default async function VisaApplicationDetailPage({
 
       <TravellerSelectionProvider travellers={travellers}>
         <CorrectionsCard
+          applicationId={app.id}
+          applicationType="visa"
           rounds={rounds.filter((round) => round.status !== 'resolved')}
         />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -395,7 +397,11 @@ export default async function VisaApplicationDetailPage({
                 ) : (
                   <div className="space-y-6">
                     <StaffEditsCard edits={staffEdits} />
-                    <CorrectionsCard rounds={rounds} />
+                    <CorrectionsCard
+                      applicationId={app.id}
+                      applicationType="visa"
+                      rounds={rounds}
+                    />
                   </div>
                 )}
               </TabsPanel>

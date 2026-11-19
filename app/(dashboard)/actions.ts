@@ -17,10 +17,6 @@ import {
 } from '@/lib/db/schema';
 import { uploadService } from '@/lib/upload';
 import { uploadApplicationDocuments } from '@/lib/upload/application-actions';
-import {
-  deleteOtherSlotExtensionKeys,
-  deleteReplacedObjectKey,
-} from '@/lib/upload/deleteSlotSiblings';
 import { upsertApplicationDocumentRow } from '@/lib/upload/upsertApplicationDocumentRow';
 import { updateProfileSchema } from '@/lib/validations/auth';
 import type { ActionResponse } from '@/types/admin';
@@ -392,6 +388,12 @@ export async function submitCorrection(
     if (!application) {
       return { success: false, message: 'Application not found' };
     }
+    if (application.status === 'draft') {
+      return {
+        success: false,
+        message: 'Draft applications cannot use correction updates',
+      };
+    }
 
     const [traveller] = await db
       .select()
@@ -500,6 +502,9 @@ export async function submitCorrection(
           countryCode: application.countryCode,
           listingId: application.visaListingId,
           applicationId,
+          // Keep prior correction files in storage; live DB pointer moves to the new key.
+          preserveExistingObjects: true,
+          revisionToken: open.request.id,
           documents: files.map((file) => ({
             passengerId: traveller.passengerId,
             slotKey: file.slotKey,
@@ -519,11 +524,6 @@ export async function submitCorrection(
 
     const now = new Date();
     for (const uploaded of uploadResult.results) {
-      await deleteReplacedObjectKey(
-        previousKeys.get(uploaded.slotKey),
-        uploaded.key
-      );
-      await deleteOtherSlotExtensionKeys(uploaded.key);
       nextTraveller = replaceTravellerDocument(nextTraveller, uploaded.slotKey, {
         slotKey: uploaded.slotKey,
         key: uploaded.key,
@@ -692,6 +692,12 @@ export async function submitPassportCorrection(
     if (!application) {
       return { success: false, message: 'Application not found' };
     }
+    if (application.status === 'draft') {
+      return {
+        success: false,
+        message: 'Draft applications cannot use correction updates',
+      };
+    }
 
     const open = await getOpenPassportCorrection(applicationId);
     if (!open) {
@@ -783,6 +789,9 @@ export async function submitPassportCorrection(
           countryCode: PASSPORT_DRAFT_COUNTRY_CODE,
           listingId: application.passportListingId,
           applicationId,
+          // Keep prior correction files in storage; live DB pointer moves to the new key.
+          preserveExistingObjects: true,
+          revisionToken: open.request.id,
           documents: files.map((file) => ({
             passengerId: PASSPORT_DRAFT_PASSENGER_ID,
             slotKey: file.slotKey,
@@ -802,11 +811,6 @@ export async function submitPassportCorrection(
 
     const now = new Date();
     for (const uploaded of uploadResult.results) {
-      await deleteReplacedObjectKey(
-        previousKeys.get(uploaded.slotKey),
-        uploaded.key
-      );
-      await deleteOtherSlotExtensionKeys(uploaded.key);
       documents = replacePassportDocument(documents, uploaded.slotKey, {
         slotKey: uploaded.slotKey,
         key: uploaded.key,
@@ -826,6 +830,7 @@ export async function submitPassportCorrection(
           answers,
           personalInfo: answers,
           documents,
+          // Correction resubmit stays on a submitted case — never draft.
           status: 'under_review',
           updatedAt: now,
         })

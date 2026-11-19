@@ -1157,6 +1157,59 @@ export async function getDocumentPreviewUrl(
 }
 
 /**
+ * Resolve a preview URL for a storage key on a correction round
+ * (previous or new file — including retained older objects).
+ */
+export async function getApplicationStoragePreviewUrl(input: {
+  applicationId: string;
+  applicationType?: 'visa' | 'passport';
+  storageKey: string;
+}): Promise<ActionResponse<{ url: string }>> {
+  try {
+    const session = await requireRole(['admin', 'reviewer']);
+    const applicationId = input.applicationId?.trim();
+    if (!applicationId) {
+      return { success: false, message: 'Application not found' };
+    }
+
+    const applicationType = input.applicationType ?? 'visa';
+    const denied = await denyReviewerUnlessAssigned(
+      session,
+      applicationId,
+      applicationType
+    );
+    if (denied) return denied;
+
+    let key: string;
+    try {
+      const { assertSafeStorageKey } = await import(
+        '@/lib/upload/safeStorageKey'
+      );
+      key = assertSafeStorageKey(input.storageKey);
+    } catch {
+      return { success: false, message: 'Document not found' };
+    }
+
+    // Key must belong to this application path segment.
+    if (!key.includes(`/${applicationId}/`)) {
+      return { success: false, message: 'Document not found' };
+    }
+
+    return {
+      success: true,
+      message: 'OK',
+      data: { url: uploadService.getUrl(key) },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: 'Failed to resolve document URL',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
  * Update user role (admin only)
  */
 export async function updateUserRole(

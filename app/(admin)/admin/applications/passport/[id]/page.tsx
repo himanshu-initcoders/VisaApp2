@@ -141,6 +141,8 @@ export default async function PassportApplicationDetailPage({
       </div>
 
       <CorrectionsCard
+        applicationId={app.id}
+        applicationType="passport"
         rounds={rounds.filter((round) => round.status !== 'resolved')}
       />
 
@@ -239,7 +241,11 @@ export default async function PassportApplicationDetailPage({
               ) : (
                 <div className="space-y-6">
                   <StaffEditsCard edits={staffEdits} />
-                  <CorrectionsCard rounds={rounds} />
+                  <CorrectionsCard
+                    applicationId={app.id}
+                    applicationType="passport"
+                    rounds={rounds}
+                  />
                 </div>
               )}
             </TabsPanel>

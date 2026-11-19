@@ -13,6 +13,11 @@ export interface ApplicationObjectKeyInput {
   passengerId: string;
   slotKey: string;
   ext: string;
+  /**
+   * Optional revision token so a correction re-upload does not overwrite the
+   * previous object at `{slotKey}.{ext}` (keeps the older file in storage).
+   */
+  revision?: string;
 }
 
 /** Sanitize slot keys to [a-z0-9_-]. */
@@ -67,6 +72,9 @@ export function buildApplicationObjectKey(input: ApplicationObjectKeyInput): str
   const passengerId = sanitizePathSegment(input.passengerId);
   const slotKey = sanitizeSlotKey(input.slotKey);
   const ext = sanitizeExtension(input.ext);
+  const revision = input.revision
+    ? `__${sanitizePathSegment(input.revision)}`
+    : '';
 
   return [
     'applications',
@@ -76,7 +84,7 @@ export function buildApplicationObjectKey(input: ApplicationObjectKeyInput): str
     applicationId,
     'passengers',
     passengerId,
-    `${slotKey}.${ext}`,
+    `${slotKey}${revision}.${ext}`,
   ].join('/');
 }
 

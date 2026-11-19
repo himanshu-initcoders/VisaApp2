@@ -277,6 +277,7 @@ export function readTargetValue(
     filename: doc.filename ?? null,
     key: doc.key ?? null,
     url: doc.url ?? null,
+    mimeType: doc.mimeType ?? null,
   };
 }
 
