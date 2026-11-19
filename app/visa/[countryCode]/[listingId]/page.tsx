@@ -89,7 +89,14 @@ export async function generateMetadata({
           ...(ogImage.height ? { height: ogImage.height } : {}),
         },
       ]
-    : [{ url: '/logo.png', alt: 'Viserv' }];
+    : [
+        {
+          url: '/og-image.png',
+          width: 1733,
+          height: 907,
+          alt: 'Viserv — simplifying visas',
+        },
+      ];
 
   return {
     title,

@@ -32,13 +32,20 @@ export const metadata: Metadata = {
     description: HOME_DESCRIPTION,
     url: '/',
     type: 'website',
-    images: [{ url: '/logo.png', alt: 'Viserv' }],
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1733,
+        height: 907,
+        alt: 'Viserv — simplifying visas',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: HOME_TITLE,
     description: HOME_DESCRIPTION,
-    images: ['/logo.png'],
+    images: ['/og-image.png'],
   },
 };
 

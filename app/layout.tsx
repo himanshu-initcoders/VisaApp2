@@ -40,13 +40,20 @@ export const metadata: Metadata = {
     url: '/',
     siteName: SITE_NAME,
     type: 'website',
-    images: [{ url: '/logo.png', alt: SITE_NAME }],
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1733,
+        height: 907,
+        alt: `${SITE_NAME} — simplifying visas`,
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
-    images: ['/logo.png'],
+    images: ['/og-image.png'],
   },
   icons: {
     icon: [

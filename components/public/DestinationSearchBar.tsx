@@ -83,7 +83,7 @@ export function DestinationSearchBar({
             IN
           </span>
           <span className="text-left">
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-helper">
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-iron">
               Passport
             </span>
             <span className="block text-sm font-semibold text-portrait-ink">
@@ -93,12 +93,12 @@ export function DestinationSearchBar({
         </span>
 
         <span className="flex min-w-0 flex-1 items-center gap-3 px-4">
-          <Search className="h-5 w-5 shrink-0 text-slate-helper sm:hidden" />
+          <Search className="h-5 w-5 shrink-0 text-iron sm:hidden" />
           <span className="min-w-0 text-left">
             <span className="block text-sm font-semibold text-portrait-ink">
               Where to?
             </span>
-            <span className="block truncate text-xs text-slate-helper">
+            <span className="block truncate text-xs text-iron">
               {label}
             </span>
           </span>
