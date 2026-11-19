@@ -640,12 +640,12 @@ export async function notifyStatusApprovedWithDocumentWhatsApp(input: {
 }
 
 /**
- * Login OTP — sends to the requested mobile even if no users row exists yet.
+ * Login OTP — WhatsApp Authentication template (single variable {{1}} = OTP).
+ * Sends to the requested mobile even if no users row exists yet.
  * Returns false when Twilio/SID is missing or the API fails (caller must fail the request).
  */
 export async function sendLoginOtpWhatsApp(input: {
   phone: string;
-  name: string;
   code: string;
 }): Promise<boolean> {
   const contentSid = sid('TWILIO_WA_SID_LOGIN_OTP');
@@ -663,7 +663,7 @@ export async function sendLoginOtpWhatsApp(input: {
   return sendWhatsAppContent({
     to,
     contentSid,
-    variables: vars([input.name, input.code]),
+    variables: vars([input.code]),
     label: 'login otp',
   });
 }

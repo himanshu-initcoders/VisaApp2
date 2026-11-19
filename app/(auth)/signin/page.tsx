@@ -35,8 +35,7 @@ export default function SignInPage() {
           </span>
         </CardTitle>
         <CardDescription>
-          Sign in with your email, or create an account with your name, email,
-          and mobile number.
+          Enter your mobile number. We will send a one-time code on WhatsApp.
         </CardDescription>
       </CardHeader>
       <CardContent>

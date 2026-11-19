@@ -26,7 +26,8 @@ export const users = pgTable(
   'users',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    email: varchar('email', { length: 255 }).notNull().unique(),
+    /** Not unique — phone is the applicant identity key. */
+    email: varchar('email', { length: 255 }).notNull(),
     /** Nullable for phone-OTP applicants (no password). */
     passwordHash: varchar('password_hash', { length: 255 }),
     name: varchar('name', { length: 255 }).notNull(),

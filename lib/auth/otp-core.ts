@@ -1,17 +1,14 @@
 /**
  * Mobile OTP core (plain server module — safe to call from Auth.js authorize).
  * - mock: any valid 5-digit OTP signs in (local / CI)
- * - whatsapp: generate, store hashed challenge (10m expiry), send via Twilio template
+ * - whatsapp: generate, store hashed challenge (10m expiry), send via Twilio Auth template
  */
 
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { phoneOtpChallenges, users } from '@/lib/db/schema';
-import {
-  normalizeIndianPhone,
-  otpSyntheticEmail,
-} from '@/lib/auth/phone';
+import { normalizeIndianPhone } from '@/lib/auth/phone';
 import {
   requestOtpSchema,
   verifyOtpSchema,
@@ -71,7 +68,10 @@ function checkRateLimit(key: string): boolean {
 export async function requestOtp(input: {
   phone: string;
   ip?: string;
-}): Promise<{ success: true } | { success: false; error: string }> {
+}): Promise<
+  | { success: true; accountExists: boolean }
+  | { success: false; error: string }
+> {
   const parsed = requestOtpSchema.safeParse({
     phone: normalizeIndianPhone(input.phone) ?? input.phone,
   });
@@ -92,11 +92,12 @@ export async function requestOtp(input: {
   }
 
   const [existingUser] = await db
-    .select({ name: users.name, role: users.role })
+    .select({ id: users.id })
     .from(users)
     .where(eq(users.phone, phone))
     .limit(1);
 
+  const accountExists = Boolean(existingUser);
   const mode = otpMode();
   const code = generateOtpCode();
 
@@ -104,10 +105,9 @@ export async function requestOtp(input: {
     console.info(
       `[otp] mock mode for +91${phone}: any 5-digit code works (e.g. 11111)`
     );
-    return { success: true };
+    return { success: true, accountExists };
   }
 
-  const displayName = existingUser?.name?.trim() || 'Traveller';
   const expiresAt = new Date(Date.now() + OTP_TTL_MS);
   const codeHash = hashOtp(code);
   const now = new Date();
@@ -133,7 +133,6 @@ export async function requestOtp(input: {
 
   const sent = await sendLoginOtpWhatsApp({
     phone,
-    name: displayName,
     code,
   });
 
@@ -147,16 +146,18 @@ export async function requestOtp(input: {
     };
   }
 
-  return { success: true };
+  return { success: true, accountExists };
 }
 
 /**
  * Verify OTP and find-or-create user (applicants; existing staff with this phone).
- * Does not create a session — caller should signIn('phone-otp', …).
+ * New phones require name + email. Does not create a session — caller should signIn('phone-otp', …).
  */
 export async function verifyOtpAndEnsureUser(input: {
   phone: string;
   otp: string;
+  name?: string;
+  email?: string;
 }): Promise<
   | { success: true; userId: string; phone: string }
   | { success: false; error: string }
@@ -165,6 +166,8 @@ export async function verifyOtpAndEnsureUser(input: {
   const parsed = verifyOtpSchema.safeParse({
     phone: phoneNorm ?? input.phone,
     otp: input.otp,
+    name: input.name,
+    email: input.email,
   });
   if (!parsed.success) {
     return {
@@ -173,7 +176,7 @@ export async function verifyOtpAndEnsureUser(input: {
     };
   }
 
-  const { phone, otp } = parsed.data;
+  const { phone, otp, name, email } = parsed.data;
   const mode = otpMode();
 
   if (mode === 'whatsapp') {
@@ -247,12 +250,19 @@ export async function verifyOtpAndEnsureUser(input: {
     return { success: true, userId: existing.id, phone };
   }
 
+  if (!name || !email) {
+    return {
+      success: false,
+      error: 'Name and email are required to create an account.',
+    };
+  }
+
   const [created] = await db
     .insert(users)
     .values({
-      email: otpSyntheticEmail(phone),
+      email,
       passwordHash: null,
-      name: 'Traveller',
+      name,
       phone,
       phoneVerified: new Date(),
       emailVerified: new Date(),

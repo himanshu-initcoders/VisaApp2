@@ -14,26 +14,20 @@ import { cn } from '@/lib/utils';
 import {
   indianMobileSchema,
   mobileOtpSchema,
-  requestEmailLoginOtpSchema,
-  requestEmailRegisterOtpSchema,
+  requestOtpSchema,
+  verifyOtpSchema,
 } from '@/lib/validations/auth';
-import {
-  completeEmailOtp,
-  requestEmailLoginOtp,
-  requestEmailRegisterOtp,
-} from '@/lib/auth/email-otp';
+import { requestOtp } from '@/lib/auth/otp';
 import { trackEvent } from '@/lib/analytics/gtm';
 
-type AuthTab = 'login' | 'register';
-type AuthStep = 'form' | 'otp';
+type AuthStep = 'phone' | 'otp';
 
 export interface ApplicantAuthPanelProps {
   otpLength?: number;
   variant?: 'page' | 'checkout-embed' | 'modal-embed';
   redirectTo?: string;
   analyticsContext?: 'signin' | 'apply_modal' | 'checkout' | 'save_draft';
-  onVerified?: (payload: { email: string; userId: string }) => void;
-  defaultTab?: AuthTab;
+  onVerified?: (payload: { phone: string; userId: string }) => void;
 }
 
 export function ApplicantAuthPanel({
@@ -42,7 +36,6 @@ export function ApplicantAuthPanel({
   redirectTo,
   analyticsContext,
   onVerified,
-  defaultTab = 'login',
 }: ApplicantAuthPanelProps) {
   const authContext =
     analyticsContext ??
@@ -51,8 +44,8 @@ export function ApplicantAuthPanel({
       : 'signin');
   const router = useRouter();
 
-  const [tab, setTab] = useState<AuthTab>(defaultTab);
-  const [step, setStep] = useState<AuthStep>('form');
+  const [step, setStep] = useState<AuthStep>('phone');
+  const [accountExists, setAccountExists] = useState(true);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -73,14 +66,6 @@ export function ApplicantAuthPanel({
     setFieldErrors({});
   };
 
-  const switchTab = (next: AuthTab) => {
-    setTab(next);
-    setStep('form');
-    setOtp(Array(otpLength).fill(''));
-    setOtpComplete(false);
-    clearMessages();
-  };
-
   const handlePhoneChange = (value: string) => {
     setPhone(value.replace(/\D/g, '').slice(0, 10));
     if (fieldErrors.phone) {
@@ -97,63 +82,11 @@ export function ApplicantAuthPanel({
     if (loading || verifyingRef.current || sendingRef.current) return;
     clearMessages();
 
-    if (tab === 'login') {
-      const parsed = requestEmailLoginOtpSchema.safeParse({ email });
-      if (!parsed.success) {
-        setFieldErrors({
-          email:
-            parsed.error.issues[0]?.message ?? 'Enter a valid email address',
-        });
-        return;
-      }
-
-      sendingRef.current = true;
-      setLoading(true);
-      try {
-        const response = await requestEmailLoginOtp({ email: parsed.data.email });
-        if (!response.success) {
-          setError(response.error);
-          return;
-        }
-        trackEvent('auth_otp_requested', {
-          context: authContext,
-          method: 'email_otp',
-          intent: 'login',
-        });
-        setEmail(parsed.data.email);
-        setOtp(Array(otpLength).fill(''));
-        setOtpComplete(false);
-        setStep('otp');
-        requestAnimationFrame(() => otpRefs.current[0]?.focus());
-      } catch {
-        setError('Could not send OTP. Please try again.');
-      } finally {
-        sendingRef.current = false;
-        setLoading(false);
-      }
-      return;
-    }
-
-    const parsed = requestEmailRegisterOtpSchema.safeParse({
-      name,
-      email,
-      phone,
-    });
+    const parsed = requestOtpSchema.safeParse({ phone });
     if (!parsed.success) {
-      const nextErrors: Record<string, string> = {};
-      for (const issue of parsed.error.issues) {
-        const key = String(issue.path[0] ?? '');
-        if (key && !nextErrors[key]) nextErrors[key] = issue.message;
-      }
-      setFieldErrors(nextErrors);
-      return;
-    }
-
-    const phoneCheck = indianMobileSchema.safeParse(parsed.data.phone);
-    if (!phoneCheck.success) {
       setFieldErrors({
         phone:
-          phoneCheck.error.issues[0]?.message ??
+          parsed.error.issues[0]?.message ??
           'Enter a valid Indian mobile number',
       });
       return;
@@ -162,23 +95,28 @@ export function ApplicantAuthPanel({
     sendingRef.current = true;
     setLoading(true);
     try {
-      const response = await requestEmailRegisterOtp(parsed.data);
+      const response = await requestOtp({ phone: parsed.data.phone });
       if (!response.success) {
         setError(response.error);
         return;
       }
       trackEvent('auth_otp_requested', {
         context: authContext,
-        method: 'email_otp',
-        intent: 'register',
+        method: 'phone_otp',
+        intent: response.accountExists ? 'login' : 'register',
       });
-      setName(parsed.data.name);
-      setEmail(parsed.data.email);
       setPhone(parsed.data.phone);
+      setAccountExists(response.accountExists);
       setOtp(Array(otpLength).fill(''));
       setOtpComplete(false);
       setStep('otp');
-      requestAnimationFrame(() => otpRefs.current[0]?.focus());
+      requestAnimationFrame(() => {
+        if (!response.accountExists) {
+          document.getElementById('applicant-auth-name')?.focus();
+        } else {
+          otpRefs.current[0]?.focus();
+        }
+      });
     } catch {
       setError('Could not send OTP. Please try again.');
     } finally {
@@ -198,29 +136,18 @@ export function ApplicantAuthPanel({
     setOtpComplete(false);
 
     try {
-      const response =
-        tab === 'login'
-          ? await requestEmailLoginOtp({ email, resend: true })
-          : await requestEmailRegisterOtp({
-              name,
-              email,
-              phone,
-              resend: true,
-            });
+      const response = await requestOtp({ phone });
       if (!response.success) {
         setError(response.error);
         return;
       }
+      setAccountExists(response.accountExists);
       trackEvent('auth_otp_requested', {
         context: authContext,
-        method: 'email_otp',
-        intent: tab === 'register' ? 'register' : 'login',
+        method: 'phone_otp',
+        intent: response.accountExists ? 'login' : 'register',
       });
-      setNotice(
-        response.sent
-          ? 'New code sent. Use the newest email.'
-          : 'That code is still valid. Check your inbox and spam.'
-      );
+      setNotice('New code sent on WhatsApp. Use the newest code.');
       requestAnimationFrame(() => otpRefs.current[0]?.focus());
     } catch {
       setError('Could not send OTP. Please try again.');
@@ -239,39 +166,52 @@ export function ApplicantAuthPanel({
     setError(null);
     setNotice(null);
 
-    const intent = tab === 'register' ? 'register' : 'login';
+    const intent = accountExists ? 'login' : 'register';
     const digits = otpValue.replace(/\D/g, '');
 
     try {
-      // Verify OTP in a server action (same path as send), then open the
-      // Auth.js session with a short-lived proof — not the raw OTP.
-      const verified = await completeEmailOtp({
-        email,
-        otp: digits,
-        intent,
-      });
-
-      if (!verified.success) {
-        const message = verified.error;
-        trackEvent('login_failed', {
-          method: 'email_otp',
-          error_code: /deactivated/i.test(message)
-            ? 'deactivated'
-            : /no account/i.test(message)
-              ? 'no_account'
-              : /invalid otp/i.test(message)
-                ? 'invalid_otp'
-                : 'unknown',
-          context: authContext,
-          intent,
+      if (!accountExists) {
+        const profile = verifyOtpSchema.safeParse({
+          phone,
+          otp: digits,
+          name,
+          email,
         });
-        setError(message);
+        if (!profile.success) {
+          const nextErrors: Record<string, string> = {};
+          for (const issue of profile.error.issues) {
+            const key = String(issue.path[0] ?? '');
+            if (key && key !== 'otp' && !nextErrors[key]) {
+              nextErrors[key] = issue.message;
+            }
+          }
+          if (Object.keys(nextErrors).length > 0) {
+            setFieldErrors(nextErrors);
+            return;
+          }
+          setError(profile.error.issues[0]?.message ?? 'Invalid details');
+          return;
+        }
+      } else {
+        const otpCheck = mobileOtpSchema.safeParse(digits);
+        if (!otpCheck.success) {
+          setError(otpCheck.error.issues[0]?.message ?? 'Enter a valid OTP');
+          return;
+        }
+      }
+
+      const phoneCheck = indianMobileSchema.safeParse(phone);
+      if (!phoneCheck.success) {
+        setError('Invalid mobile number. Go back and try again.');
         return;
       }
 
-      const result = await signIn('email-otp', {
-        email: verified.email,
-        proof: verified.proof,
+      const result = await signIn('phone-otp', {
+        phone: phoneCheck.data,
+        otp: digits,
+        ...(accountExists
+          ? {}
+          : { name: name.trim(), email: email.trim().toLowerCase() }),
         redirect: false,
       });
 
@@ -281,34 +221,40 @@ export function ApplicantAuthPanel({
             ? (result as { code?: string }).code
             : undefined;
         trackEvent('login_failed', {
-          method: 'email_otp',
+          method: 'phone_otp',
           error_code:
             code === 'deactivated'
               ? 'deactivated'
-              : result.error === 'CredentialsSignin'
-                ? 'invalid_otp'
-                : 'unknown',
+              : code === 'profile_required'
+                ? 'profile_required'
+                : result.error === 'CredentialsSignin'
+                  ? 'invalid_otp'
+                  : 'unknown',
           context: authContext,
           intent,
         });
         setError(
           code === 'deactivated'
             ? 'This account has been deactivated.'
-            : 'Sign-in failed after OTP verification. Please request a new code.'
+            : code === 'profile_required'
+              ? 'Name and email are required to create an account.'
+              : 'Invalid OTP. Please try again.'
         );
         return;
       }
 
       trackEvent('login', {
-        method: 'email_otp',
+        method: 'phone_otp',
         context: authContext,
         intent,
       });
-      onVerified?.({ email: verified.email, userId: '' });
+
+      const session = await getSession();
+      const userId = session?.user?.id ?? '';
+      onVerified?.({ phone: phoneCheck.data, userId });
       router.refresh();
 
       if (variant === 'page') {
-        const session = await getSession();
         const role = session?.user?.role;
         const isStaff = role === 'admin' || role === 'reviewer';
 
@@ -341,6 +287,19 @@ export function ApplicantAuthPanel({
         : value.length === otpLength && /^\d+$/.test(value);
     setOtpComplete(isComplete);
     if (isComplete) {
+      // For new accounts, wait until name + email are filled — verify on submit button
+      // or when OTP completes if profile already valid.
+      if (!accountExists) {
+        const profile = verifyOtpSchema.safeParse({
+          phone,
+          otp: value,
+          name,
+          email,
+        });
+        if (!profile.success) {
+          return;
+        }
+      }
       void verifyAndSignIn(value);
     }
   };
@@ -415,12 +374,19 @@ export function ApplicantAuthPanel({
     otpRefs.current[Math.min(digits.length, otpLength - 1)]?.focus();
   };
 
-  const handleChangeDetails = () => {
-    setStep('form');
+  const handleChangeNumber = () => {
+    setStep('phone');
     setOtp(Array(otpLength).fill(''));
     setOtpComplete(false);
     setError(null);
     setNotice(null);
+    setFieldErrors({});
+  };
+
+  const handleVerifySubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const value = otp.join('');
+    void verifyAndSignIn(value);
   };
 
   const shellClass =
@@ -428,105 +394,142 @@ export function ApplicantAuthPanel({
       ? 'rounded-[24px] border border-ash bg-white p-5 text-left shadow-sm'
       : '';
 
-  const tabs = (
-    <div
-      role="tablist"
-      aria-label="Account access"
-      className="flex rounded-full border border-ash bg-mist/40 p-1"
-    >
-      {(
-        [
-          { id: 'login' as const, label: 'Login' },
-          { id: 'register' as const, label: 'Create Account' },
-        ] as const
-      ).map((item) => {
-        const selected = tab === item.id;
-        return (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            disabled={loading || step === 'otp'}
-            onClick={() => switchTab(item.id)}
-            className={cn(
-              'flex-1 rounded-full px-3 py-2 font-switzer text-sm font-medium transition-colors',
-              'disabled:cursor-not-allowed disabled:opacity-60',
-              selected
-                ? 'bg-white text-portrait-ink shadow-sm'
-                : 'text-slate-helper hover:text-portrait-ink'
-            )}
-          >
-            {item.label}
-          </button>
-        );
-      })}
-    </div>
-  );
+  const fieldClass = (hasError?: boolean) =>
+    cn(
+      'box-border block !w-full min-w-0 rounded-input border bg-white px-4 py-2.5',
+      'font-switzer text-base text-portrait-ink',
+      'placeholder:text-slate-helper',
+      'focus:outline-none focus:ring-2 focus:ring-portrait-ink focus:border-transparent',
+      'disabled:opacity-60',
+      hasError ? 'border-red-500' : 'border-ash'
+    );
 
   if (step === 'otp') {
     return (
-      <div className={cn('space-y-5', shellClass)}>
+      <form
+        onSubmit={handleVerifySubmit}
+        className={cn('flex w-full min-w-0 flex-col gap-3', shellClass)}
+      >
         {variant === 'checkout-embed' && (
-          <div>
+          <div className="w-full">
             <h2 className="font-basier text-xl text-portrait-ink">
-              {tab === 'register' ? 'Verify your email' : 'Enter your code'}
+              {accountExists ? 'Enter your code' : 'Create your account'}
             </h2>
             <p className="mt-1 text-sm text-slate-helper">
-              We sent a {otpLength}-digit code to your email.
+              We sent a {otpLength}-digit code on WhatsApp.
             </p>
           </div>
         )}
 
-        {tabs}
-
-        <div>
+        <div className="w-full">
           <p className="font-switzer text-sm text-slate-helper">
-            Enter the {otpLength}-digit OTP sent to
-          </p>
-          <p className="mt-1 font-switzer text-base font-medium text-portrait-ink">
-            {email}
-          </p>
-          <p className="mt-2 text-xs text-slate-helper">
-            Use the newest email only (ignore older codes). Check spam too —
-            the code expires in 10 minutes.
+            OTP sent to{' '}
+            <span className="font-medium text-portrait-ink">+91 {phone}</span>
+            <span className="text-slate-helper"> · expires in 10 min</span>
           </p>
         </div>
 
-        <div className="flex justify-between gap-2">
-          {otp.map((digit, index) => (
-            <input
-              key={index}
-              ref={(node) => {
-                otpRefs.current[index] = node;
-              }}
-              type="text"
-              inputMode="numeric"
-              autoComplete={index === 0 ? 'one-time-code' : 'off'}
-              maxLength={otpLength}
-              aria-label={`OTP digit ${index + 1}`}
-              value={digit}
-              disabled={loading}
-              onChange={(event) => handleOtpChange(index, event.target.value)}
-              onKeyDown={(event) => handleOtpKeyDown(index, event)}
-              onPaste={handleOtpPaste}
-              className={cn(
-                'h-12 w-12 rounded-input border bg-white text-center font-switzer text-lg text-portrait-ink',
-                'focus:outline-none focus:ring-2 focus:ring-portrait-ink focus:border-transparent',
-                'disabled:opacity-60',
-                otpComplete ? 'border-portrait-ink' : 'border-ash'
+        {!accountExists && (
+          <>
+            <div className="flex w-full min-w-0 flex-col">
+              <label
+                htmlFor="applicant-auth-name"
+                className="mb-1.5 block font-switzer text-sm font-medium text-portrait-ink"
+              >
+                Full name
+              </label>
+              <input
+                id="applicant-auth-name"
+                type="text"
+                autoComplete="name"
+                placeholder="Priya Sharma"
+                value={name}
+                disabled={loading}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  if (fieldErrors.name || error) clearMessages();
+                }}
+                className={fieldClass(Boolean(fieldErrors.name))}
+              />
+              {fieldErrors.name && (
+                <p className="mt-1 font-switzer text-sm text-red-600">
+                  {fieldErrors.name}
+                </p>
               )}
-            />
-          ))}
+            </div>
+
+            <div className="flex w-full min-w-0 flex-col">
+              <label
+                htmlFor="applicant-auth-email"
+                className="mb-1.5 block font-switzer text-sm font-medium text-portrait-ink"
+              >
+                Email
+              </label>
+              <input
+                id="applicant-auth-email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={email}
+                disabled={loading}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  if (fieldErrors.email || error) clearMessages();
+                }}
+                className={fieldClass(Boolean(fieldErrors.email))}
+              />
+              {fieldErrors.email && (
+                <p className="mt-1 font-switzer text-sm text-red-600">
+                  {fieldErrors.email}
+                </p>
+              )}
+            </div>
+          </>
+        )}
+
+        <div className="w-full min-w-0">
+          <p className="mb-1.5 font-switzer text-sm font-medium text-portrait-ink">
+            Enter OTP
+          </p>
+          <div className="flex w-full gap-2">
+            {otp.map((digit, index) => (
+              <div key={index} className="min-w-0 flex-1">
+                <input
+                  ref={(node) => {
+                    otpRefs.current[index] = node;
+                  }}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                  maxLength={1}
+                  size={1}
+                  aria-label={`OTP digit ${index + 1}`}
+                  value={digit}
+                  disabled={loading}
+                  onChange={(event) =>
+                    handleOtpChange(index, event.target.value)
+                  }
+                  onKeyDown={(event) => handleOtpKeyDown(index, event)}
+                  onPaste={handleOtpPaste}
+                  className={cn(
+                    'box-border block h-11 w-full rounded-input border bg-white text-center font-switzer text-lg text-portrait-ink',
+                    'focus:outline-none focus:ring-2 focus:ring-portrait-ink focus:border-transparent',
+                    'disabled:opacity-60',
+                    otpComplete ? 'border-portrait-ink' : 'border-ash'
+                  )}
+                />
+              </div>
+            ))}
+          </div>
         </div>
 
         {loading && (
           <p className="font-switzer text-sm text-slate-helper">
             {resending
               ? 'Sending a new code…'
-              : tab === 'register'
-                ? 'Creating your account…'
-                : 'Signing you in…'}
+              : accountExists
+                ? 'Signing you in…'
+                : 'Creating your account…'}
           </p>
         )}
         {notice && (
@@ -536,14 +539,26 @@ export function ApplicantAuthPanel({
           <p className="font-switzer text-sm text-red-600">{error}</p>
         )}
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {!accountExists && (
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            className="w-full"
+            disabled={loading || !otpComplete}
+          >
+            {loading ? 'Please wait…' : 'Verify & create account'}
+          </Button>
+        )}
+
+        <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 pb-1">
           <button
             type="button"
-            onClick={handleChangeDetails}
+            onClick={handleChangeNumber}
             disabled={loading}
             className="font-switzer text-sm text-portrait-ink hover:opacity-80 disabled:opacity-50"
           >
-            Change details
+            Change number
           </button>
           <button
             type="button"
@@ -556,134 +571,67 @@ export function ApplicantAuthPanel({
             Resend code
           </button>
         </div>
-      </div>
+      </form>
     );
   }
 
   return (
-    <form onSubmit={handleGetOtp} className={cn('space-y-4', shellClass)}>
+    <form
+      onSubmit={handleGetOtp}
+      className={cn('flex w-full min-w-0 flex-col gap-4', shellClass)}
+    >
       {variant === 'checkout-embed' && (
-        <div>
+        <div className="w-full">
           <h2 className="font-basier text-xl text-portrait-ink">
             Sign in to continue
           </h2>
           <p className="mt-1 text-sm text-slate-helper">
-            Verify your email before checkout.
+            We will send a one-time code on WhatsApp.
           </p>
         </div>
       )}
 
-      {tabs}
-
-      {tab === 'register' && (
-        <div className="w-full">
-          <label
-            htmlFor="applicant-auth-name"
-            className="mb-2 block font-switzer text-sm font-medium text-portrait-ink"
-          >
-            Full name
-          </label>
-          <input
-            id="applicant-auth-name"
-            type="text"
-            autoComplete="name"
-            placeholder="Priya Sharma"
-            value={name}
-            disabled={loading}
-            onChange={(event) => {
-              setName(event.target.value);
-              if (fieldErrors.name || error) clearMessages();
-            }}
-            className={cn(
-              'w-full rounded-input border bg-white px-4 py-2.5 font-switzer text-base text-portrait-ink',
-              'placeholder:text-slate-helper focus:outline-none focus:ring-2 focus:ring-portrait-ink focus:border-transparent',
-              'disabled:opacity-60',
-              fieldErrors.name ? 'border-red-500' : 'border-ash'
-            )}
-          />
-          {fieldErrors.name && (
-            <p className="mt-1.5 font-switzer text-sm text-red-600">
-              {fieldErrors.name}
-            </p>
-          )}
-        </div>
-      )}
-
-      <div className="w-full">
+      <div className="flex w-full min-w-0 flex-col">
         <label
-          htmlFor="applicant-auth-email"
+          htmlFor="applicant-auth-phone"
           className="mb-2 block font-switzer text-sm font-medium text-portrait-ink"
         >
-          Email
+          Mobile number
         </label>
-        <input
-          id="applicant-auth-email"
-          type="email"
-          autoComplete="email"
-          placeholder="you@example.com"
-          value={email}
-          disabled={loading}
-          onChange={(event) => {
-            setEmail(event.target.value);
-            if (fieldErrors.email || error) clearMessages();
-          }}
+        <div
           className={cn(
-            'w-full rounded-input border bg-white px-4 py-2.5 font-switzer text-base text-portrait-ink',
-            'placeholder:text-slate-helper focus:outline-none focus:ring-2 focus:ring-portrait-ink focus:border-transparent',
-            'disabled:opacity-60',
-            fieldErrors.email ? 'border-red-500' : 'border-ash'
+            'flex w-full min-w-0 items-center rounded-input border bg-white',
+            fieldErrors.phone
+              ? 'border-red-500 focus-within:ring-red-500'
+              : 'border-ash',
+            'focus-within:ring-2 focus-within:ring-portrait-ink focus-within:border-transparent'
           )}
-        />
-        {fieldErrors.email && (
+        >
+          <span className="flex shrink-0 items-center gap-1.5 border-r border-ash px-3 py-2.5 font-switzer text-sm font-medium text-portrait-ink">
+            <span className="rounded bg-sky-wash px-1.5 py-0.5 text-[10px] font-semibold">
+              IN
+            </span>
+            +91
+          </span>
+          <input
+            id="applicant-auth-phone"
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel-national"
+            maxLength={10}
+            placeholder="9876543210"
+            value={phone}
+            disabled={loading}
+            onChange={(event) => handlePhoneChange(event.target.value)}
+            className="box-border min-w-0 flex-1 bg-transparent px-4 py-2.5 font-switzer text-base text-portrait-ink placeholder:text-slate-helper focus:outline-none disabled:opacity-60"
+          />
+        </div>
+        {fieldErrors.phone && (
           <p className="mt-1.5 font-switzer text-sm text-red-600">
-            {fieldErrors.email}
+            {fieldErrors.phone}
           </p>
         )}
       </div>
-
-      {tab === 'register' && (
-        <div className="w-full">
-          <label
-            htmlFor="applicant-auth-phone"
-            className="mb-2 block font-switzer text-sm font-medium text-portrait-ink"
-          >
-            Mobile number
-          </label>
-          <div
-            className={cn(
-              'flex items-center rounded-input border bg-white',
-              fieldErrors.phone
-                ? 'border-red-500 focus-within:ring-red-500'
-                : 'border-ash',
-              'focus-within:ring-2 focus-within:ring-portrait-ink focus-within:border-transparent'
-            )}
-          >
-            <span className="flex shrink-0 items-center gap-1.5 border-r border-ash px-3 py-2.5 font-switzer text-sm font-medium text-portrait-ink">
-              <span className="rounded bg-sky-wash px-1.5 py-0.5 text-[10px] font-semibold">
-                IN
-              </span>
-              +91
-            </span>
-            <input
-              id="applicant-auth-phone"
-              type="tel"
-              inputMode="numeric"
-              autoComplete="tel-national"
-              maxLength={10}
-              placeholder="9876543210"
-              value={phone}
-              disabled={loading}
-              onChange={(event) => handlePhoneChange(event.target.value)}
-              className="w-full bg-transparent px-4 py-2.5 font-switzer text-base text-portrait-ink placeholder:text-slate-helper focus:outline-none disabled:opacity-60"
-            />
-          </div>
-          {fieldErrors.phone && (
-            <p className="mt-1.5 font-switzer text-sm text-red-600">
-              {fieldErrors.phone}
-            </p>
-          )}
-        </div>
-      )}
 
       {error && (
         <p className="font-switzer text-sm text-red-600">{error}</p>
@@ -696,7 +644,7 @@ export function ApplicantAuthPanel({
         className="w-full"
         disabled={loading}
       >
-        {loading ? 'Sending…' : 'Send OTP'}
+        {loading ? 'Sending…' : 'Send OTP on WhatsApp'}
       </Button>
     </form>
   );

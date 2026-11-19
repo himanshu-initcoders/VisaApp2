@@ -10,7 +10,7 @@ interface SaveDraftLoginModalProps {
 }
 
 /**
- * Email OTP sign-in / create-account modal so applicants can unlock Save as draft.
+ * Mobile WhatsApp OTP modal so applicants can unlock Save as draft.
  */
 export function SaveDraftLoginModal({
   open,
@@ -20,7 +20,7 @@ export function SaveDraftLoginModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-portrait-ink/40 p-4 sm:items-center">
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-portrait-ink/40 p-3 sm:items-center sm:p-4">
       <button
         type="button"
         aria-label="Close"
@@ -31,22 +31,21 @@ export function SaveDraftLoginModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="save-draft-login-title"
-        className="relative w-full max-w-md overflow-hidden rounded-[24px] border border-ash bg-white shadow-elevated"
+        className="relative flex max-h-[min(92dvh,640px)] w-full max-w-md flex-col overflow-hidden rounded-[24px] border border-ash bg-white shadow-elevated"
       >
-        <div className="flex items-start justify-between gap-3 border-b border-mist px-5 py-4">
-          <div>
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-mist px-5 py-3">
+          <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-helper">
               Sign in required
             </p>
             <h2
               id="save-draft-login-title"
-              className="mt-1 font-basier text-2xl text-portrait-ink"
+              className="mt-0.5 font-basier text-xl text-portrait-ink sm:text-2xl"
             >
               Save as draft
             </h2>
             <p className="mt-1 font-switzer text-sm text-slate-helper">
-              Sign in or create an account with your email to save this
-              application to your account.
+              WhatsApp OTP to save this application to your account.
             </p>
           </div>
           <button
@@ -58,7 +57,7 @@ export function SaveDraftLoginModal({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="px-5 py-5">
+        <div className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain px-5 py-4">
           <ApplicantAuthPanel
             variant="modal-embed"
             analyticsContext="save_draft"

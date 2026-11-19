@@ -42,14 +42,15 @@ Authenticated Request
 
 **Features**:
 - Credentials provider for email/password (staff)
-- Email OTP provider for applicant login + create account (`email-otp`)
-- Legacy phone OTP provider kept for compatibility
-- JWT session strategy (30-day expiry)
+- Phone OTP provider for applicants (`phone-otp`) via WhatsApp Authentication template (`TWILIO_WA_SID_LOGIN_OTP`, single variable `{{1}}` = OTP)
+- Legacy email OTP provider kept for compatibility (no applicant UI)
+- JWT session strategy (1-day expiry in code)
 - Custom callbacks for user data
 - Email verification check on password login
 - Secure password verification with bcrypt
+- `users.email` is **not** unique; `users.phone` is unique (applicant identity)
 
-**Applicant auth UI**: `components/auth/ApplicantAuthPanel.tsx` — Login (email OTP) and Create Account (name, email, mobile + email OTP). Used by start-application modal, save-draft modal, checkout, and `/signin`.
+**Applicant auth UI**: `components/auth/ApplicantAuthPanel.tsx` — mobile number → WhatsApp OTP; if phone is new, collect name + email + OTP then create account and sign in. Used by start-application modal, save-draft modal, checkout, and `/signin`.
 
 **Exported Functions**:
 - `auth()` - Get current session (Server Components)

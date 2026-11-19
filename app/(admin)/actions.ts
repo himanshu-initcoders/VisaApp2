@@ -1338,20 +1338,7 @@ export async function createReviewer(input: unknown): Promise<ActionResponse> {
   const { name, email, phone, password } = parsed.data;
 
   try {
-    const [emailOwner] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
-
-    if (emailOwner) {
-      return {
-        success: false,
-        message: 'Email already registered',
-        error: 'Email already registered',
-      };
-    }
-
+    // Email is not unique; phone remains the unique identity key.
     const [phoneOwner] = await db
       .select({ id: users.id })
       .from(users)

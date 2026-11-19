@@ -13,7 +13,10 @@ import {
 export async function requestOtp(input: {
   phone: string;
   ip?: string;
-}): Promise<{ success: true } | { success: false; error: string }> {
+}): Promise<
+  | { success: true; accountExists: boolean }
+  | { success: false; error: string }
+> {
   return requestOtpCore(input);
 }
 
@@ -21,6 +24,8 @@ export async function requestOtp(input: {
 export async function verifyOtpAndEnsureUser(input: {
   phone: string;
   otp: string;
+  name?: string;
+  email?: string;
 }): Promise<
   | { success: true; userId: string; phone: string }
   | { success: false; error: string }

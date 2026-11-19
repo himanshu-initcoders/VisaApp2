@@ -3,7 +3,7 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { compare } from 'bcryptjs';
 import { db } from '@/lib/db';
 import { users } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { normalizeIndianPhone } from '@/lib/auth/phone';
 import { resolveSessionUserId } from '@/lib/auth/session-user';
@@ -30,8 +30,8 @@ class EmailOtpSignInError extends CredentialsSignin {
  * NextAuth Configuration
  *
  * - Email/password credentials (admins / staff)
- * - Email OTP credentials (applicants login + create account)
- * - Phone OTP credentials (legacy; kept for compatibility)
+ * - Phone OTP credentials (applicants — WhatsApp / mock)
+ * - Email OTP credentials (legacy; kept for compatibility)
  */
 
 const loginSchema = z.object({
@@ -54,18 +54,26 @@ export const authConfig: NextAuthConfig = {
         try {
           const { email, password } = loginSchema.parse(credentials);
 
-          const [user] = await db
+          // Email is not unique (applicants may share emails). Staff login
+          // only matches rows that have a password hash.
+          const candidates = await db
             .select()
             .from(users)
-            .where(eq(users.email, email))
-            .limit(1);
+            .where(
+              and(eq(users.email, email), isNotNull(users.passwordHash))
+            );
 
-          if (!user || !user.passwordHash) {
-            return null;
+          let user: (typeof candidates)[number] | undefined;
+          for (const candidate of candidates) {
+            if (!candidate.passwordHash) continue;
+            const ok = await compare(password, candidate.passwordHash);
+            if (ok) {
+              user = candidate;
+              break;
+            }
           }
 
-          const isValidPassword = await compare(password, user.passwordHash);
-          if (!isValidPassword) {
+          if (!user) {
             return null;
           }
 
@@ -147,18 +155,33 @@ export const authConfig: NextAuthConfig = {
       credentials: {
         phone: { label: 'Phone', type: 'text' },
         otp: { label: 'OTP', type: 'text' },
+        name: { label: 'Name', type: 'text' },
+        email: { label: 'Email', type: 'email' },
       },
       async authorize(credentials) {
         try {
           const phone = normalizeIndianPhone(String(credentials?.phone ?? ''));
           const otp = String(credentials?.otp ?? '').trim();
+          const name = String(credentials?.name ?? '').trim() || undefined;
+          const email =
+            String(credentials?.email ?? '')
+              .trim()
+              .toLowerCase() || undefined;
           if (!phone) return null;
 
-          const result = await verifyOtpAndEnsureUser({ phone, otp });
+          const result = await verifyOtpAndEnsureUser({
+            phone,
+            otp,
+            name,
+            email,
+          });
           if (!result.success) {
             console.warn('[auth] phone-otp verify failed:', result.error);
             if (/deactivated/i.test(result.error)) {
               throw new PhoneOtpSignInError('deactivated');
+            }
+            if (/name and email/i.test(result.error)) {
+              throw new PhoneOtpSignInError('profile_required');
             }
             throw new PhoneOtpSignInError('invalid_otp');
           }

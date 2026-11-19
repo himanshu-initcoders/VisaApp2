@@ -148,7 +148,7 @@ export default function LoginPage() {
             href="/signin"
             className="font-medium text-portrait-ink hover:opacity-80"
           >
-            Sign in with mobile OTP
+            Sign in with WhatsApp OTP
           </Link>
         </p>
       </CardFooter>

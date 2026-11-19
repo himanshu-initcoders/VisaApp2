@@ -36,7 +36,7 @@ Copy each block into **Twilio Console → Messaging → Content Template Builder
 | 8 | `viserv_new_comment` | `notifyNewComment` | Applicant or Staff | Submit |
 | 9 | `viserv_status_changed` | `notifyStatusChanged` | Applicant + Staff | Submit |
 | 9f | `viserv_status_approved_with_document` | `notifyStatusApprovedWithDocumentWhatsApp` · `TWILIO_WA_SID_STATUS_APPROVED_WITH_DOCUMENT` | Applicant | **Submit (Document media)** |
-| 10 | `viserv_login_otp` | `requestOtp` (later) · `TWILIO_WA_SID_LOGIN_OTP` | Applicant | **Submit (Utility — full sentences)** |
+| 10 | Login OTP (Auth template) | `requestOtp` · `TWILIO_WA_SID_LOGIN_OTP` | Applicant | **WhatsApp Authentication — single `{{1}}` = OTP** |
 | 11 | `viserv_passport_submitted_applicant` | `notifyPassportSubmittedToApplicant` | Applicant | **Wired** |
 | 12 | `viserv_passport_submitted_admin` | `notifyPassportSubmittedToAdmin` | Admin | **Wired** |
 | 13 | `viserv_passport_reviewer_assigned` | `notifyPassportReviewerAssigned` | Reviewer | **Wired** |

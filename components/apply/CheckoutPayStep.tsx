@@ -744,7 +744,7 @@ export function CheckoutPayStep({
           {filledCount === 1 ? '' : 's'} to {countryName}
           {isAuthed
             ? ' — you are signed in and ready to submit.'
-            : ' — sign in with your email to unlock payment.'}
+            : ' — sign in with your mobile number to unlock payment.'}
         </p>
         {isAuthed && (session?.user?.email || session?.user?.phone) && (
           <p className="mt-2 text-xs text-slate-helper">
