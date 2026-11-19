@@ -13,7 +13,7 @@ import { ApplicantAuthPanel } from '@/components/auth/ApplicantAuthPanel';
 
 function SignInForm() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
+  const callbackUrl = searchParams.get('callbackUrl') || '/';
 
   return (
     <ApplicantAuthPanel

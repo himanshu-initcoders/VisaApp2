@@ -267,7 +267,7 @@ export function ApplicantAuthPanel({
         } else if (redirectTo) {
           router.push(redirectTo);
         } else if (!onVerified) {
-          router.push('/dashboard');
+          router.push('/');
         }
       }
     } catch {

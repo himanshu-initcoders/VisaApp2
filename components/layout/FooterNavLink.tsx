@@ -38,7 +38,7 @@ export function FooterNavLink({ href, label }: FooterNavLinkProps) {
   return (
     <Link
       href={href}
-      className="text-sm text-white/70 hover:text-nautical-teal transition-colors"
+      className="text-sm text-white/70 hover:text-white transition-colors"
       onClick={(event) => {
         if (!isSamePage) return;
         event.preventDefault();

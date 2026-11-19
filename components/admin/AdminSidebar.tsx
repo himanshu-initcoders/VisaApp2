@@ -124,7 +124,7 @@ export function AdminSidebar({
     <>
       {/* Mobile top bar */}
       <div className="fixed left-0 right-0 top-0 z-50 flex items-center justify-between border-b border-ash bg-white px-4 py-3 lg:hidden">
-        <Logo href="/admin" size="lg" subtitle="Admin" />
+        <Logo href="/" size="lg" subtitle="Admin" />
         <button
           type="button"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -173,18 +173,18 @@ export function AdminSidebar({
           >
             {!collapsed ? (
               <Logo
-                href="/admin"
+                href="/"
                 size="lg"
                 subtitle=""
                 onNavigate={closeMobile}
               />
             ) : (
               <Link
-                href="/admin"
+                href="/"
                 onClick={closeMobile}
                 className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl"
-                title="Admin home"
-                aria-label="Admin home"
+                title="Home"
+                aria-label="Home"
               >
                 <Image
                   src="/favicon.png"

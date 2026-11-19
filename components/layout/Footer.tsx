@@ -88,7 +88,7 @@ export function Footer() {
                     href={profile.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-nautical-teal transition-colors"
+                    className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors"
                     aria-label={profile.label}
                   >
                     <span className="shrink-0">{SOCIAL_ICONS[profile.network]}</span>
