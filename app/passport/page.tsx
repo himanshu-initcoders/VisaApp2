@@ -20,6 +20,7 @@ import { ContactBar } from '@/components/public/ContactBar';
 import { FaqAccordion } from '@/components/public/FaqAccordion';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { PassportHeroPricingCard } from '@/components/public/PassportHeroPricingCard';
+import { PrivateServiceDisclaimer } from '@/components/public/PrivateServiceDisclaimer';
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
 import { RecentBlogsSection } from '@/components/public/RecentBlogsSection';
 import { StickySectionNav } from '@/components/public/StickySectionNav';
@@ -36,7 +37,7 @@ import {
 
 const PASSPORT_TITLE = 'Indian passport services — Viserv';
 const PASSPORT_DESCRIPTION =
-  'Fresh passport or re-issue for Indian citizens — clear documents, government fees, Tatkaal options, and expert-guided applications with Viserv.';
+  'Private passport assistance for Indian citizens — fresh or re-issue, clear documents, Tatkaal options, and guided applications. Not Passport Seva; apply yourself on the official portal if you prefer.';
 const PASSPORT_OG_IMAGE = {
   url: '/indian-passport-banner.jpg',
   alt: 'Indian passport cover on a desk',
@@ -269,6 +270,12 @@ const purposes = [
 
 const faqs = [
   {
+    id: 'affiliation',
+    question: 'Is Viserv the official Passport Seva website?',
+    answer:
+      'No. Viserv is a private assistance service and is not affiliated with the Government of India, the Ministry of External Affairs, or Passport Seva. You can always apply directly on the official Passport Seva portal (passportindia.gov.in) and pay only the government fee. If you choose Viserv, you pay an additional service fee for guided help with documents, forms, and the application process.',
+  },
+  {
     id: 'fresh-vs-reissue',
     question: 'When should I choose fresh passport instead of re-issue?',
     answer:
@@ -460,6 +467,7 @@ export default async function PassportPage() {
             </MotionReveal>
           </div>
         </section>
+
 
         <div className="mt-8">
           <StickySectionNav items={sectionItems} />

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { PrivateServiceDisclaimer } from '@/components/public/PrivateServiceDisclaimer';
 import { BRAND_NAME, Logo } from '@/components/shared/Logo';
 import { SOCIAL_PROFILES } from '@/lib/seo/site';
 
@@ -121,6 +122,10 @@ export function Footer() {
                 🇮🇳 India (English)
               </button>
             </div>
+          </div>
+
+          <div className="mt-6 flex justify-center md:justify-start">
+            <PrivateServiceDisclaimer variant="footer" />
           </div>
         </div>
       </div>

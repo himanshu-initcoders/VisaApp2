@@ -82,6 +82,7 @@
 - [ ] Form validation (client + server)
 
 ### Passport Services
+- [x] Non-affiliation disclaimer (private service + Passport Seva DIY link) on hub, pricing card, apply review, footer, Terms §4, FAQ
 - [x] India-only catalog: Fresh + Re-issue (`passport_listings` + admin hub)
 - [x] Pricing matrix (Normal/Tatkaal × 36/60 pages) + public hero card from DB
 - [x] Documents from shared document-types catalog + FAQs per product

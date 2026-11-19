@@ -1,3 +1,6 @@
+/** Official MEA Passport Seva portal — applicants can apply here without Viserv. */
+export const PASSPORT_SEVA_URL = 'https://www.passportindia.gov.in/';
+
 export const PASSPORT_SERVICE_TYPES = [
   { value: 'fresh', label: 'Fresh passport' },
   { value: 'reissue', label: 'Re-issue' },

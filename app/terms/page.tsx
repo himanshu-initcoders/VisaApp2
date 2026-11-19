@@ -163,8 +163,9 @@ export default function TermsAndConditionsPage() {
         <p>
           <strong>4.1 We are a private facilitator.</strong> Viserv is an
           independent company. We are not a government body, and we are not an
-          agent of, or affiliated with, any embassy, consulate or immigration
-          authority, unless we expressly say so for a particular service.
+          agent of, or affiliated with, Passport Seva, the Ministry of External
+          Affairs, any embassy, consulate or immigration authority, unless we
+          expressly say so for a particular service.
         </p>
         <p>
           <strong>4.2 Our role.</strong> Depending on the service you choose, we
@@ -176,11 +177,12 @@ export default function TermsAndConditionsPage() {
           documents to you.
         </p>
         <p>
-          <strong>4.3 You can apply directly.</strong> Many visas and e-visas can
-          be obtained by applying directly on the official government website,
-          often for only the Government Fee. Our Service Fee pays for the
-          convenience, review and support we provide; it is not a fee required by
-          any Authority.
+          <strong>4.3 You can apply directly.</strong> Many visas, e-visas and
+          Indian passport applications can be obtained by applying directly on
+          the official government website (for passports, Passport Seva at
+          passportindia.gov.in), often for only the Government Fee. Our Service
+          Fee pays for the convenience, review and support we provide; it is not
+          a fee required by any Authority.
         </p>
         <p>
           <strong>4.4 Information is guidance, not legal advice.</strong> Visa

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { cn } from '@/lib/utils';
 import { passportPriceLabel } from '@/lib/passport/constants';
+import { PrivateServiceDisclaimer } from '@/components/public/PrivateServiceDisclaimer';
 
 const CONSULTATION_URL =
   'https://wa.me/917019902821?text=' +
@@ -311,6 +312,11 @@ export function PassportHeroPricingCard({
           Get a free consultation
         </Button>
       </div>
+
+      <PrivateServiceDisclaimer
+        variant="passport-compact"
+        className="mt-4 text-center"
+      />
       {modals}
     </div>
   );
