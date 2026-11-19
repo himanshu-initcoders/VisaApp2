@@ -33,7 +33,7 @@ Quick guide to test the authentication system.
 4. Click "Create account"
 
 **Expected Result**:
-- ✅ Redirected to `/login?registered=true`
+- ✅ Redirected to `/admin/login?registered=true`
 - ✅ Success message shown
 - ✅ User created in database with hashed password
 
@@ -47,7 +47,7 @@ Check `users` table for the new user.
 
 ### 2. Test Login
 
-**URL**: http://localhost:3000/login
+**URL**: http://localhost:3000/admin/login
 
 **Steps**:
 1. Enter credentials:
@@ -90,13 +90,13 @@ Check `users` table for the new user.
 
 1. Sign out (click "Sign out" button)
 2. Try to visit: http://localhost:3000/dashboard
-3. **Expected**: Redirected to `/login?callbackUrl=/dashboard`
+3. **Expected**: Redirected to `/signin?callbackUrl=/dashboard`
 
 **Test B: Auth Page While Logged In**
 
 1. Sign in again
-2. Try to visit: http://localhost:3000/login
-3. **Expected**: Redirected to `/dashboard`
+2. Try to visit: http://localhost:3000/admin/login
+3. **Expected**: Redirected to `/dashboard` (or `/admin` for staff)
 
 ---
 
@@ -161,7 +161,7 @@ The indicator should update in real-time as you type.
 
 1. Click "Sign out" button
 2. **Expected**: 
-   - Redirected to `/login`
+   - Redirected to `/` (or `/admin/login` for staff Auth.js fallback)
    - Session cleared
    - Can't access dashboard without signing in again
 

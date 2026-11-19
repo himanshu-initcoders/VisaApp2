@@ -128,8 +128,8 @@ Handles:
 ### 4. Pages
 
 #### Login Page
-**Route**: `/login`
-**File**: `app/(auth)/login/page.tsx`
+**Route**: `/admin/login`
+**File**: `app/(admin)/admin/login/page.tsx`
 
 **Features**:
 - Email/password form
@@ -173,13 +173,15 @@ Handles:
 
 **Public Routes**:
 - `/`
-- `/login`
+- `/admin/login`
 - `/register`
+- `/signin`
 - `/api/auth/*`
 
 **Behavior**:
-- Unauthenticated user on protected route → Redirect to `/login?callbackUrl=<route>`
-- Authenticated user on auth page → Redirect to `/dashboard`
+- Unauthenticated user on `/admin/*` → Redirect to `/admin/login?callbackUrl=<route>`
+- Unauthenticated user on other protected routes → Redirect to `/signin?callbackUrl=<route>`
+- Authenticated user on auth page → Redirect to `/dashboard` or `/admin`
 
 #### Server-Side Checks
 ```typescript
@@ -187,7 +189,7 @@ Handles:
 import { auth } from '@/lib/auth';
 
 const session = await auth();
-if (!session) redirect('/login');
+if (!session) redirect('/admin/login');
 ```
 
 ---
@@ -299,8 +301,9 @@ export default async function ProtectedPage() {
   const session = await auth();
   
   if (!session) {
-    redirect('/login');
+    redirect('/admin/login');
   }
+
   
   return <div>Welcome, {session.user.name}!</div>;
 }

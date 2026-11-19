@@ -36,7 +36,7 @@ export async function notifyUserWelcome(input: {
         'Your Viserv account is ready. Sign in to track visa applications and pick up where you left off.',
       ],
       buttonLabel: 'Sign in',
-      buttonHref: '/login',
+      buttonHref: '/signin',
     }),
   });
 }
@@ -57,7 +57,7 @@ export async function notifyReviewerWelcome(input: {
         'An admin created a reviewer account for you. Sign in with the email and password they shared to review visa applications.',
       ],
       buttonLabel: 'Sign in',
-      buttonHref: '/login',
+      buttonHref: '/admin/login',
     }),
   });
 }

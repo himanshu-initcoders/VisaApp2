@@ -44,7 +44,8 @@ Viserv pushes custom events to `window.dataLayer` via `lib/analytics/gtm.ts`. GT
 ## Policy
 
 - No PII in payloads (no name, phone, email, passport numbers).
-- Skip `/admin/*`, `/login`, `/register`.
+- Skip `/admin/*`, `/register`.
+
 - Primary conversion: `purchase` (+ optional `visa_application_submitted`).
 
 ## Code entry points

@@ -60,7 +60,7 @@ npm run db:seed
 ### Step 4: Login
 
 1. Start the development server: `npm run dev`
-2. Navigate to: `http://localhost:3000/login`
+2. Navigate to: `http://localhost:3000/admin/login`
 3. Login with the credentials shown in the seed output
 4. Access admin panel at: `http://localhost:3000/admin`
 
@@ -304,7 +304,8 @@ npm run db:seed
 # 6. Start development server
 npm run dev
 
-# 7. Login at http://localhost:3000/login
+# 7. Login at http://localhost:3000/admin/login
+
 # Use credentials from seed output
 
 # 8. Access admin panel at http://localhost:3000/admin

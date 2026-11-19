@@ -19,7 +19,7 @@
 2. **Cloud key shape:**  
    `applications/{countryCode}/{listingId}/{userId}/{applicationId}/passengers/{passengerId}/{slotKey}.{ext}`
 3. **Replace/delete before submit:** IndexDB only. **After submit:** applicants read-only; **admin only** may replace, and must **delete the old cloud object**.
-4. **Applicants:** mobile OTP only (`/signin` + checkout embed). **Admins:** email + password on `/login`. Same `users` table; role `user` for applicants. `superadmin` ≡ `admin` for now.
+4. **Applicants:** mobile OTP only (`/signin` + checkout embed). **Admins:** email + password on `/admin/login`. Same `users` table; role `user` for applicants. `superadmin` ≡ `admin` for now.
 5. **OTP:** keep **mock that always passes** until a real SMS provider is chosen.
 6. **After login:** optional **server draft** sync (IndexDB → DB) so user can continue on another device.
 7. **DB `visa_application` row** created **on mock pay / submit** (not earlier). Skip `payments` table until real gateway.

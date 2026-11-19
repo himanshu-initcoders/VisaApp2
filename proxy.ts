@@ -4,14 +4,18 @@ import { NextResponse } from 'next/server';
 /**
  * Route protection (Next.js proxy).
  *
- * Protected: /dashboard, /applications, /documents, /profile, /admin
+ * Protected: /dashboard, /applications, /documents, /profile, /admin (except /admin/login)
  * Apply: /visa/.../apply and /passport/[serviceType]/apply — user, admin, or reviewer
  * Auth pages:
- * - /login, /register → staff; applicants redirected away
+ * - /admin/login, /register → staff; applicants redirected away
  * - /signin → applicant OTP; staff redirected to admin
  */
 
 const APPLY_ROLES = new Set(['user', 'admin', 'reviewer']);
+
+function isAdminLoginPath(pathname: string) {
+  return pathname === '/admin/login' || pathname.startsWith('/admin/login/');
+}
 
 /** /visa/{countryCode}/{listingId}/apply */
 function matchVisaApplyPath(pathname: string) {
@@ -37,6 +41,15 @@ export default auth((req) => {
   const role = req.auth?.user?.role;
   const { pathname } = req.nextUrl;
 
+  // Legacy staff login URL
+  if (pathname === '/login') {
+    const url = new URL('/admin/login', req.url);
+    req.nextUrl.searchParams.forEach((value, key) => {
+      url.searchParams.set(key, value);
+    });
+    return NextResponse.redirect(url);
+  }
+
   const protectedRoutes = [
     '/dashboard',
     '/applications',
@@ -44,13 +57,13 @@ export default auth((req) => {
     '/profile',
     '/admin',
   ];
-  const isProtectedRoute = protectedRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
+  const isProtectedRoute =
+    protectedRoutes.some((route) => pathname.startsWith(route)) &&
+    !isAdminLoginPath(pathname);
 
   if (isProtectedRoute && !isLoggedIn) {
     const loginUrl = new URL(
-      pathname.startsWith('/admin') ? '/login' : '/signin',
+      pathname.startsWith('/admin') ? '/admin/login' : '/signin',
       req.url
     );
     loginUrl.searchParams.set('callbackUrl', pathname);
@@ -89,7 +102,7 @@ export default auth((req) => {
     }
   }
 
-  if (pathname.startsWith('/admin') && isLoggedIn) {
+  if (pathname.startsWith('/admin') && !isAdminLoginPath(pathname) && isLoggedIn) {
     if (role !== 'admin' && role !== 'reviewer') {
       const dashboardUrl = new URL('/dashboard', req.url);
       dashboardUrl.searchParams.set('error', 'unauthorized');
@@ -100,7 +113,7 @@ export default auth((req) => {
   if (isLoggedIn) {
     const isStaff = role === 'admin' || role === 'reviewer';
 
-    if (pathname === '/login' || pathname === '/register') {
+    if (isAdminLoginPath(pathname) || pathname === '/register') {
       if (isStaff) {
         return NextResponse.redirect(new URL('/admin', req.url));
       }
@@ -115,8 +128,14 @@ export default auth((req) => {
     }
   }
 
-  return NextResponse.next();
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-pathname', pathname);
+  return NextResponse.next({
+    request: { headers: requestHeaders },
+  });
 });
+
+
 
 export const config = {
   matcher: [

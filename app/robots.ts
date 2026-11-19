@@ -20,8 +20,9 @@ export default function robots(): MetadataRoute.Robots {
         '/documents/',
         '/profile/',
         '/signin',
-        '/login',
+        '/admin/login',
         '/register',
+
         // Visa + passport apply funnels (e.g. /visa/.../apply, /passport/fresh/apply)
         '/*/apply',
         '/*/apply/',

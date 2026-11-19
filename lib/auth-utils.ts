@@ -16,7 +16,8 @@ export async function requireAuth() {
   const session = await auth();
 
   if (!session || !session.user) {
-    redirect('/login');
+    redirect('/admin/login');
+
   }
 
   return session;

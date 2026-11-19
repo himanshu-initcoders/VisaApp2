@@ -76,7 +76,7 @@ Thank you for choosing Viserv.
 
 | Type | Text | URL |
 |---|---|---|
-| URL | Sign in | `https://app.viserv.com/login` |
+| URL | Sign in | `https://app.viserv.com/signin` |
 
 ---
 
@@ -129,7 +129,7 @@ Thank you for choosing Viserv.
 ### Button
 | Type | Text | URL |
 |---|---|---|
-| URL | Sign in | `https://app.viserv.com/login` |
+| URL | Sign in | `https://app.viserv.com/admin/login` |
 
 **Why this should approve better:** no “password” in the WhatsApp body, no soft invite marketing, same Viserv Utility voice as approved templates.
 

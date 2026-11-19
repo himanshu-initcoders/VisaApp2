@@ -261,19 +261,19 @@ See: [TESTING.md](./TESTING.md) for complete testing guide
 - [ ] Visit `/register`
 - [ ] Fill form with valid data
 - [ ] Watch password strength indicator
-- [ ] Submit and verify redirect to `/login`
+- [ ] Submit and verify redirect to `/admin/login`
 - [ ] Check user created in database
 
 ### Login Flow
-- [ ] Visit `/login`
+- [ ] Visit `/admin/login`
 - [ ] Enter credentials
-- [ ] Verify redirect to `/dashboard`
+- [ ] Verify redirect to `/admin`
 - [ ] See personalized welcome message
 
 ### Route Protection
 - [ ] Sign out
 - [ ] Try to access `/dashboard`
-- [ ] Verify redirect to `/login`
+- [ ] Verify redirect to `/signin`
 
 ### Session Management
 - [ ] Sign in

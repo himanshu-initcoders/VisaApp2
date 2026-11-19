@@ -22,7 +22,7 @@ import { loginSchema, type LoginInput } from '@/lib/validations/auth';
  * Admin / staff email-password login.
  * Applicants should use /signin (mobile OTP).
  */
-export default function LoginPage() {
+export default function AdminLoginPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [isLoading, setIsLoading] = useState(false);

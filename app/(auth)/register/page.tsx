@@ -56,7 +56,8 @@ export default function RegisterPage() {
       }
 
       // Redirect to login with success message
-      router.push('/login?registered=true');
+      router.push('/admin/login?registered=true');
+
     } catch (err) {
       setError('Something went wrong. Please try again.');
       setIsLoading(false);
@@ -209,7 +210,8 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <Link href="/login" className="w-full">
+        <Link href="/admin/login" className="w-full">
+
           <Button variant="ghost" size="lg" className="w-full">
             Sign in
           </Button>

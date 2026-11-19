@@ -109,9 +109,10 @@ Peach Wash: #ffebd6 (pastel surface)
 /
 ├── app/                          # Next.js 16 App Router
 │   ├── (auth)/                  # Auth routes group
-│   │   ├── login/
-│   │   ├── register/
+│   │   ├── signin/              # Applicant WhatsApp OTP
+│   │   ├── register/            # Staff registration
 │   │   └── layout.tsx
+│   ├── (admin)/admin/login/     # Staff email/password login
 │   ├── (dashboard)/             # Protected routes
 │   │   ├── dashboard/
 │   │   ├── applications/
@@ -280,7 +281,8 @@ import { redirect } from 'next/navigation';
 
 export default async function DashboardPage() {
   const session = await getServerSession();
-  if (!session) redirect('/login');
+  if (!session) redirect('/admin/login');
+
   
   // Render protected content
 }

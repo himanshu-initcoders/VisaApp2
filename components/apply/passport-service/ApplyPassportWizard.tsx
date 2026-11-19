@@ -1064,7 +1064,7 @@ export function ApplyPassportWizard({
               ) : null}
               {!isSignedIn ? (
                 <p className="mt-4 text-sm text-slate-helper">
-                  <Link href="/login" className="text-[#2563EB] underline">
+                  <Link href="/signin" className="text-[#2563EB] underline">
                     Sign in
                   </Link>{' '}
                   to complete payment.

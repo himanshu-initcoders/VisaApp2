@@ -5,11 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { trackPageView } from '@/lib/analytics/gtm';
 
 function shouldSkipPath(pathname: string): boolean {
-  return (
-    pathname.startsWith('/admin') ||
-    pathname === '/login' ||
-    pathname === '/register'
-  );
+  return pathname.startsWith('/admin') || pathname === '/register';
 }
 
 /**

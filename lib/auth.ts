@@ -216,10 +216,11 @@ export const authConfig: NextAuthConfig = {
   ],
 
   pages: {
-    signIn: '/login',
-    signOut: '/login',
-    error: '/login',
+    signIn: '/admin/login',
+    signOut: '/admin/login',
+    error: '/admin/login',
   },
+
 
   session: {
     strategy: 'jwt',
