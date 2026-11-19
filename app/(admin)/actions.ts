@@ -1538,11 +1538,12 @@ export async function searchReviewers(
 }
 
 /**
- * Assign or reassign a reviewer on a visa application (admin only).
+ * Assign, reassign, or unassign a reviewer on a visa application (admin only).
+ * Pass reviewerId = null to clear the assignment.
  */
 export async function assignVisaReviewer(
   applicationId: string,
-  reviewerId: string
+  reviewerId: string | null
 ): Promise<ActionResponse> {
   const session = await requireRole(['admin']);
 
@@ -1554,11 +1555,11 @@ export async function assignVisaReviewer(
     };
   }
 
-  if (!applicationId || !reviewerId) {
+  if (!applicationId) {
     return {
       success: false,
       message: 'Missing required fields',
-      error: 'applicationId and reviewerId are required',
+      error: 'applicationId is required',
     };
   }
 
@@ -1581,6 +1582,25 @@ export async function assignVisaReviewer(
         success: false,
         message: 'Application not found',
         error: 'Visa application does not exist',
+      };
+    }
+
+    if (reviewerId == null) {
+      await db
+        .update(visaApplications)
+        .set({
+          assignedReviewerId: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(visaApplications.id, applicationId));
+
+      revalidatePath('/admin/applications');
+      revalidatePath(`/admin/applications/visa/${application.referenceNumber}`);
+      revalidatePath(`/admin/applications/visa/${applicationId}`);
+
+      return {
+        success: true,
+        message: 'Reviewer unassigned',
       };
     }
 
@@ -1647,11 +1667,12 @@ export async function assignVisaReviewer(
 }
 
 /**
- * Assign or reassign a reviewer on a passport application (admin only).
+ * Assign, reassign, or unassign a reviewer on a passport application (admin only).
+ * Pass reviewerId = null to clear the assignment.
  */
 export async function assignPassportReviewer(
   applicationId: string,
-  reviewerId: string
+  reviewerId: string | null
 ): Promise<ActionResponse> {
   const session = await requireRole(['admin']);
 
@@ -1663,11 +1684,11 @@ export async function assignPassportReviewer(
     };
   }
 
-  if (!applicationId || !reviewerId) {
+  if (!applicationId) {
     return {
       success: false,
       message: 'Missing required fields',
-      error: 'applicationId and reviewerId are required',
+      error: 'applicationId is required',
     };
   }
 
@@ -1694,6 +1715,35 @@ export async function assignPassportReviewer(
       };
     }
 
+    const snapshot =
+      (application.formSnapshot as PassportApplyFormConfig | null) ?? null;
+    const productName =
+      snapshot?.productName ||
+      (application.serviceType === 'reissue'
+        ? 'Passport reissue'
+        : 'New passport');
+    const referenceNumber =
+      application.referenceNumber || application.id.slice(0, 8);
+
+    if (reviewerId == null) {
+      await db
+        .update(passportServices)
+        .set({
+          assignedReviewerId: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(passportServices.id, applicationId));
+
+      revalidatePath('/admin/applications');
+      revalidatePath(`/admin/applications/passport/${referenceNumber}`);
+      revalidatePath(`/admin/applications/passport/${applicationId}`);
+
+      return {
+        success: true,
+        message: 'Reviewer unassigned',
+      };
+    }
+
     const [reviewer] = await db
       .select({
         id: users.id,
@@ -1712,16 +1762,6 @@ export async function assignPassportReviewer(
         error: 'Selected user is not a reviewer or admin',
       };
     }
-
-    const snapshot =
-      (application.formSnapshot as PassportApplyFormConfig | null) ?? null;
-    const productName =
-      snapshot?.productName ||
-      (application.serviceType === 'reissue'
-        ? 'Passport reissue'
-        : 'New passport');
-    const referenceNumber =
-      application.referenceNumber || application.id.slice(0, 8);
 
     await db
       .update(passportServices)

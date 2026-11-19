@@ -96,8 +96,8 @@ export function AssignReviewerDialog({
     };
   }, [isOpen]);
 
-  const handleSelect = async (reviewerId: string) => {
-    setAssigningId(reviewerId);
+  const handleSelect = async (reviewerId: string | null) => {
+    setAssigningId(reviewerId ?? '__unassign__');
     setError('');
     try {
       const result =
@@ -108,7 +108,12 @@ export function AssignReviewerDialog({
         onSuccess?.();
         onClose();
       } else {
-        setError(result.message || 'Failed to assign reviewer');
+        setError(
+          result.message ||
+            (reviewerId == null
+              ? 'Failed to unassign reviewer'
+              : 'Failed to assign reviewer')
+        );
       }
     } catch {
       setError('An unexpected error occurred');
@@ -116,6 +121,9 @@ export function AssignReviewerDialog({
       setAssigningId(null);
     }
   };
+
+  const isUnassigned = !assignedReviewerId;
+  const isUnassigning = assigningId === '__unassign__';
 
   if (!isOpen || !mounted) return null;
 
@@ -188,6 +196,29 @@ export function AssignReviewerDialog({
           />
 
           <ul className="max-h-[min(22.5rem,70dvh)] space-y-2 overflow-y-auto overscroll-contain">
+            <li className="flex items-center justify-between gap-3 rounded-[16px] border border-ash px-4 py-3">
+              <div className="min-w-0">
+                <p className="font-switzer text-sm font-medium text-portrait-ink">
+                  Unassigned
+                </p>
+                <p className="font-switzer text-xs text-slate-helper">
+                  Clear the reviewer on this application
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant={isUnassigned ? 'secondary' : 'primary'}
+                size="sm"
+                disabled={isUnassigned || Boolean(assigningId)}
+                onClick={() => handleSelect(null)}
+              >
+                {isUnassigned
+                  ? 'Selected'
+                  : isUnassigning
+                    ? 'Unassigning…'
+                    : 'Select'}
+              </Button>
+            </li>
             {isLoading && reviewers.length === 0 && (
               <li className="font-switzer text-sm text-slate-helper">
                 Loading reviewers…
