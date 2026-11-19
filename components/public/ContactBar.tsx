@@ -98,7 +98,7 @@ export function ContactBar({ className }: ContactBarProps) {
                 </div>
               </div>
               <p className="mt-3 text-xs text-slate-helper">
-                Prompt response within 24 business hours
+                We Reply Within 1 Business Day
               </p>
             </a>
 

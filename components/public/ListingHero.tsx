@@ -75,6 +75,7 @@ function InfoPills({
   pillVisaLabel,
   processingEta,
   withFreeInsurance = false,
+  className,
 }: {
   countryName: string;
   countryFlag: string;
@@ -82,9 +83,14 @@ function InfoPills({
   pillVisaLabel: string;
   processingEta?: string | null;
   withFreeInsurance?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="flex flex-wrap gap-2 sm:items-center lg:flex-col lg:items-stretch xl:flex-row xl:flex-wrap">
+    <div
+      className={['flex flex-wrap gap-2 sm:items-center', className]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <div className="flex min-w-0 shrink-0 items-center gap-2.5 rounded-full border border-[#B7C9DC]/50 bg-[#FFFFFF] px-3 py-2 text-[#102B4E] shadow-[0_8px_24px_rgba(16,43,78,0.08)] sm:gap-3 sm:px-4 sm:py-3">
         <span className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full bg-[#E8F1FF] sm:h-10 sm:w-10">
           {flagUrl ? (
@@ -205,8 +211,8 @@ export function ListingHero({
       )}
 
       <div className="relative z-10 px-4 pb-[4.75rem] sm:px-6 sm:pb-20 lg:mx-auto lg:max-w-7xl lg:px-8 lg:pb-28 lg:pt-32">
-        {/* One pills tree: overlaps photo on mobile, docks bottom-right on desktop */}
-        <div className="-mt-7 lg:absolute lg:bottom-10 lg:right-8 lg:mt-0 xl:right-10">
+        {/* Mobile: pills overlap hero photo */}
+        <div className="-mt-7 lg:hidden">
           <InfoPills
             countryName={countryName}
             countryFlag={countryFlag}
@@ -217,7 +223,7 @@ export function ListingHero({
           />
         </div>
 
-        <div className="lg:grid lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:items-stretch lg:gap-10">
+        <div className="relative lg:min-h-[420px]">
           <div className="max-w-xl">
             <p className="mt-6 text-[10px] font-medium uppercase tracking-[0.2em] text-[#52657D] lg:mt-0 lg:text-xs lg:tracking-[0.22em]">
               Your global journey starts here
@@ -255,11 +261,14 @@ export function ListingHero({
                 </li>
               ))}
             </ul>
+          </div>
 
-            <div className="mt-6 flex flex-col gap-2.5 lg:mt-8 lg:flex-row lg:items-center lg:gap-3">
+          {/* Full-width row: CTAs left, flag/days right */}
+          <div className="mt-6 flex w-full flex-col gap-2.5 lg:mt-8 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+            <div className="flex w-full flex-col gap-2.5 lg:w-auto lg:flex-row lg:items-center lg:gap-3">
               <a
                 href="#pricing"
-                className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-portrait-ink px-5 py-3.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.28)] transition-colors hover:bg-fog lg:w-auto lg:px-6 lg:text-base lg:active:scale-[0.98]"
+                className="group inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-full bg-portrait-ink px-5 py-3.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.28)] transition-colors hover:bg-fog lg:w-auto lg:px-6 lg:text-base lg:active:scale-[0.98]"
               >
                 <span className="lg:hidden">Apply now</span>
                 <span className="hidden lg:inline">{applyLabel}</span>
@@ -267,18 +276,25 @@ export function ListingHero({
               </a>
               <a
                 href="#requirements"
-                className="inline-flex w-full items-center justify-center rounded-full border border-[#B7C9DC] bg-white px-5 py-3.5 text-sm font-medium text-[#102B4E] transition-colors hover:bg-white/80 lg:w-auto lg:px-6 lg:text-base lg:hover:bg-[#F3F8FF]"
+                className="inline-flex w-full shrink-0 items-center justify-center rounded-full border border-[#B7C9DC] bg-white px-5 py-3.5 text-sm font-medium text-[#102B4E] transition-colors hover:bg-white/80 lg:w-auto lg:px-6 lg:text-base lg:hover:bg-[#F3F8FF]"
               >
                 View requirements
               </a>
             </div>
+            <InfoPills
+              className="hidden lg:flex"
+              countryName={countryName}
+              countryFlag={countryFlag}
+              flagUrl={resolvedFlagUrl}
+              pillVisaLabel={pillVisaLabel}
+              processingEta={processingEta}
+              withFreeInsurance={withFreeInsurance}
+            />
           </div>
 
-          <div className="relative hidden min-h-[420px] lg:block">
-            <p className="font-script pointer-events-none absolute right-[8%] top-[18%] max-w-[220px] -rotate-[8deg] text-right text-3xl leading-tight text-[#102B4E]/80 xl:text-4xl">
-              {scriptLine}
-            </p>
-          </div>
+          <p className="font-script pointer-events-none absolute right-[8%] top-[18%] hidden max-w-[220px] -rotate-[8deg] text-right text-3xl leading-tight text-[#102B4E]/80 lg:block xl:text-4xl">
+            {scriptLine}
+          </p>
         </div>
       </div>
 
