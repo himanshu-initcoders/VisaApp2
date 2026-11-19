@@ -1194,7 +1194,9 @@ export async function getApplicationStoragePreviewUrl(input: {
       applicationId,
       applicationType
     );
-    if (denied) return denied;
+    if (denied) {
+      return { success: false, message: denied.message };
+    }
 
     let key: string;
     try {

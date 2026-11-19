@@ -149,7 +149,12 @@ export type AnalyticsEventMap = {
   };
   login_failed: {
     method: 'phone_otp' | 'email_otp';
-    error_code?: 'deactivated' | 'invalid_otp' | 'no_account' | 'unknown';
+    error_code?:
+      | 'deactivated'
+      | 'invalid_otp'
+      | 'no_account'
+      | 'profile_required'
+      | 'unknown';
     context?: 'signin' | 'apply_modal' | 'checkout' | 'save_draft';
     intent?: 'login' | 'register';
   };
