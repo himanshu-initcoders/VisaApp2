@@ -128,6 +128,7 @@
 ### User Experience
 - [ ] Application auto-save
 - [x] Smart form pre-fill foundation — shared question keys via `question_catalog` (autofill key-first, label fallback for old snapshots)
+- [x] Applicant `/dashboard` home — SQL stats, capped drafts/recent/payments, reference-number URLs, split visa/passport CTAs
 - [ ] Photo validation (AI-powered)
 - [ ] Document quality checker
 - [ ] Progress indicators

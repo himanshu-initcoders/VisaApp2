@@ -652,6 +652,8 @@ export async function listCorrectionRounds(
 
 export interface ApplicantActionItem {
   applicationId: string;
+  /** Prefer this in applicant-facing URLs (`/applications/visa/[ref]/form`). */
+  referenceNumber: string | null;
   travellerId: string;
   travellerName: string;
   country: string;
@@ -666,6 +668,7 @@ export async function listApplicantActionItems(
   const rows = await db
     .select({
       applicationId: correctionRequests.applicationId,
+      referenceNumber: visaApplications.referenceNumber,
       travellerId: correctionRequests.travellerId,
       message: correctionRequests.message,
       travellerName: visaApplicationTravellers.name,
@@ -708,6 +711,7 @@ export async function listApplicantActionItems(
     const config = (row.formSnapshot as ApplyFormConfig | null) ?? null;
     const current = grouped.get(key) ?? {
       applicationId: row.applicationId,
+      referenceNumber: row.referenceNumber,
       travellerId: row.travellerId,
       travellerName: row.travellerName,
       country: row.country || row.countryCode || 'Visa',

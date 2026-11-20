@@ -36,7 +36,7 @@ export function ActionRequiredBanner({
             ))}
           </ul>
           <Link
-            href={`/applications/visa/${item.applicationId}/fix?traveller=${item.travellerId}`}
+            href={`/applications/visa/${item.referenceNumber || item.applicationId}/form?traveller=${item.travellerId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-4 inline-flex rounded-full border border-portrait-ink px-4 py-2 font-switzer text-sm font-semibold text-portrait-ink"

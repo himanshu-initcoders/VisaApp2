@@ -36,7 +36,7 @@ export function PassportActionRequiredBanner({
             ))}
           </ul>
           <Link
-            href={`/applications/passport/${item.applicationId}/fix`}
+            href={`/applications/passport/${item.referenceNumber || item.applicationId}/form`}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-4 inline-flex rounded-full border border-portrait-ink px-4 py-2 font-switzer text-sm font-semibold text-portrait-ink"

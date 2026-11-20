@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { redirectStaffToAdmin } from '@/lib/auth-utils';
 import { db } from '@/lib/db';
 import { visaApplications, passportServices, payments } from '@/lib/db/schema';
-import { and, eq, desc } from 'drizzle-orm';
+import { and, eq, desc, ne, sql, inArray } from 'drizzle-orm';
 import {
   Card,
   CardHeader,
@@ -12,7 +12,6 @@ import {
   CardContent,
   Button,
 } from '@/components/ui';
-import { ApplicationStatusCell } from '@/components/shared/ApplicationStatusCell';
 import { PaymentHistory } from '@/components/applications/PaymentHistory';
 import { loadTravellerSummaries } from '@/lib/visa/travellerStatus';
 import { listApplicantActionItems } from '@/lib/visa/corrections';
@@ -20,16 +19,45 @@ import { listPassportApplicantActionItems } from '@/lib/passport/corrections';
 import { ActionRequiredBanner } from '@/components/dashboard/ActionRequiredBanner';
 import { PassportActionRequiredBanner } from '@/components/dashboard/PassportActionRequiredBanner';
 import { DraftApplicationsList } from '@/components/dashboard/DraftApplicationsList';
-import { FlagLogo } from '@/components/shared/FlagLogo';
+import { UserApplicationListItem } from '@/components/dashboard/UserApplicationListItem';
 import { SubmissionConfirmationTracker } from '@/components/analytics/SubmissionConfirmationTracker';
 import { listMyApplicationDrafts } from '@/lib/apply/serverDraft';
 import { listMyPassportDrafts } from '@/lib/apply/passportDraftActions';
-import { flagUrlFor, getCountryFlagMap } from '@/lib/countries/flags';
+import { getCountryFlagMap } from '@/lib/countries/flags';
 import { loadVisaOutcomePresence } from '@/lib/visa/outcomeDocument';
 import Link from 'next/link';
 
+/** Dashboard home only shows a short slice; full lists live under /applications/*. */
+const DRAFT_LIMIT = 3;
+const RECENT_LIMIT = 5;
+const PAYMENT_LIMIT = 5;
+
+const VISA_IN_PROGRESS = ['submitted', 'under_review', 'action_required'] as const;
+const PASSPORT_IN_PROGRESS = [
+  'submitted',
+  'under_review',
+  'action_required',
+  'in_progress',
+] as const;
+const PASSPORT_APPROVED = ['approved', 'completed'] as const;
+
+function formatAppDate(date: Date | string) {
+  return new Date(date).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  });
+}
+
+function passportTitle(serviceType: string | null | undefined) {
+  if (serviceType === 'reissue') return 'Passport reissue';
+  if (serviceType === 'fresh') return 'New passport';
+  return serviceType ? `Passport · ${serviceType}` : 'Passport';
+}
+
 /**
- * Applicant dashboard — welcome + applications overview.
+ * Applicant dashboard — overview with capped lists and canonical app URLs.
  */
 export default async function DashboardPage({
   searchParams,
@@ -45,30 +73,158 @@ export default async function DashboardPage({
 
   const params = searchParams ? await searchParams : {};
   const submittedId = params.submitted;
-  const firstName = session.user.name?.split(' ')[0] || 'traveler';
+  const firstName = session.user.name?.split(' ')[0] || 'traveller';
+  const userId = session.user.id;
 
-  const [visaAppsAll, passportAppsAll, draftsResult, passportDraftsResult] =
-    await Promise.all([
-      db
-        .select()
-        .from(visaApplications)
-        .where(eq(visaApplications.userId, session.user.id))
-        .orderBy(desc(visaApplications.createdAt))
-        .limit(20),
-      db
-        .select()
-        .from(passportServices)
-        .where(eq(passportServices.userId, session.user.id))
-        .orderBy(desc(passportServices.createdAt))
-        .limit(20),
-      listMyApplicationDrafts(),
-      listMyPassportDrafts(),
-    ]);
-
-  const visaApps = visaAppsAll.filter((a) => a.status !== 'draft').slice(0, 8);
-  const passportApps = passportAppsAll
-    .filter((a) => a.status !== 'draft')
-    .slice(0, 8);
+  const [
+    visaCountRow,
+    passportCountRow,
+    visaInProgressRow,
+    passportInProgressRow,
+    visaApprovedRow,
+    passportApprovedRow,
+    visaRecent,
+    passportRecent,
+    draftsResult,
+    passportDraftsResult,
+    paymentRows,
+    actionItems,
+    passportActionItems,
+  ] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(visaApplications)
+      .where(
+        and(eq(visaApplications.userId, userId), ne(visaApplications.status, 'draft'))
+      )
+      .then((rows) => rows[0]?.count ?? 0),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(passportServices)
+      .where(
+        and(eq(passportServices.userId, userId), ne(passportServices.status, 'draft'))
+      )
+      .then((rows) => rows[0]?.count ?? 0),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(visaApplications)
+      .where(
+        and(
+          eq(visaApplications.userId, userId),
+          inArray(visaApplications.status, [...VISA_IN_PROGRESS])
+        )
+      )
+      .then((rows) => rows[0]?.count ?? 0),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(passportServices)
+      .where(
+        and(
+          eq(passportServices.userId, userId),
+          inArray(passportServices.status, [...PASSPORT_IN_PROGRESS])
+        )
+      )
+      .then((rows) => rows[0]?.count ?? 0),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(visaApplications)
+      .where(
+        and(
+          eq(visaApplications.userId, userId),
+          eq(visaApplications.status, 'approved')
+        )
+      )
+      .then((rows) => rows[0]?.count ?? 0),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(passportServices)
+      .where(
+        and(
+          eq(passportServices.userId, userId),
+          inArray(passportServices.status, [...PASSPORT_APPROVED])
+        )
+      )
+      .then((rows) => rows[0]?.count ?? 0),
+    db
+      .select({
+        id: visaApplications.id,
+        country: visaApplications.country,
+        countryCode: visaApplications.countryCode,
+        visaType: visaApplications.visaType,
+        referenceNumber: visaApplications.referenceNumber,
+        status: visaApplications.status,
+        submittedAt: visaApplications.submittedAt,
+        createdAt: visaApplications.createdAt,
+      })
+      .from(visaApplications)
+      .where(
+        and(eq(visaApplications.userId, userId), ne(visaApplications.status, 'draft'))
+      )
+      .orderBy(desc(visaApplications.submittedAt), desc(visaApplications.createdAt))
+      .limit(RECENT_LIMIT),
+    db
+      .select({
+        id: passportServices.id,
+        serviceType: passportServices.serviceType,
+        referenceNumber: passportServices.referenceNumber,
+        status: passportServices.status,
+        submittedAt: passportServices.submittedAt,
+        createdAt: passportServices.createdAt,
+      })
+      .from(passportServices)
+      .where(
+        and(eq(passportServices.userId, userId), ne(passportServices.status, 'draft'))
+      )
+      .orderBy(desc(passportServices.submittedAt), desc(passportServices.createdAt))
+      .limit(RECENT_LIMIT),
+    listMyApplicationDrafts(),
+    listMyPassportDrafts(),
+    db
+      .select({
+        id: payments.id,
+        amount: payments.amount,
+        currency: payments.currency,
+        status: payments.status,
+        paymentMethod: payments.paymentMethod,
+        razorpayPaymentId: payments.razorpayPaymentId,
+        razorpayOrderId: payments.razorpayOrderId,
+        razorpayRefundId: payments.razorpayRefundId,
+        kind: payments.kind,
+        parentPaymentId: payments.parentPaymentId,
+        createdAt: payments.createdAt,
+        completedAt: payments.completedAt,
+        applicationId: payments.applicationId,
+        applicationType: payments.applicationType,
+        visaCountry: visaApplications.country,
+        visaCountryCode: visaApplications.countryCode,
+        visaType: visaApplications.visaType,
+        visaReference: visaApplications.referenceNumber,
+        passportServiceType: passportServices.serviceType,
+        passportReference: passportServices.referenceNumber,
+      })
+      .from(payments)
+      .leftJoin(
+        visaApplications,
+        and(
+          eq(payments.applicationId, visaApplications.id),
+          eq(payments.applicationType, 'visa'),
+          eq(visaApplications.userId, userId)
+        )
+      )
+      .leftJoin(
+        passportServices,
+        and(
+          eq(payments.applicationId, passportServices.id),
+          eq(payments.applicationType, 'passport'),
+          eq(passportServices.userId, userId)
+        )
+      )
+      .where(eq(payments.userId, userId))
+      .orderBy(desc(payments.createdAt))
+      .limit(PAYMENT_LIMIT),
+    listApplicantActionItems(userId),
+    listPassportApplicantActionItems(userId),
+  ]);
 
   const visaDrafts = draftsResult.success ? draftsResult.drafts : [];
   const passportDrafts = passportDraftsResult.success
@@ -96,168 +252,118 @@ export default async function DashboardPage({
         },
       }))
     : [];
-  const drafts = [...visaDrafts, ...passportDrafts].sort(
-    (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
-  );
 
-  const totalApplications = visaApps.length + passportApps.length;
+  const drafts = [...visaDrafts, ...passportDrafts]
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+    .slice(0, DRAFT_LIMIT);
+
+  const totalApplications = visaCountRow + passportCountRow;
+  const draftCount = visaDrafts.length + passportDrafts.length;
   const inProgress =
-    visaApps.filter((a) =>
-      ['submitted', 'under_review', 'action_required'].includes(a.status)
-    ).length +
-    passportApps.filter((a) =>
-      ['submitted', 'under_review', 'in_progress'].includes(a.status)
-    ).length +
-    drafts.length;
-  const approved =
-    visaApps.filter((a) => a.status === 'approved').length +
-    passportApps.filter((a) =>
-      ['approved', 'completed'].includes(a.status)
-    ).length;
+    visaInProgressRow + passportInProgressRow + draftCount;
+  const approved = visaApprovedRow + passportApprovedRow;
 
-  const [summaries, paymentRows, actionItems, passportActionItems] =
-    await Promise.all([
-      loadTravellerSummaries(visaApps.map((app) => app.id)),
-      db
-        .select({
-          id: payments.id,
-          amount: payments.amount,
-          currency: payments.currency,
-          status: payments.status,
-          paymentMethod: payments.paymentMethod,
-          razorpayPaymentId: payments.razorpayPaymentId,
-          razorpayOrderId: payments.razorpayOrderId,
-          razorpayRefundId: payments.razorpayRefundId,
-          kind: payments.kind,
-          parentPaymentId: payments.parentPaymentId,
-          createdAt: payments.createdAt,
-          completedAt: payments.completedAt,
-          applicationId: payments.applicationId,
-          applicationType: payments.applicationType,
-          country: visaApplications.country,
-          countryCode: visaApplications.countryCode,
-          visaType: visaApplications.visaType,
-        })
-        .from(payments)
-        .leftJoin(
-          visaApplications,
-          and(
-            eq(payments.applicationId, visaApplications.id),
-            eq(visaApplications.userId, session.user.id)
-          )
-        )
-        .where(eq(payments.userId, session.user.id))
-        .orderBy(desc(payments.createdAt))
-        .limit(10),
-      listApplicantActionItems(session.user.id),
-      listPassportApplicantActionItems(session.user.id),
-    ]);
-
-  const draftSlice = drafts.slice(0, 4);
-  const [flagUrls, outcomePresence] = await Promise.all([
+  const [summaries, flagUrls, outcomePresence] = await Promise.all([
+    loadTravellerSummaries(visaRecent.map((app) => app.id)),
     getCountryFlagMap([
-      ...draftSlice.map((d) => d.countryCode || d.payload.countryCode),
-      ...visaApps.map((app) => app.countryCode),
+      ...drafts.map((d) => d.countryCode || d.payload.countryCode),
+      ...visaRecent.map((app) => app.countryCode),
     ]),
-    loadVisaOutcomePresence(visaApps.map((app) => app.id)),
+    loadVisaOutcomePresence(visaRecent.map((app) => app.id)),
   ]);
 
   const recent = [
-    ...visaApps.map((app) => {
+    ...visaRecent.map((app) => {
       const summary = summaries.get(app.id);
+      const date = app.submittedAt || app.createdAt;
       return {
         id: app.id,
         kind: 'visa' as const,
         title: `${app.country || app.countryCode || 'Visa'} · ${app.visaType}`,
         countryCode: app.countryCode,
-        referenceNumber: app.referenceNumber,
+        reference: app.referenceNumber || app.id.slice(0, 8),
         status: app.status,
         travellerCount: summary?.travellerCount ?? 0,
         approvedTravellerCount: summary?.approvedCount ?? 0,
-        date: app.submittedAt || app.createdAt,
+        date,
+        dateLabel: formatAppDate(date),
         href: `/applications/visa/${app.referenceNumber || app.id}`,
-        hasVisaDocument: outcomePresence.has(app.id),
+        documentReady: outcomePresence.has(app.id),
       };
     }),
-    ...passportApps.map((app) => ({
-      id: app.id,
-      kind: 'passport' as const,
-      title: `Passport · ${app.serviceType}`,
-      countryCode: null as string | null,
-      referenceNumber: app.referenceNumber,
-      status: app.status,
-      travellerCount: 0,
-      approvedTravellerCount: 0,
-      date: app.submittedAt || app.createdAt,
-      href: `/applications/passport/${app.referenceNumber || app.id}`,
-      hasVisaDocument: false,
-    })),
+    ...passportRecent.map((app) => {
+      const date = app.submittedAt || app.createdAt;
+      return {
+        id: app.id,
+        kind: 'passport' as const,
+        title: passportTitle(app.serviceType),
+        countryCode: null as string | null,
+        reference: app.referenceNumber || app.id.slice(0, 8),
+        status: app.status,
+        travellerCount: 0,
+        approvedTravellerCount: 0,
+        date,
+        dateLabel: formatAppDate(date),
+        href: `/applications/passport/${app.referenceNumber || app.id}`,
+        documentReady: false,
+      };
+    }),
   ]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 6);
+    .slice(0, RECENT_LIMIT);
 
   return (
     <div className="space-y-8">
       <ActionRequiredBanner items={actionItems} />
       <PassportActionRequiredBanner items={passportActionItems} />
-      {submittedId && (
+
+      {submittedId ? (
         <div className="rounded-[24px] border border-ash bg-mint-wash/60 px-6 py-4">
           <SubmissionConfirmationTracker applicationId={submittedId} />
           <p className="font-switzer text-sm text-portrait-ink">
-            Application submitted successfully
+            Application submitted
             {submittedId.length > 8 ? ` (${submittedId.slice(0, 8)}…)` : ''}.
-            We&apos;ll update you as it moves through review.
+            We&apos;ll email you as it moves through review.
           </p>
         </div>
-      )}
+      ) : null}
 
-      <section className="relative overflow-hidden rounded-[28px] border border-ash bg-white px-6 py-8 shadow-sm sm:px-10 sm:py-10">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-70"
-          style={{
-            background:
-              'radial-gradient(ellipse 80% 60% at 100% 0%, #e8f1ff 0%, transparent 55%), radial-gradient(ellipse 60% 50% at 0% 100%, #d7ffe2 0%, transparent 50%)',
-          }}
-          aria-hidden
-        />
-        <div className="relative">
-          <p className="font-switzer text-sm text-slate-helper">Your account</p>
-          <h1 className="mt-2 font-basier text-[40px] leading-tight tracking-tight text-portrait-ink sm:text-[48px]">
-            Welcome back,{' '}
-            <span className="bg-gradient-rainbow bg-clip-text italic text-transparent">
-              {firstName}
-            </span>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="font-switzer text-sm text-slate-helper">Dashboard</p>
+          <h1 className="mt-1 font-basier text-[36px] leading-tight tracking-tight text-portrait-ink sm:text-[40px]">
+            Welcome back, {firstName}
           </h1>
-          <p className="mt-3 max-w-xl font-switzer text-base leading-7 text-slate-helper">
-            Track visa applications, pick up where you left off, and start a new
-            trip whenever you&apos;re ready.
+          <p className="mt-1.5 max-w-xl font-switzer text-sm text-slate-helper sm:text-base">
+            Finish drafts, track submissions, and start a new visa or passport
+            application.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Link href="/">
-              <Button variant="primary" size="md">
-                Browse destinations
-              </Button>
-            </Link>
-            <Link href="/applications/visa">
-              <Button variant="ghost" size="md">
-                View applications
-              </Button>
-            </Link>
-          </div>
         </div>
-      </section>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/">
+            <Button variant="primary" size="md">
+              Start a visa
+            </Button>
+          </Link>
+          <Link href="/passport">
+            <Button variant="ghost" size="md">
+              Start a passport
+            </Button>
+          </Link>
+        </div>
+      </header>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card className="border-ash">
           <CardHeader className="pb-2">
-            <CardDescription>Total</CardDescription>
+            <CardDescription>Applications</CardDescription>
             <CardTitle className="font-basier text-4xl text-portrait-ink">
               {totalApplications}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="font-switzer text-xs text-slate-helper">
-              Applications on file
+              Submitted visa and passport files
             </p>
           </CardContent>
         </Card>
@@ -270,7 +376,7 @@ export default async function DashboardPage({
           </CardHeader>
           <CardContent>
             <p className="font-switzer text-xs text-slate-helper">
-              Drafts, review, or action needed
+              Drafts, review, or changes needed
             </p>
           </CardContent>
         </Card>
@@ -283,52 +389,69 @@ export default async function DashboardPage({
           </CardHeader>
           <CardContent>
             <p className="font-switzer text-xs text-slate-helper">
-              Ready for travel
+              Ready for travel or completed
             </p>
           </CardContent>
         </Card>
       </section>
 
       <DraftApplicationsList
-        drafts={draftSlice}
+        drafts={drafts}
         flagUrls={flagUrls}
         title="Continue a draft"
-        description="Applications you saved — pick up where you left off."
+        description={
+          draftCount > DRAFT_LIMIT
+            ? `Showing ${DRAFT_LIMIT} of ${draftCount} saved applications.`
+            : 'Pick up an application you saved for later.'
+        }
       />
 
-      <section>
-        <div className="mb-4 flex items-end justify-between gap-4">
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="font-basier text-2xl text-portrait-ink">
               Recent applications
             </h2>
             <p className="mt-1 font-switzer text-sm text-slate-helper">
-              Latest visa and passport activity
+              Latest {RECENT_LIMIT} submitted files
             </p>
           </div>
-          {totalApplications > 0 && (
-            <Link
-              href="/applications/visa"
-              className="font-switzer text-sm text-nautical-teal hover:text-portrait-ink"
-            >
-              See all
-            </Link>
-          )}
+          {totalApplications > 0 ? (
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <Link
+                href="/applications/visa"
+                className="font-switzer text-sm text-nautical-teal hover:text-portrait-ink"
+              >
+                All visas
+              </Link>
+              <Link
+                href="/applications/passport"
+                className="font-switzer text-sm text-nautical-teal hover:text-portrait-ink"
+              >
+                All passports
+              </Link>
+            </div>
+          ) : null}
         </div>
 
         {recent.length === 0 ? (
           <Card className="border-ash">
             <CardContent className="py-14 text-center">
               <p className="font-switzer text-portrait-ink">
-                No applications yet
+                No submitted applications yet
               </p>
               <p className="mt-2 font-switzer text-sm text-slate-helper">
-                Start with a destination to create your first visa application.
+                Start a visa destination or passport service to see it here.
               </p>
-              <div className="mt-6">
+              <div className="mt-6 flex flex-wrap justify-center gap-2">
                 <Link href="/">
                   <Button variant="primary" size="md">
-                    Explore destinations
+                    Browse visas
+                  </Button>
+                </Link>
+                <Link href="/passport">
+                  <Button variant="ghost" size="md">
+                    Passport services
                   </Button>
                 </Link>
               </div>
@@ -336,87 +459,79 @@ export default async function DashboardPage({
           </Card>
         ) : (
           <div className="overflow-hidden rounded-[24px] border border-ash bg-white">
+            <div className="hidden border-b border-ash bg-[#fafbfc] px-4 py-2.5 sm:grid sm:grid-cols-[minmax(0,1.4fr)_minmax(8rem,0.9fr)_6.5rem_auto] sm:gap-x-5">
+              <p className="font-switzer text-[11px] font-semibold uppercase tracking-wider text-slate-helper">
+                Application
+              </p>
+              <p className="font-switzer text-[11px] font-semibold uppercase tracking-wider text-slate-helper">
+                Reference
+              </p>
+              <p className="font-switzer text-[11px] font-semibold uppercase tracking-wider text-slate-helper">
+                Submitted
+              </p>
+              <p className="text-right font-switzer text-[11px] font-semibold uppercase tracking-wider text-slate-helper">
+                Status
+              </p>
+            </div>
             <ul>
               {recent.map((item, index) => (
-                <li key={`${item.kind}-${item.id}`}>
-                  <Link
-                    href={item.href}
-                    className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-3 transition-colors hover:bg-sky-wash/25 sm:grid-cols-[minmax(0,1.5fr)_minmax(8rem,1fr)_auto] ${
-                      index === recent.length - 1 ? '' : 'border-b border-ash'
-                    }`}
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      {item.kind === 'visa' ? (
-                        <FlagLogo
-                          countryCode={item.countryCode}
-                          flagUrl={flagUrlFor(flagUrls, item.countryCode)}
-                          alt={item.title}
-                          size="md"
-                          className="shrink-0"
-                        />
-                      ) : (
-                        <span
-                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-wash/60 font-switzer text-[10px] font-semibold text-nautical-teal"
-                          aria-hidden
-                        >
-                          PP
-                        </span>
-                      )}
-                      <div className="min-w-0">
-                        <p className="truncate font-switzer text-sm font-medium text-portrait-ink">
-                          {item.title}
-                        </p>
-                        <p className="mt-0.5 truncate font-mono font-switzer text-xs text-nautical-teal sm:hidden">
-                          {item.referenceNumber || item.id.slice(0, 8)}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="hidden truncate font-mono font-switzer text-xs text-nautical-teal sm:block">
-                      {item.referenceNumber || item.id.slice(0, 8)}
-                    </p>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <ApplicationStatusCell
-                        status={item.status}
-                        travellerCount={item.travellerCount}
-                        approvedTravellerCount={item.approvedTravellerCount}
-                        readable
-                      />
-                      {item.hasVisaDocument ? (
-                        <span className="font-switzer text-[11px] text-nautical-teal">
-                          Document ready
-                        </span>
-                      ) : null}
-                    </div>
-                  </Link>
-                </li>
+                <UserApplicationListItem
+                  key={`${item.kind}-${item.id}`}
+                  href={item.href}
+                  title={item.title}
+                  reference={item.reference}
+                  dateLabel={item.dateLabel}
+                  status={item.status}
+                  travellerCount={item.travellerCount}
+                  approvedTravellerCount={item.approvedTravellerCount}
+                  countryCode={item.countryCode}
+                  flagUrls={flagUrls}
+                  showFlag={item.kind === 'visa'}
+                  documentReady={item.documentReady}
+                  isLast={index === recent.length - 1}
+                />
               ))}
             </ul>
           </div>
         )}
       </section>
 
-      <section>
-        <div className="mb-4">
+      <section className="space-y-3">
+        <div>
           <h2 className="font-basier text-2xl text-portrait-ink">
-            Payment history
+            Recent payments
           </h2>
           <p className="mt-1 font-switzer text-sm text-slate-helper">
-            Charges for your visa applications
+            Last {PAYMENT_LIMIT} charges and refunds
           </p>
         </div>
         <PaymentHistory
           hideTitle
           payments={paymentRows.map((payment) => {
-            const place = payment.country || payment.countryCode;
-            const label = place
+            const isVisa = payment.applicationType === 'visa';
+            const isPassport = payment.applicationType === 'passport';
+            const place = payment.visaCountry || payment.visaCountryCode;
+            const visaLabel = place
               ? `${place}${payment.visaType ? ` · ${payment.visaType}` : ''}`
-              : payment.applicationType === 'visa'
-                ? 'Visa payment'
+              : 'Visa payment';
+            const passportLabel = payment.passportServiceType
+              ? passportTitle(payment.passportServiceType)
+              : 'Passport payment';
+            const label = isVisa
+              ? visaLabel
+              : isPassport
+                ? passportLabel
                 : 'Payment';
-            const href =
-              payment.applicationId && payment.applicationType === 'visa'
-                ? `/applications/visa/${payment.applicationId}`
+            const ref = isVisa
+              ? payment.visaReference
+              : isPassport
+                ? payment.passportReference
                 : null;
+            const href =
+              payment.applicationId && (isVisa || isPassport)
+                ? `/applications/${payment.applicationType}/${ref || payment.applicationId}?tab=payments`
+                : null;
+
             return {
               id: payment.id,
               amount: payment.amount,

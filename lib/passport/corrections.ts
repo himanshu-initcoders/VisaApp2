@@ -375,6 +375,8 @@ export async function listPassportStaffFieldEdits(
 
 export interface PassportApplicantActionItem {
   applicationId: string;
+  /** Prefer this in applicant-facing URLs (`/applications/passport/[ref]/form`). */
+  referenceNumber: string | null;
   travellerName: string;
   serviceLabel: string;
   productName: string;
@@ -425,6 +427,7 @@ export async function listPassportApplicantActionItems(
       (row.serviceType === 'reissue' ? 'Passport reissue' : 'New passport');
     const current = grouped.get(key) ?? {
       applicationId: row.applicationId,
+      referenceNumber: row.referenceNumber,
       travellerName: 'Applicant',
       serviceLabel: 'Passport',
       productName,

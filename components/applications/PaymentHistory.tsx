@@ -49,6 +49,8 @@ export function PaymentHistory({
   payments,
   hideTitle = false,
   canRefund = false,
+  /** Admin ops: show Razorpay ids. Applicants never see gateway ids. */
+  showGatewayIds,
   applicationId,
   applicationType = 'visa',
   onRefundSuccess,
@@ -57,6 +59,7 @@ export function PaymentHistory({
   hideTitle?: boolean;
   /** Admin-only: show Refund on completed charges with remaining balance. */
   canRefund?: boolean;
+  showGatewayIds?: boolean;
   applicationId?: string;
   applicationType?: 'visa' | 'passport';
   onRefundSuccess?: () => void;
@@ -66,6 +69,8 @@ export function PaymentHistory({
     originalAmountPaise: number;
     remainingAmountPaise: number;
   } | null>(null);
+
+  const revealGatewayIds = showGatewayIds ?? canRefund;
 
   const remainingByChargeId = useMemo(() => {
     const map = new Map<string, number>();
@@ -106,32 +111,21 @@ export function PaymentHistory({
                   isCharge &&
                   Boolean(payment.razorpayPaymentId) &&
                   remaining > 0;
+                const href = payment.href || null;
 
-                return (
-                  <li
-                    key={payment.id}
-                    className="rounded-2xl border border-ash px-4 py-3"
-                  >
+                const body = (
+                  <>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="min-w-0">
                         <p className="font-switzer text-sm font-medium text-portrait-ink">
                           {isRefund ? 'Refund · ' : ''}
                           {formatInrFromPaise(payment.amount)}
                         </p>
-                        {payment.label && (
+                        {payment.label ? (
                           <p className="mt-1 truncate font-switzer text-xs text-slate-helper">
-                            {payment.href ? (
-                              <Link
-                                href={payment.href}
-                                className="text-nautical-teal hover:text-portrait-ink"
-                              >
-                                {payment.label}
-                              </Link>
-                            ) : (
-                              payment.label
-                            )}
+                            {payment.label}
                           </p>
-                        )}
+                        ) : null}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant={getStatusVariant(payment.status)}>
@@ -142,13 +136,15 @@ export function PaymentHistory({
                             type="button"
                             variant="ghost"
                             size="sm"
-                            onClick={() =>
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
                               setRefundTarget({
                                 parentPaymentId: payment.id,
                                 originalAmountPaise: payment.amount,
                                 remainingAmountPaise: remaining,
-                              })
-                            }
+                              });
+                            }}
                           >
                             Refund
                           </Button>
@@ -174,18 +170,20 @@ export function PaymentHistory({
                             : formatMethod(payment.paymentMethod)}
                         </dd>
                       </div>
-                      <div className="sm:col-span-2">
-                        <dt className="font-switzer text-xs text-slate-helper">
-                          {isRefund
-                            ? 'Razorpay refund id'
-                            : 'Razorpay payment id'}
-                        </dt>
-                        <dd className="break-all font-switzer text-sm text-portrait-ink">
-                          {isRefund
-                            ? payment.razorpayRefundId || '—'
-                            : payment.razorpayPaymentId || '—'}
-                        </dd>
-                      </div>
+                      {revealGatewayIds ? (
+                        <div className="sm:col-span-2">
+                          <dt className="font-switzer text-xs text-slate-helper">
+                            {isRefund
+                              ? 'Razorpay refund id'
+                              : 'Razorpay payment id'}
+                          </dt>
+                          <dd className="break-all font-switzer text-sm text-portrait-ink">
+                            {isRefund
+                              ? payment.razorpayRefundId || '—'
+                              : payment.razorpayPaymentId || '—'}
+                          </dd>
+                        </div>
+                      ) : null}
                     </dl>
                     {payment.status === 'proceed' ? (
                       <p className="mt-3 font-switzer text-xs text-slate-helper">
@@ -193,6 +191,23 @@ export function PaymentHistory({
                         within 5-7 working days after the refund has processed
                       </p>
                     ) : null}
+                  </>
+                );
+
+                return (
+                  <li key={payment.id}>
+                    {href ? (
+                      <Link
+                        href={href}
+                        className="block rounded-2xl border border-ash px-4 py-3 transition-colors hover:bg-sky-wash/25"
+                      >
+                        {body}
+                      </Link>
+                    ) : (
+                      <div className="rounded-2xl border border-ash px-4 py-3">
+                        {body}
+                      </div>
+                    )}
                   </li>
                 );
               })}
