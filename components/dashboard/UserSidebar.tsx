@@ -75,20 +75,6 @@ const navItems = [
       </svg>
     ),
   },
-  {
-    name: 'Profile',
-    href: '/profile',
-    icon: (
-      <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-        />
-      </svg>
-    ),
-  },
 ];
 
 /**
@@ -273,16 +259,28 @@ export function UserSidebar({
 
           <div className="space-y-2 border-t border-ash px-2 py-4">
             {collapsed ? (
-              <div
-                className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-mint-wash to-sky-wash"
-                title={user.name || user.email || 'Account'}
+              <Link
+                href="/profile"
+                onClick={closeMobile}
+                title="Profile"
+                className={cn(
+                  'mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-mint-wash to-sky-wash transition-shadow',
+                  pathname.startsWith('/profile') && 'ring-2 ring-portrait-ink/20'
+                )}
               >
                 <span className="font-switzer text-sm font-semibold text-portrait-ink">
                   {user.name?.charAt(0).toUpperCase() || 'U'}
                 </span>
-              </div>
+              </Link>
             ) : (
-              <div className="flex items-center space-x-3 px-3 py-2">
+              <Link
+                href="/profile"
+                onClick={closeMobile}
+                className={cn(
+                  'flex items-center space-x-3 rounded-[12px] px-3 py-2 transition-colors hover:bg-sky-wash/30',
+                  pathname.startsWith('/profile') && 'bg-sky-wash/40'
+                )}
+              >
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-mint-wash to-sky-wash">
                   <span className="font-switzer text-sm font-semibold text-portrait-ink">
                     {user.name?.charAt(0).toUpperCase() || 'U'}
@@ -298,7 +296,7 @@ export function UserSidebar({
                       : user.email || ''}
                   </p>
                 </div>
-              </div>
+              </Link>
             )}
 
             <form action={signOutAction} className={collapsed ? 'flex justify-center' : 'px-1'}>
