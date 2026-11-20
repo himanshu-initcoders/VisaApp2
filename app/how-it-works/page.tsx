@@ -13,7 +13,7 @@ const steps = [
     id: 'traveller-info',
     title: 'Choose your destination',
     description:
-      'Pick the country you’re visiting and the visa that fits your trip: tourist, business or study.',
+      'Pick the country you’re visiting and the visa that fits your trip: tourist, business.',
     stepNumber: 1,
   },
   {

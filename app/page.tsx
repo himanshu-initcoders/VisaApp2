@@ -54,7 +54,7 @@ const HOW_IT_WORKS_STEPS = [
     id: 'destination',
     title: 'Choose your destination',
     description:
-      'Pick the country you’re visiting and the visa that fits your trip: tourist, business or study.',
+      'Pick the country you’re visiting and the visa that fits your trip: tourist, business.',
     stepNumber: 1,
   },
   {
