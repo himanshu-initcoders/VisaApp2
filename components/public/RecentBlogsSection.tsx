@@ -19,7 +19,7 @@ export function RecentBlogsSection({
   return (
     <section
       className={`mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 ${
-        compactBottom ? 'py-10 sm:py-14' : 'pb-12 pt-4 sm:pb-20 sm:pt-6'
+        compactBottom ? 'pb-10 pt-4 sm:pb-14 sm:pt-6' : 'pb-12 pt-4 sm:pb-20 sm:pt-6'
       }`}
     >
       <MotionReveal className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">

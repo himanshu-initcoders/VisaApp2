@@ -34,11 +34,11 @@ export function Footer() {
       ],
     },
     {
-      title: 'Products',
+      title: 'Services',
       links: [
-        { href: '/#visas', label: 'Visa services' },
-        { href: '/passport', label: 'Passport services' },
-        { href: '/dashboard', label: 'Track application' },
+        { href: '/#visas', label: 'Visa Services' },
+        { href: '/passport', label: 'Passport Services' },
+        { href: '/dashboard', label: 'Track Applications' },
       ],
     },
     {

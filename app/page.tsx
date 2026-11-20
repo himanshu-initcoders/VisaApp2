@@ -148,29 +148,22 @@ export default async function Home() {
         <h1 className="sr-only">{HOME_TITLE}</h1>
         <HomeLandingClient countries={countries} processes={allProcesses} />
 
-        <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-16 lg:px-8">
+        <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
           <MotionReveal className="mb-8 max-w-2xl sm:mb-10">
             <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-helper">
               How it works
             </p>
             <h2 className="mt-2 font-basier text-2xl leading-tight tracking-[-0.03em] text-portrait-ink sm:text-4xl">
-               Your visa in four simple steps
+              Your visa in four simple steps
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-helper sm:text-base sm:leading-7">
               Clear guidance for first-time travellers, and no repeated paperwork for frequent ones.
             </p>
           </MotionReveal>
           <ProcessTimeline steps={HOW_IT_WORKS_STEPS} />
-          <Link
-            href="/how-it-works"
-            className="mt-6 inline-flex items-center text-sm font-medium text-portrait-ink"
-          >
-            See the full process
-            <ArrowRight className="ml-1 h-4 w-4" />
-          </Link>
         </section>
 
-        <section className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 sm:pb-20 lg:px-8">
+        <section className="mx-auto max-w-7xl px-4 pb-8 pt-2 sm:px-6 sm:pb-10 sm:pt-4 lg:px-8">
           <MotionReveal className="grid overflow-hidden rounded-[28px] bg-[#062445] text-white shadow-elevated sm:rounded-[36px] lg:grid-cols-[1.1fr_0.9fr]">
             <div className="px-5 py-10 sm:px-10 sm:py-12">
               <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/60">
@@ -185,10 +178,10 @@ export default async function Home() {
               </p>
               <Link
                 href="/passport"
-                className="mt-7 inline-flex items-center justify-center rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-portrait-ink transition-transform active:scale-[0.98] sm:text-base"
+                className="mt-7 inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-portrait-ink transition-transform active:scale-[0.98] sm:text-base"
               >
                 Apply for Indian passport
-                <ArrowRight className="ml-2 h-4 w-4" />
+                <ArrowRight className="h-4 w-4 shrink-0" />
               </Link>
             </div>
             <div className="relative hidden min-h-[220px] items-center justify-center bg-[#08304c] px-10 lg:flex">
