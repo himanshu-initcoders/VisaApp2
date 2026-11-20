@@ -30,11 +30,6 @@ const nextConfig: NextConfig = {
         hostname: '**.amazonaws.com',
       },
       {
-        // Existing seeded country images still point here until replaced with our CDN
-        protocol: 'https',
-        hostname: 'media.atlys.com',
-      },
-      {
         protocol: 'https',
         hostname: 'res.cloudinary.com',
         pathname: '/**',

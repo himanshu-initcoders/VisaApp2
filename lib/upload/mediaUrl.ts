@@ -153,7 +153,7 @@ export function sniffMediaContentType(
 
 /**
  * Convert a stored key or absolute S3 /uploads URL into an app-served URL.
- * Leaves Cloudinary, Atlys CDN, blob/data, and already-proxied URLs unchanged.
+ * Leaves Cloudinary, blob/data, and already-proxied URLs unchanged.
  */
 export function toAppMediaUrl(
   urlOrKey: string | null | undefined
@@ -165,7 +165,6 @@ export function toAppMediaUrl(
   if (value.startsWith('/api/media')) return value;
   if (value.startsWith('blob:') || value.startsWith('data:')) return value;
   if (value.includes('res.cloudinary.com')) return value;
-  if (value.includes('media.atlys.com')) return value;
 
   // Legacy local public URLs → proxy (correct Content-Type + S3 fallback)
   if (value.startsWith('/uploads/')) {

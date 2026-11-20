@@ -109,8 +109,7 @@ function resolveHeroBannerUrl(
       (u.startsWith('/api/media') ||
        u.startsWith('/uploads/') ||
        u.includes('amazonaws.com') ||
-       u.includes('cloudinary.com') ||
-       !u.includes('media.atlys.com'))
+       u.includes('cloudinary.com'))
     );
 
   if (heroUrl && isCustomUpload(heroUrl)) return heroUrl;
