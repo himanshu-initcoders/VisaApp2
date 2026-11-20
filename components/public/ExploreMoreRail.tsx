@@ -1,14 +1,17 @@
 'use client';
 
 import { MotionReveal } from '@/components/public/MotionReveal';
-import { PublicProcessCard } from '@/components/public/PublicProcessCard';
+import {
+  PublicCountryCard,
+  type HomeCountryCardData,
+} from '@/components/public/PublicCountryCard';
 
 const MAX_ITEMS = 4;
 
 export function ExploreMoreRail({
   items,
 }: {
-  items: Array<any>;
+  items: HomeCountryCardData[];
 }) {
   const visible = items.slice(0, MAX_ITEMS);
 
@@ -24,9 +27,9 @@ export function ExploreMoreRail({
       </MotionReveal>
 
       <div className="grid gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
-        {visible.map((item, index) => (
-          <MotionReveal key={item.id} delayMs={index * 40}>
-            <PublicProcessCard process={item} />
+        {visible.map((country, index) => (
+          <MotionReveal key={country.iso2Code} delayMs={index * 40}>
+            <PublicCountryCard country={country} showExploreFooter />
           </MotionReveal>
         ))}
       </div>

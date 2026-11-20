@@ -320,19 +320,37 @@ const getCachedPublicProcessPageData = unstable_cache(
       }),
     ]);
 
+    // Country cards like the home grid: tourism first, else next available listing.
     const exploreMore = relatedCountries
-      .flatMap((country) =>
-        country.visaListings.map((visaListing) => ({
-          ...visaListing,
-          country: {
-            id: country.id,
-            name: country.name,
-            iso2Code: country.iso2Code,
-            images: rewriteCountryImages(country.images),
-          },
-        }))
-      )
-      .filter((visaListing) => visaListing.id !== process.id)
+      .filter((country) => country.iso2Code !== process.country.iso2Code)
+      .map((country) => {
+        const listings = country.visaListings.map((visaListing) => ({
+          id: visaListing.id,
+          href: visaListing.href,
+          processName: visaListing.processName,
+          startingPrice: visaListing.startingPrice,
+          isFree: visaListing.isFree,
+          purpose: visaListing.purpose,
+          withFreeInsurance: visaListing.withFreeInsurance,
+        }));
+
+        const preferred =
+          listings.find((listing) => listing.purpose === 'tourism') ??
+          listings[0];
+        const cheapest = listings.reduce((lowest, listing) =>
+          listing.startingPrice < lowest.startingPrice ? listing : lowest
+        );
+
+        return {
+          name: country.name,
+          iso2Code: country.iso2Code,
+          images: country.images,
+          href: preferred.href,
+          startingPrice: cheapest.startingPrice,
+          isFree: cheapest.isFree,
+          listings,
+        };
+      })
       .slice(0, 4);
 
     const visaKindsRaw = siblingListings
