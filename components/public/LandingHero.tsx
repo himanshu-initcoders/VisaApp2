@@ -22,6 +22,7 @@ const PRODUCT_TABS = [
     label: 'Visas',
     href: '#visas',
     videoSrc: '/visa.mp4',
+    posterSrc: '/visa.gif',
     playOnHover: false,
   },
   {
@@ -29,6 +30,7 @@ const PRODUCT_TABS = [
     label: 'Passport',
     href: '/passport',
     videoSrc: '/passport.mp4',
+    posterSrc: '/passport.gif',
     playOnHover: true,
   },
 ] as const;
@@ -57,15 +59,18 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 function ProductVideo({
   src,
+  poster,
   autoPlay,
   playing,
 }: {
   src: string;
+  poster?: string;
   autoPlay: boolean;
   playing?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   // Defer network fetch until after first paint so videos don't contend with LCP.
+  // Still load play-on-hover videos so their first frame is visible before hover.
   const [shouldLoad, setShouldLoad] = useState(false);
 
   useEffect(() => {
@@ -73,7 +78,6 @@ function ProductVideo({
       setShouldLoad(true);
       return;
     }
-    if (!autoPlay) return;
 
     const win = window as Window & {
       requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
@@ -87,7 +91,7 @@ function ProductVideo({
     }
     const timer = window.setTimeout(() => setShouldLoad(true), 1200);
     return () => window.clearTimeout(timer);
-  }, [autoPlay, playing]);
+  }, [playing]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -95,9 +99,23 @@ function ProductVideo({
 
     if (autoPlay || playing) {
       void video.play().catch(() => {});
+      return;
+    }
+
+    video.pause();
+    // Tiny seek paints a still frame; currentTime=0 alone is often blank until play.
+    const showStill = () => {
+      try {
+        video.currentTime = 0.001;
+      } catch {
+        // Ignore seek before metadata is ready.
+      }
+    };
+    if (video.readyState >= 1) {
+      showStill();
     } else {
-      video.pause();
-      video.currentTime = 0;
+      video.addEventListener('loadedmetadata', showStill, { once: true });
+      return () => video.removeEventListener('loadedmetadata', showStill);
     }
   }, [autoPlay, playing, shouldLoad]);
 
@@ -105,11 +123,12 @@ function ProductVideo({
     <video
       ref={videoRef}
       src={shouldLoad ? src : undefined}
+      poster={poster}
       muted
       loop
       playsInline
       autoPlay={autoPlay}
-      preload="none"
+      preload="metadata"
       className="h-16 w-16 shrink-0 rounded-full object-cover mix-blend-multiply"
       aria-hidden
     />
@@ -194,6 +213,7 @@ export function LandingHero({
               >
                 <ProductVideo
                   src={tab.videoSrc}
+                  poster={tab.posterSrc}
                   autoPlay={!tab.playOnHover}
                   playing={tab.playOnHover ? passportPlaying : undefined}
                 />
