@@ -8,15 +8,25 @@ type MediaImageProps = Omit<ImageProps, 'src'> & {
 };
 
 /**
+ * After toAppMediaUrl, our storage is `/api/media` or a relative path.
+ * Leftover absolute remotes (legacy Unsplash covers, etc.) use <img> so
+ * unconfigured next/image hosts never throw at runtime.
+ */
+function shouldUseNativeImg(url: string): boolean {
+  if (isSvgMediaUrl(url)) return true;
+  return /^https?:\/\//i.test(url);
+}
+
+/**
  * next/image wrapper that always rewrites storage URLs through /api/media.
  * Use for any DB/CDN-backed photo so private S3 and extensionless local files work.
- * SVGs fall back to <img> because the Next optimizer returns 400 for them.
+ * SVGs and absolute remote hosts fall back to <img>.
  */
 export function MediaImage({ src, alt, className, fill, width, height, ...rest }: MediaImageProps) {
   const resolved = toAppMediaUrl(src) || src;
   if (!resolved) return null;
 
-  if (isSvgMediaUrl(resolved) || isSvgMediaUrl(src)) {
+  if (shouldUseNativeImg(resolved) || isSvgMediaUrl(src)) {
     const style =
       fill
         ? undefined
@@ -33,6 +43,8 @@ export function MediaImage({ src, alt, className, fill, width, height, ...rest }
         height={typeof height === 'number' ? height : undefined}
         className={cn(fill && 'absolute inset-0 h-full w-full', className)}
         style={style}
+        loading="lazy"
+        decoding="async"
       />
     );
   }

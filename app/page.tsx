@@ -116,6 +116,14 @@ export default async function Home() {
 
   return (
     <>
+      {/* LCP hero: discoverable in initial HTML before the client LandingHero tree. */}
+      <link
+        rel="preload"
+        as="image"
+        href="/hero.webp"
+        type="image/webp"
+        fetchPriority="high"
+      />
       <JsonLd
         data={[
           buildWebPageJsonLd({

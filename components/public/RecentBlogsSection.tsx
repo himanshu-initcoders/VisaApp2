@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { MotionReveal } from '@/components/public/MotionReveal';
+import { MediaImage } from '@/components/shared/MediaImage';
 import type { BlogPost } from '@/lib/db/queries/blog';
-import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 type RecentBlogsSectionProps = {
   posts: BlogPost[];
@@ -53,13 +53,12 @@ export function RecentBlogsSection({
             >
               <div className="relative aspect-[16/10] w-full overflow-hidden bg-sky-wash">
                 {post.coverImageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- CMS covers may be local or arbitrary hosts
-                  <img
-                    src={
-                      toAppMediaUrl(post.coverImageUrl) || post.coverImageUrl
-                    }
+                  <MediaImage
+                    src={post.coverImageUrl}
                     alt={post.coverImageAlt || post.title}
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                    fill
+                    sizes="(min-width: 1280px) 33vw, (min-width: 640px) 50vw, 100vw"
+                    className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                   />
                 ) : null}
               </div>

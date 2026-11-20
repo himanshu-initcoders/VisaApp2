@@ -134,7 +134,8 @@ export default function RootLayout({
                 title="Google Tag Manager"
               />
             </noscript>
-            <Script id="gtm" strategy="afterInteractive">
+            {/* lazyOnload keeps GTM/Clarity off the LCP critical path. */}
+            <Script id="gtm" strategy="lazyOnload">
               {`
                 window.dataLayer = window.dataLayer || [];
                 function gtag(){dataLayer.push(arguments);}

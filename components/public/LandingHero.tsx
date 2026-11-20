@@ -65,28 +65,51 @@ function ProductVideo({
   playing?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Defer network fetch until after first paint so videos don't contend with LCP.
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  useEffect(() => {
+    if (playing) {
+      setShouldLoad(true);
+      return;
+    }
+    if (!autoPlay) return;
+
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (typeof win.requestIdleCallback === 'function') {
+      const id = win.requestIdleCallback(() => setShouldLoad(true), {
+        timeout: 2000,
+      });
+      return () => win.cancelIdleCallback?.(id);
+    }
+    const timer = window.setTimeout(() => setShouldLoad(true), 1200);
+    return () => window.clearTimeout(timer);
+  }, [autoPlay, playing]);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || autoPlay) return;
+    if (!video || !shouldLoad) return;
 
-    if (playing) {
+    if (autoPlay || playing) {
       void video.play().catch(() => {});
     } else {
       video.pause();
       video.currentTime = 0;
     }
-  }, [autoPlay, playing]);
+  }, [autoPlay, playing, shouldLoad]);
 
   return (
     <video
       ref={videoRef}
-      src={src}
+      src={shouldLoad ? src : undefined}
       muted
       loop
       playsInline
       autoPlay={autoPlay}
-      preload="auto"
+      preload="none"
       className="h-16 w-16 shrink-0 rounded-full object-cover mix-blend-multiply"
       aria-hidden
     />
@@ -118,11 +141,14 @@ export function LandingHero({
   return (
     <section className="relative overflow-hidden pt-24 sm:pt-28">
       <div aria-hidden className="pointer-events-none absolute inset-0">
+        {/* Pre-compressed WebP: skip optimizer so LCP preload URL matches the img. */}
         <Image
-          src="/hero.png"
+          src="/hero.webp"
           alt=""
           fill
-          priority
+          unoptimized
+          loading="eager"
+          fetchPriority="high"
           sizes="100vw"
           className="object-cover object-[center_30%]"
         />
