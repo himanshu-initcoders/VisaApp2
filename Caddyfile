@@ -2,8 +2,13 @@
 	email {$CADDY_EMAIL:hello@viserv.in}
 }
 
-# Apex + www (Caddy gets Let's Encrypt certs after DNS points here)
-viserv.in, www.viserv.in {
+# www → apex (301). Canonical / sitemap / robots / metadataBase all use https://viserv.in.
+# Serving both hosts as 200 creates duplicate URLs for crawlers.
+www.viserv.in {
+	redir https://viserv.in{uri} permanent
+}
+
+viserv.in {
 	encode gzip zstd
 	reverse_proxy app:3000 {
 		header_up Host {host}

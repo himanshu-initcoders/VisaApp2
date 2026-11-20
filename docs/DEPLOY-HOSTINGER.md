@@ -8,7 +8,7 @@ Uploads stay on **S3** (`UPLOAD_PROVIDER=s3`). Only the database moves off Neon.
 
 - **Postgres** — installed on the VPS host (not a Compose service). Listens on `127.0.0.1` + Docker bridge; UFW denies public `5432`
 - `app` / `migrate` — reach DB via `host.docker.internal` (`extra_hosts: host-gateway`)
-- `caddy` — ports 80/443, auto TLS for `DOMAIN`
+- `caddy` — ports 80/443, auto TLS; `www.viserv.in` → `301` → `https://viserv.in{uri}` (apex is canonical)
 - `jenkins` — `127.0.0.1:8080`, Docker socket for compose deploys
 
 ## 0. VPS prerequisites

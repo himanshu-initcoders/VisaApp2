@@ -143,6 +143,7 @@
 - [x] GTM / GA4 funnel event tracking (client dataLayer; GA tags configured in GTM)
 - [x] JSON-LD structured data (Organization, WebSite, WebPage, Breadcrumb, Service, FAQ, BlogPosting)
 - [x] Sitemap (`/sitemap.xml`) + robots (`/robots.txt`)
+- [x] www → apex host redirect (`Caddyfile`: `www.viserv.in` → `https://viserv.in`)
 - [x] Blog index + post pages in sitemap, footer, header, `view_blog_post` analytics
 - [x] Recent blogs teaser (3 posts) on home + `/passport`
 - [ ] Analytics dashboard

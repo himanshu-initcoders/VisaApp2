@@ -103,7 +103,7 @@ export function verifyWaMediaToken(
 
 /**
  * Public origin Twilio can HTTPS-fetch.
- * Prefer WA_MEDIA_PUBLIC_BASE_URL (e.g. https://www.viserv.in) over localhost.
+ * Prefer WA_MEDIA_PUBLIC_BASE_URL (e.g. https://viserv.in) over localhost.
  */
 export function publicAppBaseUrl(): string {
   const raw =
@@ -134,7 +134,7 @@ export function isPubliclyReachableMediaBase(base: string): boolean {
  * Twilio template Media URL field must be: {{7}}
  * (the full URL — not https://domain/api/wa-media/{{7}})
  *
- * Example {{7}}: https://www.viserv.in/api/wa-media/{token}.pdf
+ * Example {{7}}: https://viserv.in/api/wa-media/{token}.pdf
  */
 export function buildWaMediaPublicUrl(
   documentId: string,
@@ -154,7 +154,7 @@ export function buildWaMediaPublicUrl(
 
   if (!isPubliclyReachableMediaBase(base)) {
     console.warn(
-      '[wa-media] Media base is not a public HTTPS URL. Twilio will fail with "No media available". Set WA_MEDIA_PUBLIC_BASE_URL=https://www.viserv.in (or an ngrok HTTPS URL).',
+      '[wa-media] Media base is not a public HTTPS URL. Twilio will fail with "No media available". Set WA_MEDIA_PUBLIC_BASE_URL=https://viserv.in (or an ngrok HTTPS URL).',
       { base, fullUrl }
     );
   }
