@@ -145,6 +145,7 @@ export default async function Home() {
         ]}
       />
       <main className="min-h-screen bg-[#f8f6f1]">
+        <h1 className="sr-only">{HOME_TITLE}</h1>
         <HomeLandingClient countries={countries} processes={allProcesses} />
 
         <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-16 lg:px-8">
