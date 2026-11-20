@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 /**
  * Route protection (Next.js proxy).
  *
- * Protected: /dashboard, /applications, /documents, /profile, /admin (except /admin/login)
+ * Protected: /dashboard, /applications, /documents, /traveller-profiles, /profile, /admin (except /admin/login)
  * Apply: /visa/.../apply and /passport/[serviceType]/apply — user, admin, or reviewer
  * Auth pages:
  * - /admin/login, /register → staff; applicants redirected away
@@ -54,6 +54,7 @@ export default auth((req) => {
     '/dashboard',
     '/applications',
     '/documents',
+    '/traveller-profiles',
     '/profile',
     '/admin',
   ];

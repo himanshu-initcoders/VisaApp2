@@ -16,7 +16,7 @@ import {
 } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import type { TravelerProfile } from '@/lib/dashboard/travelerProfiles';
-import { replaceMyProfileDocument } from '@/app/(dashboard)/documents/actions';
+import { replaceMyProfileDocument } from '@/app/(dashboard)/traveller-profiles/actions';
 
 const ALLOWED_MIME = new Set([
   'image/jpeg',

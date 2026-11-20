@@ -16,7 +16,7 @@ Insert new vault row → set prior active slot row to `visibility=hidden`. Never
 ## What belongs in the vault
 - Applicant personal docs only: `passport-front` / `passport-back` / `photo`, catalog document types, listing component UUID slots
 - **Not** staff outcomes (`visa_outcome`, `passport_outcome`) — those stay on the application
-- `/documents` dedupes by catalog type so one passport / one photo per traveller
+- `/traveller-profiles` (legacy `/documents` redirects) dedupes by catalog type so one passport / one photo per traveller
 
 ## Vault vs application separation (critical)
 - **Application attachments** are frozen refs in `travellers[].documents[]` (`documentId` + `key`)

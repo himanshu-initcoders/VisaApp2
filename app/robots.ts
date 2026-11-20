@@ -18,6 +18,7 @@ export default function robots(): MetadataRoute.Robots {
         '/dashboard/',
         '/applications/',
         '/documents/',
+        '/traveller-profiles/',
         '/profile/',
         '/signin',
         '/admin/login',

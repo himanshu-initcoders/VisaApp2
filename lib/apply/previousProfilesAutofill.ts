@@ -292,7 +292,7 @@ type MutableApplyProfile = {
 
 /**
  * Carousel-friendly previous profiles for the apply first step.
- * Source of truth: traveler_profiles (same as /documents). App history only
+ * Source of truth: traveler_profiles (same as /traveller-profiles). App history only
  * enriches counts / last visa label — never invents extra travellers.
  */
 export async function getApplyPreviousProfiles(
@@ -444,7 +444,7 @@ function rememberDoc(
 /**
  * Build autofill payload for a traveler profile against the current listing form.
  *
- * Documents: traveler vault only (same source as /documents).
+ * Documents: traveler vault only (same source as /traveller-profiles).
  * Trip / richer passport: optional enrichment from past apps for this identity —
  * never path LIKE / never attach another traveller's files.
  */

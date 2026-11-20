@@ -127,7 +127,7 @@ export async function UserApplicationsList({
             {description}
           </p>
         </div>
-        <Link href="/">
+        <Link href={isVisa ? '/' : '/passport'}>
           <Button variant="primary" size="md">
             New application
           </Button>
