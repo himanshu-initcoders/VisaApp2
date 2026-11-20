@@ -267,7 +267,7 @@ export function CountrySearchOverlay({
                       href={country.href}
                       className="hidden shrink-0 rounded-full border-[1.5px] border-portrait-ink px-5 py-2 text-sm font-medium text-portrait-ink transition-colors hover:bg-portrait-ink hover:text-white sm:inline-flex"
                     >
-                      Get Visa
+                      Apply Now
                     </Link>
                   </div>
 
@@ -275,7 +275,7 @@ export function CountrySearchOverlay({
                     href={country.href}
                     className="mt-3 flex h-10 items-center justify-center rounded-full border-[1.5px] border-portrait-ink text-sm font-medium text-portrait-ink sm:hidden"
                   >
-                    Get Visa
+                    Apply Now
                   </Link>
                 </li>
               ))}
