@@ -55,7 +55,8 @@ export const purposeEnum = pgEnum('purpose', [
   'study',
   'family',
   'medical',
-  'transit'
+  'transit',
+  'visa_on_arrival',
 ]);
 
 export const unitEnum = pgEnum('unit', [

@@ -16,11 +16,14 @@ import {
   formatDuration,
   formatPrice,
   formatProcessType,
-  formatVisaKindLabel,
   getFlagEmoji,
   stableDemoCount,
 } from '@/lib/public';
 import { isVisaListingUuid } from '@/lib/visa/listingSlug';
+import {
+  purposeTabSortIndex,
+  visaPurposeTabLabel,
+} from '@/lib/visa/purposes';
 import {
   getDemoHighlights,
   getDemoPriceOptions,
@@ -317,6 +320,11 @@ const getCachedPublicProcessPageData = unstable_cache(
           process.destinationCountry
         ),
         orderBy: [visaListings.processName],
+        with: {
+          prices: {
+            orderBy: [visaListingPrices.sortOrder],
+          },
+        },
       }),
     ]);
 
@@ -353,34 +361,56 @@ const getCachedPublicProcessPageData = unstable_cache(
       })
       .slice(0, 4);
 
-    const visaKindsRaw = siblingListings
-      .filter((listing) => !listing.unsupported)
-      .map((listing) => ({
-        id: listing.id,
-        purpose: listing.purpose,
-        label: formatVisaKindLabel({
-          purpose: listing.purpose,
-        }),
-        href: buildProcessHref(process.country.iso2Code, listing.slug),
-      }));
-
-    // Prefer unique labels; fall back to process name when purpose clashes
-    const labelCounts = visaKindsRaw.reduce<Record<string, number>>(
-      (acc, kind) => {
-        acc[kind.label] = (acc[kind.label] ?? 0) + 1;
-        return acc;
-      },
-      {}
+    // One tab per purpose (tourism → … → visa_on_arrival). Same-purpose
+    // listings share a tab; their options render under that tab.
+    const enabledSiblings = siblingListings.filter(
+      (listing) => !listing.unsupported
     );
 
-    const visaKinds = visaKindsRaw.map((kind) => {
-      if ((labelCounts[kind.label] ?? 0) <= 1) return kind;
-      const listing = siblingListings.find((item) => item.id === kind.id);
-      return {
-        ...kind,
-        label: listing?.processName || kind.label,
+    const listingsByPurpose = new Map<
+      string,
+      Array<{
+        id: string;
+        href: string;
+        processName: string;
+        purpose: string;
+        formattedStartingPrice: string;
+        isMultipleEntry: boolean;
+        stayDuration: string | null;
+      }>
+    >();
+
+    for (const listing of enabledSiblings) {
+      const mapped = mapProcess(listing);
+      const entry = {
+        id: listing.id,
+        href: buildProcessHref(process.country.iso2Code, listing.slug),
+        processName: listing.processName,
+        purpose: listing.purpose,
+        formattedStartingPrice: mapped.formattedStartingPrice,
+        isMultipleEntry: Boolean(listing.isMultipleEntry),
+        stayDuration: mapped.stayDuration,
       };
-    });
+      const bucket = listingsByPurpose.get(listing.purpose) ?? [];
+      bucket.push(entry);
+      listingsByPurpose.set(listing.purpose, bucket);
+    }
+
+    const visaKinds = Array.from(listingsByPurpose.entries())
+      .map(([purpose, listings]) => {
+        const primary = listings[0];
+        return {
+          purpose,
+          label: visaPurposeTabLabel(purpose),
+          id: primary.id,
+          href: primary.href,
+          listings,
+        };
+      })
+      .sort(
+        (a, b) =>
+          purposeTabSortIndex(a.purpose) - purposeTabSortIndex(b.purpose)
+      );
 
     const dbRequirements = process.componentsRequired.map((item) => {
       return {

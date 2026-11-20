@@ -125,10 +125,15 @@ function invalidListingError(error: unknown, fallback: string) {
     const issue = (
       error as { issues?: Array<{ message?: string; path?: Array<PropertyKey> }> }
     ).issues?.[0];
+    const pathKey = issue?.path?.[0];
+    const field =
+      pathKey === 'slug' || pathKey === 'purpose'
+        ? (pathKey as 'slug' | 'purpose')
+        : undefined;
     return {
       success: false as const,
       error: issue?.message || 'Invalid visa listing data provided',
-      field: issue?.path?.[0] === 'slug' ? ('slug' as const) : undefined,
+      field,
     };
   }
 

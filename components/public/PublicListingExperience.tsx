@@ -175,9 +175,16 @@ export function PublicListingExperience({
     const currentId = data.process.id;
 
     siblings.forEach((kind) => {
-      if (kind.id === currentId) return;
-      if (listingCache.has(cacheKey(countryCode, kind.id))) return;
-      void readListing(countryCode, kind.id);
+      const listingIds =
+        kind.listings?.length > 0
+          ? kind.listings.map((listing) => listing.id)
+          : [kind.id];
+
+      listingIds.forEach((listingId) => {
+        if (listingId === currentId) return;
+        if (listingCache.has(cacheKey(countryCode, listingId))) return;
+        void readListing(countryCode, listingId);
+      });
     });
   }, [data.country.iso2Code, data.page.visaKinds, data.process.id]);
 
@@ -232,7 +239,7 @@ export function PublicListingExperience({
           className="border-ash-divider/40 bg-[#f8f6f1]/95"
         />
 
-        <div className="mx-auto max-w-7xl space-y-12 px-4 py-10 sm:space-y-20 sm:px-6 sm:py-16 lg:px-8">
+        <div className="mx-auto max-w-7xl space-y-12 px-4 pb-10 pt-4 sm:space-y-20 sm:px-6 sm:pb-16 sm:pt-6 lg:px-8">
           <ListingOverviewSection
             overview={data.page.overview}
             processingEta={data.process.standardEta}

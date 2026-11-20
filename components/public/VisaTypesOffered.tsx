@@ -16,14 +16,17 @@ import {
   HeartPulse,
   Plane,
   ArrowRightLeft,
+  MapPin,
   Users,
   type LucideIcon,
 } from 'lucide-react';
 import { beginVisaKindNavigation } from '@/components/public/PreserveListingView';
 import type {
   PriceOptionView,
+  VisaKindListingOption,
   VisaKindOption,
 } from '@/components/public/PricingPanel';
+import { visaPurposeTabLabel } from '@/lib/visa/purposes';
 import { cn } from '@/lib/utils';
 
 const VISIBLE_OPTIONS = 2;
@@ -36,6 +39,7 @@ const PURPOSE_ICONS: Record<string, LucideIcon> = {
   family: Users,
   medical: HeartPulse,
   transit: ArrowRightLeft,
+  visa_on_arrival: MapPin,
 };
 
 function purposeIcon(purpose: string): LucideIcon {
@@ -44,13 +48,6 @@ function purposeIcon(purpose: string): LucideIcon {
 
 function titleCaseDuration(value: string) {
   return value.replace(/\b[a-z]/g, (char) => char.toUpperCase());
-}
-
-function visaKindLabel(label: string, purpose?: string) {
-  if (purpose?.toLowerCase() === 'tourism') return 'Tourist Visa';
-  const trimmed = label.trim();
-  if (!trimmed) return 'Visa';
-  return /visa/i.test(trimmed) ? trimmed : `${trimmed} Visa`;
 }
 
 function entryLabel(isMultipleEntry: boolean) {
@@ -72,6 +69,19 @@ function processingLabel(eta: string | null | undefined) {
   if (!eta?.trim()) return null;
   const cleaned = eta.trim().replace(/^in\s+/i, '');
   return `Visa in ${cleaned}`;
+}
+
+function resolveActiveVisaKind(
+  visaKinds: VisaKindOption[],
+  currentListingId?: string
+) {
+  return (
+    visaKinds.find((kind) =>
+      kind.listings.some((listing) => listing.id === currentListingId)
+    ) ||
+    visaKinds.find((kind) => kind.id === currentListingId) ||
+    visaKinds[0]
+  );
 }
 
 interface VisaTypesOfferedProps {
@@ -96,22 +106,25 @@ function VisaKindTabs({
   onSelect?: (kind: VisaKindOption) => Promise<boolean> | boolean;
 }) {
   const router = useRouter();
-  const current =
-    visaKinds.find((kind) => kind.id === currentListingId) || visaKinds[0];
-  const [pendingId, setPendingId] = useState(current?.id);
+  const current = resolveActiveVisaKind(visaKinds, currentListingId);
+  const [pendingPurpose, setPendingPurpose] = useState(current?.purpose);
   const switchingRef = useRef(false);
 
   useEffect(() => {
-    setPendingId(current?.id);
-  }, [current?.id]);
+    setPendingPurpose(current?.purpose);
+  }, [current?.purpose]);
 
   useEffect(() => {
     visaKinds.forEach((kind) => {
-      if (kind.id !== current?.id) router.prefetch(kind.href);
+      kind.listings.forEach((listing) => {
+        if (listing.id !== currentListingId) router.prefetch(listing.href);
+      });
     });
-  }, [visaKinds, current?.id, router]);
+  }, [visaKinds, currentListingId, router]);
 
   if (!current || visaKinds.length < 2) return null;
+
+  const activePurpose = pendingPurpose || current.purpose;
 
   return (
     <div
@@ -120,27 +133,35 @@ function VisaKindTabs({
       className="flex w-full gap-1 rounded-full bg-[#eceff3] p-1"
     >
       {visaKinds.map((kind) => {
-        const isActive = kind.id === (pendingId || current.id);
+        const isActive = kind.purpose === activePurpose;
         const Icon = purposeIcon(kind.purpose);
 
         return (
           <button
-            key={kind.id}
+            key={kind.purpose}
             type="button"
             role="tab"
             aria-selected={isActive}
             onClick={() => {
-              if (kind.id === current.id || switchingRef.current) return;
+              if (switchingRef.current) return;
 
-              const previousId = current.id;
-              setPendingId(kind.id);
+              const alreadyInGroup = kind.listings.some(
+                (listing) => listing.id === currentListingId
+              );
+              if (alreadyInGroup) {
+                setPendingPurpose(kind.purpose);
+                return;
+              }
+
+              const previousPurpose = current.purpose;
+              setPendingPurpose(kind.purpose);
 
               const navigate = async () => {
                 switchingRef.current = true;
                 try {
                   if (onSelect) {
                     const ok = await onSelect(kind);
-                    if (!ok) setPendingId(previousId);
+                    if (!ok) setPendingPurpose(previousPurpose);
                     return;
                   }
                   beginVisaKindNavigation();
@@ -161,7 +182,7 @@ function VisaKindTabs({
           >
             <Icon className="h-4 w-4 shrink-0" aria-hidden />
             <span className="whitespace-nowrap">
-              {visaKindLabel(kind.label, kind.purpose)}
+              {visaPurposeTabLabel(kind.purpose) || kind.label}
             </span>
           </button>
         );
@@ -170,29 +191,25 @@ function VisaKindTabs({
   );
 }
 
-function PackageCard({
-  option,
+function SelectableCard({
+  title,
+  price,
   selected,
-  isMultipleEntry,
+  detail,
+  processText,
   processingEta,
+  formattedTotal,
   onSelect,
 }: {
-  option: PriceOptionView;
+  title: string;
+  price: string;
   selected: boolean;
-  isMultipleEntry: boolean;
+  detail: ReactNode;
+  processText: string | null;
   processingEta: string | null;
+  formattedTotal: string;
   onSelect: () => void;
 }) {
-  const validity = option.entryValidity
-    ? titleCaseDuration(option.entryValidity)
-    : null;
-  const stay = option.stayDuration
-    ? titleCaseDuration(option.stayDuration)
-    : option.daysLabel
-      ? titleCaseDuration(option.daysLabel)
-      : null;
-  const processText = processingLabel(processingEta);
-
   return (
     <button
       type="button"
@@ -220,47 +237,16 @@ function PackageCard({
             {selected ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
           </span>
           <h3 className="text-[15px] font-semibold leading-snug text-portrait-ink sm:text-base">
-            {packageTitle(option, isMultipleEntry)}
+            {title}
           </h3>
         </div>
         <p className="shrink-0 text-[15px] font-semibold tabular-nums text-portrait-ink sm:text-base">
-          {option.formattedTotal}
+          {price}
         </p>
       </div>
 
       <p className="mt-3 pl-7 text-[12px] leading-6 text-slate-helper sm:text-[13px]">
-        {[
-          validity ? (
-            <span key="validity">
-              Valid for{' '}
-              <span className="font-semibold text-portrait-ink">{validity}</span>
-            </span>
-          ) : null,
-          stay ? (
-            <span key="stay">
-              Maximum stay of{' '}
-              <span className="font-semibold text-portrait-ink">{stay}</span>
-            </span>
-          ) : null,
-          <span key="entry">
-            Entry{' '}
-            <span className="font-semibold text-portrait-ink">
-              {entryWord(isMultipleEntry)}
-            </span>
-          </span>,
-        ]
-          .filter(Boolean)
-          .reduce<ReactNode[]>((acc, node, index) => {
-            if (index > 0) {
-              acc.push(
-                <span key={`sep-${index}`} className="mx-1.5 text-fog">
-                  |
-                </span>
-              );
-            }
-            acc.push(node);
-            return acc;
-          }, [])}
+        {detail}
       </p>
 
       {processText ? (
@@ -278,13 +264,138 @@ function PackageCard({
                 {processingEta?.trim().replace(/^in\s+/i, '')}
               </span>
             </span>
-            <span className="font-semibold tabular-nums">
-              {option.formattedTotal}
-            </span>
+            <span className="font-semibold tabular-nums">{formattedTotal}</span>
           </div>
         </div>
       ) : null}
     </button>
+  );
+}
+
+function PackageCard({
+  option,
+  selected,
+  isMultipleEntry,
+  processingEta,
+  onSelect,
+}: {
+  option: PriceOptionView;
+  selected: boolean;
+  isMultipleEntry: boolean;
+  processingEta: string | null;
+  onSelect: () => void;
+}) {
+  const validity = option.entryValidity
+    ? titleCaseDuration(option.entryValidity)
+    : null;
+  const stay = option.stayDuration
+    ? titleCaseDuration(option.stayDuration)
+    : option.daysLabel
+      ? titleCaseDuration(option.daysLabel)
+      : null;
+  const processText = processingLabel(processingEta);
+
+  const detail = [
+    validity ? (
+      <span key="validity">
+        Valid for{' '}
+        <span className="font-semibold text-portrait-ink">{validity}</span>
+      </span>
+    ) : null,
+    stay ? (
+      <span key="stay">
+        Maximum stay of{' '}
+        <span className="font-semibold text-portrait-ink">{stay}</span>
+      </span>
+    ) : null,
+    <span key="entry">
+      Entry{' '}
+      <span className="font-semibold text-portrait-ink">
+        {entryWord(isMultipleEntry)}
+      </span>
+    </span>,
+  ]
+    .filter(Boolean)
+    .reduce<ReactNode[]>((acc, node, index) => {
+      if (index > 0) {
+        acc.push(
+          <span key={`sep-${index}`} className="mx-1.5 text-fog">
+            |
+          </span>
+        );
+      }
+      acc.push(node);
+      return acc;
+    }, []);
+
+  return (
+    <SelectableCard
+      title={packageTitle(option, isMultipleEntry)}
+      price={option.formattedTotal}
+      selected={selected}
+      detail={detail}
+      processText={processText}
+      processingEta={processingEta}
+      formattedTotal={option.formattedTotal}
+      onSelect={onSelect}
+    />
+  );
+}
+
+function ListingOptionCard({
+  listing,
+  selected,
+  processingEta,
+  onSelect,
+}: {
+  listing: VisaKindListingOption;
+  selected: boolean;
+  processingEta: string | null;
+  onSelect: () => void;
+}) {
+  const stay = listing.stayDuration
+    ? titleCaseDuration(listing.stayDuration)
+    : null;
+  const processText = selected ? processingLabel(processingEta) : null;
+
+  const detail = [
+    stay ? (
+      <span key="stay">
+        Maximum stay of{' '}
+        <span className="font-semibold text-portrait-ink">{stay}</span>
+      </span>
+    ) : null,
+    <span key="entry">
+      Entry{' '}
+      <span className="font-semibold text-portrait-ink">
+        {entryWord(listing.isMultipleEntry)}
+      </span>
+    </span>,
+  ]
+    .filter(Boolean)
+    .reduce<ReactNode[]>((acc, node, index) => {
+      if (index > 0) {
+        acc.push(
+          <span key={`sep-${index}`} className="mx-1.5 text-fog">
+            |
+          </span>
+        );
+      }
+      acc.push(node);
+      return acc;
+    }, []);
+
+  return (
+    <SelectableCard
+      title={listing.processName}
+      price={listing.formattedStartingPrice}
+      selected={selected}
+      detail={detail}
+      processText={processText}
+      processingEta={processingEta}
+      formattedTotal={listing.formattedStartingPrice}
+      onSelect={onSelect}
+    />
   );
 }
 
@@ -299,7 +410,13 @@ export function VisaTypesOffered({
   currentListingId,
   onVisaKindSelect,
 }: VisaTypesOfferedProps) {
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
+  const switchingRef = useRef(false);
+
+  const activeGroup = resolveActiveVisaKind(visaKinds, currentListingId);
+  const siblingListings = activeGroup?.listings ?? [];
+  const showListingOptions = siblingListings.length > 1;
 
   const visibleOptions = useMemo(() => {
     if (expanded || priceOptions.length <= VISIBLE_OPTIONS) return priceOptions;
@@ -307,6 +424,28 @@ export function VisaTypesOffered({
   }, [expanded, priceOptions]);
 
   const hiddenCount = Math.max(0, priceOptions.length - VISIBLE_OPTIONS);
+
+  const selectListing = async (listing: VisaKindListingOption) => {
+    if (listing.id === currentListingId || switchingRef.current) return;
+    if (!activeGroup) return;
+
+    switchingRef.current = true;
+    try {
+      const kind: VisaKindOption = {
+        ...activeGroup,
+        id: listing.id,
+        href: listing.href,
+      };
+      if (onVisaKindSelect) {
+        await onVisaKindSelect(kind);
+        return;
+      }
+      beginVisaKindNavigation();
+      router.push(listing.href, { scroll: false });
+    } finally {
+      switchingRef.current = false;
+    }
+  };
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -320,24 +459,51 @@ export function VisaTypesOffered({
         onSelect={onVisaKindSelect}
       />
 
-      <div
-        className="space-y-3"
-        role="radiogroup"
-        aria-label="Visa packages"
-      >
-        {visibleOptions.map((option) => (
-          <PackageCard
-            key={option.id}
-            option={option}
-            selected={option.id === selectedId}
-            isMultipleEntry={isMultipleEntry}
-            processingEta={processingEta}
-            onSelect={() => onSelectedIdChange(option.id)}
-          />
-        ))}
-      </div>
+      {showListingOptions ? (
+        <div
+          className="space-y-3"
+          role="radiogroup"
+          aria-label="Visa options for this type"
+        >
+          {siblingListings.map((listing) => (
+            <ListingOptionCard
+              key={listing.id}
+              listing={listing}
+              selected={listing.id === currentListingId}
+              processingEta={
+                listing.id === currentListingId ? processingEta : null
+              }
+              onSelect={() => void selectListing(listing)}
+            />
+          ))}
+        </div>
+      ) : null}
 
-      {hiddenCount > 0 ? (
+      {!showListingOptions || priceOptions.length > 1 ? (
+        <div
+          className="space-y-3"
+          role="radiogroup"
+          aria-label="Visa packages"
+        >
+          {showListingOptions && priceOptions.length > 1 ? (
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-helper">
+              Stay options
+            </p>
+          ) : null}
+          {visibleOptions.map((option) => (
+            <PackageCard
+              key={option.id}
+              option={option}
+              selected={option.id === selectedId}
+              isMultipleEntry={isMultipleEntry}
+              processingEta={processingEta}
+              onSelect={() => onSelectedIdChange(option.id)}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {!showListingOptions && hiddenCount > 0 ? (
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}

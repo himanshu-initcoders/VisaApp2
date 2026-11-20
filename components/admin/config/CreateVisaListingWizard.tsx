@@ -19,6 +19,7 @@ import {
   normalizeVisaListingSlug,
   suggestVisaListingSlug,
 } from '@/lib/visa/listingSlug';
+import { VISA_PURPOSE_OPTIONS } from '@/lib/visa/purposes';
 import {
   PriceOptionsManager,
   type ListingPrice,
@@ -75,15 +76,7 @@ const PROCESS_TYPE_OPTIONS = [
   { value: 'visa_free', label: 'Visa Free' },
 ] as const;
 
-const PURPOSE_OPTIONS = [
-  { value: 'tourism', label: 'Tourism' },
-  { value: 'business', label: 'Business' },
-  { value: 'work', label: 'Work' },
-  { value: 'study', label: 'Study' },
-  { value: 'family', label: 'Family' },
-  { value: 'medical', label: 'Medical' },
-  { value: 'transit', label: 'Transit' },
-] as const;
+const PURPOSE_OPTIONS = VISA_PURPOSE_OPTIONS;
 
 const UNIT_OPTIONS = [
   { value: 'minutes', label: 'Minutes' },
@@ -207,8 +200,8 @@ export function CreateVisaListingWizard({
 
       if (!result.success) {
         const message = result.error || 'Failed to create visa listing';
-        if (result.field === 'slug') {
-          form.setError('slug', { message });
+        if (result.field === 'slug' || result.field === 'purpose') {
+          form.setError(result.field, { message });
         }
         setFormError(message);
         return;

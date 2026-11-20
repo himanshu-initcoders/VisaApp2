@@ -9,6 +9,10 @@ import { processBasicInfoSchema, type ProcessBasicInfo } from '@/lib/validations
 import { updateProcessBasicInfo } from '@/app/(admin)/admin/config/visa-listings/actions';
 import { VisaListingSlugField } from '@/components/admin/config/VisaListingSlugField';
 import { normalizeVisaListingSlug } from '@/lib/visa/listingSlug';
+import {
+  VISA_PURPOSE_OPTIONS,
+  type VisaListingPurpose,
+} from '@/lib/visa/purposes';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -28,7 +32,7 @@ interface ProcessBasicInfoFormProps {
       | 'visa_on_arrival'
       | 'sticker_visa'
       | 'visa_free';
-    purpose: 'tourism' | 'business' | 'work' | 'study' | 'family' | 'medical' | 'transit';
+    purpose: VisaListingPurpose;
     processTypeLabel: string | null;
     entryType: string | null;
     processPhysical: boolean;
@@ -58,15 +62,7 @@ const PROCESS_TYPE_OPTIONS = [
   { value: 'visa_free', label: 'Visa Free' },
 ] as const;
 
-const PURPOSE_OPTIONS = [
-  { value: 'tourism', label: 'Tourism' },
-  { value: 'business', label: 'Business' },
-  { value: 'work', label: 'Work' },
-  { value: 'study', label: 'Study' },
-  { value: 'family', label: 'Family' },
-  { value: 'medical', label: 'Medical' },
-  { value: 'transit', label: 'Transit' },
-] as const;
+const PURPOSE_OPTIONS = VISA_PURPOSE_OPTIONS;
 
 const UNIT_OPTIONS = [
   { value: 'minutes', label: 'Minutes' },
@@ -125,8 +121,11 @@ export function ProcessBasicInfoForm({
       const result = await updateProcessBasicInfo(processId, data);
 
       if (!result.success) {
-        if (result.field === 'slug' && result.error) {
-          form.setError('slug', { message: result.error });
+        if (
+          (result.field === 'slug' || result.field === 'purpose') &&
+          result.error
+        ) {
+          form.setError(result.field, { message: result.error });
           return;
         }
         alert(result.error || 'Failed to update process details');

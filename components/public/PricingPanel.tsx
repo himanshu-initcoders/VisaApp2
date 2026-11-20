@@ -62,11 +62,23 @@ export interface PriceOptionView {
   stayDuration?: string | null;
 }
 
+export interface VisaKindListingOption {
+  id: string;
+  href: string;
+  processName: string;
+  purpose: string;
+  formattedStartingPrice: string;
+  isMultipleEntry: boolean;
+  stayDuration: string | null;
+}
+
+/** One purpose tab; `listings` holds every sibling listing with that purpose. */
 export interface VisaKindOption {
   id: string;
   label: string;
   href: string;
   purpose: string;
+  listings: VisaKindListingOption[];
 }
 
 interface PricingPanelProps {
@@ -96,6 +108,19 @@ function stayDaysLabel(option: PriceOptionView) {
   return option.stayDuration || option.daysLabel || option.entryValidity || 'Package';
 }
 
+function resolveActiveVisaKind(
+  visaKinds: VisaKindOption[],
+  currentListingId?: string
+) {
+  return (
+    visaKinds.find((kind) =>
+      kind.listings.some((listing) => listing.id === currentListingId)
+    ) ||
+    visaKinds.find((kind) => kind.id === currentListingId) ||
+    visaKinds[0]
+  );
+}
+
 function VisaKindSelector({
   visaKinds,
   currentListingId,
@@ -108,24 +133,26 @@ function VisaKindSelector({
   onSelect?: (kind: VisaKindOption) => Promise<boolean> | boolean;
 }) {
   const router = useRouter();
-  const current =
-    visaKinds.find((kind) => kind.id === currentListingId) || visaKinds[0];
-  const [pendingId, setPendingId] = useState(current?.id);
+  const current = resolveActiveVisaKind(visaKinds, currentListingId);
+  const [pendingPurpose, setPendingPurpose] = useState(current?.purpose);
   const switchingRef = useRef(false);
 
   useEffect(() => {
-    setPendingId(current?.id);
-  }, [current?.id]);
+    setPendingPurpose(current?.purpose);
+  }, [current?.purpose]);
 
   useEffect(() => {
     visaKinds.forEach((kind) => {
-      if (kind.id !== current?.id) router.prefetch(kind.href);
+      kind.listings.forEach((listing) => {
+        if (listing.id !== currentListingId) router.prefetch(listing.href);
+      });
     });
-  }, [visaKinds, current?.id, router]);
+  }, [visaKinds, currentListingId, router]);
 
   if (!current || visaKinds.length < 2) return null;
 
   const isDark = tone === 'dark';
+  const activePurpose = pendingPurpose || current.purpose;
 
   return (
     <div>
@@ -137,21 +164,32 @@ function VisaKindSelector({
         Visa type
       </p>
       <AnimatedTabs
-        items={visaKinds.map((kind) => ({ id: kind.id, label: kind.label }))}
-        value={pendingId || current.id}
-        onChange={(id) => {
-          const kind = visaKinds.find((item) => item.id === id);
-          if (!kind || kind.id === current.id || switchingRef.current) return;
+        items={visaKinds.map((kind) => ({
+          id: kind.purpose,
+          label: kind.label,
+        }))}
+        value={activePurpose}
+        onChange={(purpose) => {
+          const kind = visaKinds.find((item) => item.purpose === purpose);
+          if (!kind || switchingRef.current) return;
 
-          const previousId = current.id;
-          setPendingId(id);
+          const alreadyInGroup = kind.listings.some(
+            (listing) => listing.id === currentListingId
+          );
+          if (alreadyInGroup) {
+            setPendingPurpose(purpose);
+            return;
+          }
+
+          const previousPurpose = current.purpose;
+          setPendingPurpose(purpose);
 
           const navigate = async () => {
             switchingRef.current = true;
             try {
               if (onSelect) {
                 const ok = await onSelect(kind);
-                if (!ok) setPendingId(previousId);
+                if (!ok) setPendingPurpose(previousPurpose);
                 return;
               }
 

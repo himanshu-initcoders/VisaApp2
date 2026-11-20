@@ -12,6 +12,7 @@ import {
   type HomeCountryCardData,
 } from '@/components/public/PublicCountryCard';
 import { Header } from '@/components/layout/Header';
+import { VISA_PURPOSE_TAB_ORDER } from '@/lib/visa/purposes';
 
 interface HomeProcess {
   id: string;
@@ -96,9 +97,7 @@ export function HomeLandingClient({
         if (listing.purpose) seen.add(listing.purpose);
       }
     }
-    return ['tourism', 'business', 'work', 'study', 'family', 'medical', 'transit'].filter(
-      (purpose) => seen.has(purpose)
-    );
+    return VISA_PURPOSE_TAB_ORDER.filter((purpose) => seen.has(purpose));
   }, [countries]);
 
   const visibleCountries = useMemo(() => {

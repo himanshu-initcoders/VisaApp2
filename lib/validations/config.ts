@@ -12,6 +12,7 @@ import {
   normalizeVisaListingSlug,
   VISA_LISTING_SLUG_PATTERN,
 } from '@/lib/visa/listingSlug';
+import { VISA_LISTING_PURPOSES } from '@/lib/visa/purposes';
 
 /**
  * Validation schemas for admin configuration forms
@@ -78,10 +79,9 @@ export const processBasicInfoSchema = z.object({
     ['electronic_travel_authorisation', 'afc', 'visa', 'appointment', 'visa_on_arrival', 'sticker_visa', 'visa_free'],
     'Invalid process type'
   ),
-  purpose: z.enum(
-    ['tourism', 'business', 'work', 'study', 'family', 'medical', 'transit'],
-    'Invalid purpose'
-  ),
+  purpose: z.enum(VISA_LISTING_PURPOSES, {
+    error: 'Invalid purpose',
+  }),
   processTypeLabel: z.union([z.string().max(50, 'Type label too long'), z.literal('')]).nullable().optional(),
   entryType: z.union([z.string().max(50, 'Entry type too long'), z.literal('')]).nullable().optional(),
   processPhysical: z.boolean(),

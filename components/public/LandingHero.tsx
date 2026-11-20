@@ -9,6 +9,7 @@ import {
   Globe,
   GraduationCap,
   HeartPulse,
+  MapPin,
   Palmtree,
   Plane,
   Users,
@@ -44,6 +45,7 @@ const CATEGORY_ICONS = {
   family: Users,
   medical: HeartPulse,
   transit: Plane,
+  visa_on_arrival: MapPin,
 } as const;
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -55,6 +57,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   family: 'Family',
   medical: 'Medical',
   transit: 'Transit',
+  visa_on_arrival: 'Visa On Arrival',
 };
 
 function ProductVideo({

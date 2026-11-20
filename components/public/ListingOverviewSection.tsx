@@ -63,13 +63,10 @@ export function ListingOverviewSection({
   const overviewText = overview?.trim() || '';
 
   return (
-    <section id="overview" className="scroll-mt-32 space-y-6 sm:scroll-mt-36 sm:space-y-8">
+    <section id="overview" className="scroll-mt-28 space-y-5 sm:scroll-mt-32 sm:space-y-6">
       {overviewText ? (
-        <MotionReveal className="max-w-3xl space-y-2 sm:space-y-3">
-          <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
-            Overview
-          </p>
-          <p className="text-[15px] leading-7 text-portrait-ink sm:text-base sm:leading-8 whitespace-pre-line">
+        <MotionReveal>
+          <p className="max-w-3xl text-[15px] leading-7 text-portrait-ink sm:text-base sm:leading-8 whitespace-pre-line">
             {overviewText}
           </p>
         </MotionReveal>

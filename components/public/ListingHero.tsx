@@ -36,6 +36,7 @@ const SCRIPT_BY_PURPOSE: Record<string, string> = {
   family: 'Travel Together, Simply',
   medical: 'Care Without Borders',
   transit: 'Smooth Travels Ahead',
+  visa_on_arrival: 'Land Ready, Travel Easy',
 };
 
 function visaKindLabel(purpose: string) {
@@ -62,6 +63,9 @@ function heroDescription(
   }
   if (purpose === 'work') {
     return `Move forward on your ${countryName} work visa with transparent fees and a process designed for Indian applicants.`;
+  }
+  if (purpose === 'visa_on_arrival') {
+    return `Arrive in ${countryName} with clear Visa On Arrival guidance — what to prepare, what it costs, and how Viserv supports you.`;
   }
 
   const firstSentence = fallback.split(/(?<=\.)\s/)[0];
