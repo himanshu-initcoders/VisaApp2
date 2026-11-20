@@ -32,7 +32,6 @@ export async function revalidatePublicVisaCatalog(options?: {
 
   try {
     revalidatePath('/');
-    revalidatePath('/destinations');
     revalidatePath('/visa');
   } catch (err) {
     console.warn('revalidatePath catalog routes error:', err);

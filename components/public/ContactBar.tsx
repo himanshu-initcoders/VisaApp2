@@ -67,9 +67,6 @@ export function ContactBar({ className }: ContactBarProps) {
                   </p>
                 </div>
               </div>
-              <p className="mt-3 text-xs text-slate-helper">
-                Available Mon – Sat, 10:00 AM – 8:00 PM
-              </p>
             </a>
 
             {/* Email Card */}
@@ -97,9 +94,6 @@ export function ContactBar({ className }: ContactBarProps) {
                   </p>
                 </div>
               </div>
-              <p className="mt-3 text-xs text-slate-helper">
-                We Reply Within 1 Business Day
-              </p>
             </a>
 
             {/* Address Card */}
@@ -129,9 +123,6 @@ export function ContactBar({ className }: ContactBarProps) {
                   </p>
                 </div>
               </div>
-              <p className="mt-3 text-xs text-slate-helper">
-                Head office in Bengaluru, Karnataka
-              </p>
             </a>
           </div>
         </div>
