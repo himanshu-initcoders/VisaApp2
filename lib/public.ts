@@ -1,4 +1,5 @@
 import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
+import { visaPurposeLabel } from '@/lib/visa/purposes';
 
 export function formatDuration(
   duration: number | null | undefined,
@@ -94,9 +95,7 @@ export function formatVisaKindLabel(input: {
   const entryType = input.entryType?.trim();
   if (entryType) return entryType;
 
-  return input.purpose
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+  return visaPurposeLabel(input.purpose);
 }
 
 /** e.g. "United States Business Visa 30 Days" */
@@ -109,7 +108,9 @@ export function formatFullVisaLabel(input: {
 }) {
   // Match listing hero: purpose → "Business Visa", not entry-type codes like B1/B2
   const kind = formatVisaKindLabel({ purpose: input.purpose });
-  const visaTitle = /visa/i.test(kind) ? kind : `${kind} Visa`;
+  const visaTitle = /visa|card|authorisation|authorization/i.test(kind)
+    ? kind
+    : `${kind} Visa`;
   const durationRaw =
     input.daysLabel || input.stayDuration || input.entryValidity || '';
   const duration = durationRaw

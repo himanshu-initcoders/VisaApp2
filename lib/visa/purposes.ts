@@ -16,7 +16,7 @@ export const VISA_LISTING_PURPOSES = [
 
 export type VisaListingPurpose = (typeof VISA_LISTING_PURPOSES)[number];
 
-/** Public tab / filter order: tourism first, visa on arrival last. */
+/** Public tab / filter order: tourism first, arrival card last. */
 export const VISA_PURPOSE_TAB_ORDER: readonly VisaListingPurpose[] = [
   'tourism',
   'business',
@@ -39,7 +39,7 @@ export const VISA_PURPOSE_OPTIONS: ReadonlyArray<{
   { value: 'family', label: 'Family' },
   { value: 'medical', label: 'Medical' },
   { value: 'transit', label: 'Transit' },
-  { value: 'visa_on_arrival', label: 'Visa On Arrival' },
+  { value: 'visa_on_arrival', label: 'Arrival Card' },
 ];
 
 const PURPOSE_LABELS: Record<VisaListingPurpose, string> = {
@@ -50,7 +50,7 @@ const PURPOSE_LABELS: Record<VisaListingPurpose, string> = {
   family: 'Family',
   medical: 'Medical',
   transit: 'Transit',
-  visa_on_arrival: 'Visa On Arrival',
+  visa_on_arrival: 'Arrival Card',
 };
 
 /** Short purpose label for admin / filters (no trailing "Visa"). */
@@ -66,7 +66,7 @@ export function visaPurposeLabel(purpose: string): string {
 export function visaPurposeTabLabel(purpose: string): string {
   const key = purpose.toLowerCase();
   if (key === 'tourism') return 'Tourist Visa';
-  if (key === 'visa_on_arrival') return 'Visa On Arrival';
+  if (key === 'visa_on_arrival') return 'Arrival Card';
   const base = visaPurposeLabel(purpose);
   return /visa/i.test(base) ? base : `${base} Visa`;
 }

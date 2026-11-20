@@ -9,6 +9,7 @@ import { HeroWave } from '@/components/public/HeroWave';
 import { MediaImage } from '@/components/shared/MediaImage';
 import { formatVisaKindLabel } from '@/lib/public';
 import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
+import { visaPurposeTabLabel } from '@/lib/visa/purposes';
 
 const TRUST_ITEMS = [
   {
@@ -40,11 +41,13 @@ const SCRIPT_BY_PURPOSE: Record<string, string> = {
 };
 
 function visaKindLabel(purpose: string) {
-  return formatVisaKindLabel({ purpose });
+  return visaPurposeTabLabel(purpose) || formatVisaKindLabel({ purpose });
 }
 
 function headlineVisaLabel(kind: string) {
-  return /visa/i.test(kind) ? kind : `${kind} Visa`;
+  // Arrival Card / ETA-style titles already stand alone
+  if (/visa|card|authorisation|authorization/i.test(kind)) return kind;
+  return `${kind} Visa`;
 }
 
 function heroDescription(
@@ -65,7 +68,7 @@ function heroDescription(
     return `Move forward on your ${countryName} work visa with transparent fees and a process designed for Indian applicants.`;
   }
   if (purpose === 'visa_on_arrival') {
-    return `Arrive in ${countryName} with clear Visa On Arrival guidance — what to prepare, what it costs, and how Viserv supports you.`;
+    return `Arrive in ${countryName} with clear Arrival Card guidance — what to prepare, what it costs, and how Viserv supports you.`;
   }
 
   const firstSentence = fallback.split(/(?<=\.)\s/)[0];

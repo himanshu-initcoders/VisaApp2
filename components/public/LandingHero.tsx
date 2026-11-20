@@ -57,7 +57,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   family: 'Family',
   medical: 'Medical',
   transit: 'Transit',
-  visa_on_arrival: 'Visa On Arrival',
+  visa_on_arrival: 'Arrival Card',
 };
 
 function ProductVideo({
