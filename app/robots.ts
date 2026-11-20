@@ -4,6 +4,10 @@ import { getSiteUrl } from '@/lib/seo/jsonld';
 /**
  * Crawl policy for public marketing/catalog pages.
  * Blocks authenticated, staff, API, and apply-funnel routes.
+ *
+ * Exception: /api/media serves public destination/blog imagery (same-origin
+ * S3 proxy). Google uses longest-match, so Allow:/api/media wins over Disallow:/api/
+ * and Google Images can crawl those URLs.
  */
 export default function robots(): MetadataRoute.Robots {
   const siteUrl = getSiteUrl();
@@ -11,7 +15,7 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: '*',
-      allow: '/',
+      allow: ['/', '/api/media'],
       disallow: [
         '/admin/',
         '/api/',
