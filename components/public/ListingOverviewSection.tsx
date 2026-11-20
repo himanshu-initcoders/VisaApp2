@@ -30,6 +30,7 @@ interface ListingOverviewSectionProps {
 }
 
 export function ListingOverviewSection({
+  overview,
   processingEta,
   isFree,
   visaFree = false,
@@ -59,47 +60,59 @@ export function ListingOverviewSection({
     [priceOptions, selectedId]
   );
 
-  return (
-    <section
-      id="overview"
-      className="scroll-mt-32 space-y-6 sm:scroll-mt-36 sm:space-y-0 lg:grid lg:grid-cols-[1fr_0.95fr] lg:gap-8"
-    >
-      <MotionReveal>
-        <VisaTypesOffered
-          countryName={countryName}
-          processingEta={processingEta}
-          isMultipleEntry={isMultipleEntry}
-          priceOptions={priceOptions}
-          selectedId={selected?.id}
-          onSelectedIdChange={setSelectedId}
-          visaKinds={visaKinds}
-          currentListingId={listingId}
-          onVisaKindSelect={onVisaKindSelect}
-        />
-      </MotionReveal>
+  const overviewText = overview?.trim() || '';
 
-      <div id="pricing" className="scroll-mt-28 sm:scroll-mt-32">
-        <Suspense fallback={null}>
-          <PricingPanel
-            compact
-            countryCode={countryCode}
-            listingId={listingId}
-            listingSlug={listingSlug}
-            isFree={isFree}
-            visaFree={visaFree}
-            officialPortalUrl={officialPortalUrl}
-            withFreeInsurance={withFreeInsurance}
+  return (
+    <section id="overview" className="scroll-mt-32 space-y-6 sm:scroll-mt-36 sm:space-y-8">
+      {overviewText ? (
+        <MotionReveal className="max-w-3xl space-y-2 sm:space-y-3">
+          <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
+            Overview
+          </p>
+          <p className="text-[15px] leading-7 text-portrait-ink sm:text-base sm:leading-8 whitespace-pre-line">
+            {overviewText}
+          </p>
+        </MotionReveal>
+      ) : null}
+
+      <div className="space-y-6 sm:space-y-0 lg:grid lg:grid-cols-[1fr_0.95fr] lg:gap-8">
+        <MotionReveal>
+          <VisaTypesOffered
+            countryName={countryName}
+            processingEta={processingEta}
+            isMultipleEntry={isMultipleEntry}
             priceOptions={priceOptions}
-            headline={headline}
-            visaKinds={visaKinds}
-            currentListingId={listingId}
             selectedId={selected?.id}
             onSelectedIdChange={setSelectedId}
-            applyPath={applyPath}
-            onApplyPathChange={setApplyPath}
+            visaKinds={visaKinds}
+            currentListingId={listingId}
             onVisaKindSelect={onVisaKindSelect}
           />
-        </Suspense>
+        </MotionReveal>
+
+        <div id="pricing" className="scroll-mt-28 sm:scroll-mt-32">
+          <Suspense fallback={null}>
+            <PricingPanel
+              compact
+              countryCode={countryCode}
+              listingId={listingId}
+              listingSlug={listingSlug}
+              isFree={isFree}
+              visaFree={visaFree}
+              officialPortalUrl={officialPortalUrl}
+              withFreeInsurance={withFreeInsurance}
+              priceOptions={priceOptions}
+              headline={headline}
+              visaKinds={visaKinds}
+              currentListingId={listingId}
+              selectedId={selected?.id}
+              onSelectedIdChange={setSelectedId}
+              applyPath={applyPath}
+              onApplyPathChange={setApplyPath}
+              onVisaKindSelect={onVisaKindSelect}
+            />
+          </Suspense>
+        </div>
       </div>
     </section>
   );

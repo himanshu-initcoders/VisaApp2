@@ -401,7 +401,7 @@ export function CreateVisaListingWizard({
                   htmlFor="description"
                   className="block text-sm font-medium text-portrait-ink mb-2"
                 >
-                  Description
+                  Overview
                 </label>
                 <textarea
                   id="description"
@@ -416,7 +416,7 @@ export function CreateVisaListingWizard({
                   </p>
                 )}
                 <p className="mt-1.5 text-xs text-slate-helper">
-                  Appears in the Product overview section on the public listing page.
+                  Shown below the Overview tab on the public visa listing page.
                 </p>
               </div>
 
