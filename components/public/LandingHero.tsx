@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type Ref } from 'react';
+import { useEffect, useRef, useState, type Ref } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -21,14 +21,14 @@ const PRODUCT_TABS = [
     id: 'visa',
     label: 'Visas',
     href: '#visas',
-    imageSrc: '/visa.gif',
+    videoSrc: '/visa.mp4',
     playOnHover: false,
   },
   {
     id: 'passport',
     label: 'Passport',
     href: '/passport',
-    imageSrc: '/passport.gif',
+    videoSrc: '/passport.mp4',
     playOnHover: true,
   },
 ] as const;
@@ -55,60 +55,41 @@ const CATEGORY_LABELS: Record<string, string> = {
   transit: 'Transit',
 };
 
-function HoverGif({
+function ProductVideo({
   src,
+  autoPlay,
   playing,
 }: {
   src: string;
-  playing: boolean;
+  autoPlay: boolean;
+  playing?: boolean;
 }) {
-  const [frozenSrc, setFrozenSrc] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    const image = new window.Image();
-    image.src = src;
+    const video = videoRef.current;
+    if (!video || autoPlay) return;
 
-    image.onload = () => {
-      if (cancelled) return;
-      const canvas = document.createElement('canvas');
-      canvas.width = image.naturalWidth || image.width;
-      canvas.height = image.naturalHeight || image.height;
-      const context = canvas.getContext('2d');
-      if (!context) return;
-      context.drawImage(image, 0, 0);
-      setFrozenSrc(canvas.toDataURL('image/png'));
-    };
-
-    return () => {
-      cancelled = true;
-    };
-  }, [src]);
+    if (playing) {
+      void video.play().catch(() => {});
+    } else {
+      video.pause();
+      video.currentTime = 0;
+    }
+  }, [autoPlay, playing]);
 
   return (
-    <span className="relative inline-flex h-16 w-16 shrink-0 mix-blend-multiply">
-      {/* Preloaded GIF always underneath — no remount, no blink */}
-      <img
-        src={src}
-        alt=""
-        width={64}
-        height={64}
-        className="absolute inset-0 h-16 w-16 rounded-full object-cover"
-        aria-hidden
-      />
-      {/* Frozen first frame covers it until hover */}
-      <img
-        src={frozenSrc || src}
-        alt=""
-        width={64}
-        height={64}
-        className={cn(
-          'absolute inset-0 h-16 w-16 rounded-full object-cover transition-opacity duration-200 ease-out',
-          playing ? 'opacity-0' : 'opacity-100'
-        )}
-        aria-hidden
-      />
-    </span>
+    <video
+      ref={videoRef}
+      src={src}
+      muted
+      loop
+      playsInline
+      autoPlay={autoPlay}
+      preload="auto"
+      className="h-16 w-16 shrink-0 rounded-full object-cover mix-blend-multiply"
+      aria-hidden
+    />
   );
 }
 
@@ -153,8 +134,6 @@ export function LandingHero({
         <div className="mb-5 flex items-center justify-center gap-8 sm:mb-6">
           {PRODUCT_TABS.map((tab) => {
             const isActive = tab.id === 'visa';
-            const imageClassName =
-              'h-16 w-16 rounded-full object-cover mix-blend-multiply';
 
             return (
               <Link
@@ -187,21 +166,11 @@ export function LandingHero({
                     : undefined
                 }
               >
-                {tab.playOnHover ? (
-                  <HoverGif
-                    src={tab.imageSrc}
-                    playing={passportPlaying}
-                  />
-                ) : (
-                  <img
-                    src={tab.imageSrc}
-                    alt=""
-                    width={64}
-                    height={64}
-                    className={imageClassName}
-                    aria-hidden
-                  />
-                )}
+                <ProductVideo
+                  src={tab.videoSrc}
+                  autoPlay={!tab.playOnHover}
+                  playing={tab.playOnHover ? passportPlaying : undefined}
+                />
                 {tab.label}
               </Link>
             );
