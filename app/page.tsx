@@ -15,39 +15,22 @@ import {
   buildBreadcrumbJsonLd,
   buildWebPageJsonLd,
 } from '@/lib/seo/jsonld';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import { SEO_PAGES } from '@/lib/seo/pages';
 
 /** Static at build; refresh hourly or when admin emits catalog revalidation. */
 export const revalidate = 3600;
 
-const HOME_TITLE = 'Viserv — Visa & Passport Services';
-const HOME_DESCRIPTION =
-  'Get your visa and passport services done quickly and easily with Viserv. We help Indian citizens with visa applications and passport services.';
+const HOME = SEO_PAGES.home;
+const HOME_H1 = 'Visa and passport services for Indian citizens';
 
-export const metadata: Metadata = {
-  title: HOME_TITLE,
-  description: HOME_DESCRIPTION,
-  alternates: { canonical: '/' },
-  openGraph: {
-    title: HOME_TITLE,
-    description: HOME_DESCRIPTION,
-    url: '/',
-    type: 'website',
-    images: [
-      {
-        url: '/og-image.png',
-        width: 1733,
-        height: 907,
-        alt: 'Viserv — simplifying visas',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: HOME_TITLE,
-    description: HOME_DESCRIPTION,
-    images: ['/og-image.png'],
-  },
-};
+export const metadata: Metadata = buildPageMetadata({
+  title: HOME.titleAbsolute,
+  absoluteTitle: HOME.titleAbsolute,
+  description: HOME.description,
+  path: HOME.path,
+  keywords: HOME.keywords,
+});
 
 const HOW_IT_WORKS_STEPS = [
   {
@@ -136,16 +119,15 @@ export default async function Home() {
       <JsonLd
         data={[
           buildWebPageJsonLd({
-            title: 'Viserv — Visa & Passport Services',
-            description:
-              'Get your visa and passport services done quickly and easily with Viserv. We help Indian citizens with visa applications and passport services.',
-            path: '/',
+            title: HOME.titleAbsolute,
+            description: HOME.description,
+            path: HOME.path,
           }),
           buildBreadcrumbJsonLd([{ name: 'Home', path: '/' }]),
         ]}
       />
       <main className="min-h-screen bg-[#f8f6f1]">
-        <h1 className="sr-only">{HOME_TITLE}</h1>
+        <h1 className="sr-only">{HOME_H1}</h1>
         <HomeLandingClient countries={countries} processes={allProcesses} />
 
         <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">

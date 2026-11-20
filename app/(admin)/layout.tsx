@@ -1,9 +1,13 @@
+import type { Metadata } from 'next';
 import { ReactNode } from 'react';
 import { headers } from 'next/headers';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { signOutAction } from '@/app/(admin)/actions';
+import { NOINDEX_METADATA } from '@/lib/seo/metadata';
+
+export const metadata: Metadata = NOINDEX_METADATA;
 
 /**
  * Admin Layout

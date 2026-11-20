@@ -5,8 +5,38 @@
 
 export const SITE_NAME = 'Viserv';
 
+export const SITE_TAGLINE = 'Visa & Passport Services for Indians';
+
+/** Default document title (home / fallback). */
+export const SITE_TITLE = `${SITE_NAME} — ${SITE_TAGLINE}`;
+
 export const SITE_DESCRIPTION =
-  'Visa and passport services for Indian citizens — clear pricing, guided applications, and expert review.';
+  'Visa and passport services for Indian citizens — clear pricing, guided applications, expert document review, and real-time tracking on Viserv.';
+
+/**
+ * Focused root keywords (page-level sets live in lib/seo/pages.ts).
+ * Prefer unique titles/descriptions over stuffing this list.
+ */
+export const SITE_KEYWORDS = [
+  'visa for Indians',
+  'Indian passport services',
+  'visa application India',
+  'tourist visa India',
+  'passport renewal India',
+  'Tatkaal passport',
+  'e-visa for Indians',
+  'Viserv',
+] as const;
+
+export const SITE_LOCALE = 'en_IN';
+
+/** Default Open Graph / Twitter share image (public/). */
+export const DEFAULT_OG_IMAGE = {
+  url: '/og-image.png',
+  width: 1733,
+  height: 907,
+  alt: `${SITE_NAME} — simplifying visas and passports for Indians`,
+} as const;
 
 /** Clean profile URLs (no tracking query params). */
 export const SOCIAL_LINKS = {

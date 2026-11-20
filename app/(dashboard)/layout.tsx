@@ -1,9 +1,13 @@
+import type { Metadata } from 'next';
 import { ReactNode } from 'react';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { UserShell } from '@/components/dashboard/UserShell';
 import { signOutAction } from '@/app/(dashboard)/actions';
 import { listNotifications } from '@/lib/notifications';
+import { NOINDEX_METADATA } from '@/lib/seo/metadata';
+
+export const metadata: Metadata = NOINDEX_METADATA;
 
 /**
  * Dashboard layout — sidebar shell (mirrors admin panel pattern).

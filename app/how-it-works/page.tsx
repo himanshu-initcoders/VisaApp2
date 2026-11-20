@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { MotionReveal } from '@/components/public/MotionReveal';
@@ -7,6 +8,17 @@ import {
   buildBreadcrumbJsonLd,
   buildWebPageJsonLd,
 } from '@/lib/seo/jsonld';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import { SEO_PAGES } from '@/lib/seo/pages';
+
+const PAGE = SEO_PAGES.howItWorks;
+
+export const metadata: Metadata = buildPageMetadata({
+  title: PAGE.title,
+  description: PAGE.description,
+  path: PAGE.path,
+  keywords: PAGE.keywords,
+});
 
 const steps = [
   {
@@ -45,14 +57,13 @@ export default function HowItWorksPage() {
       <JsonLd
         data={[
           buildWebPageJsonLd({
-            title: 'How it works — Viserv',
-            description:
-              'Your visa in four simple steps. Clear guidance for first-time travellers, and no repeated paperwork for frequent ones.',
-            path: '/how-it-works',
+            title: `${PAGE.title} | Viserv`,
+            description: PAGE.description,
+            path: PAGE.path,
           }),
           buildBreadcrumbJsonLd([
             { name: 'Home', path: '/' },
-            { name: 'How it works', path: '/how-it-works' },
+            { name: 'How it works', path: PAGE.path },
           ]),
         ]}
       />

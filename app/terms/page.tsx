@@ -11,11 +11,18 @@ import {
   buildWebPageJsonLd,
 } from '@/lib/seo/jsonld';
 
-export const metadata: Metadata = {
-  title: 'Terms and Conditions — Viserv',
-  description:
-    'Terms and Conditions for using Viserv visa assistance services on www.viserv.in and related channels.',
-};
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import { SEO_PAGES } from '@/lib/seo/pages';
+import { SITE_NAME } from '@/lib/seo/site';
+
+const PAGE = SEO_PAGES.terms;
+
+export const metadata: Metadata = buildPageMetadata({
+  title: PAGE.title,
+  description: PAGE.description,
+  path: PAGE.path,
+  keywords: PAGE.keywords,
+});
 
 export default function TermsAndConditionsPage() {
   return (
@@ -23,14 +30,13 @@ export default function TermsAndConditionsPage() {
     <JsonLd
       data={[
         buildWebPageJsonLd({
-          title: 'Terms and Conditions — Viserv',
-          description:
-            'Terms and Conditions for using Viserv visa assistance services on www.viserv.in and related channels.',
-          path: '/terms',
+          title: `${PAGE.title} | ${SITE_NAME}`,
+          description: PAGE.description,
+          path: PAGE.path,
         }),
         buildBreadcrumbJsonLd([
           { name: 'Home', path: '/' },
-          { name: 'Terms and Conditions', path: '/terms' },
+          { name: 'Terms and Conditions', path: PAGE.path },
         ]),
       ]}
     />

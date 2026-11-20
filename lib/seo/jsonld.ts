@@ -1,4 +1,10 @@
-import { SAME_AS, SITE_DESCRIPTION, SITE_NAME } from '@/lib/seo/site';
+import { CONTACT_EMAIL, CONTACT_PHONE } from '@/lib/contact';
+import {
+  DEFAULT_OG_IMAGE,
+  SAME_AS,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+} from '@/lib/seo/site';
 
 const DEFAULT_SITE_NAME = SITE_NAME;
 const DEFAULT_DESCRIPTION = SITE_DESCRIPTION;
@@ -35,8 +41,29 @@ export function buildOrganizationJsonLd(siteUrl = getSiteUrl()): JsonLdDocument 
     name: DEFAULT_SITE_NAME,
     url: siteUrl,
     logo: absoluteUrl('/apple-touch-icon.png', siteUrl),
+    image: absoluteUrl(DEFAULT_OG_IMAGE.url, siteUrl),
     description: DEFAULT_DESCRIPTION,
+    email: CONTACT_EMAIL,
+    telephone: CONTACT_PHONE,
     sameAs: SAME_AS,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: 'No 5/1, 1st Cross, RRMR Extn, KH Road',
+      addressLocality: 'Bengaluru',
+      addressRegion: 'Karnataka',
+      postalCode: '560027',
+      addressCountry: 'IN',
+    },
+    contactPoint: [
+      {
+        '@type': 'ContactPoint',
+        telephone: CONTACT_PHONE,
+        email: CONTACT_EMAIL,
+        contactType: 'customer service',
+        areaServed: 'IN',
+        availableLanguage: ['English', 'Hindi'],
+      },
+    ],
     areaServed: {
       '@type': 'Country',
       name: 'India',

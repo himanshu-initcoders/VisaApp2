@@ -6,7 +6,14 @@ import { AuthSessionProvider } from '@/components/auth/AuthSessionProvider';
 import { GtmRouteListener } from '@/components/analytics/GtmRouteListener';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { buildSiteGraphJsonLd, getSiteUrl } from '@/lib/seo/jsonld';
-import { SITE_NAME } from '@/lib/seo/site';
+import {
+  DEFAULT_OG_IMAGE,
+  SITE_DESCRIPTION,
+  SITE_KEYWORDS,
+  SITE_LOCALE,
+  SITE_NAME,
+  SITE_TITLE,
+} from '@/lib/seo/site';
 import './globals.css';
 
 const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID?.trim();
@@ -26,34 +33,49 @@ const instrumentSerif = Instrument_Serif({
   display: 'swap',
 });
 
-const DEFAULT_TITLE = `${SITE_NAME} — Visa & Passport Services`;
-const DEFAULT_DESCRIPTION =
-  'Get your visa and passport services done quickly and easily with Viserv. We help Indian citizens with visa applications and passport services.';
-
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: DEFAULT_TITLE,
-  description: DEFAULT_DESCRIPTION,
+  title: {
+    default: SITE_TITLE,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [...SITE_KEYWORDS],
+  authors: [{ name: SITE_NAME, url: siteUrl }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: 'travel',
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
   openGraph: {
-    title: DEFAULT_TITLE,
-    description: DEFAULT_DESCRIPTION,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
     url: '/',
     siteName: SITE_NAME,
+    locale: SITE_LOCALE,
     type: 'website',
-    images: [
-      {
-        url: '/og-image.png',
-        width: 1733,
-        height: 907,
-        alt: `${SITE_NAME} — simplifying visas`,
-      },
-    ],
+    images: [{ ...DEFAULT_OG_IMAGE }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: DEFAULT_TITLE,
-    description: DEFAULT_DESCRIPTION,
-    images: ['/og-image.png'],
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [DEFAULT_OG_IMAGE.url],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
   },
   icons: {
     icon: [
@@ -78,7 +100,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="en-IN"
       className={`scroll-smooth ${caveat.variable} ${instrumentSerif.variable}`}
       data-scroll-behavior="smooth"
     >

@@ -1,5 +1,9 @@
+import type { Metadata } from 'next';
 import { ReactNode } from 'react';
 import { Logo } from '@/components/shared/Logo';
+import { NOINDEX_METADATA } from '@/lib/seo/metadata';
+
+export const metadata: Metadata = NOINDEX_METADATA;
 
 /**
  * Authentication Layout

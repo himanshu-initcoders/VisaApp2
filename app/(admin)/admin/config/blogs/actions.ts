@@ -30,13 +30,18 @@ function actionErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-function normalizeSeo(seo: BlogPostFormInput['seo']) {
-  if (!seo) return null;
-  const metaTitle = seo.metaTitle?.trim() || undefined;
-  const metaDescription = seo.metaDescription?.trim() || undefined;
-  const ogImageUrl = seo.ogImageUrl?.trim() || undefined;
-  if (!metaTitle && !metaDescription && !ogImageUrl) return null;
-  return { metaTitle, metaDescription, ogImageUrl };
+/** SEO JSON: OG image always mirrors the cover — never a separate admin field. */
+function normalizeSeo(
+  seo: BlogPostFormInput['seo'],
+  coverImageUrl: string
+) {
+  const metaTitle = seo?.metaTitle?.trim() || undefined;
+  const metaDescription = seo?.metaDescription?.trim() || undefined;
+  return {
+    metaTitle,
+    metaDescription,
+    ogImageUrl: coverImageUrl,
+  };
 }
 
 function toDbValues(
@@ -44,6 +49,17 @@ function toDbValues(
   authorUserId: string | undefined,
   existingPublishedAt: Date | null | undefined
 ) {
+  const coverImageUrl = validated.coverImageUrl?.trim();
+  if (!coverImageUrl) {
+    throw new ZodError([
+      {
+        code: 'custom',
+        path: ['coverImageUrl'],
+        message: 'Cover image is required',
+      },
+    ]);
+  }
+
   const now = new Date();
   const publishing = validated.status === 'published';
   return {
@@ -51,10 +67,10 @@ function toDbValues(
     slug: validated.slug,
     excerpt: validated.excerpt?.trim() || null,
     body: sanitizeBlogHtml(validated.body),
-    coverImageUrl: validated.coverImageUrl?.trim() || null,
+    coverImageUrl,
     coverImageKey: validated.coverImageKey?.trim() || null,
     coverImageAlt: validated.coverImageAlt?.trim() || null,
-    seo: normalizeSeo(validated.seo),
+    seo: normalizeSeo(validated.seo, coverImageUrl),
     status: validated.status,
     publishedAt: publishing
       ? existingPublishedAt ?? now

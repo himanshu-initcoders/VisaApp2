@@ -11,11 +11,18 @@ import {
   buildWebPageJsonLd,
 } from '@/lib/seo/jsonld';
 
-export const metadata: Metadata = {
-  title: 'Privacy Policy — Viserv',
-  description:
-    'How Viserv collects, uses, shares and protects personal data under the Digital Personal Data Protection Act, 2023.',
-};
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import { SEO_PAGES } from '@/lib/seo/pages';
+import { SITE_NAME } from '@/lib/seo/site';
+
+const PAGE = SEO_PAGES.privacy;
+
+export const metadata: Metadata = buildPageMetadata({
+  title: PAGE.title,
+  description: PAGE.description,
+  path: PAGE.path,
+  keywords: PAGE.keywords,
+});
 
 export default function PrivacyPolicyPage() {
   return (
@@ -23,14 +30,13 @@ export default function PrivacyPolicyPage() {
     <JsonLd
       data={[
         buildWebPageJsonLd({
-          title: 'Privacy Policy — Viserv',
-          description:
-            'How Viserv collects, uses, shares and protects personal data under the Digital Personal Data Protection Act, 2023.',
-          path: '/privacy',
+          title: `${PAGE.title} | ${SITE_NAME}`,
+          description: PAGE.description,
+          path: PAGE.path,
         }),
         buildBreadcrumbJsonLd([
           { name: 'Home', path: '/' },
-          { name: 'Privacy Policy', path: '/privacy' },
+          { name: 'Privacy Policy', path: PAGE.path },
         ]),
       ]}
     />

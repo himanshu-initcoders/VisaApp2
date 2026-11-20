@@ -62,7 +62,8 @@ export function BlogPostForm({ post }: BlogPostFormProps) {
       seo: {
         metaTitle: post?.seo?.metaTitle ?? '',
         metaDescription: post?.seo?.metaDescription ?? '',
-        ogImageUrl: post?.seo?.ogImageUrl ?? '',
+        // Always derived from cover on save — not edited in the UI.
+        ogImageUrl: post?.coverImageUrl ?? post?.seo?.ogImageUrl ?? '',
       },
       status: (post?.status as 'draft' | 'published') ?? 'draft',
     }),
@@ -93,6 +94,7 @@ export function BlogPostForm({ post }: BlogPostFormProps) {
     }
 
     setFormError(null);
+    form.clearErrors('coverImageUrl');
     setPendingCoverFile(file);
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -106,10 +108,18 @@ export function BlogPostForm({ post }: BlogPostFormProps) {
     setLocalCoverPreview(null);
     form.setValue('coverImageUrl', '', { shouldDirty: true });
     form.setValue('coverImageKey', '', { shouldDirty: true });
+    form.setValue('seo.ogImageUrl', '', { shouldDirty: true });
+    form.clearErrors('coverImageUrl');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const onSubmit = async (data: BlogPostFormValues) => {
+    if (!pendingCoverFile && !data.coverImageUrl?.trim()) {
+      setFormError('Cover image is required');
+      form.setError('coverImageUrl', { message: 'Cover image is required' });
+      return;
+    }
+
     setIsSubmitting(true);
     setFormError(null);
 
@@ -138,6 +148,21 @@ export function BlogPostForm({ post }: BlogPostFormProps) {
           coverImageAlt: payload.coverImageAlt || pendingCoverFile.name,
         };
       }
+
+      const coverUrl = payload.coverImageUrl?.trim() || '';
+      if (!coverUrl) {
+        setFormError('Cover image is required');
+        return;
+      }
+
+      // Open Graph image always tracks the cover — no separate field.
+      payload = {
+        ...payload,
+        seo: {
+          ...payload.seo,
+          ogImageUrl: coverUrl,
+        },
+      };
 
       const result = isEdit
         ? await updateBlogPost(post!.id, payload)
@@ -258,12 +283,18 @@ export function BlogPostForm({ post }: BlogPostFormProps) {
               Cover image
             </h2>
             <p className="text-sm text-slate-helper">
-              Choose an image now — it uploads when you click Save changes.
-              Recommended 1200×630.
+              Required. Uploads when you save, and is also used as the Open Graph
+              / social share image. Recommended 1200×630.
             </p>
           </div>
 
-          <div className="rounded-3xl border-2 border-dashed border-ash-divider bg-white p-6">
+          <div
+            className={`rounded-3xl border-2 border-dashed bg-white p-6 ${
+              form.formState.errors.coverImageUrl
+                ? 'border-red-300'
+                : 'border-ash-divider'
+            }`}
+          >
             {coverPreview ? (
               <div className="relative flex flex-col items-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -318,6 +349,11 @@ export function BlogPostForm({ post }: BlogPostFormProps) {
               </label>
             </div>
           </div>
+          {form.formState.errors.coverImageUrl?.message ? (
+            <p className="text-sm text-red-600">
+              {form.formState.errors.coverImageUrl.message}
+            </p>
+          ) : null}
 
           <Input
             label="Cover alt text"
@@ -380,8 +416,9 @@ export function BlogPostForm({ post }: BlogPostFormProps) {
               SEO
             </h2>
             <p className="text-sm text-slate-helper">
-              Optional overrides for search and social. Leave blank to use the
-              post title and excerpt.
+              Optional overrides for search results. Leave blank to use the post
+              title and excerpt. The cover image is used automatically for social
+              sharing.
             </p>
           </div>
 
@@ -406,12 +443,6 @@ export function BlogPostForm({ post }: BlogPostFormProps) {
               </p>
             )}
           </div>
-          <Input
-            label="Open Graph image URL"
-            placeholder="https://… (defaults to cover image)"
-            error={form.formState.errors.seo?.ogImageUrl?.message}
-            {...form.register('seo.ogImageUrl')}
-          />
         </section>
 
         {formError && (

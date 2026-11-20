@@ -1,6 +1,9 @@
 {
-  "name": "Viserv",
+  "name": "Viserv — Visa & Passport Services",
   "short_name": "Viserv",
+  "description": "Visa and passport services for Indian citizens — clear pricing, guided applications, and expert review.",
+  "start_url": "/",
+  "lang": "en-IN",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",

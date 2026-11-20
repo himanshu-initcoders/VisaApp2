@@ -1,14 +1,10 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
 import {
-  ArrowUpRight,
   BadgeIndianRupee,
-  BookOpenText,
   FileCheck2,
   FileText,
-  HelpCircle,
   IdCard,
   ShieldCheck,
   Timer,
@@ -20,7 +16,6 @@ import { ContactBar } from '@/components/public/ContactBar';
 import { FaqAccordion } from '@/components/public/FaqAccordion';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { PassportHeroPricingCard } from '@/components/public/PassportHeroPricingCard';
-import { PrivateServiceDisclaimer } from '@/components/public/PrivateServiceDisclaimer';
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
 import { RecentBlogsSection } from '@/components/public/RecentBlogsSection';
 import { StickySectionNav } from '@/components/public/StickySectionNav';
@@ -34,37 +29,22 @@ import {
   buildPassportServiceJsonLd,
   buildWebPageJsonLd,
 } from '@/lib/seo/jsonld';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import { SEO_PAGES } from '@/lib/seo/pages';
+import { SITE_NAME } from '@/lib/seo/site';
 
-const PASSPORT_TITLE = 'Indian passport services — Viserv';
-const PASSPORT_DESCRIPTION =
-  'Private passport assistance for Indian citizens — fresh or re-issue, clear documents, Tatkaal options, and guided applications. Not Passport Seva; apply yourself on the official portal if you prefer.';
-const PASSPORT_OG_IMAGE = {
-  url: '/indian-passport-banner.jpg',
-  alt: 'Indian passport cover on a desk',
-};
+const PAGE = SEO_PAGES.passport;
+const PASSPORT_TITLE = `${PAGE.title} | ${SITE_NAME}`;
+const PASSPORT_DESCRIPTION = PAGE.description;
 
-export const metadata: Metadata = {
-  title: PASSPORT_TITLE,
-  description: PASSPORT_DESCRIPTION,
-  alternates: { canonical: '/passport' },
-  openGraph: {
-    title: PASSPORT_TITLE,
-    description: PASSPORT_DESCRIPTION,
-    url: '/passport',
-    type: 'website',
-    images: [PASSPORT_OG_IMAGE],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: PASSPORT_TITLE,
-    description: PASSPORT_DESCRIPTION,
-    images: [PASSPORT_OG_IMAGE.url],
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+export const metadata: Metadata = buildPageMetadata({
+  title: PAGE.title,
+  description: PAGE.description,
+  path: PAGE.path,
+  keywords: PAGE.keywords,
+  ogImage: PAGE.ogImage,
+  robots: { index: true, follow: true },
+});
 
 const sectionItems = [
   { id: 'overview', label: 'Overview' },
@@ -446,7 +426,10 @@ export default async function PassportPage() {
       />
       <Header overlay cta="account" />
       <main className="min-h-screen bg-[#f8f6f1] pt-20 sm:pt-24">
-        <section className="px-4 sm:px-6 lg:px-8">
+        <h1 className="sr-only">
+          Indian passport services — fresh, re-issue, and Tatkaal for Indian citizens
+        </h1>
+        <section className="px-4 sm:px-6 lg:px-8" aria-label="Passport pricing">
           <div className="mx-auto max-w-7xl">
             <MotionReveal className="overflow-hidden rounded-[32px] border border-ash-divider bg-white shadow-card sm:rounded-[40px]">
               <div className="relative min-h-[420px] sm:min-h-[480px] lg:min-h-[540px]">

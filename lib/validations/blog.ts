@@ -31,6 +31,10 @@ const blogSeoSchema = z.object({
     ])
     .nullable()
     .optional(),
+  /**
+   * Optional on the form — server always overwrites this with coverImageUrl.
+   * Kept so older payloads / DB shapes still parse.
+   */
   ogImageUrl: optionalImageSrc,
 });
 

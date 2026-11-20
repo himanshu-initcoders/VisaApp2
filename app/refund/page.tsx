@@ -11,11 +11,18 @@ import {
   buildWebPageJsonLd,
 } from '@/lib/seo/jsonld';
 
-export const metadata: Metadata = {
-  title: 'Refund Policy — Viserv',
-  description:
-    'When and how Viserv refunds Government Fees, Service Fees and Third-Party Charges for visa Orders.',
-};
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import { SEO_PAGES } from '@/lib/seo/pages';
+import { SITE_NAME } from '@/lib/seo/site';
+
+const PAGE = SEO_PAGES.refund;
+
+export const metadata: Metadata = buildPageMetadata({
+  title: PAGE.title,
+  description: PAGE.description,
+  path: PAGE.path,
+  keywords: PAGE.keywords,
+});
 
 export default function RefundPolicyPage() {
   return (
@@ -23,14 +30,13 @@ export default function RefundPolicyPage() {
     <JsonLd
       data={[
         buildWebPageJsonLd({
-          title: 'Refund Policy — Viserv',
-          description:
-            'When and how Viserv refunds Government Fees, Service Fees and Third-Party Charges for visa Orders.',
-          path: '/refund',
+          title: `${PAGE.title} | ${SITE_NAME}`,
+          description: PAGE.description,
+          path: PAGE.path,
         }),
         buildBreadcrumbJsonLd([
           { name: 'Home', path: '/' },
-          { name: 'Refund Policy', path: '/refund' },
+          { name: 'Refund Policy', path: PAGE.path },
         ]),
       ]}
     />

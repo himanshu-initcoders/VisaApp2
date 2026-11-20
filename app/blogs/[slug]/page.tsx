@@ -10,12 +10,15 @@ import {
   getPublishedPostBySlug,
   getPublishedPostSlugs,
 } from '@/lib/db/queries/blog';
-import { absoluteUrl, getSiteUrl } from '@/lib/seo/jsonld';
 import {
+  absoluteUrl,
   buildBlogPostingJsonLd,
   buildBreadcrumbJsonLd,
   buildWebPageJsonLd,
+  getSiteUrl,
 } from '@/lib/seo/jsonld';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import { DEFAULT_OG_IMAGE, SITE_NAME } from '@/lib/seo/site';
 import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 export const revalidate = 3600;
@@ -44,35 +47,27 @@ export async function generateMetadata({
   const description =
     post.seo?.metaDescription?.trim() ||
     post.excerpt?.trim() ||
-    `Read ${post.title} on the Viserv blog.`;
+    `Read ${post.title} on the ${SITE_NAME} blog.`;
   const path = `/blogs/${post.slug}`;
-  const ogImage =
+  const ogImageUrl =
     post.seo?.ogImageUrl?.trim() || post.coverImageUrl || undefined;
 
-  return {
+  return buildPageMetadata({
     title,
     description,
-    alternates: { canonical: path },
-    openGraph: {
-      title,
-      description,
-      url: path,
-      type: 'article',
-      publishedTime: post.publishedAt
-        ? new Date(post.publishedAt).toISOString()
-        : undefined,
-      modifiedTime: post.updatedAt
-        ? new Date(post.updatedAt).toISOString()
-        : undefined,
-      images: ogImage ? [{ url: ogImage }] : undefined,
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description,
-      images: ogImage ? [ogImage] : undefined,
-    },
-  };
+    path,
+    keywords: [post.title, 'visa guide', 'passport tips', SITE_NAME],
+    ogType: 'article',
+    ogImage: ogImageUrl
+      ? { url: ogImageUrl, alt: post.coverImageAlt || post.title }
+      : DEFAULT_OG_IMAGE,
+    publishedTime: post.publishedAt
+      ? new Date(post.publishedAt).toISOString()
+      : undefined,
+    modifiedTime: post.updatedAt
+      ? new Date(post.updatedAt).toISOString()
+      : undefined,
+  });
 }
 
 export default async function BlogPostPage({ params }: PageProps) {
@@ -84,7 +79,7 @@ export default async function BlogPostPage({ params }: PageProps) {
   const description =
     post.seo?.metaDescription?.trim() ||
     post.excerpt?.trim() ||
-    `Read ${post.title} on the Viserv blog.`;
+    `Read ${post.title} on the ${SITE_NAME} blog.`;
   const path = `/blogs/${post.slug}`;
   const siteUrl = getSiteUrl();
   const safeHtml = sanitizeBlogHtml(post.body);

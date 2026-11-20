@@ -9,30 +9,23 @@ import {
   buildBreadcrumbJsonLd,
   buildWebPageJsonLd,
 } from '@/lib/seo/jsonld';
+import { buildPageMetadata } from '@/lib/seo/metadata';
+import { SEO_PAGES } from '@/lib/seo/pages';
+import { SITE_NAME } from '@/lib/seo/site';
 import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 export const revalidate = 3600;
 
-const PAGE_TITLE = 'Visa & passport guides — Viserv Blog';
-const PAGE_DESCRIPTION =
-  'Practical guides for Indian travellers: visa tips, passport renewals, documents, and destination checklists from Viserv.';
+const PAGE = SEO_PAGES.blogs;
+const PAGE_TITLE = `${PAGE.title} | ${SITE_NAME}`;
+const PAGE_DESCRIPTION = PAGE.description;
 
-export const metadata: Metadata = {
-  title: PAGE_TITLE,
-  description: PAGE_DESCRIPTION,
-  alternates: { canonical: '/blogs' },
-  openGraph: {
-    title: PAGE_TITLE,
-    description: PAGE_DESCRIPTION,
-    url: '/blogs',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: PAGE_TITLE,
-    description: PAGE_DESCRIPTION,
-  },
-};
+export const metadata: Metadata = buildPageMetadata({
+  title: PAGE.title,
+  description: PAGE.description,
+  path: PAGE.path,
+  keywords: PAGE.keywords,
+});
 
 export default async function BlogIndexPage() {
   const posts = await getPublishedPosts();
