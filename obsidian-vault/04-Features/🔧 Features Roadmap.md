@@ -117,6 +117,7 @@
 - [x] Country exemption content (TinyMCE on visa-listings country card; public Exemption tab above FAQs)
 - [x] Add Visa listing (admin config create flow)
 - [x] Passport listings admin (basic, pricing, forms/steps, docs, FAQs)
+- [x] Shared `question_catalog` — Form Builder autocomplete attaches stable key across visa/passport; category/required/visibility stay listing-local (`0042_question_catalog`)
 - [x] Visa listing public URL slug (basic info, SEO paths)
 - [x] Admin blogs (TinyMCE) under Configuration + public `/blog` SEO
 
@@ -126,7 +127,7 @@
 
 ### User Experience
 - [ ] Application auto-save
-- [ ] Smart form pre-fill
+- [x] Smart form pre-fill foundation — shared question keys via `question_catalog` (autofill key-first, label fallback for old snapshots)
 - [ ] Photo validation (AI-powered)
 - [ ] Document quality checker
 - [ ] Progress indicators

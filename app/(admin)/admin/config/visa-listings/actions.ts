@@ -2,12 +2,29 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
-import { countries, visaListings, visaListingPrices, additionalQuestions, componentsRequired, faqs, postCheckoutSteps, multiTripCountries } from '@/lib/db/schema-extended';
+import { countries, visaListings, visaListingPrices, additionalQuestions, questionCatalog, componentsRequired, faqs, postCheckoutSteps, multiTripCountries } from '@/lib/db/schema-extended';
 import { eq, and, sql, ne } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth-utils';
 import { processBasicInfoSchema, type ProcessBasicInfo, createVisaListingSchema, visaListingPriceSchema, type VisaListingPriceInput, additionalQuestionSchema, type AdditionalQuestion, componentRequiredSchema, type ComponentRequired, createComponentsBulkSchema, type CreateComponentsBulk, faqSchema, type FAQ, postCheckoutStepSchema, type PostCheckoutStep, multiCountrySchema, type MultiCountry } from '@/lib/validations/config';
-import { getQuestionById, getMaxQuestionSortOrder, getAdditionalQuestions, searchAdditionalQuestionsByLabel, getComponentById, getMaxComponentSortOrder, getComponentsRequired, getFaqById, getMaxFaqSortOrder, getPostCheckoutStepById, getMaxStepSortOrder, getProcessWithAllRelations, getDocumentTypeByValue, getDocumentTypeSamplesByValues } from '@/lib/db/queries/config';
-import { searchPassportAdditionalQuestionsByLabel } from '@/lib/db/queries/passport-config';
+import {
+  getQuestionById,
+  getMaxQuestionSortOrder,
+  getAdditionalQuestions,
+  searchQuestionCatalogByLabel,
+  getQuestionCatalogById,
+  createQuestionCatalogEntry,
+  listingHasCatalogQuestion,
+  getComponentById,
+  getMaxComponentSortOrder,
+  getComponentsRequired,
+  getFaqById,
+  getMaxFaqSortOrder,
+  getPostCheckoutStepById,
+  getMaxStepSortOrder,
+  getProcessWithAllRelations,
+  getDocumentTypeByValue,
+  getDocumentTypeSamplesByValues,
+} from '@/lib/db/queries/config';
 import { revalidatePublicVisaCatalog } from '@/lib/revalidate-public-catalog';
 import { documentTypeLabel } from '@/lib/document-types';
 import { validateVisibilityAgainstSiblings } from '@/lib/question-visibility';
@@ -481,27 +498,16 @@ export async function getProcessInfo(processId: string) {
 }
 
 /**
- * Suggest existing question labels from visa + passport listings (admin autocomplete).
+ * Suggest shared catalog questions for admin Form Builder autocomplete.
  */
 export async function suggestQuestions(query: string, excludeId?: string) {
   await requireRole(['admin']);
 
   try {
-    const [visaSuggestions, passportSuggestions] = await Promise.all([
-      searchAdditionalQuestionsByLabel(query, { excludeId, limit: 10 }),
-      searchPassportAdditionalQuestionsByLabel(query, { excludeId, limit: 10 }),
-    ]);
-
-    const seen = new Set<string>();
-    const suggestions = [];
-    for (const row of [...visaSuggestions, ...passportSuggestions]) {
-      const dedupeKey = row.label.trim().toLowerCase();
-      if (seen.has(dedupeKey)) continue;
-      seen.add(dedupeKey);
-      suggestions.push(row);
-      if (suggestions.length >= 10) break;
-    }
-
+    const suggestions = await searchQuestionCatalogByLabel(query, {
+      excludeCatalogId: excludeId,
+      limit: 10,
+    });
     return { success: true as const, suggestions };
   } catch (error) {
     console.error('Error suggesting questions:', error);
@@ -510,7 +516,8 @@ export async function suggestQuestions(query: string, excludeId?: string) {
 }
 
 /**
- * Create new additional question for a process
+ * Create new additional question for a process.
+ * Attaches shared catalog identity when catalogQuestionId is provided; otherwise creates catalog + listing row.
  */
 export async function createQuestion(processId: string, data: AdditionalQuestion) {
   await requireRole(['admin']);
@@ -543,10 +550,35 @@ export async function createQuestion(processId: string, data: AdditionalQuestion
 
     const documentConditions = validated.documentConditions ?? null;
 
-    // Create question
+    let catalogId = validated.catalogQuestionId ?? null;
+    let questionKey = validated.key?.trim() || '';
+
+    if (catalogId) {
+      const catalog = await getQuestionCatalogById(catalogId);
+      if (!catalog) {
+        return { error: 'Catalog question not found' };
+      }
+      if (await listingHasCatalogQuestion(processId, catalogId)) {
+        return { error: 'This question is already on this listing' };
+      }
+      questionKey = catalog.key;
+    } else {
+      const catalog = await createQuestionCatalogEntry({
+        key: questionKey || undefined,
+        label: validated.label,
+        description: validated.description || null,
+        questionType: validated.questionType,
+        options: validated.options || [],
+      });
+      catalogId = catalog.id;
+      questionKey = catalog.key;
+    }
+
+    // Create listing attachment (category/required/visibility stay listing-local)
     await db.insert(additionalQuestions).values({
       visaListingId: processId,
-      key: crypto.randomUUID(),
+      catalogQuestionId: catalogId,
+      key: questionKey,
       label: validated.label,
       description: validated.description || null,
       questionType: validated.questionType,
@@ -629,7 +661,7 @@ export async function updateQuestion(questionId: string, data: AdditionalQuestio
 
     const documentConditions = validated.documentConditions ?? null;
 
-    // Update question. Key and unused flags stay as stored — they are not editable in the form UI.
+    // Update listing row. Key + catalogQuestionId stay immutable after create.
     await db
       .update(additionalQuestions)
       .set({
@@ -644,6 +676,20 @@ export async function updateQuestion(questionId: string, data: AdditionalQuestio
         documentConditions,
       })
       .where(eq(additionalQuestions.id, questionId));
+
+    // Keep catalog identity fields in sync for future autocomplete.
+    if (question.catalogQuestionId) {
+      await db
+        .update(questionCatalog)
+        .set({
+          label: validated.label,
+          description: validated.description || null,
+          questionType: validated.questionType,
+          options: validated.options || [],
+          updatedAt: new Date(),
+        })
+        .where(eq(questionCatalog.id, question.catalogQuestionId));
+    }
 
     const processId = question.visaListingId;
     const conditionDocs =

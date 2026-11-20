@@ -12,6 +12,7 @@ import {
   passportComponentsRequired,
   passportFaqs,
 } from '@/lib/db/schema-passport';
+import { questionCatalog } from '@/lib/db/schema-extended';
 import { passportFormVersions } from '@/lib/db/schema';
 import {
   passportListingBasicSchema,
@@ -41,13 +42,15 @@ import {
   getMaxPassportComponentSortOrder,
   getMaxPassportFaqSortOrder,
   getNextPassportFormVersionNumber,
-  searchPassportAdditionalQuestionsByLabel,
+  passportListingHasCatalogQuestion,
 } from '@/lib/db/queries/passport-config';
 import {
   getDocumentTypeByValue,
   getDocumentTypeSamplesByValues,
   listDocumentTypes,
-  searchAdditionalQuestionsByLabel,
+  searchQuestionCatalogByLabel,
+  getQuestionCatalogById,
+  createQuestionCatalogEntry,
 } from '@/lib/db/queries/config';
 import { revalidatePublicPassportCatalog } from '@/lib/revalidate-public-catalog';
 import { buildPassportFormConfig } from '@/lib/apply/passportForm';
@@ -332,28 +335,16 @@ export async function reorderPassportFormSteps(
 }
 
 /**
- * Suggest existing question labels from passport + visa listings (admin autocomplete).
+ * Suggest shared catalog questions for passport Form Builder autocomplete.
  */
 export async function suggestPassportQuestions(query: string, excludeId?: string) {
   await requireRole(['admin']);
 
   try {
-    const [passportSuggestions, visaSuggestions] = await Promise.all([
-      searchPassportAdditionalQuestionsByLabel(query, { excludeId, limit: 10 }),
-      searchAdditionalQuestionsByLabel(query, { excludeId, limit: 10 }),
-    ]);
-
-    const seen = new Set<string>();
-    const suggestions = [];
-    // Prefer same-domain matches first (passport when editing passport forms).
-    for (const row of [...passportSuggestions, ...visaSuggestions]) {
-      const dedupeKey = row.label.trim().toLowerCase();
-      if (seen.has(dedupeKey)) continue;
-      seen.add(dedupeKey);
-      suggestions.push(row);
-      if (suggestions.length >= 10) break;
-    }
-
+    const suggestions = await searchQuestionCatalogByLabel(query, {
+      excludeCatalogId: excludeId,
+      limit: 10,
+    });
     return { success: true as const, suggestions };
   } catch (error) {
     console.error('Error suggesting passport questions:', error);
@@ -380,12 +371,37 @@ export async function createPassportQuestion(
     const sortOrder =
       (await getMaxPassportQuestionSortOrder(validated.stepId)) + 1;
 
+    let catalogId = validated.catalogQuestionId ?? null;
+    let questionKey = validated.key?.trim() || '';
+
+    if (catalogId) {
+      const catalog = await getQuestionCatalogById(catalogId);
+      if (!catalog) {
+        return { error: 'Catalog question not found' };
+      }
+      if (await passportListingHasCatalogQuestion(listingId, catalogId)) {
+        return { error: 'This question is already on this listing' };
+      }
+      questionKey = catalog.key;
+    } else {
+      const catalog = await createQuestionCatalogEntry({
+        key: questionKey || undefined,
+        label: validated.label,
+        description: validated.description || null,
+        questionType: validated.questionType,
+        options: validated.options ?? [],
+      });
+      catalogId = catalog.id;
+      questionKey = catalog.key;
+    }
+
     const [created] = await db
       .insert(passportAdditionalQuestions)
       .values({
         passportListingId: listingId,
         stepId: validated.stepId,
-        key: validated.key || crypto.randomUUID(),
+        catalogQuestionId: catalogId,
+        key: questionKey,
         label: validated.label,
         description: validated.description || null,
         questionType: validated.questionType,
@@ -432,6 +448,7 @@ export async function updatePassportQuestion(
       return { error: 'Form step not found on this listing' };
     }
 
+    // Key + catalogQuestionId stay immutable after create.
     await db
       .update(passportAdditionalQuestions)
       .set({
@@ -448,6 +465,19 @@ export async function updatePassportQuestion(
         documentConditions: validated.documentConditions,
       })
       .where(eq(passportAdditionalQuestions.id, questionId));
+
+    if (question.catalogQuestionId) {
+      await db
+        .update(questionCatalog)
+        .set({
+          label: validated.label,
+          description: validated.description || null,
+          questionType: validated.questionType,
+          options: validated.options ?? [],
+          updatedAt: new Date(),
+        })
+        .where(eq(questionCatalog.id, question.catalogQuestionId));
+    }
 
     if (validated.documentConditions?.enabled) {
       await ensurePassportDocumentTypesAttached(

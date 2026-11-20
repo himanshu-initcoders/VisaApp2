@@ -176,6 +176,8 @@ export const questionOptionSchema = z
   }));
 
 export const additionalQuestionSchema = z.object({
+  /** Shared catalog identity — when set on create, reuse catalog.key instead of minting a new one. */
+  catalogQuestionId: z.string().uuid('Invalid catalog question id').optional().nullable(),
   key: z
     .string()
     .min(2, 'Key must be at least 2 characters')

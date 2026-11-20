@@ -236,7 +236,8 @@ function resolveCurrentDocSlotKey(input: {
 
 /**
  * Remap past extra answers onto current question keys.
- * Prefer exact key (same listing); otherwise match normalized labels.
+ * Prefer exact key (shared question_catalog.key across listings after publish);
+ * otherwise match normalized labels (covers pre-catalog / pre-republish snapshots).
  */
 function mergeExtraAnswers(input: {
   currentExtra: Record<string, string>;

@@ -50,6 +50,8 @@ type QuestionFormValues = z.input<typeof additionalQuestionSchema>;
 
 type QuestionLabelSuggestion = {
   id: string;
+  catalogQuestionId: string;
+  key: string;
   label: string;
   description: string | null;
   questionType:
@@ -138,6 +140,7 @@ interface Question {
   id: string;
   visaListingId?: string;
   passportListingId?: string;
+  catalogQuestionId?: string | null;
   key: string;
   label: string;
   description: string | null;
@@ -210,6 +213,8 @@ export function QuestionFormModal({
   const [isSearching, setIsSearching] = useState(false);
   const labelWrapRef = useRef<HTMLDivElement>(null);
   const skipNextSearchRef = useRef(false);
+  /** Label frozen when a catalog suggestion was applied (create mode). */
+  const attachedCatalogLabelRef = useRef<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -260,6 +265,8 @@ export function QuestionFormModal({
     ),
     defaultValues: initialData
       ? {
+          catalogQuestionId: initialData.catalogQuestionId ?? null,
+          key: initialData.key,
           label: initialData.label,
           description: initialData.description || '',
           questionType: toAdminQuestionType(initialData.questionType),
@@ -272,6 +279,8 @@ export function QuestionFormModal({
           documentConditions: initialDocumentConditions,
         }
       : {
+          catalogQuestionId: null,
+          key: undefined,
           label: '',
           description: '',
           questionType: 'text' as const,
@@ -331,6 +340,19 @@ export function QuestionFormModal({
       return;
     }
 
+    // If create-mode label diverges from the applied suggestion, detach catalog identity.
+    if (!isEditMode && attachedCatalogLabelRef.current) {
+      const attachedCatalogId = form.getValues('catalogQuestionId');
+      if (
+        attachedCatalogId &&
+        (labelValue || '').trim() !== attachedCatalogLabelRef.current.trim()
+      ) {
+        attachedCatalogLabelRef.current = null;
+        form.setValue('catalogQuestionId', null, { shouldDirty: true });
+        form.setValue('key', undefined, { shouldDirty: true });
+      }
+    }
+
     const query = (labelValue || '').trim();
     if (query.length < 2) {
       setSuggestions([]);
@@ -343,9 +365,11 @@ export function QuestionFormModal({
     const timer = window.setTimeout(async () => {
       setIsSearching(true);
       try {
+        const excludeCatalogId =
+          initialData?.catalogQuestionId ?? undefined;
         const result = isPassport
-          ? await suggestPassportQuestions(query, initialData?.id)
-          : await suggestQuestions(query, initialData?.id);
+          ? await suggestPassportQuestions(query, excludeCatalogId)
+          : await suggestQuestions(query, excludeCatalogId);
         if (cancelled) return;
 
         if (result.success) {
@@ -667,31 +691,34 @@ export function QuestionFormModal({
 
   const applySuggestion = (suggestion: QuestionLabelSuggestion) => {
     skipNextSearchRef.current = true;
+    attachedCatalogLabelRef.current = suggestion.label;
+    // Attach shared catalog identity for autofill; category stays listing-local.
+    form.setValue('catalogQuestionId', suggestion.catalogQuestionId, {
+      shouldDirty: true,
+    });
+    form.setValue('key', suggestion.key, { shouldDirty: true });
     form.setValue('label', suggestion.label, { shouldDirty: true, shouldValidate: true });
     form.setValue('description', suggestion.description || '', { shouldDirty: true });
     form.setValue('questionType', toAdminQuestionType(suggestion.questionType), {
       shouldDirty: true,
     });
-    if (!isPassport) {
-      form.setValue('category', toAdminCategory(suggestion.category), {
-        shouldDirty: true,
-      });
-    }
+    // Do not force category from suggestion — admin keeps / chooses listing category.
     form.setValue('required', suggestion.required ?? true, { shouldDirty: true });
     form.setValue(
       'visibility',
-      adaptVisibilityForListing(suggestion.visibility, listingKeys),
+      adaptVisibilityForListing(suggestion.visibility ?? null, listingKeys),
       { shouldDirty: true }
     );
     form.setValue(
       'documentConditions',
-      adaptDocumentConditionsForListing(suggestion.documentConditions),
+      adaptDocumentConditionsForListing(suggestion.documentConditions ?? null),
       { shouldDirty: true }
     );
+    // Preserve stable option values from catalog (needed for select autofill).
     replace(
       (suggestion.options || []).map((option) => ({
         label: option.label,
-        value: crypto.randomUUID(),
+        value: option.value?.trim() ? option.value : crypto.randomUUID(),
       }))
     );
     setSuggestions([]);

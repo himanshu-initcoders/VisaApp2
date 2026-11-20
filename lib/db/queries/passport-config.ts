@@ -12,6 +12,8 @@ import { passportFormVersions } from '@/lib/db/schema';
 
 export type PassportQuestionLabelSuggestion = {
   id: string;
+  catalogQuestionId: string;
+  key: string;
   label: string;
   description: string | null;
   questionType:
@@ -215,8 +217,7 @@ export async function getNextPassportFormVersionNumber(listingId: string) {
 }
 
 /**
- * Search passport additional questions by label across all passport listings.
- * Returns recent matches (deduped by lowercase label) for admin autocomplete.
+ * Legacy passport listing-table search. Prefer searchQuestionCatalogByLabel.
  */
 export async function searchPassportAdditionalQuestionsByLabel(
   query: string,
@@ -228,7 +229,6 @@ export async function searchPassportAdditionalQuestionsByLabel(
   }
 
   const limit = options?.limit ?? 10;
-  // Strip LIKE wildcards from user input so they match literally as text search
   const safeTerm = trimmed.replace(/[%_]/g, '');
   if (safeTerm.length < 2) {
     return [];
@@ -246,6 +246,8 @@ export async function searchPassportAdditionalQuestionsByLabel(
     limit: limit * 4,
     columns: {
       id: true,
+      catalogQuestionId: true,
+      key: true,
       label: true,
       description: true,
       questionType: true,
@@ -264,11 +266,34 @@ export async function searchPassportAdditionalQuestionsByLabel(
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
     suggestions.push({
-      ...row,
+      id: row.catalogQuestionId ?? row.id,
+      catalogQuestionId: row.catalogQuestionId ?? row.id,
+      key: row.key,
+      label: row.label,
+      description: row.description,
+      questionType: row.questionType,
       category: 'other',
+      required: row.required,
+      options: row.options,
+      visibility: row.visibility,
+      documentConditions: row.documentConditions,
     });
     if (suggestions.length >= limit) break;
   }
 
   return suggestions;
+}
+
+export async function passportListingHasCatalogQuestion(
+  passportListingId: string,
+  catalogQuestionId: string
+) {
+  const existing = await db.query.passportAdditionalQuestions.findFirst({
+    where: and(
+      eq(passportAdditionalQuestions.passportListingId, passportListingId),
+      eq(passportAdditionalQuestions.catalogQuestionId, catalogQuestionId)
+    ),
+    columns: { id: true },
+  });
+  return Boolean(existing);
 }

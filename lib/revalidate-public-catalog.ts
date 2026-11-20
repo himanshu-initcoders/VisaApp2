@@ -3,9 +3,12 @@ import { db } from '@/lib/db';
 import { visaListings } from '@/lib/db/schema-extended';
 import { eq } from 'drizzle-orm';
 import { scheduleWarmPublicVisaCatalog } from '@/lib/warm-public-catalog';
+import {
+  PUBLIC_PASSPORT_CATALOG_TAG,
+  PUBLIC_VISA_CATALOG_TAG,
+} from '@/lib/public-catalog-tags';
 
-/** Shared cache tag for public landing / destinations / listing queries. */
-export const PUBLIC_VISA_CATALOG_TAG = 'public-visa-catalog';
+export { PUBLIC_PASSPORT_CATALOG_TAG, PUBLIC_VISA_CATALOG_TAG };
 
 /**
  * Invalidate public catalog pages after admin country / visa-listing changes.
@@ -91,9 +94,6 @@ export async function revalidatePublicVisaCatalog(options?: {
     );
   }
 }
-
-/** Shared cache tag for public passport marketing / apply queries. */
-export const PUBLIC_PASSPORT_CATALOG_TAG = 'public-passport-catalog';
 
 /**
  * Invalidate public passport pages after admin passport-listing changes.

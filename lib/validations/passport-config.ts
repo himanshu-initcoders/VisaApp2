@@ -95,6 +95,8 @@ export const questionOptionSchema = z
 
 export const passportAdditionalQuestionSchema = z
   .object({
+    /** Shared catalog identity — when set on create, reuse catalog.key. */
+    catalogQuestionId: z.string().uuid('Invalid catalog question id').optional().nullable(),
     key: z
       .string()
       .min(2, 'Key must be at least 2 characters')

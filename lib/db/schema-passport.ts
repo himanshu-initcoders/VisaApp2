@@ -18,7 +18,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { questionTypeEnum, unitEnum } from './schema-extended';
+import { questionCatalog, questionTypeEnum, unitEnum } from './schema-extended';
 
 export const passportServiceTypeEnum = pgEnum('passport_service_type', [
   'fresh',
@@ -135,6 +135,7 @@ export const passportFormSteps = pgTable(
 
 /**
  * Dynamic questions scoped to a form step.
+ * catalog_question_id links shared identity; category/settings stay listing-local.
  */
 export const passportAdditionalQuestions = pgTable(
   'passport_additional_questions',
@@ -146,6 +147,10 @@ export const passportAdditionalQuestions = pgTable(
     stepId: uuid('step_id')
       .references(() => passportFormSteps.id, { onDelete: 'cascade' })
       .notNull(),
+    catalogQuestionId: uuid('catalog_question_id').references(
+      () => questionCatalog.id,
+      { onDelete: 'restrict' }
+    ),
     key: varchar('key', { length: 50 }).notNull(),
     label: text('label').notNull(),
     description: text('description'),
@@ -181,6 +186,15 @@ export const passportAdditionalQuestions = pgTable(
       table.passportListingId
     ),
     stepIdx: index('passport_additional_questions_step_id_idx').on(table.stepId),
+    catalogQuestionIdIdx: index(
+      'passport_additional_questions_catalog_question_id_idx'
+    ).on(table.catalogQuestionId),
+    listingCatalogUnique: uniqueIndex(
+      'passport_additional_questions_listing_catalog_unique'
+    ).on(table.passportListingId, table.catalogQuestionId),
+    listingKeyUnique: uniqueIndex(
+      'passport_additional_questions_listing_key_unique'
+    ).on(table.passportListingId, table.key),
   })
 );
 
@@ -276,6 +290,10 @@ export const passportAdditionalQuestionsRelations = relations(
     step: one(passportFormSteps, {
       fields: [passportAdditionalQuestions.stepId],
       references: [passportFormSteps.id],
+    }),
+    catalogQuestion: one(questionCatalog, {
+      fields: [passportAdditionalQuestions.catalogQuestionId],
+      references: [questionCatalog.id],
     }),
   })
 );

@@ -5,6 +5,7 @@ import {
   visaListings,
   visaListingPrices,
   additionalQuestions,
+  questionCatalog,
   componentsRequired,
   multiTripCountries,
   faqs,
@@ -332,7 +333,10 @@ export async function getMaxQuestionSortOrder(processId: string) {
 }
 
 export type QuestionLabelSuggestion = {
+  /** Catalog id when from catalog; listing row id for legacy fallback. */
   id: string;
+  catalogQuestionId: string;
+  key: string;
   label: string;
   description: string | null;
   questionType:
@@ -345,6 +349,7 @@ export type QuestionLabelSuggestion = {
     | 'boolean'
     | 'checkbox'
     | 'radio';
+  /** Hint only — category stays listing-local and is not applied from suggestion. */
   category: string;
   required: boolean | null;
   options: Array<{ label: string; value: string }> | null;
@@ -362,9 +367,116 @@ export type QuestionLabelSuggestion = {
   } | null;
 };
 
+export async function getQuestionCatalogById(catalogQuestionId: string) {
+  // Use select() (not db.query.*) so HMR-cached drizzle clients still see new tables.
+  const [row] = await db
+    .select()
+    .from(questionCatalog)
+    .where(eq(questionCatalog.id, catalogQuestionId))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function getQuestionCatalogByKey(key: string) {
+  const [row] = await db
+    .select()
+    .from(questionCatalog)
+    .where(eq(questionCatalog.key, key))
+    .limit(1);
+  return row ?? null;
+}
+
 /**
- * Search additional questions by label across all visa listings.
- * Returns recent matches (deduped by lowercase label) for admin autocomplete.
+ * Create a catalog identity row. `key` defaults to a new UUID.
+ */
+export async function createQuestionCatalogEntry(input: {
+  key?: string;
+  label: string;
+  description?: string | null;
+  questionType: QuestionLabelSuggestion['questionType'];
+  options?: Array<{ label: string; value: string }> | null;
+}) {
+  const key = input.key?.trim() || crypto.randomUUID();
+  const [row] = await db
+    .insert(questionCatalog)
+    .values({
+      key,
+      label: input.label,
+      description: input.description || null,
+      questionType: input.questionType,
+      options: input.options ?? [],
+      updatedAt: new Date(),
+    })
+    .returning();
+  return row;
+}
+
+/**
+ * Search shared question catalog by label (admin autocomplete).
+ */
+export async function searchQuestionCatalogByLabel(
+  query: string,
+  options?: { excludeCatalogId?: string; limit?: number }
+): Promise<QuestionLabelSuggestion[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) {
+    return [];
+  }
+
+  const limit = options?.limit ?? 10;
+  const safeTerm = trimmed.replace(/[%_]/g, '');
+  if (safeTerm.length < 2) {
+    return [];
+  }
+
+  const conditions = [ilike(questionCatalog.label, `%${safeTerm}%`)];
+  if (options?.excludeCatalogId) {
+    conditions.push(ne(questionCatalog.id, options.excludeCatalogId));
+  }
+
+  // select() avoids db.query.questionCatalog (undefined on HMR-stale schema cache).
+  const rows = await db
+    .select({
+      id: questionCatalog.id,
+      key: questionCatalog.key,
+      label: questionCatalog.label,
+      description: questionCatalog.description,
+      questionType: questionCatalog.questionType,
+      options: questionCatalog.options,
+    })
+    .from(questionCatalog)
+    .where(and(...conditions))
+    .orderBy(desc(questionCatalog.updatedAt))
+    .limit(limit * 4);
+
+  const seen = new Set<string>();
+  const suggestions: QuestionLabelSuggestion[] = [];
+
+  for (const row of rows) {
+    const dedupeKey = row.label.trim().toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    suggestions.push({
+      id: row.id,
+      catalogQuestionId: row.id,
+      key: row.key,
+      label: row.label,
+      description: row.description,
+      questionType: row.questionType,
+      category: 'other',
+      required: null,
+      options: row.options,
+      visibility: null,
+      documentConditions: null,
+    });
+    if (suggestions.length >= limit) break;
+  }
+
+  return suggestions;
+}
+
+/**
+ * Legacy listing-table search (fallback). Prefer searchQuestionCatalogByLabel.
  */
 export async function searchAdditionalQuestionsByLabel(
   query: string,
@@ -376,7 +488,6 @@ export async function searchAdditionalQuestionsByLabel(
   }
 
   const limit = options?.limit ?? 10;
-  // Strip LIKE wildcards from user input so they match literally as text search
   const safeTerm = trimmed.replace(/[%_]/g, '');
   if (safeTerm.length < 2) {
     return [];
@@ -393,6 +504,8 @@ export async function searchAdditionalQuestionsByLabel(
     limit: limit * 4,
     columns: {
       id: true,
+      catalogQuestionId: true,
+      key: true,
       label: true,
       description: true,
       questionType: true,
@@ -411,11 +524,37 @@ export async function searchAdditionalQuestionsByLabel(
     const dedupeKey = row.label.trim().toLowerCase();
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
-    suggestions.push(row);
+    suggestions.push({
+      id: row.catalogQuestionId ?? row.id,
+      catalogQuestionId: row.catalogQuestionId ?? row.id,
+      key: row.key,
+      label: row.label,
+      description: row.description,
+      questionType: row.questionType,
+      category: row.category,
+      required: row.required,
+      options: row.options,
+      visibility: row.visibility,
+      documentConditions: row.documentConditions,
+    });
     if (suggestions.length >= limit) break;
   }
 
   return suggestions;
+}
+
+export async function listingHasCatalogQuestion(
+  visaListingId: string,
+  catalogQuestionId: string
+) {
+  const existing = await db.query.additionalQuestions.findFirst({
+    where: and(
+      eq(additionalQuestions.visaListingId, visaListingId),
+      eq(additionalQuestions.catalogQuestionId, catalogQuestionId)
+    ),
+    columns: { id: true },
+  });
+  return Boolean(existing);
 }
 
 // ============================================================================

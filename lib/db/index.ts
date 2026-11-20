@@ -28,12 +28,19 @@ export type Database = PostgresJsDatabase<typeof allSchema>;
 type DbGlobals = {
   __visaPgClient?: ReturnType<typeof postgres>;
   __visaDb?: Database;
+  /** Bump when schema tables are added so HMR does not keep a stale db.query map. */
+  __visaDbSchemaVersion?: string;
 };
+
+const DB_SCHEMA_VERSION = 'question-catalog-v1';
 
 const globalForDb = globalThis as typeof globalThis & DbGlobals;
 
 function initializeDb(): Database {
-  if (globalForDb.__visaDb) {
+  if (
+    globalForDb.__visaDb &&
+    globalForDb.__visaDbSchemaVersion === DB_SCHEMA_VERSION
+  ) {
     return globalForDb.__visaDb;
   }
 
@@ -59,6 +66,7 @@ function initializeDb(): Database {
 
   globalForDb.__visaPgClient = client;
   globalForDb.__visaDb = instance;
+  globalForDb.__visaDbSchemaVersion = DB_SCHEMA_VERSION;
 
   return instance;
 }

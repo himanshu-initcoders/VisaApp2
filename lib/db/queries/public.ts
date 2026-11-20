@@ -28,7 +28,7 @@ import {
 } from '@/lib/public-demo';
 import { buildApplyFormConfig, formatDocumentTitle } from '@/lib/apply/applicationForm';
 import { getDocumentTypeSamplesByValues } from '@/lib/db/queries/config';
-import { PUBLIC_VISA_CATALOG_TAG } from '@/lib/revalidate-public-catalog';
+import { PUBLIC_VISA_CATALOG_TAG } from '@/lib/public-catalog-tags';
 import { rewriteCountryImages, toAppMediaUrl } from '@/lib/upload/mediaUrl';
 
 /**

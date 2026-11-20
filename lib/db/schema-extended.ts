@@ -242,16 +242,45 @@ export const visaRisks = pgTable('visa_risks', {
 // ============================================================================
 
 /**
+ * Question Catalog — shared identity across visa/passport listings.
+ * Listing rows keep category/required/visibility overrides; answers/autofill use `key`.
+ */
+export const questionCatalog = pgTable(
+  'question_catalog',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Stable storage/autofill key (UUID). Immutable after create. */
+    key: varchar('key', { length: 50 }).notNull(),
+    label: text('label').notNull(),
+    description: text('description'),
+    questionType: questionTypeEnum('question_type').notNull(),
+    options: jsonb('options')
+      .$type<Array<{ label: string; value: string }>>()
+      .default([]),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    keyUnique: uniqueIndex('question_catalog_key_unique').on(table.key),
+    labelIdx: index('question_catalog_label_idx').on(table.label),
+  })
+);
+
+/**
  * Additional Questions - Country-specific dynamic form fields
  */
 export const additionalQuestions = pgTable('additional_questions', {
   id: uuid('id').primaryKey().defaultRandom(),
   visaListingId: uuid('visa_listing_id').references(() => visaListings.id, { onDelete: 'cascade' }).notNull(),
-  key: varchar('key', { length: 50 }).notNull(), // 'flight_number', 'hotel', 'occupation'
+  /** Shared identity — references question_catalog. Answers/autofill use this key. */
+  catalogQuestionId: uuid('catalog_question_id').references(() => questionCatalog.id, {
+    onDelete: 'restrict',
+  }),
+  key: varchar('key', { length: 50 }).notNull(), // matches catalog.key when linked
   label: text('label').notNull(),
   description: text('description'),
   questionType: questionTypeEnum('question_type').notNull(),
-  /** Stable key from QUESTION_CATEGORIES (e.g. financial_information) */
+  /** Listing-only: same catalog question may sit in different categories per visa. */
   category: varchar('category', { length: 50 }).notNull().default('other'),
   required: boolean('required').default(false),
   familyEnabled: boolean('family_enabled').default(false),
@@ -285,7 +314,18 @@ export const additionalQuestions = pgTable('additional_questions', {
   sortOrder: integer('sort_order').default(0),
   createdAt: timestamp('created_at').defaultNow().notNull()
 }, (table) => ({
-  visaListingIdIdx: index('additional_questions_visa_listing_id_idx').on(table.visaListingId)
+  visaListingIdIdx: index('additional_questions_visa_listing_id_idx').on(table.visaListingId),
+  catalogQuestionIdIdx: index('additional_questions_catalog_question_id_idx').on(
+    table.catalogQuestionId
+  ),
+  listingCatalogUnique: uniqueIndex('additional_questions_listing_catalog_unique').on(
+    table.visaListingId,
+    table.catalogQuestionId
+  ),
+  listingKeyUnique: uniqueIndex('additional_questions_listing_key_unique').on(
+    table.visaListingId,
+    table.key
+  ),
 }));
 
 /**
@@ -505,11 +545,20 @@ export const multiTripCountriesRelations = relations(multiTripCountries, ({ one 
   })
 }));
 
+export const questionCatalogRelations = relations(questionCatalog, ({ many }) => ({
+  visaQuestions: many(additionalQuestions),
+  // passport questions relation declared in schema-passport (avoids circular import)
+}));
+
 export const additionalQuestionsRelations = relations(additionalQuestions, ({ one }) => ({
   visaListing: one(visaListings, {
     fields: [additionalQuestions.visaListingId],
     references: [visaListings.id]
-  })
+  }),
+  catalogQuestion: one(questionCatalog, {
+    fields: [additionalQuestions.catalogQuestionId],
+    references: [questionCatalog.id],
+  }),
 }));
 
 export const componentsRequiredRelations = relations(componentsRequired, ({ one }) => ({
@@ -577,6 +626,9 @@ export type NewMultiTripCountry = typeof multiTripCountries.$inferInsert;
 
 export type VisaRisk = typeof visaRisks.$inferSelect;
 export type NewVisaRisk = typeof visaRisks.$inferInsert;
+
+export type QuestionCatalog = typeof questionCatalog.$inferSelect;
+export type NewQuestionCatalog = typeof questionCatalog.$inferInsert;
 
 export type AdditionalQuestion = typeof additionalQuestions.$inferSelect;
 export type NewAdditionalQuestion = typeof additionalQuestions.$inferInsert;
