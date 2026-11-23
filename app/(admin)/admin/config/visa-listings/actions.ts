@@ -29,6 +29,7 @@ import { revalidatePublicVisaCatalog } from '@/lib/revalidate-public-catalog';
 import { documentTypeLabel } from '@/lib/document-types';
 import { validateVisibilityAgainstSiblings } from '@/lib/question-visibility';
 import { normalizeDocumentConditions } from '@/lib/document-conditions';
+import { sanitizeBlogHtml } from '@/lib/blog/sanitize';
 
 /**
  * Invalidate public static catalog pages whenever any listing attribute changes.
@@ -1077,6 +1078,47 @@ export async function reorderComponents(processId: string, componentIds: string[
   } catch (error) {
     console.error('Error reordering components:', error);
     return { error: 'Failed to reorder document requirements' };
+  }
+}
+
+/**
+ * Update listing-specific disclaimer (TinyMCE HTML) shown on the public page.
+ */
+export async function updateListingDisclaimer(
+  processId: string,
+  disclaimerHtml: string
+) {
+  await requireRole(['admin']);
+
+  try {
+    const process = await db.query.visaListings.findFirst({
+      where: eq(visaListings.id, processId),
+      columns: { id: true },
+    });
+
+    if (!process) {
+      return { error: 'Visa listing not found' };
+    }
+
+    const cleaned = sanitizeBlogHtml(disclaimerHtml ?? '').trim();
+
+    await db
+      .update(visaListings)
+      .set({
+        disclaimer: cleaned.length > 0 ? cleaned : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(visaListings.id, processId));
+
+    revalidatePath(`/admin/config/visa-listings/${processId}`);
+    revalidatePath(`/admin/config/visa-listings/${processId}/content`);
+    revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
+
+    return { success: true, message: 'Disclaimer saved successfully' };
+  } catch (error) {
+    console.error('Error updating listing disclaimer:', error);
+    return { error: 'Failed to save disclaimer' };
   }
 }
 

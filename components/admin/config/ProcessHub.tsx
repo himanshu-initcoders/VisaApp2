@@ -72,7 +72,7 @@ export function ProcessHub({ processId, stats }: ProcessHubProps) {
     },
     {
       title: 'Content & Help',
-      description: `${stats.faqsCount} FAQ${stats.faqsCount !== 1 ? 's' : ''} and timeline steps`,
+      description: `${stats.faqsCount} FAQ${stats.faqsCount !== 1 ? 's' : ''}, timeline, disclaimer`,
       count: stats.faqsCount,
       icon: <HelpCircle className="h-6 w-6" />,
       href: `/admin/config/visa-listings/${processId}/content`,

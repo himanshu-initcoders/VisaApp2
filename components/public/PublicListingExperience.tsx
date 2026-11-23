@@ -204,12 +204,18 @@ export function PublicListingExperience({
     ? sanitizeBlogHtml(data.page.exemption)
     : '';
   const hasExemption = exemptionHtml.replace(/<[^>]*>/g, '').trim().length > 0;
+  const disclaimerHtml = data.page.disclaimer
+    ? sanitizeBlogHtml(data.page.disclaimer)
+    : '';
+  const hasDisclaimer =
+    disclaimerHtml.replace(/<[^>]*>/g, '').trim().length > 0;
   const hasFaqs = data.page.faqs.length > 0;
   const hasTimeline = data.page.hasTimeline;
   const navItems = [
     ...BASE_NAV_ITEMS,
     ...(hasTimeline ? [{ id: 'process', label: 'Process' }] : []),
     ...(hasExemption ? [{ id: 'exemption', label: 'Exemption' }] : []),
+    ...(hasDisclaimer ? [{ id: 'disclaimer', label: 'Disclaimer' }] : []),
     ...(hasFaqs ? [{ id: 'faqs', label: 'FAQs' }] : []),
   ];
 
@@ -348,6 +354,28 @@ export function PublicListingExperience({
                 <div
                   className="max-w-3xl space-y-4 text-[15px] leading-7 text-portrait-ink sm:text-base sm:leading-8 [&_a]:text-nautical-teal [&_a]:underline [&_h2]:font-basier [&_h2]:text-2xl [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:font-basier [&_h3]:text-xl [&_h3]:mt-6 [&_h3]:mb-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-3"
                   dangerouslySetInnerHTML={{ __html: exemptionHtml }}
+                />
+              </MotionReveal>
+            </section>
+          )}
+
+          {hasDisclaimer && (
+            <section
+              id="disclaimer"
+              className="scroll-mt-32 space-y-5 sm:scroll-mt-36 sm:space-y-8"
+            >
+              <MotionReveal className="max-w-2xl space-y-2 sm:space-y-3">
+                <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
+                  Disclaimer
+                </p>
+                <h2 className="font-basier text-2xl text-portrait-ink sm:text-4xl">
+                  Important information
+                </h2>
+              </MotionReveal>
+              <MotionReveal>
+                <div
+                  className="max-w-3xl space-y-4 text-[15px] leading-7 text-portrait-ink sm:text-base sm:leading-8 [&_a]:text-nautical-teal [&_a]:underline [&_h2]:font-basier [&_h2]:text-2xl [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:font-basier [&_h3]:text-xl [&_h3]:mt-6 [&_h3]:mb-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-3"
+                  dangerouslySetInnerHTML={{ __html: disclaimerHtml }}
                 />
               </MotionReveal>
             </section>

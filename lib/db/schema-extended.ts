@@ -169,6 +169,8 @@ export const visaListings = pgTable('visa_listings', {
   sourceUrl: text('source_url'), // Official government URL
   /** Traveler-facing product overview copy shown on the public listing page. */
   description: text('description'),
+  /** Listing-specific disclaimer (TinyMCE HTML), shown on the public listing page. */
+  disclaimer: text('disclaimer'),
   /**
    * Public URL segment, e.g. Japan-Tourism-Visa.
    * Unique per destination country. Stored in title case.

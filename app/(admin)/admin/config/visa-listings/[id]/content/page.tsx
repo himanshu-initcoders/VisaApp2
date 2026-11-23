@@ -10,6 +10,7 @@ import {
 import { FaqsManager } from '@/components/admin/config/FaqsManager';
 import { PostCheckoutStepsManager } from '@/components/admin/config/PostCheckoutStepsManager';
 import { MultiCountryManager } from '@/components/admin/config/MultiCountryManager';
+import { DisclaimerEditor } from '@/components/admin/config/DisclaimerEditor';
 import { ChevronLeft } from 'lucide-react';
 
 /**
@@ -19,6 +20,7 @@ import { ChevronLeft } from 'lucide-react';
  * 1. FAQs - Frequently Asked Questions with markdown answers
  * 2. Post-Checkout Steps - Timeline shown after payment
  * 3. Multi-Country Support - Additional countries where visa is valid
+ * 4. Disclaimer - Listing-specific legal/disclaimer HTML (TinyMCE)
  */
 export default async function ContentPage({
   params,
@@ -76,7 +78,8 @@ export default async function ContentPage({
             </h1>
           </div>
           <p className="text-base text-slate-helper">
-            Manage FAQs, timeline steps, and multi-country support for {process.processName}
+            Manage FAQs, timeline steps, multi-country support, and disclaimer for{' '}
+            {process.processName}
           </p>
         </div>
 
@@ -122,6 +125,20 @@ export default async function ContentPage({
               processId={id}
               initialCountries={multiCountries}
               primaryCountry={process.country}
+            />
+          </section>
+
+          {/* Disclaimer Section */}
+          <section>
+            <h2
+              className="text-[31px] font-medium text-portrait-ink mb-6"
+              style={{ fontFamily: 'Basier Circle', letterSpacing: '-0.4px' }}
+            >
+              Disclaimer
+            </h2>
+            <DisclaimerEditor
+              processId={id}
+              initialDisclaimer={process.disclaimer}
             />
           </section>
         </div>

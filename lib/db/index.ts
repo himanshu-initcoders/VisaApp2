@@ -28,11 +28,11 @@ export type Database = PostgresJsDatabase<typeof allSchema>;
 type DbGlobals = {
   __visaPgClient?: ReturnType<typeof postgres>;
   __visaDb?: Database;
-  /** Bump when schema tables are added so HMR does not keep a stale db.query map. */
+  /** Bump when schema tables/columns are added so HMR does not keep a stale db.query map. */
   __visaDbSchemaVersion?: string;
 };
 
-const DB_SCHEMA_VERSION = 'question-catalog-v1';
+const DB_SCHEMA_VERSION = 'visa-listing-disclaimer-v1';
 
 const globalForDb = globalThis as typeof globalThis & DbGlobals;
 

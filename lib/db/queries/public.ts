@@ -542,6 +542,7 @@ const getCachedPublicProcessPageData = unstable_cache(
         hasTimeline: process.postCheckoutSteps.length > 0,
         faqs: process.faqs,
         exemption: process.country.exemption?.trim() || null,
+        disclaimer: process.disclaimer?.trim() || null,
         multiCountries: (process.multiTripCountries ?? []).map((row) => {
           const code = row.additionalCountryCode.trim().toUpperCase();
           return {
