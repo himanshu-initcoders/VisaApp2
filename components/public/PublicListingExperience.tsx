@@ -236,7 +236,6 @@ export function PublicListingExperience({
           heroImageUrl={resolvedHeroImage}
           heroImageAlt={resolvedHeroAlt}
           purpose={data.process.purpose}
-          entryType={data.process.entryType}
           processName={data.process.processName}
           overview={data.page.overview}
           processingEta={data.process.standardEta}

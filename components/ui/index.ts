@@ -60,3 +60,6 @@ export type { InitialTabItem } from './InitialTabs';
 export { AnimatedStatValue } from './AnimatedStatValue';
 
 export { AutoFitText } from './AutoFitText';
+
+export { ModalFrame } from './ModalFrame';
+export type { ModalFrameProps } from './ModalFrame';

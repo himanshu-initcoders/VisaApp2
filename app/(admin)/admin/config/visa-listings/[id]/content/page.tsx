@@ -11,7 +11,15 @@ import { FaqsManager } from '@/components/admin/config/FaqsManager';
 import { PostCheckoutStepsManager } from '@/components/admin/config/PostCheckoutStepsManager';
 import { MultiCountryManager } from '@/components/admin/config/MultiCountryManager';
 import { DisclaimerEditor } from '@/components/admin/config/DisclaimerEditor';
+import { Tabs, TabsPanel } from '@/components/ui';
 import { ChevronLeft } from 'lucide-react';
+
+const CONTENT_TABS = [
+  { id: 'faqs', label: 'FAQs' },
+  { id: 'timeline', label: 'Post-Checkout Timeline' },
+  { id: 'multi-country', label: 'Multi-Country Support' },
+  { id: 'disclaimer', label: 'Disclaimer' },
+] as const;
 
 /**
  * Content & Help Page
@@ -83,42 +91,26 @@ export default async function ContentPage({
           </p>
         </div>
 
-        {/* Sections */}
-        <div className="space-y-12">
-          {/* FAQs Section */}
-          <section>
-            <h2
-              className="text-[31px] font-medium text-portrait-ink mb-6"
-              style={{ fontFamily: 'Basier Circle', letterSpacing: '-0.4px' }}
-            >
-              Frequently Asked Questions
-            </h2>
+        <Tabs
+          items={[...CONTENT_TABS]}
+          defaultValue="faqs"
+          tone="light"
+          layoutId={`visa-listing-content-tabs-${id}`}
+          ariaLabel="Content and help sections"
+        >
+          <TabsPanel id="faqs">
             <FaqsManager processId={id} initialFaqs={faqs} />
-          </section>
+          </TabsPanel>
 
-          {/* Post-Checkout Steps Section */}
-          <section>
-            <h2
-              className="text-[31px] font-medium text-portrait-ink mb-6"
-              style={{ fontFamily: 'Basier Circle', letterSpacing: '-0.4px' }}
-            >
-              Post-Checkout Timeline
-            </h2>
-            <p className="text-sm text-slate-helper mb-6">
+          <TabsPanel id="timeline">
+            <p className="text-sm text-slate-helper">
               Steps shown to users after they complete payment
             </p>
             <PostCheckoutStepsManager processId={id} initialSteps={steps} />
-          </section>
+          </TabsPanel>
 
-          {/* Multi-Country Support Section */}
-          <section>
-            <h2
-              className="text-[31px] font-medium text-portrait-ink mb-6"
-              style={{ fontFamily: 'Basier Circle', letterSpacing: '-0.4px' }}
-            >
-              Multi-Country Visa Support
-            </h2>
-            <p className="text-sm text-slate-helper mb-6">
+          <TabsPanel id="multi-country">
+            <p className="text-sm text-slate-helper">
               Additional countries where this visa is valid.
             </p>
             <MultiCountryManager
@@ -126,22 +118,15 @@ export default async function ContentPage({
               initialCountries={multiCountries}
               primaryCountry={process.country}
             />
-          </section>
+          </TabsPanel>
 
-          {/* Disclaimer Section */}
-          <section>
-            <h2
-              className="text-[31px] font-medium text-portrait-ink mb-6"
-              style={{ fontFamily: 'Basier Circle', letterSpacing: '-0.4px' }}
-            >
-              Disclaimer
-            </h2>
+          <TabsPanel id="disclaimer">
             <DisclaimerEditor
               processId={id}
               initialDisclaimer={process.disclaimer}
             />
-          </section>
-        </div>
+          </TabsPanel>
+        </Tabs>
       </div>
     </div>
   );

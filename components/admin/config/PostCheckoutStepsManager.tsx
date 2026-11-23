@@ -125,7 +125,7 @@ export function PostCheckoutStepsManager({ processId, initialSteps }: PostChecko
         <p className="text-sm text-slate-helper">
           {steps.length} step{steps.length !== 1 ? 's' : ''}
         </p>
-        <Button onClick={() => setShowAddModal(true)} variant="primary" size="md">
+        <Button onClick={() => setShowAddModal(true)} variant="primary" size="md" className="flex items-center">
           <Plus className="h-4 w-4 mr-2" />
           Add Step
         </Button>

@@ -164,7 +164,6 @@ export interface ListingHeroProps {
   heroImageUrl?: string | null;
   heroImageAlt?: string | null;
   purpose: string;
-  entryType?: string | null;
   processName: string;
   overview: string;
   processingEta?: string | null;
@@ -178,7 +177,6 @@ export function ListingHero({
   heroImageUrl,
   heroImageAlt,
   purpose,
-  entryType,
   processName,
   overview,
   processingEta,
@@ -187,7 +185,7 @@ export function ListingHero({
   const kind = visaKindLabel(purpose);
   const visaTitle = headlineVisaLabel(kind);
   const applyLabel = `Apply for ${countryName} ${visaTitle}`;
-  const pillVisaLabel = entryType ? `${visaTitle} (${entryType})` : visaTitle;
+  const pillVisaLabel = visaTitle;
   const description = heroDescription(countryName, purpose, overview);
   const scriptLine =
     SCRIPT_BY_PURPOSE[purpose] || 'Your Global Journey Starts Here';
