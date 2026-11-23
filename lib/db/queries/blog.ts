@@ -1,8 +1,13 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { blogPosts, type BlogPost } from '@/lib/db/schema-extended';
 
 export type { BlogPost };
+
+function normalizeIso2(code: string | null | undefined): string | null {
+  const normalized = code?.trim().toUpperCase() ?? '';
+  return /^[A-Z]{2}$/.test(normalized) ? normalized : null;
+}
 
 function isMissingRelationError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
@@ -113,6 +118,35 @@ export async function getPublishedPostSlugs(): Promise<string[]> {
     return rows.map((row) => row.slug);
   } catch (error) {
     if (isMissingRelationError(error)) return [];
+    throw error;
+  }
+}
+
+/**
+ * Published posts tagged with a destination ISO2 (blog_posts.country_codes).
+ * Used on visa listing pages for related guides.
+ */
+export async function getPublishedPostsForCountry(
+  countryCode: string,
+  limit = 3
+): Promise<BlogPost[]> {
+  const code = normalizeIso2(countryCode);
+  if (!code) return [];
+
+  try {
+    return await db.query.blogPosts.findMany({
+      where: and(
+        eq(blogPosts.status, 'published'),
+        sql`${blogPosts.countryCodes} @> ${JSON.stringify([code])}::jsonb`
+      ),
+      orderBy: [desc(blogPosts.publishedAt), desc(blogPosts.updatedAt)],
+      limit,
+    });
+  } catch (error) {
+    if (isMissingRelationError(error)) {
+      console.warn('blog_posts table missing — run npm run db:migrate');
+      return [];
+    }
     throw error;
   }
 }

@@ -71,6 +71,11 @@ function toDbValues(
     coverImageKey: validated.coverImageKey?.trim() || null,
     coverImageAlt: validated.coverImageAlt?.trim() || null,
     seo: normalizeSeo(validated.seo, coverImageUrl),
+    countryCodes: Array.from(
+      new Set(
+        (validated.countryCodes ?? []).map((code) => code.trim().toUpperCase())
+      )
+    ),
     status: validated.status,
     publishedAt: publishing
       ? existingPublishedAt ?? now
@@ -100,7 +105,10 @@ export async function createBlogPost(data: unknown) {
       .returning({ id: blogPosts.id, slug: blogPosts.slug });
 
     revalidatePath('/admin/config/blogs');
-    revalidateBlog({ slug: created.slug });
+    await revalidateBlog({
+      slug: created.slug,
+      countryCodes: validated.countryCodes,
+    });
 
     return {
       success: true,
@@ -147,9 +155,13 @@ export async function updateBlogPost(id: string, data: unknown) {
 
     revalidatePath('/admin/config/blogs');
     revalidatePath(`/admin/config/blogs/${id}`);
-    revalidateBlog({
+    await revalidateBlog({
       slug: validated.slug,
       previousSlug: existing.slug,
+      countryCodes: [
+        ...(validated.countryCodes ?? []),
+        ...((existing.countryCodes as string[] | null) ?? []),
+      ],
     });
 
     return { success: true, message: 'Blog post updated successfully' };
@@ -165,7 +177,7 @@ export async function deleteBlogPost(id: string) {
   try {
     const existing = await db.query.blogPosts.findFirst({
       where: eq(blogPosts.id, id),
-      columns: { id: true, slug: true },
+      columns: { id: true, slug: true, countryCodes: true },
     });
     if (!existing) {
       return { error: 'Blog post not found' };
@@ -174,7 +186,10 @@ export async function deleteBlogPost(id: string) {
     await db.delete(blogPosts).where(eq(blogPosts.id, id));
 
     revalidatePath('/admin/config/blogs');
-    revalidateBlog({ slug: existing.slug });
+    await revalidateBlog({
+      slug: existing.slug,
+      countryCodes: existing.countryCodes ?? [],
+    });
 
     return { success: true, message: 'Blog post deleted successfully' };
   } catch (error) {

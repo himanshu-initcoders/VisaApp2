@@ -12,11 +12,13 @@ import { ListingOverviewSection } from '@/components/public/ListingOverviewSecti
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
 import { FaqAccordion } from '@/components/public/FaqAccordion';
 import { ExploreMoreRail } from '@/components/public/ExploreMoreRail';
+import { RecentBlogsSection } from '@/components/public/RecentBlogsSection';
 import { MobileStickyBar } from '@/components/public/MobileStickyBar';
 import { MultiCountryChips } from '@/components/shared/MultiCountryChips';
 import { loadPublicListingPage } from '@/app/visa/loadPublicListing';
 import { trackEvent } from '@/lib/analytics/gtm';
 import { sanitizeBlogHtml } from '@/lib/blog/sanitize';
+import type { BlogPost } from '@/lib/db/queries/blog';
 import type { PublicProcessPageData } from '@/lib/db/queries/public';
 import type { VisaKindOption } from '@/components/public/PricingPanel';
 
@@ -120,8 +122,10 @@ function resolveHeroBannerUrl(
 
 export function PublicListingExperience({
   initialData,
+  relatedBlogPosts = [],
 }: {
   initialData: PublicProcessPageData;
+  relatedBlogPosts?: BlogPost[];
 }) {
   const pathname = usePathname();
   const [data, setData] = useState(initialData);
@@ -394,6 +398,18 @@ export function PublicListingExperience({
                 </h2>
               </MotionReveal>
               <FaqAccordion faqs={data.page.faqs} />
+            </section>
+          )}
+
+          {relatedBlogPosts.length > 0 && (
+            <section id="related-blogs" className="scroll-mt-32 sm:scroll-mt-36">
+              <RecentBlogsSection
+                posts={relatedBlogPosts}
+                embedded
+                eyebrow="From the blog"
+                title={`Guides for ${data.country.name}`}
+                description={`Related reading for travellers planning a trip to ${data.country.name}.`}
+              />
             </section>
           )}
 

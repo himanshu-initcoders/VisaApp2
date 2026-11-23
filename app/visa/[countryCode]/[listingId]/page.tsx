@@ -6,6 +6,7 @@ import {
   loadEnabledCountriesWithProcesses,
   getPublicProcessPageData,
 } from '@/lib/db/queries/public';
+import { getPublishedPostsForCountry } from '@/lib/db/queries/blog';
 import { getCountryOgImage } from '@/lib/public';
 import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 import {
@@ -164,6 +165,10 @@ export default async function PublicProcessPage({ params, searchParams }: PagePr
   ];
 
   const heroPreload = resolveHeroPreloadUrl(data.country.images);
+  const relatedBlogPosts = await getPublishedPostsForCountry(
+    data.country.iso2Code,
+    3
+  );
 
   return (
     <>
@@ -176,7 +181,10 @@ export default async function PublicProcessPage({ params, searchParams }: PagePr
         />
       ) : null}
       <JsonLd data={jsonLd} />
-      <PublicListingExperience initialData={data} />
+      <PublicListingExperience
+        initialData={data}
+        relatedBlogPosts={relatedBlogPosts}
+      />
     </>
   );
 }

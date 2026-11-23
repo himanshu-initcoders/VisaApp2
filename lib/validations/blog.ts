@@ -64,6 +64,16 @@ export const blogPostFormSchema = z.object({
     .nullable()
     .optional(),
   seo: blogSeoSchema.optional(),
+  countryCodes: z
+    .array(
+      z
+        .string()
+        .trim()
+        .length(2, 'Country code must be 2 letters (ISO2)')
+        .transform((value) => value.toUpperCase())
+    )
+    .max(50, 'Too many countries')
+    .default([]),
   status: z.enum(['draft', 'published']),
 });
 

@@ -121,6 +121,7 @@
 - [x] Shared `question_catalog` — Form Builder autocomplete attaches stable key across visa/passport; category/required/visibility stay listing-local (`0042_question_catalog`)
 - [x] Visa listing public URL slug (basic info, SEO paths)
 - [x] Admin blogs (TinyMCE) under Configuration + public `/blog` SEO
+- [x] Blog multi-country attach — admin Countries picker; related guides on visa listing pages (`0045_blog_post_countries`)
 
 ---
 

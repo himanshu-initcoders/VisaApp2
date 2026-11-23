@@ -18,6 +18,7 @@ import {
 import { replaceFileByUrlFromFormData } from '@/lib/upload/server-actions';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { BlogCountriesPicker } from '@/components/admin/config/BlogCountriesPicker';
 import type { BlogPost } from '@/lib/db/schema-extended';
 
 const TinyMceEditor = dynamic(
@@ -65,6 +66,7 @@ export function BlogPostForm({ post }: BlogPostFormProps) {
         // Always derived from cover on save — not edited in the UI.
         ogImageUrl: post?.coverImageUrl ?? post?.seo?.ogImageUrl ?? '',
       },
+      countryCodes: post?.countryCodes ?? [],
       status: (post?.status as 'draft' | 'published') ?? 'draft',
     }),
     [post]
@@ -405,6 +407,39 @@ export function BlogPostForm({ post }: BlogPostFormProps) {
               TinyMCE key missing — editing as HTML.
             </p>
           ) : null}
+        </section>
+
+        <section className="space-y-6 border-t border-ash-divider pt-8">
+          <div>
+            <h2
+              className="mb-2 text-xl font-medium text-portrait-ink"
+              style={{ fontFamily: 'Basier Circle' }}
+            >
+              Countries
+            </h2>
+            <p className="text-sm text-slate-helper">
+              Attach countries related to this post. Published posts show as
+              related guides at the bottom of those countries&apos; visa listing
+              pages (next to More destinations).
+            </p>
+          </div>
+
+          <Controller
+            control={form.control}
+            name="countryCodes"
+            render={({ field }) => (
+              <BlogCountriesPicker
+                value={field.value ?? []}
+                onChange={field.onChange}
+                error={
+                  typeof form.formState.errors.countryCodes?.message ===
+                  'string'
+                    ? form.formState.errors.countryCodes.message
+                    : undefined
+                }
+              />
+            )}
+          />
         </section>
 
         <section className="space-y-6 border-t border-ash-divider pt-8">

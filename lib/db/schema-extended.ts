@@ -444,6 +444,8 @@ export const blogPosts = pgTable(
       metaDescription?: string;
       ogImageUrl?: string;
     }>(),
+    /** ISO2 country codes attached to the post (multi-country chips). */
+    countryCodes: jsonb('country_codes').$type<string[]>().notNull().default([]),
     status: varchar('status', { length: 20 }).notNull().default('draft'),
     publishedAt: timestamp('published_at'),
     authorUserId: uuid('author_user_id'),
