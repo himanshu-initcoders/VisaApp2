@@ -32,7 +32,7 @@ type DbGlobals = {
   __visaDbSchemaVersion?: string;
 };
 
-const DB_SCHEMA_VERSION = 'blog-post-countries-v1';
+const DB_SCHEMA_VERSION = 'visa-listing-is-active-v1';
 
 const globalForDb = globalThis as typeof globalThis & DbGlobals;
 

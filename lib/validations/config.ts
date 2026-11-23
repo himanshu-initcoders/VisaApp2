@@ -93,6 +93,8 @@ export const processBasicInfoSchema = z.object({
   isMultipleEntry: z.boolean(),
   familyEnabled: z.boolean(),
   unsupported: z.boolean(),
+  /** When true, listing appears on the public site for travelers. */
+  isActive: z.boolean(),
   visaOnArrival: z.boolean(),
   visaFree: z.boolean(),
   withFreeInsurance: z.boolean(),

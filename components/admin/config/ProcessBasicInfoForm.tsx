@@ -41,6 +41,7 @@ interface ProcessBasicInfoFormProps {
     isMultipleEntry: boolean | null;
     familyEnabled: boolean;
     unsupported: boolean | null;
+    isActive?: boolean | null;
     visaOnArrival: boolean | null;
     visaFree: boolean | null;
     withFreeInsurance?: boolean | null;
@@ -96,6 +97,7 @@ export function ProcessBasicInfoForm({
       isMultipleEntry: initialData.isMultipleEntry ?? false,
       familyEnabled: initialData.familyEnabled,
       unsupported: initialData.unsupported ?? false,
+      isActive: initialData.isActive ?? true,
       visaOnArrival: initialData.visaOnArrival ?? false,
       visaFree: initialData.visaFree ?? false,
       withFreeInsurance: initialData.withFreeInsurance ?? false,
@@ -351,8 +353,14 @@ export function ProcessBasicInfoForm({
               onChange={(checked) => form.setValue('familyEnabled', checked, { shouldDirty: true })}
             />
             <Checkbox
+              label="Visible to travelers"
+              description="When off, this visa is hidden from the public catalog and apply flow."
+              checked={form.watch('isActive')}
+              onChange={(checked) => form.setValue('isActive', checked, { shouldDirty: true })}
+            />
+            <Checkbox
               label="Unsupported"
-              description="Hide this process from active public traveler journeys."
+              description="Mark as unsupported (coming soon). Distinct from visibility above."
               checked={form.watch('unsupported')}
               onChange={(checked) => form.setValue('unsupported', checked, { shouldDirty: true })}
             />

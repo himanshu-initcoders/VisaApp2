@@ -137,6 +137,7 @@ export function CreateVisaListingWizard({
       isMultipleEntry: false,
       familyEnabled: false,
       unsupported: false,
+      isActive: true,
       visaOnArrival: false,
       visaFree: false,
       withFreeInsurance: false,
@@ -502,8 +503,16 @@ export function CreateVisaListingWizard({
                   }
                 />
                 <Checkbox
+                  label="Visible to travelers"
+                  description="When off, this visa stays hidden from the public catalog until you enable it."
+                  checked={form.watch('isActive')}
+                  onChange={(checked) =>
+                    form.setValue('isActive', checked, { shouldDirty: true })
+                  }
+                />
+                <Checkbox
                   label="Unsupported"
-                  description="Hide this process from active public traveler journeys."
+                  description="Mark as unsupported (coming soon). Distinct from visibility above."
                   checked={form.watch('unsupported')}
                   onChange={(checked) =>
                     form.setValue('unsupported', checked, { shouldDirty: true })

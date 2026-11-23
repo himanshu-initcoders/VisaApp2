@@ -201,6 +201,7 @@ export async function createVisaListing(data: unknown) {
         isMultipleEntry: validated.isMultipleEntry,
         familyEnabled: validated.familyEnabled,
         unsupported: validated.unsupported,
+        isActive: validated.isActive,
         visaOnArrival: validated.visaOnArrival,
         visaFree: validated.visaFree,
         withFreeInsurance: validated.withFreeInsurance,
@@ -291,6 +292,7 @@ export async function updateProcessBasicInfo(processId: string, data: ProcessBas
         isMultipleEntry: validated.isMultipleEntry,
         familyEnabled: validated.familyEnabled,
         unsupported: validated.unsupported,
+        isActive: validated.isActive,
         visaOnArrival: validated.visaOnArrival,
         visaFree: validated.visaFree,
         withFreeInsurance: validated.withFreeInsurance,
@@ -326,6 +328,53 @@ export async function updateProcessBasicInfo(processId: string, data: ProcessBas
   } catch (error) {
     console.error('Error updating process basic info:', error);
     return invalidListingError(error, 'Failed to update process details');
+  }
+}
+
+/**
+ * Toggle public visibility for a visa listing (Visible / Hidden).
+ */
+export async function toggleVisaListingVisibility(processId: string) {
+  await requireRole(['admin']);
+
+  try {
+    const process = await db.query.visaListings.findFirst({
+      where: eq(visaListings.id, processId),
+      columns: {
+        id: true,
+        isActive: true,
+        destinationCountry: true,
+        slug: true,
+        processName: true,
+      },
+    });
+
+    if (!process) {
+      return { error: 'Visa listing not found' };
+    }
+
+    const nextActive = !process.isActive;
+
+    await db
+      .update(visaListings)
+      .set({ isActive: nextActive, updatedAt: new Date() })
+      .where(eq(visaListings.id, processId));
+
+    revalidatePath(`/admin/config/visa-listings/${processId}`);
+    revalidatePath(`/admin/config/visa-listings/${processId}/basic`);
+    revalidatePath('/admin/config/visa-listings');
+    await revalidateListingPublic(processId);
+
+    return {
+      success: true,
+      isActive: nextActive,
+      message: nextActive
+        ? 'Visa listing is now visible to travelers'
+        : 'Visa listing is now hidden from travelers',
+    };
+  } catch (error) {
+    console.error('Error toggling visa listing visibility:', error);
+    return { error: 'Failed to update visibility status' };
   }
 }
 

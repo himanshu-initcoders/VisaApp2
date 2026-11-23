@@ -122,6 +122,7 @@
 - [x] Visa listing public URL slug (basic info, SEO paths)
 - [x] Admin blogs (TinyMCE) under Configuration + public `/blog` SEO
 - [x] Blog multi-country attach — admin Countries picker; related guides on visa listing pages (`0045_blog_post_countries`)
+- [x] Visa listing visibility status (`is_active`) — hub toggle + public catalog filter (`0046_visa_listing_is_active`)
 
 ---
 

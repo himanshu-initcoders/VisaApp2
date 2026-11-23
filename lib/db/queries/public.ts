@@ -165,7 +165,7 @@ export async function loadEnabledCountriesWithProcesses() {
       ...country,
       images: rewriteCountryImages(country.images),
       visaListings: country.visaListings
-        .filter((process) => !process.unsupported)
+        .filter((process) => process.isActive && !process.unsupported)
         .map((process) => ({
           ...mapProcess(process),
           featured: false,
@@ -200,6 +200,7 @@ export async function loadEnabledComingSoonCountries() {
         columns: {
           id: true,
           unsupported: true,
+          isActive: true,
         },
       },
     },
@@ -208,7 +209,9 @@ export async function loadEnabledComingSoonCountries() {
 
   return enabledCountries
     .filter((country) =>
-      country.visaListings.every((listing) => listing.unsupported)
+      country.visaListings.every(
+        (listing) => listing.unsupported || !listing.isActive
+      )
     )
     .map((country) => ({
       name: country.name,
@@ -252,7 +255,7 @@ export async function getCountryWithProcesses(iso2Code: string) {
     images: rewriteCountryImages(country.images),
     flag: getFlagEmoji(country.iso2Code),
     visaListings: country.visaListings
-      .filter((process) => !process.unsupported)
+      .filter((process) => process.isActive && !process.unsupported)
       .map((process) => ({
         ...mapProcess(process),
         href: buildProcessHref(country.iso2Code, process.slug),
@@ -330,7 +333,12 @@ const getCachedPublicProcessPageData = unstable_cache(
       },
     });
 
-    if (!process || process.unsupported || !process.country.enabled) {
+    if (
+      !process ||
+      !process.isActive ||
+      process.unsupported ||
+      !process.country.enabled
+    ) {
       return null;
     }
 
@@ -399,7 +407,7 @@ const getCachedPublicProcessPageData = unstable_cache(
     // One tab per purpose (tourism → … → visa_on_arrival). Same-purpose
     // listings share a tab; their options render under that tab.
     const enabledSiblings = siblingListings.filter(
-      (listing) => !listing.unsupported
+      (listing) => listing.isActive && !listing.unsupported
     );
 
     const listingsByPurpose = new Map<

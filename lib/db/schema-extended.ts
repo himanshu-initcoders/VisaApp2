@@ -139,6 +139,11 @@ export const visaListings = pgTable('visa_listings', {
   // Support flags
   familyEnabled: boolean('family_enabled').default(false).notNull(),
   unsupported: boolean('unsupported').default(false),
+  /**
+   * Public catalog visibility. When false, the listing is hidden from end users
+   * (home grid, listing pages, apply). Admins can still manage it.
+   */
+  isActive: boolean('is_active').default(true).notNull(),
   visaOnArrival: boolean('visa_on_arrival').default(false),
   visaFree: boolean('visa_free').default(false),
   withFreeInsurance: boolean('with_free_insurance').default(false).notNull(),

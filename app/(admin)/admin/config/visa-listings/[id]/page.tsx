@@ -4,6 +4,7 @@ import { requireRole } from '@/lib/auth-utils';
 import { getProcessWithAllRelations } from '@/lib/db/queries/config';
 import { ProcessHub } from '@/components/admin/config/ProcessHub';
 import { ProcessTypeBadge } from '@/components/admin/config/ProcessTypeBadge';
+import { VisaListingVisibilityCard } from '@/components/admin/config/VisaListingVisibilityCard';
 import { MultiCountryChips } from '@/components/shared/MultiCountryChips';
 import { getCountryName, getLocalFlagUrl } from '@/lib/countries/catalog';
 import { ChevronLeft } from 'lucide-react';
@@ -96,9 +97,25 @@ export default async function ProcessDetailPage({
                 <span className="text-sm text-slate-helper capitalize">
                   {process.country.iso2Code}
                 </span>
+                <span className="text-slate-helper">•</span>
+                <span
+                  className={
+                    process.isActive
+                      ? 'text-sm font-medium text-nautical-teal'
+                      : 'text-sm font-medium text-slate-helper'
+                  }
+                >
+                  {process.isActive ? 'Visible' : 'Hidden'}
+                </span>
               </div>
             </div>
           </div>
+
+          <VisaListingVisibilityCard
+            processId={id}
+            processName={process.processName}
+            isActive={process.isActive}
+          />
 
           {/* Multi-Country Info */}
           {multiCountryCount > 0 && (
