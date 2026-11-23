@@ -17,6 +17,7 @@ import {
 } from '@/lib/seo/jsonld';
 import { buildPageMetadata } from '@/lib/seo/metadata';
 import { SEO_PAGES } from '@/lib/seo/pages';
+import { pickPreferredCountryListing } from '@/lib/visa/purposes';
 
 /** Static at build; refresh hourly or when admin emits catalog revalidation. */
 export const revalidate = 3600;
@@ -88,17 +89,16 @@ export default async function Home() {
       withFreeInsurance: process.withFreeInsurance,
     }));
 
-    const cheapest = listings.reduce((lowest, listing) =>
-      listing.startingPrice < lowest.startingPrice ? listing : lowest
-    );
+    // Card price + click target: tourism → business → any other purpose.
+    const preferred = pickPreferredCountryListing(listings) ?? listings[0];
 
     return {
       name: country.name,
       iso2Code: country.iso2Code,
       images: country.images,
-      href: cheapest.href,
-      startingPrice: cheapest.startingPrice,
-      isFree: cheapest.isFree,
+      href: preferred.href,
+      startingPrice: preferred.startingPrice,
+      isFree: preferred.isFree,
       listings,
     };
   });

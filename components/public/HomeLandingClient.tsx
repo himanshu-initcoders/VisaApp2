@@ -12,7 +12,10 @@ import {
   type HomeCountryCardData,
 } from '@/components/public/PublicCountryCard';
 import { Header } from '@/components/layout/Header';
-import { VISA_PURPOSE_TAB_ORDER } from '@/lib/visa/purposes';
+import {
+  pickPreferredCountryListing,
+  VISA_PURPOSE_TAB_ORDER,
+} from '@/lib/visa/purposes';
 
 interface HomeProcess {
   id: string;
@@ -20,6 +23,7 @@ interface HomeProcess {
   processName: string;
   processType: string;
   processTypeLabel?: string | null;
+  purpose?: string | null;
   formattedStartingPrice: string;
   standardEta?: string | null;
   standardEtaDuration?: number | null;
@@ -101,10 +105,25 @@ export function HomeLandingClient({
   }, [countries]);
 
   const visibleCountries = useMemo(() => {
-    if (activeCategory === 'all') return countries;
-    return countries.filter((country) =>
-      country.listings.some((listing) => listing.purpose === activeCategory)
-    );
+    return countries.flatMap((country) => {
+      const pool =
+        activeCategory === 'all'
+          ? country.listings
+          : country.listings.filter(
+              (listing) => listing.purpose === activeCategory
+            );
+      if (pool.length === 0) return [];
+
+      const preferred = pickPreferredCountryListing(pool) ?? pool[0];
+      return [
+        {
+          ...country,
+          href: preferred.href,
+          startingPrice: preferred.startingPrice,
+          isFree: preferred.isFree,
+        },
+      ];
+    });
   }, [activeCategory, countries]);
 
   const openSearch = () => setIsSearchOpen(true);

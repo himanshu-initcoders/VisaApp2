@@ -21,6 +21,7 @@ import {
 } from '@/lib/public';
 import { isVisaListingUuid } from '@/lib/visa/listingSlug';
 import {
+  pickPreferredCountryListing,
   purposeTabSortIndex,
   visaPurposeTabLabel,
 } from '@/lib/visa/purposes';
@@ -328,7 +329,7 @@ const getCachedPublicProcessPageData = unstable_cache(
       }),
     ]);
 
-    // Country cards like the home grid: tourism first, else next available listing.
+    // Country cards like the home grid: tourism → business → other.
     const exploreMore = relatedCountries
       .filter((country) => country.iso2Code !== process.country.iso2Code)
       .map((country) => {
@@ -343,19 +344,15 @@ const getCachedPublicProcessPageData = unstable_cache(
         }));
 
         const preferred =
-          listings.find((listing) => listing.purpose === 'tourism') ??
-          listings[0];
-        const cheapest = listings.reduce((lowest, listing) =>
-          listing.startingPrice < lowest.startingPrice ? listing : lowest
-        );
+          pickPreferredCountryListing(listings) ?? listings[0];
 
         return {
           name: country.name,
           iso2Code: country.iso2Code,
           images: country.images,
           href: preferred.href,
-          startingPrice: cheapest.startingPrice,
-          isFree: cheapest.isFree,
+          startingPrice: preferred.startingPrice,
+          isFree: preferred.isFree,
           listings,
         };
       })

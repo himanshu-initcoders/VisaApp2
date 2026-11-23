@@ -12,6 +12,10 @@ import {
   formatProcessType,
   getFlagEmoji,
 } from '@/lib/public';
+import {
+  pickPreferredCountryListing,
+  purposeTabSortIndex,
+} from '@/lib/visa/purposes';
 
 export interface SearchableProcess {
   id: string;
@@ -19,6 +23,7 @@ export interface SearchableProcess {
   processName: string;
   processType: string;
   processTypeLabel?: string | null;
+  purpose?: string | null;
   startingPrice: number;
   isFree?: boolean;
   formattedStartingPrice?: string;
@@ -63,51 +68,48 @@ interface CountrySearchOverlayProps {
 }
 
 function groupCountries(processes: SearchableProcess[]): CountrySearchResult[] {
-  const countries = new Map<string, CountrySearchResult>();
+  const byCountry = new Map<string, SearchableProcess[]>();
 
   for (const process of processes) {
     const key = process.country.iso2Code;
-    const existing = countries.get(key);
-    const processTypeLabel =
-      process.processTypeLabel || formatProcessType(process.processType);
-
-    if (!existing) {
-      countries.set(key, {
-        iso2Code: key,
-        name: process.country.name,
-        href: process.href,
-        processTypeLabel,
-        startingPrice: process.startingPrice,
-        formattedFee: processFeeLabel(process),
-        guaranteedOn: formatGuaranteedOnDate(
-          process.standardEtaDuration,
-          process.standardEtaUnit
-        ),
-        imageUrl: process.country.images?.hero?.url,
-        imageAlt: process.country.images?.hero?.alt || process.country.name,
-        flagUrl: process.country.images?.flag?.url,
-        processNames: [process.processName],
-      });
-      continue;
-    }
-
-    existing.processNames.push(process.processName);
-
-    if (process.startingPrice < existing.startingPrice) {
-      existing.href = process.href;
-      existing.processTypeLabel = processTypeLabel;
-      existing.startingPrice = process.startingPrice;
-      existing.formattedFee = processFeeLabel(process);
-      existing.guaranteedOn = formatGuaranteedOnDate(
-        process.standardEtaDuration,
-        process.standardEtaUnit
-      );
-    }
+    const bucket = byCountry.get(key) ?? [];
+    bucket.push(process);
+    byCountry.set(key, bucket);
   }
 
-  return [...countries.values()].sort((first, second) =>
-    first.name.localeCompare(second.name)
-  );
+  return [...byCountry.values()]
+    .map((listings) => {
+      const preferred =
+        pickPreferredCountryListing(listings) ??
+        [...listings].sort(
+          (a, b) =>
+            purposeTabSortIndex(a.purpose ?? '') -
+            purposeTabSortIndex(b.purpose ?? '')
+        )[0];
+      const sample = listings[0];
+      const processTypeLabel =
+        preferred.processTypeLabel ||
+        formatProcessType(preferred.processType);
+
+      return {
+        iso2Code: sample.country.iso2Code,
+        name: sample.country.name,
+        href: preferred.href,
+        processTypeLabel,
+        startingPrice: preferred.startingPrice,
+        formattedFee: processFeeLabel(preferred),
+        guaranteedOn: formatGuaranteedOnDate(
+          preferred.standardEtaDuration,
+          preferred.standardEtaUnit
+        ),
+        imageUrl: sample.country.images?.hero?.url,
+        imageAlt:
+          sample.country.images?.hero?.alt || sample.country.name,
+        flagUrl: sample.country.images?.flag?.url,
+        processNames: listings.map((listing) => listing.processName),
+      };
+    })
+    .sort((first, second) => first.name.localeCompare(second.name));
 }
 
 export function CountrySearchOverlay({

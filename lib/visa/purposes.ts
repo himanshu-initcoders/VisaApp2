@@ -77,3 +77,21 @@ export function purposeTabSortIndex(purpose: string): number {
   );
   return index === -1 ? VISA_PURPOSE_TAB_ORDER.length : index;
 }
+
+/**
+ * Country cards / default redirects: tourism → business → remaining purposes.
+ * Within the same purpose, prefer the lower starting price.
+ */
+export function pickPreferredCountryListing<
+  T extends { purpose?: string | null; startingPrice?: number | null },
+>(listings: readonly T[]): T | undefined {
+  if (listings.length === 0) return undefined;
+
+  return [...listings].sort((a, b) => {
+    const purposeDiff =
+      purposeTabSortIndex(a.purpose ?? '') -
+      purposeTabSortIndex(b.purpose ?? '');
+    if (purposeDiff !== 0) return purposeDiff;
+    return (a.startingPrice ?? 0) - (b.startingPrice ?? 0);
+  })[0];
+}
