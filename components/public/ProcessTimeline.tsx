@@ -13,10 +13,14 @@ export function ProcessTimeline({
   }>;
 }) {
   return (
-    <div className="relative space-y-0 sm:grid sm:grid-cols-2 sm:gap-5 sm:space-y-0 lg:grid-cols-4">
+    <div className="relative sm:grid sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
       {steps.map((step, index) => (
-        <MotionReveal key={step.id} delayMs={index * 80}>
-          <div className="relative flex gap-4 pb-6 last:pb-0 sm:h-full sm:flex-col sm:gap-0 sm:rounded-[28px] sm:border sm:border-ash-divider sm:bg-white sm:p-6 sm:pb-6 sm:shadow-card">
+        <MotionReveal
+          key={step.id}
+          delayMs={index * 80}
+          className="pb-6 last:pb-0 sm:h-full sm:pb-0"
+        >
+          <div className="relative flex h-full gap-4 sm:flex-col sm:gap-0 sm:rounded-[28px] sm:border sm:border-ash-divider sm:bg-white sm:p-6 sm:shadow-card">
             {index < steps.length - 1 && (
               <div className="absolute left-[21px] top-11 bottom-0 w-px bg-ash-divider sm:hidden" />
             )}
