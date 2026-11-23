@@ -70,8 +70,13 @@ export function FlagLogo({
 
   const resolvedFlagUrl = toAppMediaUrl(flagUrl) || flagUrl;
   if (resolvedFlagUrl) {
-    // next/image rejects SVG (400). Countries upload preview uses <img>, so match that.
-    if (isSvgMediaUrl(resolvedFlagUrl) || isSvgMediaUrl(flagUrl)) {
+    // Local static flags + SVGs: use <img> (optimizer can 400 on SVG / miss static webp).
+    const usePlainImg =
+      isSvgMediaUrl(resolvedFlagUrl) ||
+      isSvgMediaUrl(flagUrl) ||
+      resolvedFlagUrl.startsWith('/flags/');
+
+    if (usePlainImg) {
       return (
         <span className={cn(box, className)} aria-hidden={!alt}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -96,19 +101,32 @@ export function FlagLogo({
     );
   }
 
+  // Prefer bundled flag assets by ISO2 when no uploaded URL exists.
   if (code.length === 2) {
+    const localFlag = `/flags/${code.toLowerCase()}.webp`;
     return (
-      <span
-        className={cn(
-          box,
-          'inline-flex items-center justify-center leading-none',
-          tokens.emoji,
-          className
-        )}
-        aria-hidden={!alt}
-        title={alt || undefined}
-      >
-        <span suppressHydrationWarning>{getFlagEmoji(code)}</span>
+      <span className={cn(box, className)} aria-hidden={!alt}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={localFlag}
+          alt={alt}
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+            const fallback = e.currentTarget.nextElementSibling;
+            if (fallback instanceof HTMLElement) fallback.hidden = false;
+          }}
+        />
+        <span
+          hidden
+          className={cn(
+            'absolute inset-0 inline-flex items-center justify-center leading-none',
+            tokens.emoji
+          )}
+          suppressHydrationWarning
+        >
+          {getFlagEmoji(code)}
+        </span>
       </span>
     );
   }

@@ -4,6 +4,8 @@ import { requireRole } from '@/lib/auth-utils';
 import { getProcessWithAllRelations } from '@/lib/db/queries/config';
 import { ProcessHub } from '@/components/admin/config/ProcessHub';
 import { ProcessTypeBadge } from '@/components/admin/config/ProcessTypeBadge';
+import { MultiCountryChips } from '@/components/shared/MultiCountryChips';
+import { getCountryName, getLocalFlagUrl } from '@/lib/countries/catalog';
 import { ChevronLeft } from 'lucide-react';
 
 /**
@@ -100,13 +102,33 @@ export default async function ProcessDetailPage({
 
           {/* Multi-Country Info */}
           {multiCountryCount > 0 && (
-            <div className="bg-mint-wash border border-portrait-ink/10 rounded-2xl p-4 inline-flex items-center gap-3">
-              <span className="text-sm font-medium text-portrait-ink">
-                ✈️ Also valid for {multiCountryCount} additional {multiCountryCount === 1 ? 'country' : 'countries'}
-              </span>
-              <span className="text-sm text-slate-helper">
-                (1 visa for {multiCountryCount + 1} countries!)
-              </span>
+            <div className="space-y-3 rounded-2xl border border-portrait-ink/10 bg-mint-wash p-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-sm font-medium text-portrait-ink">
+                  Also valid for {multiCountryCount} additional{' '}
+                  {multiCountryCount === 1 ? 'country' : 'countries'}
+                </span>
+                <span className="text-sm text-slate-helper">
+                  (1 visa for {multiCountryCount + 1} countries)
+                </span>
+                <Link
+                  href={`/admin/config/visa-listings/${id}/content`}
+                  className="text-sm font-medium text-nautical-teal hover:underline"
+                >
+                  Edit countries
+                </Link>
+              </div>
+              <MultiCountryChips
+                size="sm"
+                countries={(process.multiTripCountries ?? []).map((row) => {
+                  const code = row.additionalCountryCode.trim().toUpperCase();
+                  return {
+                    code,
+                    name: getCountryName(code),
+                    flagUrl: getLocalFlagUrl(code),
+                  };
+                })}
+              />
             </div>
           )}
         </div>

@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent,
   type ReactNode,
 } from 'react';
 import { useRouter } from 'next/navigation';
@@ -12,6 +13,7 @@ import {
   Briefcase,
   Check,
   ChevronDown,
+  FileText,
   GraduationCap,
   HeartPulse,
   Plane,
@@ -89,6 +91,15 @@ function resolveActiveVisaKind(
   );
 }
 
+function scrollToRequirements(event: MouseEvent<HTMLAnchorElement>) {
+  event.preventDefault();
+  event.stopPropagation();
+  const section = document.getElementById('requirements');
+  if (!section) return;
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  window.history.replaceState(null, '', '#requirements');
+}
+
 interface VisaTypesOfferedProps {
   countryName: string;
   processingEta: string | null;
@@ -99,6 +110,7 @@ interface VisaTypesOfferedProps {
   onSelectedIdChange: (id: string) => void;
   visaKinds?: VisaKindOption[];
   currentListingId?: string;
+  hasRequiredDocuments?: boolean;
   onVisaKindSelect?: (kind: VisaKindOption) => Promise<boolean> | boolean;
 }
 
@@ -205,6 +217,7 @@ function SelectableCard({
   processText,
   processingEta,
   formattedTotal,
+  hasRequiredDocuments,
   onSelect,
 }: {
   title: string;
@@ -214,16 +227,26 @@ function SelectableCard({
   processText: string | null;
   processingEta: string | null;
   formattedTotal: string;
+  hasRequiredDocuments?: boolean;
   onSelect: () => void;
 }) {
+  const showDocumentsLink = Boolean(hasRequiredDocuments && selected);
+  const showFooter = Boolean(processText || showDocumentsLink);
+
   return (
-    <button
-      type="button"
+    <div
       role="radio"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
       aria-checked={selected}
       className={cn(
-        'w-full rounded-2xl border bg-white p-4 text-left transition-colors sm:rounded-[18px] sm:p-5',
+        'w-full cursor-pointer rounded-2xl border bg-white p-4 text-left transition-colors sm:rounded-[18px] sm:p-5',
         selected
           ? 'border-nautical-teal shadow-[0_8px_24px_rgba(8,78,114,0.08)]'
           : 'border-ash-divider hover:border-fog'
@@ -255,26 +278,46 @@ function SelectableCard({
         {detail}
       </p>
 
-      {processText ? (
-        <div className={selected ? 'mt-4 pl-7' : 'mt-3 pl-7'}>
-          <div
-            className={
-              selected
-                ? 'inline-flex items-center gap-3 rounded-xl border border-nautical-teal/35 bg-sky-wash px-3.5 py-2.5 text-[13px] text-portrait-ink sm:rounded-2xl'
-                : 'inline-flex items-center gap-2 rounded-full bg-sky-wash px-3 py-1 text-[12px] text-portrait-ink'
-            }
-          >
-            <span>
-              Visa in{' '}
-              <span className="font-semibold">
-                {processingEta?.trim().replace(/^in\s+/i, '')}
+      {showFooter ? (
+        <div
+          className={cn(
+            'flex items-center justify-between gap-3 pl-7',
+            selected ? 'mt-4' : 'mt-3'
+          )}
+        >
+          {processText ? (
+            <div
+              className={
+                selected
+                  ? 'inline-flex items-center gap-3 rounded-xl border border-nautical-teal/35 bg-sky-wash px-3.5 py-2.5 text-[13px] text-portrait-ink sm:rounded-2xl'
+                  : 'inline-flex items-center gap-2 rounded-full bg-sky-wash px-3 py-1 text-[12px] text-portrait-ink'
+              }
+            >
+              <span>
+                Visa in{' '}
+                <span className="font-semibold">
+                  {processingEta?.trim().replace(/^in\s+/i, '')}
+                </span>
               </span>
-            </span>
-            <span className="font-semibold tabular-nums">{formattedTotal}</span>
-          </div>
+              <span className="font-semibold tabular-nums">{formattedTotal}</span>
+            </div>
+          ) : (
+            <span />
+          )}
+
+          {showDocumentsLink ? (
+            <a
+              href="#requirements"
+              onClick={scrollToRequirements}
+              className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-nautical-teal transition-colors hover:text-portrait-ink"
+            >
+              <FileText className="h-4 w-4 shrink-0" aria-hidden />
+              View required documents
+            </a>
+          ) : null}
         </div>
       ) : null}
-    </button>
+    </div>
   );
 }
 
@@ -284,6 +327,7 @@ function PackageCard({
   isMultipleEntry,
   processingEta,
   processTypeLabel,
+  hasRequiredDocuments,
   onSelect,
 }: {
   option: PriceOptionView;
@@ -291,6 +335,7 @@ function PackageCard({
   isMultipleEntry: boolean;
   processingEta: string | null;
   processTypeLabel?: string | null;
+  hasRequiredDocuments?: boolean;
   onSelect: () => void;
 }) {
   const validity = option.entryValidity
@@ -345,6 +390,7 @@ function PackageCard({
       processText={processText}
       processingEta={processingEta}
       formattedTotal={option.formattedTotal}
+      hasRequiredDocuments={hasRequiredDocuments}
       onSelect={onSelect}
     />
   );
@@ -354,11 +400,13 @@ function ListingOptionCard({
   listing,
   selected,
   processingEta,
+  hasRequiredDocuments,
   onSelect,
 }: {
   listing: VisaKindListingOption;
   selected: boolean;
   processingEta: string | null;
+  hasRequiredDocuments?: boolean;
   onSelect: () => void;
 }) {
   const stay = listing.stayDuration
@@ -402,6 +450,7 @@ function ListingOptionCard({
       processText={processText}
       processingEta={processingEta}
       formattedTotal={listing.formattedStartingPrice}
+      hasRequiredDocuments={hasRequiredDocuments}
       onSelect={onSelect}
     />
   );
@@ -417,6 +466,7 @@ export function VisaTypesOffered({
   onSelectedIdChange,
   visaKinds = [],
   currentListingId,
+  hasRequiredDocuments = false,
   onVisaKindSelect,
 }: VisaTypesOfferedProps) {
   const router = useRouter();
@@ -482,6 +532,9 @@ export function VisaTypesOffered({
               processingEta={
                 listing.id === currentListingId ? processingEta : null
               }
+              hasRequiredDocuments={
+                listing.id === currentListingId ? hasRequiredDocuments : false
+              }
               onSelect={() => void selectListing(listing)}
             />
           ))}
@@ -507,6 +560,7 @@ export function VisaTypesOffered({
               isMultipleEntry={isMultipleEntry}
               processingEta={processingEta}
               processTypeLabel={processTypeLabel}
+              hasRequiredDocuments={hasRequiredDocuments}
               onSelect={() => onSelectedIdChange(option.id)}
             />
           ))}

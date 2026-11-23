@@ -13,6 +13,7 @@ import { ProcessTimeline } from '@/components/public/ProcessTimeline';
 import { FaqAccordion } from '@/components/public/FaqAccordion';
 import { ExploreMoreRail } from '@/components/public/ExploreMoreRail';
 import { MobileStickyBar } from '@/components/public/MobileStickyBar';
+import { MultiCountryChips } from '@/components/shared/MultiCountryChips';
 import { loadPublicListingPage } from '@/app/visa/loadPublicListing';
 import { trackEvent } from '@/lib/analytics/gtm';
 import { sanitizeBlogHtml } from '@/lib/blog/sanitize';
@@ -204,8 +205,10 @@ export function PublicListingExperience({
     : '';
   const hasExemption = exemptionHtml.replace(/<[^>]*>/g, '').trim().length > 0;
   const hasFaqs = data.page.faqs.length > 0;
+  const hasTimeline = data.page.hasTimeline;
   const navItems = [
     ...BASE_NAV_ITEMS,
+    ...(hasTimeline ? [{ id: 'process', label: 'Process' }] : []),
     ...(hasExemption ? [{ id: 'exemption', label: 'Exemption' }] : []),
     ...(hasFaqs ? [{ id: 'faqs', label: 'FAQs' }] : []),
   ];
@@ -257,6 +260,7 @@ export function PublicListingExperience({
             headline={data.page.pricing.headline}
             isMultipleEntry={Boolean(data.process.isMultipleEntry)}
             visaKinds={data.page.visaKinds}
+            hasRequiredDocuments={data.page.hasRequiredDocuments}
             onVisaKindSelect={onVisaKindSelect}
           />
 
@@ -269,19 +273,49 @@ export function PublicListingExperience({
                 Required to apply
               </p>
               <h2 className="font-basier text-2xl text-portrait-ink sm:text-4xl">
-                What documents do you need?
+                {data.page.hasRequiredDocuments
+                  ? 'What documents do you need?'
+                  : 'No documents are required'}
               </h2>
               <p className="text-[15px] leading-7 text-slate-helper sm:text-base">
-                Each item gives a quick summary so you know what to prepare
-                before uploading.
+                {data.page.hasRequiredDocuments
+                  ? 'Each item gives a quick summary so you know what to prepare before uploading.'
+                  : 'You can continue with this visa without uploading any documents.'}
               </p>
             </MotionReveal>
-            <RequirementsGrid items={data.page.requirements} />
+            {data.page.hasRequiredDocuments ? (
+              <RequirementsGrid items={data.page.requirements} />
+            ) : null}
           </section>
 
-          {/* Process section — hidden for now */}
-          {false && (
-            <section id="process" className="space-y-5 sm:space-y-8">
+          {data.page.multiCountries.length > 0 ? (
+            <section className="space-y-5 sm:space-y-6">
+              <MotionReveal className="max-w-2xl space-y-2 sm:space-y-3">
+                <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
+                  Multi-country coverage
+                </p>
+                <h2 className="font-basier text-2xl text-portrait-ink sm:text-4xl">
+                  Also valid for {data.page.multiCountries.length} more{' '}
+                  {data.page.multiCountries.length === 1
+                    ? 'country'
+                    : 'countries'}
+                </h2>
+                <p className="text-[15px] leading-7 text-slate-helper sm:text-base">
+                  One visa covers {data.page.multiCountries.length + 1}{' '}
+                  destinations — including {data.country.name}.
+                </p>
+              </MotionReveal>
+              <MotionReveal>
+                <MultiCountryChips countries={data.page.multiCountries} />
+              </MotionReveal>
+            </section>
+          ) : null}
+
+          {hasTimeline ? (
+            <section
+              id="process"
+              className="scroll-mt-32 space-y-5 sm:scroll-mt-36 sm:space-y-8"
+            >
               <MotionReveal className="max-w-2xl space-y-2 sm:space-y-3">
                 <p className="text-xs uppercase tracking-[0.24em] text-slate-helper sm:text-sm">
                   The process
@@ -295,7 +329,7 @@ export function PublicListingExperience({
               </MotionReveal>
               <ProcessTimeline steps={data.page.timeline} />
             </section>
-          )}
+          ) : null}
 
           {hasExemption && (
             <section

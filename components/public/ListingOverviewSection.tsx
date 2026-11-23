@@ -27,6 +27,7 @@ interface ListingOverviewSectionProps {
   headline?: string;
   isMultipleEntry?: boolean;
   visaKinds?: VisaKindOption[];
+  hasRequiredDocuments?: boolean;
   onVisaKindSelect?: (kind: VisaKindOption) => Promise<boolean> | boolean;
 }
 
@@ -46,6 +47,7 @@ export function ListingOverviewSection({
   headline,
   isMultipleEntry = false,
   visaKinds = [],
+  hasRequiredDocuments = false,
   onVisaKindSelect,
 }: ListingOverviewSectionProps) {
   const [selectedId, setSelectedId] = useState(priceOptions[0]?.id);
@@ -86,6 +88,7 @@ export function ListingOverviewSection({
             onSelectedIdChange={setSelectedId}
             visaKinds={visaKinds}
             currentListingId={listingId}
+            hasRequiredDocuments={hasRequiredDocuments}
             onVisaKindSelect={onVisaKindSelect}
           />
         </MotionReveal>

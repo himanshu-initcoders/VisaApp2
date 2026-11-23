@@ -1369,14 +1369,26 @@ export async function addMultiTripCountry(processId: string, data: MultiCountry)
       return { error: 'Visa listing not found' };
     }
 
-    // Check if country already exists
+    const code = validated.additionalCountryCode.toUpperCase();
+
+    if (process.destinationCountry?.toUpperCase() === code) {
+      return { error: 'That country is already the primary destination' };
+    }
+
     const existing = await db.query.multiTripCountries.findFirst({
-      where: eq(multiTripCountries.visaListingId, processId)
+      where: and(
+        eq(multiTripCountries.visaListingId, processId),
+        eq(multiTripCountries.additionalCountryCode, code)
+      ),
     });
+
+    if (existing) {
+      return { error: 'This country is already added to multi-country support' };
+    }
 
     await db.insert(multiTripCountries).values({
       visaListingId: processId,
-      additionalCountryCode: validated.additionalCountryCode.toUpperCase()
+      additionalCountryCode: code,
     });
 
     revalidatePath(`/admin/config/visa-listings/${processId}`);

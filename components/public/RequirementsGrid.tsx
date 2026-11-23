@@ -23,6 +23,8 @@ export function RequirementsGrid({
     chargeable: boolean;
   }>;
 }) {
+  if (items.length === 0) return null;
+
   return (
     <div className="space-y-3 sm:grid sm:grid-cols-2 sm:gap-5 sm:space-y-0 xl:grid-cols-4">
       {items.map((item, index) => {

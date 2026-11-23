@@ -28,12 +28,12 @@ import {
 import {
   getDemoHighlights,
   getDemoPriceOptions,
-  getDemoRequirements,
 } from '@/lib/public-demo';
 import { buildApplyFormConfig, formatDocumentTitle } from '@/lib/apply/applicationForm';
 import { getDocumentTypeSamplesByValues } from '@/lib/db/queries/config';
 import { PUBLIC_VISA_CATALOG_TAG } from '@/lib/public-catalog-tags';
 import { rewriteCountryImages, toAppMediaUrl } from '@/lib/upload/mediaUrl';
+import { getCountryName, getLocalFlagUrl } from '@/lib/countries/catalog';
 
 /**
  * Public-facing database queries for landing pages
@@ -519,10 +519,8 @@ const getCachedPublicProcessPageData = unstable_cache(
           (process.processType === 'electronic_travel_authorisation'
             ? `${process.processName} lets Indian travellers complete ${process.country.name}'s entry documentation online before departure. It is designed to be quick, low-friction, and easy to submit with the core travel documents you already have.`
             : `${process.processName} gives Indian travellers a guided application experience with document checks, timeline clarity, and transparent pricing before submission.`),
-        requirements:
-          dbRequirements.length > 0
-            ? dbRequirements
-            : getDemoRequirements(mappedProcess),
+        requirements: dbRequirements,
+        hasRequiredDocuments: dbRequirements.length > 0,
         pricing: {
           priceOptions,
           usingDemoPrices: mappedProcess.priceOptions.length === 0,
@@ -534,48 +532,24 @@ const getCachedPublicProcessPageData = unstable_cache(
           serviceFeeLabel: priceOptions[0]?.serviceFeeLabel,
           governmentGstFeeLabel: priceOptions[0]?.governmentGstFeeLabel,
         },
-        timeline:
-          process.postCheckoutSteps.length > 0
-            ? process.postCheckoutSteps.map((step, index) => ({
-                id: step.id,
-                title: step.heading,
-                description:
-                  step.subheading ||
-                  'We guide you through this step end to end.',
-                stepNumber: index + 1,
-              }))
-            : [
-                {
-                  id: 'step-1',
-                  title: 'Share your details',
-                  description: `Add traveler information for ${process.processName} and confirm the trip purpose.`,
-                  stepNumber: 1,
-                },
-                {
-                  id: 'step-2',
-                  title: 'Upload documents',
-                  description:
-                    'Passport, photo, and any extra questions configured for this destination.',
-                  stepNumber: 2,
-                },
-                {
-                  id: 'step-3',
-                  title: 'We review and file',
-                  description:
-                    'Your application is checked against this process configuration, then submitted.',
-                  stepNumber: 3,
-                },
-                {
-                  id: 'step-4',
-                  title: 'Receive approval',
-                  description: mappedProcess.standardEta
-                    ? `Typical turnaround is ${mappedProcess.standardEta}. You get status updates as it moves.`
-                    : 'You receive approval details and the next steps before travel.',
-                  stepNumber: 4,
-                },
-              ],
+        timeline: process.postCheckoutSteps.map((step, index) => ({
+          id: step.id,
+          title: step.heading,
+          description:
+            step.subheading || 'We guide you through this step end to end.',
+          stepNumber: index + 1,
+        })),
+        hasTimeline: process.postCheckoutSteps.length > 0,
         faqs: process.faqs,
         exemption: process.country.exemption?.trim() || null,
+        multiCountries: (process.multiTripCountries ?? []).map((row) => {
+          const code = row.additionalCountryCode.trim().toUpperCase();
+          return {
+            code,
+            name: getCountryName(code),
+            flagUrl: getLocalFlagUrl(code),
+          };
+        }),
         exploreMore,
         visaKinds,
         applyForm: buildApplyFormConfig({
