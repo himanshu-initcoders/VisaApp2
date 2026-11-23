@@ -373,6 +373,7 @@ const getCachedPublicProcessPageData = unstable_cache(
         id: string;
         href: string;
         processName: string;
+        processTypeLabel: string;
         purpose: string;
         formattedStartingPrice: string;
         isMultipleEntry: boolean;
@@ -386,6 +387,7 @@ const getCachedPublicProcessPageData = unstable_cache(
         id: listing.id,
         href: buildProcessHref(process.country.iso2Code, listing.slug),
         processName: listing.processName,
+        processTypeLabel: mapped.processTypeLabel,
         purpose: listing.purpose,
         formattedStartingPrice: mapped.formattedStartingPrice,
         isMultipleEntry: Boolean(listing.isMultipleEntry),

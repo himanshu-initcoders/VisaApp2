@@ -66,6 +66,7 @@ export interface VisaKindListingOption {
   id: string;
   href: string;
   processName: string;
+  processTypeLabel: string;
   purpose: string;
   formattedStartingPrice: string;
   isMultipleEntry: boolean;

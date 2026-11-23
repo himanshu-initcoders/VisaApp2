@@ -58,7 +58,12 @@ function entryWord(isMultipleEntry: boolean) {
   return isMultipleEntry ? 'Multiple' : 'Single';
 }
 
-function packageTitle(option: PriceOptionView, isMultipleEntry: boolean) {
+function packageTitle(
+  option: PriceOptionView,
+  isMultipleEntry: boolean,
+  processTypeLabel?: string | null
+) {
+  if (processTypeLabel?.trim()) return processTypeLabel.trim();
   const stay = titleCaseDuration(
     (option.stayDuration || option.daysLabel || 'Visa package').trim()
   );
@@ -88,6 +93,7 @@ interface VisaTypesOfferedProps {
   countryName: string;
   processingEta: string | null;
   isMultipleEntry: boolean;
+  processTypeLabel?: string | null;
   priceOptions: PriceOptionView[];
   selectedId?: string;
   onSelectedIdChange: (id: string) => void;
@@ -277,12 +283,14 @@ function PackageCard({
   selected,
   isMultipleEntry,
   processingEta,
+  processTypeLabel,
   onSelect,
 }: {
   option: PriceOptionView;
   selected: boolean;
   isMultipleEntry: boolean;
   processingEta: string | null;
+  processTypeLabel?: string | null;
   onSelect: () => void;
 }) {
   const validity = option.entryValidity
@@ -330,7 +338,7 @@ function PackageCard({
 
   return (
     <SelectableCard
-      title={packageTitle(option, isMultipleEntry)}
+      title={packageTitle(option, isMultipleEntry, processTypeLabel)}
       price={option.formattedTotal}
       selected={selected}
       detail={detail}
@@ -387,7 +395,7 @@ function ListingOptionCard({
 
   return (
     <SelectableCard
-      title={listing.processName}
+      title={listing.processTypeLabel || listing.processName}
       price={listing.formattedStartingPrice}
       selected={selected}
       detail={detail}
@@ -403,6 +411,7 @@ export function VisaTypesOffered({
   countryName,
   processingEta,
   isMultipleEntry,
+  processTypeLabel,
   priceOptions,
   selectedId,
   onSelectedIdChange,
@@ -497,6 +506,7 @@ export function VisaTypesOffered({
               selected={option.id === selectedId}
               isMultipleEntry={isMultipleEntry}
               processingEta={processingEta}
+              processTypeLabel={processTypeLabel}
               onSelect={() => onSelectedIdChange(option.id)}
             />
           ))}

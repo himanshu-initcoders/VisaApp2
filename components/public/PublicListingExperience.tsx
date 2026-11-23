@@ -252,6 +252,7 @@ export function PublicListingExperience({
             countryName={data.country.name}
             listingId={data.process.id}
             listingSlug={data.process.slug}
+            processTypeLabel={data.process.processTypeLabel}
             priceOptions={data.page.pricing.priceOptions}
             headline={data.page.pricing.headline}
             isMultipleEntry={Boolean(data.process.isMultipleEntry)}

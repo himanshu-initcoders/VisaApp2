@@ -22,6 +22,7 @@ interface ListingOverviewSectionProps {
   countryName: string;
   listingId: string;
   listingSlug: string;
+  processTypeLabel?: string | null;
   priceOptions: PriceOptionView[];
   headline?: string;
   isMultipleEntry?: boolean;
@@ -40,6 +41,7 @@ export function ListingOverviewSection({
   countryName,
   listingId,
   listingSlug,
+  processTypeLabel,
   priceOptions,
   headline,
   isMultipleEntry = false,
@@ -78,6 +80,7 @@ export function ListingOverviewSection({
             countryName={countryName}
             processingEta={processingEta}
             isMultipleEntry={isMultipleEntry}
+            processTypeLabel={processTypeLabel}
             priceOptions={priceOptions}
             selectedId={selected?.id}
             onSelectedIdChange={setSelectedId}
