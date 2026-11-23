@@ -72,10 +72,22 @@ function packageTitle(
   return `${stay} · ${entryLabel(isMultipleEntry)}`;
 }
 
-function processingLabel(eta: string | null | undefined) {
-  if (!eta?.trim()) return null;
+/** "30 days" → "30 working days"; leave hours/minutes/etc. unchanged. */
+function formatProcessingEta(eta: string) {
   const cleaned = eta.trim().replace(/^in\s+/i, '');
-  return `Visa in ${cleaned}`;
+  if (/\bworking\s+days?\b/i.test(cleaned)) return cleaned;
+  return cleaned.replace(
+    /\b(\d+)\s+(days?)\b/i,
+    (_, count: string, unit: string) => `${count} working ${unit}`
+  );
+}
+
+function processingLabel(
+  eta: string | null | undefined,
+  purposeLabel: string
+) {
+  if (!eta?.trim()) return null;
+  return `${purposeLabel} in ${formatProcessingEta(eta)}`;
 }
 
 function resolveActiveVisaKind(
@@ -215,6 +227,7 @@ function SelectableCard({
   selected,
   detail,
   processText,
+  purposeLabel,
   processingEta,
   formattedTotal,
   hasRequiredDocuments,
@@ -225,6 +238,7 @@ function SelectableCard({
   selected: boolean;
   detail: ReactNode;
   processText: string | null;
+  purposeLabel: string;
   processingEta: string | null;
   formattedTotal: string;
   hasRequiredDocuments?: boolean;
@@ -232,6 +246,7 @@ function SelectableCard({
 }) {
   const showDocumentsLink = Boolean(hasRequiredDocuments && selected);
   const showFooter = Boolean(processText || showDocumentsLink);
+  const etaDisplay = processingEta ? formatProcessingEta(processingEta) : null;
 
   return (
     <div
@@ -285,7 +300,7 @@ function SelectableCard({
             selected ? 'mt-4' : 'mt-3'
           )}
         >
-          {processText ? (
+          {processText && etaDisplay ? (
             <div
               className={
                 selected
@@ -294,10 +309,8 @@ function SelectableCard({
               }
             >
               <span>
-                Visa in{' '}
-                <span className="font-semibold">
-                  {processingEta?.trim().replace(/^in\s+/i, '')}
-                </span>
+                {purposeLabel} in{' '}
+                <span className="font-semibold">{etaDisplay}</span>
               </span>
               <span className="font-semibold tabular-nums">{formattedTotal}</span>
             </div>
@@ -327,6 +340,7 @@ function PackageCard({
   isMultipleEntry,
   processingEta,
   processTypeLabel,
+  purposeLabel,
   hasRequiredDocuments,
   onSelect,
 }: {
@@ -335,6 +349,7 @@ function PackageCard({
   isMultipleEntry: boolean;
   processingEta: string | null;
   processTypeLabel?: string | null;
+  purposeLabel: string;
   hasRequiredDocuments?: boolean;
   onSelect: () => void;
 }) {
@@ -346,7 +361,7 @@ function PackageCard({
     : option.daysLabel
       ? titleCaseDuration(option.daysLabel)
       : null;
-  const processText = processingLabel(processingEta);
+  const processText = processingLabel(processingEta, purposeLabel);
 
   const detail = [
     validity ? (
@@ -388,6 +403,7 @@ function PackageCard({
       selected={selected}
       detail={detail}
       processText={processText}
+      purposeLabel={purposeLabel}
       processingEta={processingEta}
       formattedTotal={option.formattedTotal}
       hasRequiredDocuments={hasRequiredDocuments}
@@ -400,19 +416,23 @@ function ListingOptionCard({
   listing,
   selected,
   processingEta,
+  purposeLabel,
   hasRequiredDocuments,
   onSelect,
 }: {
   listing: VisaKindListingOption;
   selected: boolean;
   processingEta: string | null;
+  purposeLabel: string;
   hasRequiredDocuments?: boolean;
   onSelect: () => void;
 }) {
   const stay = listing.stayDuration
     ? titleCaseDuration(listing.stayDuration)
     : null;
-  const processText = selected ? processingLabel(processingEta) : null;
+  const processText = selected
+    ? processingLabel(processingEta, purposeLabel)
+    : null;
 
   const detail = [
     stay ? (
@@ -448,6 +468,7 @@ function ListingOptionCard({
       selected={selected}
       detail={detail}
       processText={processText}
+      purposeLabel={purposeLabel}
       processingEta={processingEta}
       formattedTotal={listing.formattedStartingPrice}
       hasRequiredDocuments={hasRequiredDocuments}
@@ -476,6 +497,10 @@ export function VisaTypesOffered({
   const activeGroup = resolveActiveVisaKind(visaKinds, currentListingId);
   const siblingListings = activeGroup?.listings ?? [];
   const showListingOptions = siblingListings.length > 1;
+  const purposeLabel =
+    (activeGroup
+      ? visaPurposeTabLabel(activeGroup.purpose) || activeGroup.label
+      : null) || 'Visa';
 
   const visibleOptions = useMemo(() => {
     if (expanded || priceOptions.length <= VISIBLE_OPTIONS) return priceOptions;
@@ -532,6 +557,7 @@ export function VisaTypesOffered({
               processingEta={
                 listing.id === currentListingId ? processingEta : null
               }
+              purposeLabel={purposeLabel}
               hasRequiredDocuments={
                 listing.id === currentListingId ? hasRequiredDocuments : false
               }
@@ -560,6 +586,7 @@ export function VisaTypesOffered({
               isMultipleEntry={isMultipleEntry}
               processingEta={processingEta}
               processTypeLabel={processTypeLabel}
+              purposeLabel={purposeLabel}
               hasRequiredDocuments={hasRequiredDocuments}
               onSelect={() => onSelectedIdChange(option.id)}
             />
