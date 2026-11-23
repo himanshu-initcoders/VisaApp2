@@ -44,8 +44,8 @@ export function StartApplicationCTA({
         className={
           className ||
           (variant === 'hero'
-            ? 'group min-w-[220px] border-white bg-white text-portrait-ink hover:border-white hover:bg-white/90 hover:text-portrait-ink flex items-center justify-center'
-            : 'group flex shrink-0 items-center justify-center whitespace-nowrap')
+            ? 'group flex min-w-[220px] items-center justify-center border-white bg-white text-portrait-ink hover:border-white hover:bg-white/90 hover:text-portrait-ink'
+            : 'group flex shrink-0 items-center justify-center whitespace-nowrap px-6 py-3.5 text-[15px] leading-none')
         }
       >
         {label}

@@ -64,8 +64,9 @@ export function AnimatedTabs({
   if (items.length < 2) return null;
 
   const isDark = tone === 'dark';
-  // 4+ tabs overflow on narrow screens — keep content width + horizontal scroll there.
-  const manyTabs = items.length > 3;
+  // 3+ tabs often overflow on narrow screens (e.g. "Tourist Visa") — scroll there,
+  // stretch evenly from sm up when the set is still small.
+  const manyTabs = items.length > 2;
   const stretchDesktop = items.length <= 6;
 
   return (

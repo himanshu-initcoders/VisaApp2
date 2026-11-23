@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowUpRight, Sparkles } from 'lucide-react';
-import { Badge } from '@/components/ui';
+import { AutoFitText, Badge } from '@/components/ui';
 import { MediaImage } from '@/components/shared/MediaImage';
 import { cn } from '@/lib/utils';
 import { formatPrice, getCountryCardImage, getFlagEmoji } from '@/lib/public';
@@ -67,7 +67,7 @@ export function PublicCountryCard({
               src={cardImage.url}
               alt={cardImage.alt || country.name}
               fill
-              sizes="(min-width: 1280px) 25vw, (min-width: 640px) 50vw, 100vw"
+              sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
               className="object-cover transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
@@ -89,10 +89,14 @@ export function PublicCountryCard({
           )}
 
           <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 sm:p-5">
-            <div className="min-w-0">
-              <p className="truncate text-[11px] font-medium uppercase tracking-[0.16em] text-white/70 sm:text-xs">
+            <div className="min-w-0 flex-1">
+              <AutoFitText
+                maxPx={12}
+                minPx={8}
+                className="font-medium uppercase tracking-[0.16em] text-white/70"
+              >
                 {listingLine}
-              </p>
+              </AutoFitText>
               <h3 className="mt-1.5 font-serif text-[1.75rem] leading-[1.05] tracking-[-0.02em] text-white sm:text-[2rem]">
                 {country.name}
               </h3>

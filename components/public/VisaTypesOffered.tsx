@@ -9,44 +9,18 @@ import {
   type ReactNode,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Briefcase,
-  Check,
-  ChevronDown,
-  FileText,
-  GraduationCap,
-  HeartPulse,
-  Plane,
-  ArrowRightLeft,
-  MapPin,
-  Users,
-  type LucideIcon,
-} from 'lucide-react';
+import { Check, ChevronDown, FileText } from 'lucide-react';
 import { beginVisaKindNavigation } from '@/components/public/PreserveListingView';
 import type {
   PriceOptionView,
   VisaKindListingOption,
   VisaKindOption,
 } from '@/components/public/PricingPanel';
+import { AnimatedTabs } from '@/components/ui';
 import { visaPurposeTabLabel } from '@/lib/visa/purposes';
 import { cn } from '@/lib/utils';
 
 const VISIBLE_OPTIONS = 2;
-
-const PURPOSE_ICONS: Record<string, LucideIcon> = {
-  tourism: Plane,
-  business: Briefcase,
-  work: Briefcase,
-  study: GraduationCap,
-  family: Users,
-  medical: HeartPulse,
-  transit: ArrowRightLeft,
-  visa_on_arrival: MapPin,
-};
-
-function purposeIcon(purpose: string): LucideIcon {
-  return PURPOSE_ICONS[purpose.toLowerCase()] || Plane;
-}
 
 function titleCaseDuration(value: string) {
   return value.replace(/\b[a-z]/g, (char) => char.toUpperCase());
@@ -157,67 +131,49 @@ function VisaKindTabs({
   const activePurpose = pendingPurpose || current.purpose;
 
   return (
-    <div
-      role="tablist"
-      aria-label="Visa type"
-      className="flex w-full gap-1 rounded-full bg-[#eceff3] p-1"
-    >
-      {visaKinds.map((kind) => {
-        const isActive = kind.purpose === activePurpose;
-        const Icon = purposeIcon(kind.purpose);
+    <AnimatedTabs
+      items={visaKinds.map((kind) => ({
+        id: kind.purpose,
+        label: visaPurposeTabLabel(kind.purpose) || kind.label,
+      }))}
+      value={activePurpose}
+      onChange={(purpose) => {
+        const kind = visaKinds.find((item) => item.purpose === purpose);
+        if (!kind || switchingRef.current) return;
 
-        return (
-          <button
-            key={kind.purpose}
-            type="button"
-            role="tab"
-            aria-selected={isActive}
-            onClick={() => {
-              if (switchingRef.current) return;
-
-              const alreadyInGroup = kind.listings.some(
-                (listing) => listing.id === currentListingId
-              );
-              if (alreadyInGroup) {
-                setPendingPurpose(kind.purpose);
-                return;
-              }
-
-              const previousPurpose = current.purpose;
-              setPendingPurpose(kind.purpose);
-
-              const navigate = async () => {
-                switchingRef.current = true;
-                try {
-                  if (onSelect) {
-                    const ok = await onSelect(kind);
-                    if (!ok) setPendingPurpose(previousPurpose);
-                    return;
-                  }
-                  beginVisaKindNavigation();
-                  router.push(kind.href, { scroll: false });
-                } finally {
-                  switchingRef.current = false;
-                }
-              };
-
-              void navigate();
-            }}
-            className={cn(
-              'relative inline-flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-medium transition-colors',
-              isActive
-                ? 'bg-white text-portrait-ink shadow-sm'
-                : 'text-slate-helper hover:text-portrait-ink'
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0" aria-hidden />
-            <span className="whitespace-nowrap">
-              {visaPurposeTabLabel(kind.purpose) || kind.label}
-            </span>
-          </button>
+        const alreadyInGroup = kind.listings.some(
+          (listing) => listing.id === currentListingId
         );
-      })}
-    </div>
+        if (alreadyInGroup) {
+          setPendingPurpose(purpose);
+          return;
+        }
+
+        const previousPurpose = current.purpose;
+        setPendingPurpose(purpose);
+
+        const navigate = async () => {
+          switchingRef.current = true;
+          try {
+            if (onSelect) {
+              const ok = await onSelect(kind);
+              if (!ok) setPendingPurpose(previousPurpose);
+              return;
+            }
+
+            beginVisaKindNavigation();
+            router.push(kind.href, { scroll: false });
+          } finally {
+            switchingRef.current = false;
+          }
+        };
+
+        void navigate();
+      }}
+      tone="light"
+      ariaLabel="Visa type"
+      layoutId="visa-kind-tabs-overview"
+    />
   );
 }
 
@@ -296,7 +252,7 @@ function SelectableCard({
       {showFooter ? (
         <div
           className={cn(
-            'flex items-center justify-between gap-3 pl-7',
+            'flex flex-col gap-3 pl-7 sm:flex-row sm:items-center sm:justify-between',
             selected ? 'mt-4' : 'mt-3'
           )}
         >
@@ -304,19 +260,19 @@ function SelectableCard({
             <div
               className={
                 selected
-                  ? 'inline-flex items-center gap-3 rounded-xl border border-nautical-teal/35 bg-sky-wash px-3.5 py-2.5 text-[13px] text-portrait-ink sm:rounded-2xl'
-                  : 'inline-flex items-center gap-2 rounded-full bg-sky-wash px-3 py-1 text-[12px] text-portrait-ink'
+                  ? 'flex w-full items-center justify-between gap-3 rounded-xl border border-nautical-teal/35 bg-sky-wash px-4 py-3.5 text-[13px] leading-snug text-portrait-ink sm:w-auto sm:rounded-2xl sm:gap-4 sm:px-5 sm:py-4'
+                  : 'inline-flex w-fit items-center gap-2 rounded-full bg-sky-wash px-3.5 py-2 text-[12px] text-portrait-ink'
               }
             >
-              <span>
+              <span className="min-w-0">
                 {purposeLabel} in{' '}
                 <span className="font-semibold">{etaDisplay}</span>
               </span>
-              <span className="font-semibold tabular-nums">{formattedTotal}</span>
+              <span className="shrink-0 font-semibold tabular-nums">
+                {formattedTotal}
+              </span>
             </div>
-          ) : (
-            <span />
-          )}
+          ) : null}
 
           {showDocumentsLink ? (
             <a

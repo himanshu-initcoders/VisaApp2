@@ -58,3 +58,5 @@ export { InitialTabs } from './InitialTabs';
 export type { InitialTabItem } from './InitialTabs';
 
 export { AnimatedStatValue } from './AnimatedStatValue';
+
+export { AutoFitText } from './AutoFitText';

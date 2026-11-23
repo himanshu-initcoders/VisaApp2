@@ -29,7 +29,7 @@ export function MobileStickyBar({
 
   return (
     <div
-      className={`fixed inset-x-0 bottom-0 z-40 border-t border-ash bg-white px-4 pb-[env(safe-area-inset-bottom,8px)] pt-3 shadow-elevated transition-transform duration-300 sm:hidden ${
+      className={`fixed inset-x-0 bottom-0 z-40 border-t border-ash bg-white px-4 pb-[calc(14px+env(safe-area-inset-bottom,0px))] pt-3 shadow-elevated transition-transform duration-300 sm:hidden ${
         visible ? 'translate-y-0' : 'translate-y-full'
       }`}
     >
@@ -46,7 +46,7 @@ export function MobileStickyBar({
             listingId={listingId}
             listingSlug={listingSlug}
             label="Apply now"
-            size="md"
+            size="lg"
             variant="mobile"
           />
         </Suspense>
