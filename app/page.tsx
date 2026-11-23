@@ -10,7 +10,10 @@ import { RecentBlogsSection } from '@/components/public/RecentBlogsSection';
 import { WhatsAppFloat } from '@/components/public/WhatsAppFloat';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { getRecentPublishedPosts } from '@/lib/db/queries/blog';
-import { getEnabledCountriesWithProcesses } from '@/lib/db/queries/public';
+import {
+  getEnabledComingSoonCountries,
+  getEnabledCountriesWithProcesses,
+} from '@/lib/db/queries/public';
 import {
   buildBreadcrumbJsonLd,
   buildWebPageJsonLd,
@@ -65,10 +68,12 @@ const HOW_IT_WORKS_STEPS = [
 ];
 
 export default async function Home() {
-  const [countriesWithProcesses, recentPosts] = await Promise.all([
-    getEnabledCountriesWithProcesses(),
-    getRecentPublishedPosts(3),
-  ]);
+  const [countriesWithProcesses, comingSoonCountries, recentPosts] =
+    await Promise.all([
+      getEnabledCountriesWithProcesses(),
+      getEnabledComingSoonCountries(),
+      getRecentPublishedPosts(3),
+    ]);
   type CountryWithProcesses = (typeof countriesWithProcesses)[number];
   type VisaListing = CountryWithProcesses['visaListings'][number];
 
@@ -136,7 +141,11 @@ export default async function Home() {
       />
       <main className="min-h-screen bg-[#f8f6f1]">
         <h1 className="sr-only">{HOME_H1}</h1>
-        <HomeLandingClient countries={countries} processes={allProcesses} />
+        <HomeLandingClient
+          countries={countries}
+          processes={allProcesses}
+          comingSoonCountries={comingSoonCountries}
+        />
 
         <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
           <MotionReveal className="mb-8 max-w-2xl sm:mb-10">

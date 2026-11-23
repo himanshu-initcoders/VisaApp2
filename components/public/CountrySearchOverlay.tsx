@@ -17,6 +17,16 @@ import {
   purposeTabSortIndex,
 } from '@/lib/visa/purposes';
 
+export interface ComingSoonCountry {
+  name: string;
+  iso2Code: string;
+  images?: {
+    banner?: { url?: string; alt?: string };
+    hero?: { url?: string; alt?: string };
+    flag?: { url?: string };
+  } | null;
+}
+
 export interface SearchableProcess {
   id: string;
   href: string;
@@ -49,7 +59,8 @@ function processFeeLabel(process: SearchableProcess) {
 interface CountrySearchResult {
   iso2Code: string;
   name: string;
-  href: string;
+  href: string | null;
+  comingSoon: boolean;
   processTypeLabel: string;
   startingPrice: number;
   formattedFee: string;
@@ -62,6 +73,7 @@ interface CountrySearchResult {
 
 interface CountrySearchOverlayProps {
   processes: SearchableProcess[];
+  comingSoonCountries?: ComingSoonCountry[];
   query: string;
   onQueryChange: (value: string) => void;
   onClose: () => void;
@@ -77,49 +89,106 @@ function groupCountries(processes: SearchableProcess[]): CountrySearchResult[] {
     byCountry.set(key, bucket);
   }
 
-  return [...byCountry.values()]
-    .map((listings) => {
-      const preferred =
-        pickPreferredCountryListing(listings) ??
-        [...listings].sort(
-          (a, b) =>
-            purposeTabSortIndex(a.purpose ?? '') -
-            purposeTabSortIndex(b.purpose ?? '')
-        )[0];
-      const sample = listings[0];
-      const processTypeLabel =
-        preferred.processTypeLabel ||
-        formatProcessType(preferred.processType);
+  return [...byCountry.values()].map((listings) => {
+    const preferred =
+      pickPreferredCountryListing(listings) ??
+      [...listings].sort(
+        (a, b) =>
+          purposeTabSortIndex(a.purpose ?? '') -
+          purposeTabSortIndex(b.purpose ?? '')
+      )[0];
+    const sample = listings[0];
+    const processTypeLabel =
+      preferred.processTypeLabel || formatProcessType(preferred.processType);
 
-      return {
-        iso2Code: sample.country.iso2Code,
-        name: sample.country.name,
-        href: preferred.href,
-        processTypeLabel,
-        startingPrice: preferred.startingPrice,
-        formattedFee: processFeeLabel(preferred),
-        guaranteedOn: formatGuaranteedOnDate(
-          preferred.standardEtaDuration,
-          preferred.standardEtaUnit
-        ),
-        imageUrl: sample.country.images?.hero?.url,
-        imageAlt:
-          sample.country.images?.hero?.alt || sample.country.name,
-        flagUrl: sample.country.images?.flag?.url,
-        processNames: listings.map((listing) => listing.processName),
-      };
-    })
-    .sort((first, second) => first.name.localeCompare(second.name));
+    return {
+      iso2Code: sample.country.iso2Code,
+      name: sample.country.name,
+      href: preferred.href,
+      comingSoon: false,
+      processTypeLabel,
+      startingPrice: preferred.startingPrice,
+      formattedFee: processFeeLabel(preferred),
+      guaranteedOn: formatGuaranteedOnDate(
+        preferred.standardEtaDuration,
+        preferred.standardEtaUnit
+      ),
+      imageUrl: sample.country.images?.hero?.url,
+      imageAlt: sample.country.images?.hero?.alt || sample.country.name,
+      flagUrl: sample.country.images?.flag?.url,
+      processNames: listings.map((listing) => listing.processName),
+    };
+  });
+}
+
+function mapComingSoonCountries(
+  countries: ComingSoonCountry[]
+): CountrySearchResult[] {
+  return countries.map((country) => ({
+    iso2Code: country.iso2Code,
+    name: country.name,
+    href: null,
+    comingSoon: true,
+    processTypeLabel: 'Coming soon',
+    startingPrice: 0,
+    formattedFee: '—',
+    guaranteedOn: null,
+    imageUrl: country.images?.hero?.url,
+    imageAlt: country.images?.hero?.alt || country.name,
+    flagUrl: country.images?.flag?.url,
+    processNames: [],
+  }));
+}
+
+function SearchApplyButton({
+  country,
+  className,
+}: {
+  country: CountrySearchResult;
+  className: string;
+}) {
+  if (country.comingSoon || !country.href) {
+    return (
+      <button
+        type="button"
+        disabled
+        aria-disabled="true"
+        className={`${className} cursor-not-allowed border-ash-divider bg-mist/60 text-slate-helper opacity-80`}
+      >
+        Coming Soon
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      href={country.href}
+      className={`${className} border-portrait-ink text-portrait-ink transition-colors hover:bg-portrait-ink hover:text-white`}
+    >
+      Apply Now
+    </Link>
+  );
 }
 
 export function CountrySearchOverlay({
   processes,
+  comingSoonCountries = [],
   query,
   onQueryChange,
   onClose,
 }: CountrySearchOverlayProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const countries = useMemo(() => groupCountries(processes), [processes]);
+  const countries = useMemo(() => {
+    const available = groupCountries(processes);
+    const availableCodes = new Set(available.map((country) => country.iso2Code));
+    const comingSoon = mapComingSoonCountries(comingSoonCountries).filter(
+      (country) => !availableCodes.has(country.iso2Code)
+    );
+
+    return [...available, ...comingSoon].sort((first, second) =>
+      first.name.localeCompare(second.name)
+    );
+  }, [comingSoonCountries, processes]);
 
   const results = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -265,20 +334,16 @@ export function CountrySearchOverlay({
                       </div>
                     </div>
 
-                    <Link
-                      href={country.href}
-                      className="hidden shrink-0 rounded-full border-[1.5px] border-portrait-ink px-5 py-2 text-sm font-medium text-portrait-ink transition-colors hover:bg-portrait-ink hover:text-white sm:inline-flex"
-                    >
-                      Apply Now
-                    </Link>
+                    <SearchApplyButton
+                      country={country}
+                      className="hidden shrink-0 rounded-full border-[1.5px] px-5 py-2 text-sm font-medium sm:inline-flex sm:items-center sm:justify-center"
+                    />
                   </div>
 
-                  <Link
-                    href={country.href}
-                    className="mt-3 flex h-10 items-center justify-center rounded-full border-[1.5px] border-portrait-ink text-sm font-medium text-portrait-ink sm:hidden"
-                  >
-                    Apply Now
-                  </Link>
+                  <SearchApplyButton
+                    country={country}
+                    className="mt-3 flex h-10 w-full items-center justify-center rounded-full border-[1.5px] text-sm font-medium sm:hidden"
+                  />
                 </li>
               ))}
             </ul>

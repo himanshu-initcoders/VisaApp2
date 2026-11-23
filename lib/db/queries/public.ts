@@ -189,6 +189,44 @@ export const getEnabledCountriesWithProcesses = unstable_cache(
 );
 
 /**
+ * Enabled destinations with no active visa listings.
+ * Shown in home search as Coming Soon (not on the visa grid).
+ */
+export async function loadEnabledComingSoonCountries() {
+  const enabledCountries = await db.query.countries.findMany({
+    where: eq(countries.enabled, true),
+    with: {
+      visaListings: {
+        columns: {
+          id: true,
+          unsupported: true,
+        },
+      },
+    },
+    orderBy: [countries.sortOrder, countries.name],
+  });
+
+  return enabledCountries
+    .filter((country) =>
+      country.visaListings.every((listing) => listing.unsupported)
+    )
+    .map((country) => ({
+      name: country.name,
+      iso2Code: country.iso2Code,
+      images: rewriteCountryImages(country.images),
+    }));
+}
+
+export const getEnabledComingSoonCountries = unstable_cache(
+  loadEnabledComingSoonCountries,
+  ['enabled-coming-soon-countries'],
+  {
+    tags: [PUBLIC_VISA_CATALOG_TAG],
+    revalidate: CATALOG_REVALIDATE_SECONDS,
+  }
+);
+
+/**
  * Get a single country with all its processes
  * Used for country detail pages
  */

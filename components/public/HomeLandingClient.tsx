@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
-import { CountrySearchOverlay } from '@/components/public/CountrySearchOverlay';
+import {
+  CountrySearchOverlay,
+  type ComingSoonCountry,
+} from '@/components/public/CountrySearchOverlay';
 import { DestinationSearchBar } from '@/components/public/DestinationSearchBar';
 import { LandingHero } from '@/components/public/LandingHero';
 import { MotionReveal } from '@/components/public/MotionReveal';
@@ -53,11 +56,13 @@ interface HomeProcess {
 interface HomeLandingClientProps {
   countries: HomeCountryCardData[];
   processes: HomeProcess[];
+  comingSoonCountries?: ComingSoonCountry[];
 }
 
 export function HomeLandingClient({
   countries,
   processes,
+  comingSoonCountries = [],
 }: HomeLandingClientProps) {
   const [query, setQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -155,6 +160,7 @@ export function HomeLandingClient({
       {isSearchOpen && (
         <CountrySearchOverlay
           processes={processes}
+          comingSoonCountries={comingSoonCountries}
           query={query}
           onQueryChange={setQuery}
           onClose={closeSearch}
