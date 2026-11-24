@@ -67,31 +67,33 @@ export function ListingOverviewSection({
   const overviewText = overview?.trim() || '';
 
   return (
-    <section id="overview" className="scroll-mt-28 space-y-5 sm:scroll-mt-32 sm:space-y-6">
-      {overviewText ? (
-        <MotionReveal>
-          <p className="max-w-3xl text-[15px] leading-7 text-portrait-ink sm:text-base sm:leading-8 whitespace-pre-line">
-            {overviewText}
-          </p>
-        </MotionReveal>
-      ) : null}
-
+    <section id="overview" className="scroll-mt-28 sm:scroll-mt-32">
       <div className="space-y-6 sm:space-y-0 lg:grid lg:grid-cols-[1fr_0.95fr] lg:gap-8">
-        <MotionReveal>
-          <VisaTypesOffered
-            countryName={countryName}
-            processingEta={processingEta}
-            isMultipleEntry={isMultipleEntry}
-            processTypeLabel={processTypeLabel}
-            priceOptions={priceOptions}
-            selectedId={selected?.id}
-            onSelectedIdChange={setSelectedId}
-            visaKinds={visaKinds}
-            currentListingId={listingId}
-            hasRequiredDocuments={hasRequiredDocuments}
-            onVisaKindSelect={onVisaKindSelect}
-          />
-        </MotionReveal>
+        <div className="space-y-5 sm:space-y-6">
+          {overviewText ? (
+            <MotionReveal>
+              <p className="max-w-3xl text-[15px] leading-7 text-portrait-ink sm:text-base sm:leading-8 whitespace-pre-line">
+                {overviewText}
+              </p>
+            </MotionReveal>
+          ) : null}
+
+          <MotionReveal>
+            <VisaTypesOffered
+              countryName={countryName}
+              processingEta={processingEta}
+              isMultipleEntry={isMultipleEntry}
+              processTypeLabel={processTypeLabel}
+              priceOptions={priceOptions}
+              selectedId={selected?.id}
+              onSelectedIdChange={setSelectedId}
+              visaKinds={visaKinds}
+              currentListingId={listingId}
+              hasRequiredDocuments={hasRequiredDocuments}
+              onVisaKindSelect={onVisaKindSelect}
+            />
+          </MotionReveal>
+        </div>
 
         <div id="pricing" className="scroll-mt-28 sm:scroll-mt-32">
           <Suspense fallback={null}>
