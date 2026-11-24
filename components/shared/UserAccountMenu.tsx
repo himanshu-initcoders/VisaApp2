@@ -1,6 +1,7 @@
 'use client';
 
-import { signOut, useSession } from 'next-auth/react';
+import { useRef, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { ChevronDown, LayoutDashboard, LogOut } from 'lucide-react';
 import {
   Dropdown,
@@ -8,6 +9,7 @@ import {
   DropdownItem,
   DropdownLinkItem,
 } from '@/components/ui/Dropdown';
+import { secureClientSignOut } from '@/lib/auth/client-sign-out';
 import { cn } from '@/lib/utils';
 
 export interface UserAccountMenuUser {
@@ -68,6 +70,8 @@ export function UserAccountMenu({
 }: UserAccountMenuProps) {
   const { data: session } = useSession();
   const user = userProp ?? session?.user ?? null;
+  const [signingOut, setSigningOut] = useState(false);
+  const signingOutRef = useRef(false);
 
   if (!user) return null;
 
@@ -77,6 +81,16 @@ export function UserAccountMenu({
   const staff = isStaffRole(user.role);
   const dashboardHref = staff ? '/admin' : '/dashboard';
   const dashboardLabel = staff ? 'Admin' : 'Dashboard';
+
+  const handleSignOut = () => {
+    if (signingOutRef.current) return;
+    signingOutRef.current = true;
+    setSigningOut(true);
+    void secureClientSignOut(signOutCallbackUrl).catch(() => {
+      signingOutRef.current = false;
+      setSigningOut(false);
+    });
+  };
 
   return (
     <Dropdown
@@ -132,13 +146,14 @@ export function UserAccountMenu({
           </DropdownLinkItem>
 
           <DropdownItem
+            disabled={signingOut}
             onClick={() => {
               close();
-              void signOut({ callbackUrl: signOutCallbackUrl });
+              handleSignOut();
             }}
           >
             <LogOut className="h-4 w-4 shrink-0" />
-            Log out
+            {signingOut ? 'Signing out…' : 'Log out'}
           </DropdownItem>
         </>
       )}

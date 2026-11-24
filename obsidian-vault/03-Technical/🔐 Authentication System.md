@@ -332,16 +332,20 @@ async function handleLogin(email: string, password: string) {
 
 ### Sign Out
 ```typescript
-// Client Component
-import { signOut } from 'next-auth/react';
+// Public header / client menus — use hard navigation helper
+import { secureClientSignOut } from '@/lib/auth/client-sign-out';
 
-<button onClick={() => signOut()}>Sign out</button>
+await secureClientSignOut('/'); // reloads when already on `/`
 
-// Or via form (more secure)
-<form action="/api/auth/signout" method="POST">
-  <button type="submit">Sign out</button>
-</form>
+// Dashboard / admin sidebars — server action
+import { signOut } from '@/lib/auth';
+
+export async function signOutAction() {
+  await signOut({ redirectTo: '/' });
+}
 ```
+
+**Edge case (fixed):** client `signOut({ callbackUrl: '/' })` on the home page can skip reload; an in-flight `GET /api/auth/session` may re-issue the JWT cookie so the user stays signed in until a second logout.
 
 ### Check Auth in API Route
 ```typescript
