@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Controller, useForm } from 'react-hook-form';
@@ -14,6 +14,13 @@ import {
   VISA_PURPOSE_OPTIONS,
   type VisaListingPurpose,
 } from '@/lib/visa/purposes';
+import {
+  PROCESS_TYPE_OPTIONS,
+  isDigitalArrivalCard,
+  productNoun,
+  productNounTitle,
+  type ProcessType,
+} from '@/lib/visa/processTypes';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -38,14 +45,7 @@ interface ProcessBasicInfoFormProps {
   initialData: {
     processName: string;
     slug: string;
-    processType:
-      | 'electronic_travel_authorisation'
-      | 'afc'
-      | 'visa'
-      | 'appointment'
-      | 'visa_on_arrival'
-      | 'sticker_visa'
-      | 'visa_free';
+    processType: ProcessType;
     purpose: VisaListingPurpose;
     processTypeLabel: string | null;
     entryType: string | null;
@@ -66,18 +66,6 @@ interface ProcessBasicInfoFormProps {
     description?: string | null;
   };
 }
-
-const PROCESS_TYPE_OPTIONS = [
-  { value: 'electronic_travel_authorisation', label: 'Electronic Travel Authorisation' },
-  { value: 'afc', label: 'Application Facilitation Center' },
-  { value: 'visa', label: 'Visa' },
-  { value: 'appointment', label: 'Appointment' },
-  { value: 'visa_on_arrival', label: 'Visa on Arrival' },
-  { value: 'sticker_visa', label: 'Sticker Visa' },
-  { value: 'visa_free', label: 'Visa Free' },
-] as const;
-
-const PURPOSE_OPTIONS = VISA_PURPOSE_OPTIONS;
 
 const UNIT_OPTIONS = [
   { value: 'minutes', label: 'Minutes' },
@@ -123,6 +111,29 @@ export function ProcessBasicInfoForm({
       description: initialData.description || '',
     },
   });
+
+  const watchedProcessType = form.watch('processType');
+  const isArrivalCard = isDigitalArrivalCard(watchedProcessType);
+  const noun = productNoun(watchedProcessType);
+  const nounTitle = productNounTitle(watchedProcessType);
+
+  const purposeOptions = useMemo(
+    () =>
+      isArrivalCard
+        ? VISA_PURPOSE_OPTIONS.filter((option) => option.value === 'visa_on_arrival')
+        : VISA_PURPOSE_OPTIONS,
+    [isArrivalCard]
+  );
+
+  useEffect(() => {
+    if (!isArrivalCard) return;
+    if (form.getValues('purpose') !== 'visa_on_arrival') {
+      form.setValue('purpose', 'visa_on_arrival', {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+  }, [isArrivalCard, form]);
 
   const parseOptionalNumber = (value: string) => {
     if (value === '') return null;
@@ -175,8 +186,8 @@ export function ProcessBasicInfoForm({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Input
-              label="Visa Name"
-              placeholder="Thailand TDAC"
+              label={`${nounTitle} Name`}
+              placeholder={isArrivalCard ? 'Thailand Digital Arrival Card' : 'Thailand Tourist Visa'}
               error={form.formState.errors.processName?.message}
               {...form.register('processName')}
             />
@@ -202,7 +213,7 @@ export function ProcessBasicInfoForm({
 
             <Input
               label="Process Type Label"
-              placeholder="TDAC, E-Visa, Tourist Visa"
+              placeholder={isArrivalCard ? 'TDAC, MDAC, Arrival Card' : 'TDAC, E-Visa, Tourist Visa'}
               error={form.formState.errors.processTypeLabel?.message}
               {...form.register('processTypeLabel')}
             />
@@ -216,7 +227,7 @@ export function ProcessBasicInfoForm({
 
             <Select
               label="Purpose"
-              options={PURPOSE_OPTIONS.map((option) => ({ ...option }))}
+              options={purposeOptions.map((option) => ({ ...option }))}
               error={form.formState.errors.purpose?.message}
               {...form.register('purpose')}
             />
@@ -245,7 +256,7 @@ export function ProcessBasicInfoForm({
               Overview
             </label>
             <p className="mb-2 text-xs text-slate-helper">
-              Shown below the Overview tab on the public visa listing page.
+              Shown below the Overview tab on the public {noun} listing page.
               Use the visual editor, or the Code toolbar button for raw HTML.
             </p>
             <Controller
@@ -263,7 +274,7 @@ export function ProcessBasicInfoForm({
                   <textarea
                     id="description"
                     rows={8}
-                    placeholder="<p>Product overview shown on the public visa listing page…</p>"
+                    placeholder={`<p>Product overview shown on the public ${noun} listing page…</p>`}
                     className="w-full min-h-[160px] resize-y rounded-2xl border border-ash-divider px-4 py-3 font-mono text-sm text-portrait-ink transition-shadow focus:outline-none focus:ring-2 focus:ring-portrait-ink/20"
                     value={field.value || ''}
                     onChange={field.onChange}
@@ -286,7 +297,7 @@ export function ProcessBasicInfoForm({
 
           <Checkbox
             label="With Free Insurance"
-            description="Turn on when this visa package also includes travel insurance cover for the traveler."
+            description={`Turn on when this ${noun} package also includes travel insurance cover for the traveler.`}
             checked={form.watch('withFreeInsurance')}
             onChange={(checked) => {
               form.setValue('withFreeInsurance', checked, { shouldDirty: true });
@@ -392,7 +403,7 @@ export function ProcessBasicInfoForm({
             />
             <Checkbox
               label="Visible to travelers"
-              description="When off, this visa is hidden from the public catalog and apply flow."
+              description={`When off, this ${noun} is hidden from the public catalog and apply flow.`}
               checked={form.watch('isActive')}
               onChange={(checked) => form.setValue('isActive', checked, { shouldDirty: true })}
             />
@@ -402,18 +413,22 @@ export function ProcessBasicInfoForm({
               checked={form.watch('unsupported')}
               onChange={(checked) => form.setValue('unsupported', checked, { shouldDirty: true })}
             />
-            <Checkbox
-              label="Visa on Arrival"
-              description="Mark if approval happens at the destination instead of before travel."
-              checked={form.watch('visaOnArrival')}
-              onChange={(checked) => form.setValue('visaOnArrival', checked, { shouldDirty: true })}
-            />
-            <Checkbox
-              label="Visa Free"
-              description="Use when no prior visa application is needed for the selected purpose."
-              checked={form.watch('visaFree')}
-              onChange={(checked) => form.setValue('visaFree', checked, { shouldDirty: true })}
-            />
+            {!isArrivalCard ? (
+              <>
+                <Checkbox
+                  label="Visa on Arrival"
+                  description="Mark if approval happens at the destination instead of before travel."
+                  checked={form.watch('visaOnArrival')}
+                  onChange={(checked) => form.setValue('visaOnArrival', checked, { shouldDirty: true })}
+                />
+                <Checkbox
+                  label="Visa Free"
+                  description="Use when no prior visa application is needed for the selected purpose."
+                  checked={form.watch('visaFree')}
+                  onChange={(checked) => form.setValue('visaFree', checked, { shouldDirty: true })}
+                />
+              </>
+            ) : null}
           </div>
         </section>
 

@@ -1,8 +1,9 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
+import type { ProcessType } from '@/lib/visa/processTypes';
 
 export interface ProcessTypeBadgeProps {
-  type: 'electronic_travel_authorisation' | 'afc' | 'visa' | 'appointment' | 'visa_on_arrival' | 'sticker_visa' | 'visa_free';
+  type: ProcessType;
   className?: string;
 }
 
@@ -14,6 +15,7 @@ export interface ProcessTypeBadgeProps {
  * - AFC: Sky Wash (#e8f1ff)
  * - Visa: Peach Wash (#ffebd6)
  * - Appointment: Rainbow gradient outline
+ * - Digital Arrival Card: Mint Wash
  * - Other types: Default ash background
  *
  * @example
@@ -27,6 +29,12 @@ export function ProcessTypeBadge({ type, className }: ProcessTypeBadgeProps) {
           bg: 'bg-mint-wash',
           text: 'text-portrait-ink',
           label: 'eTA'
+        };
+      case 'digital_arrival_card':
+        return {
+          bg: 'bg-mint-wash',
+          text: 'text-portrait-ink',
+          label: 'Digital Arrival Card'
         };
       case 'afc':
         return {

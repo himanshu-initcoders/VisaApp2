@@ -36,6 +36,10 @@ export function stableDemoCount(seed: string, min = 420, max = 1840) {
 }
 
 export function formatProcessType(processType: string) {
+  if (processType === 'digital_arrival_card') return 'Digital Arrival Card';
+  if (processType === 'electronic_travel_authorisation') {
+    return 'Electronic Travel Authorisation';
+  }
   return processType.replace(/_/g, ' ');
 }
 

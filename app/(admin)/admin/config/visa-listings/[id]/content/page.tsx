@@ -12,6 +12,10 @@ import { PostCheckoutStepsManager } from '@/components/admin/config/PostCheckout
 import { MultiCountryManager } from '@/components/admin/config/MultiCountryManager';
 import { DisclaimerEditor } from '@/components/admin/config/DisclaimerEditor';
 import { Tabs, TabsPanel } from '@/components/ui';
+import {
+  isDigitalArrivalCard,
+  productNoun,
+} from '@/lib/visa/processTypes';
 import { ChevronLeft } from 'lucide-react';
 
 const CONTENT_TABS = [
@@ -62,6 +66,9 @@ export default async function ContentPage({
     return String.fromCodePoint(...codePoints);
   };
 
+  const isArrivalCard = isDigitalArrivalCard(process.processType);
+  const noun = productNoun(process.processType);
+
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -71,7 +78,7 @@ export default async function ContentPage({
           className="inline-flex items-center gap-2 text-sm text-slate-helper hover:text-portrait-ink transition-colors mb-6"
         >
           <ChevronLeft className="h-4 w-4" />
-          Back to Visa Listing
+          Back to {isArrivalCard ? 'Arrival Card Listing' : 'Visa Listing'}
         </Link>
 
         {/* Header */}
@@ -111,7 +118,7 @@ export default async function ContentPage({
 
           <TabsPanel id="multi-country">
             <p className="text-sm text-slate-helper">
-              Additional countries where this visa is valid.
+              Additional countries where this {noun} is valid.
             </p>
             <MultiCountryManager
               processId={id}

@@ -25,6 +25,7 @@ import {
   purposeTabSortIndex,
   visaPurposeTabLabel,
 } from '@/lib/visa/purposes';
+import { usesArrivalCardCopy } from '@/lib/visa/processTypes';
 import {
   getDemoHighlights,
   getDemoPriceOptions,
@@ -494,7 +495,10 @@ const getCachedPublicProcessPageData = unstable_cache(
         title: `${process.country.name} ${process.processName}`,
         eyebrow:
           process.processTypeLabel ||
-          (process.processType === 'electronic_travel_authorisation'
+          (usesArrivalCardCopy({
+            processType: process.processType,
+            purpose: process.purpose,
+          })
             ? `Official ${process.country.name} digital arrival card`
             : `Official support for ${process.country.name} travellers`),
         accentLabel: isFullyFree
@@ -524,7 +528,10 @@ const getCachedPublicProcessPageData = unstable_cache(
           process.description?.trim() ||
           process.country.seo?.headline ||
           process.country.seo?.metaDescription ||
-          (process.processType === 'electronic_travel_authorisation'
+          (usesArrivalCardCopy({
+            processType: process.processType,
+            purpose: process.purpose,
+          })
             ? `${process.processName} lets Indian travellers complete ${process.country.name}'s entry documentation online before departure. It is designed to be quick, low-friction, and easy to submit with the core travel documents you already have.`
             : `${process.processName} gives Indian travellers a guided application experience with document checks, timeline clarity, and transparent pricing before submission.`),
         requirements: dbRequirements,

@@ -7,6 +7,7 @@ import {
   HelpCircle,
   Settings,
 } from 'lucide-react';
+import { productNounTitle, type ProcessType } from '@/lib/visa/processTypes';
 
 interface ProcessHubCard {
   title: string;
@@ -19,6 +20,7 @@ interface ProcessHubCard {
 
 interface ProcessHubProps {
   processId: string;
+  processType?: ProcessType;
   stats: {
     tiersCount: number;
     questionsCount: number;
@@ -37,11 +39,13 @@ interface ProcessHubProps {
  * 4. Documents (requirements)
  * 5. Content & Help (FAQs, steps)
  */
-export function ProcessHub({ processId, stats }: ProcessHubProps) {
+export function ProcessHub({ processId, processType, stats }: ProcessHubProps) {
+  const nounTitle = productNounTitle(processType);
+
   const cards: ProcessHubCard[] = [
     {
       title: 'Basic Info',
-      description: 'Visa name, type, purpose, and ETA',
+      description: `${nounTitle} name, type, purpose, and ETA`,
       icon: <Settings className="h-6 w-6" />,
       href: `/admin/config/visa-listings/${processId}/basic`,
       color: 'sky',

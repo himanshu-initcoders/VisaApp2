@@ -7,11 +7,13 @@ import { Toggle } from '@/components/ui/Toggle';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { toggleVisaListingVisibility } from '@/app/(admin)/admin/config/visa-listings/actions';
 import { cn } from '@/lib/utils';
+import { productNoun } from '@/lib/visa/processTypes';
 
 interface VisaListingVisibilityCardProps {
   processId: string;
   processName: string;
   isActive: boolean;
+  processType?: string | null;
 }
 
 /**
@@ -21,7 +23,9 @@ export function VisaListingVisibilityCard({
   processId,
   processName,
   isActive: initialIsActive,
+  processType,
 }: VisaListingVisibilityCardProps) {
+  const noun = productNoun(processType);
   const router = useRouter();
   const [isActive, setIsActive] = useState(initialIsActive);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -81,8 +85,8 @@ export function VisaListingVisibilityCard({
               </p>
               <p className="mt-0.5 text-sm text-slate-helper">
                 {isActive
-                  ? 'This visa is visible to travelers on the public site.'
-                  : 'This visa is hidden from travelers. They cannot view or apply.'}
+                  ? `This ${noun} is visible to travelers on the public site.`
+                  : `This ${noun} is hidden from travelers. They cannot view or apply.`}
               </p>
               <span
                 className={cn(
@@ -113,13 +117,13 @@ export function VisaListingVisibilityCard({
           if (!loading) setConfirmOpen(false);
         }}
         onConfirm={handleConfirm}
-        title={isActive ? 'Hide this visa?' : 'Make this visa visible?'}
+        title={isActive ? `Hide this ${noun}?` : `Make this ${noun} visible?`}
         message={
           isActive
             ? `"${processName}" will be removed from the public catalog. Travelers will not see or apply for it until you make it visible again.`
             : `"${processName}" will appear on the public site for travelers (if the country is enabled and the listing is not marked unsupported).`
         }
-        confirmText={isActive ? 'Hide visa' : 'Make visible'}
+        confirmText={isActive ? `Hide ${noun}` : 'Make visible'}
         destructive={isActive}
         loading={loading}
       />

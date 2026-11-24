@@ -11,6 +11,7 @@ import { getLatestPublishedFormVersion } from '@/lib/db/queries/formVersions';
 import { QuestionsManager } from '@/components/admin/config/QuestionsManager';
 import { PublishFormVersionButton } from '@/components/admin/config/PublishFormVersionButton';
 import { PASSPORT_DOCUMENT_TYPES } from '@/lib/document-types';
+import { isDigitalArrivalCard } from '@/lib/visa/processTypes';
 import { ChevronLeft } from 'lucide-react';
 
 /**
@@ -69,6 +70,8 @@ export default async function FormsPage({
     return String.fromCodePoint(...codePoints);
   };
 
+  const isArrivalCard = isDigitalArrivalCard(process.processType);
+
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -78,7 +81,7 @@ export default async function FormsPage({
           className="inline-flex items-center gap-2 text-sm text-slate-helper hover:text-portrait-ink transition-colors mb-6"
         >
           <ChevronLeft className="h-4 w-4" />
-          Back to Visa Listing
+          Back to {isArrivalCard ? 'Arrival Card Listing' : 'Visa Listing'}
         </Link>
 
         {/* Header */}

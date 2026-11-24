@@ -27,13 +27,14 @@ import { relations } from 'drizzle-orm';
 // ============================================================================
 
 export const processTypeEnum = pgEnum('process_type', [
-  'electronic_travel_authorisation', // eTA, TDAC (Thailand)
+  'electronic_travel_authorisation', // eTA (distinct from digital arrival card)
   'afc',                             // Application Facilitation Center (Japan physical)
   'visa',                            // Standard e-visa (Dubai)
   'appointment',                     // Visa appointment booking (USA)
   'visa_on_arrival',
   'sticker_visa',
-  'visa_free'
+  'visa_free',
+  'digital_arrival_card',            // TDAC / MDAC-style digital arrival card (not a visa)
 ]);
 
 export const questionTypeEnum = pgEnum('question_type', [

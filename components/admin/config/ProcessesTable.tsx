@@ -5,19 +5,13 @@ import Link from 'next/link';
 import { FlagLogo } from '@/components/shared/FlagLogo';
 import { cn } from '@/lib/utils';
 import { ProcessTypeBadge } from './ProcessTypeBadge';
+import type { ProcessType } from '@/lib/visa/processTypes';
 import { ArrowRight } from 'lucide-react';
 
 interface ProcessWithCountry {
   id: string;
   processName: string;
-  processType:
-    | 'electronic_travel_authorisation'
-    | 'afc'
-    | 'visa'
-    | 'appointment'
-    | 'visa_on_arrival'
-    | 'sticker_visa'
-    | 'visa_free';
+  processType: ProcessType;
   purpose: string;
   standardEtaDuration: number | null;
   standardEtaUnit: string | null;

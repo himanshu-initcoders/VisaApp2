@@ -10,6 +10,10 @@ import {
 } from '@/components/public/PricingPanel';
 import { VisaTypesOffered } from '@/components/public/VisaTypesOffered';
 import { sanitizeBlogHtml } from '@/lib/blog/sanitize';
+import {
+  isInfoOnlyFreeEntry,
+  PROCESS_TYPE_OPTIONS,
+} from '@/lib/visa/processTypes';
 
 const OVERVIEW_RICH_TEXT_CLASS =
   'max-w-3xl text-[15px] leading-7 text-portrait-ink sm:text-base sm:leading-8 [&_a]:text-nautical-teal [&_a]:underline [&_h2]:font-basier [&_h2]:text-2xl [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:font-basier [&_h3]:text-xl [&_h3]:mt-6 [&_h3]:mb-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-3 [&_strong]:font-semibold';
@@ -27,6 +31,8 @@ interface ListingOverviewSectionProps {
   listingId: string;
   listingSlug: string;
   processTypeLabel?: string | null;
+  processType?: string | null;
+  isArrivalCard?: boolean;
   priceOptions: PriceOptionView[];
   headline?: string;
   isMultipleEntry?: boolean;
@@ -47,6 +53,8 @@ export function ListingOverviewSection({
   listingId,
   listingSlug,
   processTypeLabel,
+  processType = null,
+  isArrivalCard = false,
   priceOptions,
   headline,
   isMultipleEntry = false,
@@ -67,6 +75,17 @@ export function ListingOverviewSection({
     () => priceOptions.find((option) => option.id === selectedId) || priceOptions[0],
     [priceOptions, selectedId]
   );
+
+  const infoOnlyFreeEntry = isInfoOnlyFreeEntry({
+    processType,
+    priceOptions,
+  });
+
+  const processTypeDisplay =
+    PROCESS_TYPE_OPTIONS.find((option) => option.value === processType)
+      ?.label ||
+    processTypeLabel?.trim() ||
+    'Visa on Arrival';
 
   const overviewHtml = useMemo(() => {
     const raw = overview?.trim() || '';
@@ -112,33 +131,71 @@ export function ListingOverviewSection({
               visaKinds={visaKinds}
               currentListingId={listingId}
               hasRequiredDocuments={hasRequiredDocuments}
+              hidePricingDetails={infoOnlyFreeEntry}
               onVisaKindSelect={onVisaKindSelect}
             />
           </MotionReveal>
         </div>
 
         <div id="pricing" className="scroll-mt-28 sm:scroll-mt-32">
-          <Suspense fallback={null}>
-            <PricingPanel
-              compact
-              countryCode={countryCode}
-              listingId={listingId}
-              listingSlug={listingSlug}
-              isFree={isFree}
-              visaFree={visaFree}
-              officialPortalUrl={officialPortalUrl}
-              withFreeInsurance={withFreeInsurance}
-              priceOptions={priceOptions}
-              headline={headline}
-              visaKinds={visaKinds}
-              currentListingId={listingId}
-              selectedId={selected?.id}
-              onSelectedIdChange={setSelectedId}
-              applyPath={applyPath}
-              onApplyPathChange={setApplyPath}
-              onVisaKindSelect={onVisaKindSelect}
-            />
-          </Suspense>
+          {infoOnlyFreeEntry ? (
+            <MotionReveal>
+              <div className="sticky top-32 relative isolate overflow-hidden rounded-2xl border border-ash-divider bg-[#0b1220] shadow-elevated sm:rounded-[32px]">
+                <div
+                  className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full opacity-40 blur-3xl"
+                  style={{
+                    background:
+                      'radial-gradient(circle, rgba(38,192,255,0.55), transparent 70%)',
+                  }}
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute -bottom-24 -left-10 h-64 w-64 rounded-full opacity-35 blur-3xl"
+                  style={{
+                    background:
+                      'radial-gradient(circle, rgba(230,0,194,0.4), transparent 70%)',
+                  }}
+                  aria-hidden
+                />
+                <div className="relative flex min-h-[220px] flex-col justify-end p-6 sm:min-h-[280px] sm:p-9">
+                  <p className="font-basier text-[2.75rem] leading-[0.95] tracking-[-0.05em] text-white sm:text-6xl sm:tracking-[-0.06em]">
+                    {processTypeDisplay}
+                  </p>
+                  <div
+                    className="mt-6 h-1 w-20 rounded-full sm:mt-8"
+                    style={{
+                      background:
+                        'linear-gradient(90deg, rgb(38,192,255), rgb(230,0,194) 40%, rgb(255,161,62))',
+                    }}
+                    aria-hidden
+                  />
+                </div>
+              </div>
+            </MotionReveal>
+          ) : (
+            <Suspense fallback={null}>
+              <PricingPanel
+                compact
+                countryCode={countryCode}
+                listingId={listingId}
+                listingSlug={listingSlug}
+                isFree={isFree}
+                visaFree={visaFree}
+                isArrivalCard={isArrivalCard}
+                officialPortalUrl={officialPortalUrl}
+                withFreeInsurance={withFreeInsurance}
+                priceOptions={priceOptions}
+                headline={headline}
+                visaKinds={visaKinds}
+                currentListingId={listingId}
+                selectedId={selected?.id}
+                onSelectedIdChange={setSelectedId}
+                applyPath={applyPath}
+                onApplyPathChange={setApplyPath}
+                onVisaKindSelect={onVisaKindSelect}
+              />
+            </Suspense>
+          )}
         </div>
       </div>
     </section>

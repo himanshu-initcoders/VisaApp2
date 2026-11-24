@@ -9,22 +9,38 @@ interface StickySectionNavProps {
     label: string;
   }>;
   className?: string;
+  /** Reset active tab when the soft-switched listing changes. */
+  resetKey?: string;
 }
 
 export function StickySectionNav({
   items,
   className,
+  resetKey,
 }: StickySectionNavProps) {
   const itemIds = useMemo(() => items.map((item) => item.id), [items]);
   const [activeId, setActiveId] = useState(itemIds[0] || '');
+
+  useEffect(() => {
+    setActiveId(itemIds[0] || '');
+  }, [resetKey, itemIds]);
 
   useEffect(() => {
     const sections = itemIds
       .map((id) => document.getElementById(id))
       .filter((section): section is HTMLElement => Boolean(section));
 
+    let pausedUntil = 0;
+    if (resetKey) {
+      // Ignore observer churn while sibling listing content settles.
+      pausedUntil = performance.now() + 450;
+      setActiveId(itemIds[0] || 'overview');
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
+        if (performance.now() < pausedUntil) return;
+
         const visibleSection = entries
           .filter((entry) => entry.isIntersecting)
           .sort(
@@ -44,7 +60,7 @@ export function StickySectionNav({
 
     sections.forEach((section) => observer.observe(section));
     return () => observer.disconnect();
-  }, [itemIds]);
+  }, [itemIds, resetKey]);
 
   const scrollToSection = (id: string) => {
     const section = document.getElementById(id);

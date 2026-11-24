@@ -13,6 +13,7 @@ import {
   VISA_LISTING_SLUG_PATTERN,
 } from '@/lib/visa/listingSlug';
 import { VISA_LISTING_PURPOSES } from '@/lib/visa/purposes';
+import { PROCESS_TYPES } from '@/lib/visa/processTypes';
 
 /**
  * Validation schemas for admin configuration forms
@@ -65,7 +66,7 @@ export type CreateCountryFormValues = z.input<typeof createCountrySchema>;
 // ============================================================================
 
 export const processBasicInfoSchema = z.object({
-  processName: z.string().min(3, 'Visa name must be at least 3 characters').max(100, 'Visa name too long'),
+  processName: z.string().min(3, 'Name must be at least 3 characters').max(100, 'Name too long'),
   slug: z
     .string()
     .trim()
@@ -75,10 +76,7 @@ export const processBasicInfoSchema = z.object({
     .refine((value) => VISA_LISTING_SLUG_PATTERN.test(value), {
       message: 'Use words separated by hyphens, like Australia-Tourism-Visa',
     }),
-  processType: z.enum(
-    ['electronic_travel_authorisation', 'afc', 'visa', 'appointment', 'visa_on_arrival', 'sticker_visa', 'visa_free'],
-    'Invalid process type'
-  ),
+  processType: z.enum(PROCESS_TYPES, 'Invalid process type'),
   purpose: z.enum(VISA_LISTING_PURPOSES, {
     error: 'Invalid purpose',
   }),
@@ -111,6 +109,13 @@ export const processBasicInfoSchema = z.object({
     .nullable()
     .optional(),
 }).superRefine((data, ctx) => {
+  if (data.processType === 'digital_arrival_card' && data.purpose !== 'visa_on_arrival') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Digital Arrival Card listings must use Arrival Card purpose',
+      path: ['purpose'],
+    });
+  }
   if (data.withFreeInsurance && data.showInsuranceInterest) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

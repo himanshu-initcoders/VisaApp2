@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
@@ -15,12 +15,21 @@ import { ExploreMoreRail } from '@/components/public/ExploreMoreRail';
 import { RecentBlogsSection } from '@/components/public/RecentBlogsSection';
 import { MobileStickyBar } from '@/components/public/MobileStickyBar';
 import { MultiCountryChips } from '@/components/shared/MultiCountryChips';
+import {
+  ensureOverviewInView,
+  finishVisaKindNavigation,
+} from '@/components/public/PreserveListingView';
 import { loadPublicListingPage } from '@/app/visa/loadPublicListing';
 import { trackEvent } from '@/lib/analytics/gtm';
 import { sanitizeBlogHtml } from '@/lib/blog/sanitize';
 import type { BlogPost } from '@/lib/db/queries/blog';
 import type { PublicProcessPageData } from '@/lib/db/queries/public';
 import type { VisaKindOption } from '@/components/public/PricingPanel';
+import {
+  isInfoOnlyFreeEntry,
+  productNoun,
+  usesArrivalCardCopy,
+} from '@/lib/visa/processTypes';
 
 function trackListingView(listing: PublicProcessPageData) {
   const price = listing.page.pricing.priceOptions[0];
@@ -80,8 +89,16 @@ function pathMatchesListing(segment: string, data: PublicProcessPageData) {
 
 function applyListingDocument(next: PublicProcessPageData, updateUrl: boolean) {
   document.title = `${next.process.processName} for ${next.country.name}`;
-  if (updateUrl && window.location.pathname !== next.href) {
-    window.history.pushState(null, '', next.href);
+  if (!updateUrl) return;
+
+  // Always rewrite the URL (and drop any #requirements / #overview hash)
+  // so soft sibling switches don't keep a stale section hash.
+  const nextUrl = next.href.startsWith('http')
+    ? new URL(next.href).pathname
+    : next.href.split('#')[0];
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (current !== nextUrl) {
+    window.history.pushState(null, '', nextUrl);
   }
 }
 
@@ -132,6 +149,7 @@ export function PublicListingExperience({
   const dataRef = useRef(data);
   const activeIdRef = useRef(initialData.process.id);
   const requestRef = useRef(0);
+  const softNavPendingRef = useRef(false);
 
   dataRef.current = data;
   rememberListing(initialData);
@@ -139,6 +157,21 @@ export function PublicListingExperience({
   useEffect(() => {
     trackListingView(initialData);
   }, [initialData.process.id]);
+
+  // Soft sibling switches change page height; keep Overview pinned in view.
+  useLayoutEffect(() => {
+    softNavPendingRef.current = finishVisaKindNavigation();
+  }, [data.process.id]);
+
+  useEffect(() => {
+    if (!softNavPendingRef.current) return;
+    softNavPendingRef.current = false;
+    // Second pass after layout/motion settle (scroll anchoring can fight us once).
+    const timer = window.setTimeout(() => {
+      ensureOverviewInView();
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [data.process.id]);
 
   const showListing = useCallback(
     (next: PublicProcessPageData, updateUrl: boolean) => {
@@ -228,6 +261,15 @@ export function PublicListingExperience({
     data.country.images?.hero?.alt ||
     data.country.images?.banner?.alt ||
     data.country.name;
+  const isArrivalCard = usesArrivalCardCopy({
+    processType: data.process.processType,
+    purpose: data.process.purpose,
+  });
+  const noun = productNoun(data.process.processType, data.process.purpose);
+  const infoOnlyFreeEntry = isInfoOnlyFreeEntry({
+    processType: data.process.processType,
+    priceOptions: data.page.pricing.priceOptions,
+  });
 
   return (
     <>
@@ -248,6 +290,7 @@ export function PublicListingExperience({
 
         <StickySectionNav
           items={navItems}
+          resetKey={data.process.id}
           className="border-ash-divider/40 bg-[#f8f6f1]/95"
         />
 
@@ -265,6 +308,8 @@ export function PublicListingExperience({
             listingId={data.process.id}
             listingSlug={data.process.slug}
             processTypeLabel={data.process.processTypeLabel}
+            processType={data.process.processType}
+            isArrivalCard={isArrivalCard}
             priceOptions={data.page.pricing.priceOptions}
             headline={data.page.pricing.headline}
             isMultipleEntry={Boolean(data.process.isMultipleEntry)}
@@ -289,7 +334,7 @@ export function PublicListingExperience({
               <p className="text-[15px] leading-7 text-slate-helper sm:text-base">
                 {data.page.hasRequiredDocuments
                   ? 'Each item gives a quick summary so you know what to prepare before uploading.'
-                  : 'You can continue with this visa without uploading any documents.'}
+                  : `You can continue with this ${noun} without uploading any documents.`}
               </p>
             </MotionReveal>
             {data.page.hasRequiredDocuments ? (
@@ -310,7 +355,7 @@ export function PublicListingExperience({
                     : 'countries'}
                 </h2>
                 <p className="text-[15px] leading-7 text-slate-helper sm:text-base">
-                  One visa covers {data.page.multiCountries.length + 1}{' '}
+                  One {noun} covers {data.page.multiCountries.length + 1}{' '}
                   destinations — including {data.country.name}.
                 </p>
               </MotionReveal>
@@ -420,13 +465,15 @@ export function PublicListingExperience({
           )}
         </div>
 
-        <MobileStickyBar
-          price={data.process.formattedStartingPrice}
-          processName={data.process.processName}
-          countryCode={data.country.iso2Code}
-          listingId={data.process.id}
-          listingSlug={data.process.slug}
-        />
+        {!infoOnlyFreeEntry ? (
+          <MobileStickyBar
+            price={data.process.formattedStartingPrice}
+            processName={data.process.processName}
+            countryCode={data.country.iso2Code}
+            listingId={data.process.id}
+            listingSlug={data.process.slug}
+          />
+        ) : null}
       </main>
       <Footer />
     </>

@@ -154,7 +154,9 @@ function InfoPills({
           </span>
           <span>
             <span className="block text-[11px] text-[#52657D] sm:text-xs">
-              Included with visa
+              {/arrival card/i.test(pillVisaLabel)
+                ? 'Included with arrival card'
+                : 'Included with visa'}
             </span>
             <span className="block text-[13px] font-semibold leading-tight sm:text-sm">
               Free Insurance

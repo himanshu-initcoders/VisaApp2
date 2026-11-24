@@ -10,7 +10,10 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, ChevronDown, FileText } from 'lucide-react';
-import { beginVisaKindNavigation } from '@/components/public/PreserveListingView';
+import {
+  beginVisaKindNavigation,
+  cancelVisaKindNavigation,
+} from '@/components/public/PreserveListingView';
 import type {
   PriceOptionView,
   VisaKindListingOption,
@@ -18,6 +21,7 @@ import type {
 } from '@/components/public/PricingPanel';
 import { AnimatedTabs } from '@/components/ui';
 import { visaPurposeTabLabel } from '@/lib/visa/purposes';
+import { usesArrivalCardCopy } from '@/lib/visa/processTypes';
 import { cn } from '@/lib/utils';
 
 const VISIBLE_OPTIONS = 2;
@@ -41,7 +45,7 @@ function packageTitle(
 ) {
   if (processTypeLabel?.trim()) return processTypeLabel.trim();
   const stay = titleCaseDuration(
-    (option.stayDuration || option.daysLabel || 'Visa package').trim()
+    (option.stayDuration || option.daysLabel || 'Package').trim()
   );
   return `${stay} · ${entryLabel(isMultipleEntry)}`;
 }
@@ -97,6 +101,8 @@ interface VisaTypesOfferedProps {
   visaKinds?: VisaKindOption[];
   currentListingId?: string;
   hasRequiredDocuments?: boolean;
+  /** Hide ETA/FREE pricing pill on cards (info-only free VOA listings). */
+  hidePricingDetails?: boolean;
   onVisaKindSelect?: (kind: VisaKindOption) => Promise<boolean> | boolean;
 }
 
@@ -129,6 +135,9 @@ function VisaKindTabs({
   if (!current || visaKinds.length < 2) return null;
 
   const activePurpose = pendingPurpose || current.purpose;
+  const typeAriaLabel = usesArrivalCardCopy({ purpose: activePurpose })
+    ? 'Arrival card type'
+    : 'Visa type';
 
   return (
     <AnimatedTabs
@@ -152,26 +161,29 @@ function VisaKindTabs({
         const previousPurpose = current.purpose;
         setPendingPurpose(purpose);
 
-        const navigate = async () => {
-          switchingRef.current = true;
-          try {
-            if (onSelect) {
-              const ok = await onSelect(kind);
-              if (!ok) setPendingPurpose(previousPurpose);
-              return;
-            }
-
+          const navigate = async () => {
+            switchingRef.current = true;
             beginVisaKindNavigation();
-            router.push(kind.href, { scroll: false });
-          } finally {
-            switchingRef.current = false;
-          }
-        };
+            try {
+              if (onSelect) {
+                const ok = await onSelect(kind);
+                if (!ok) {
+                  setPendingPurpose(previousPurpose);
+                  cancelVisaKindNavigation();
+                }
+                return;
+              }
 
-        void navigate();
-      }}
+              router.push(kind.href, { scroll: false });
+            } finally {
+              switchingRef.current = false;
+            }
+          };
+
+          void navigate();
+        }}
       tone="light"
-      ariaLabel="Visa type"
+      ariaLabel={typeAriaLabel}
       layoutId="visa-kind-tabs-overview"
     />
   );
@@ -187,6 +199,7 @@ function SelectableCard({
   processingEta,
   formattedTotal,
   hasRequiredDocuments,
+  hidePricingDetails = false,
   onSelect,
 }: {
   title: string;
@@ -198,10 +211,12 @@ function SelectableCard({
   processingEta: string | null;
   formattedTotal: string;
   hasRequiredDocuments?: boolean;
+  hidePricingDetails?: boolean;
   onSelect: () => void;
 }) {
   const showDocumentsLink = Boolean(hasRequiredDocuments && selected);
-  const showFooter = Boolean(processText || showDocumentsLink);
+  const showProcessPill = Boolean(processText && !hidePricingDetails);
+  const showFooter = Boolean(showProcessPill || showDocumentsLink);
   const etaDisplay = processingEta ? formatProcessingEta(processingEta) : null;
 
   return (
@@ -240,9 +255,11 @@ function SelectableCard({
             {title}
           </h3>
         </div>
-        <p className="shrink-0 text-[15px] font-semibold tabular-nums text-portrait-ink sm:text-base">
-          {price}
-        </p>
+        {!hidePricingDetails ? (
+          <p className="shrink-0 text-[15px] font-semibold tabular-nums text-portrait-ink sm:text-base">
+            {price}
+          </p>
+        ) : null}
       </div>
 
       <p className="mt-3 pl-7 text-[12px] leading-6 text-slate-helper sm:text-[13px]">
@@ -256,7 +273,7 @@ function SelectableCard({
             selected ? 'mt-4' : 'mt-3'
           )}
         >
-          {processText && etaDisplay ? (
+          {showProcessPill && processText && etaDisplay ? (
             <div
               className={
                 selected
@@ -298,6 +315,7 @@ function PackageCard({
   processTypeLabel,
   purposeLabel,
   hasRequiredDocuments,
+  hidePricingDetails = false,
   onSelect,
 }: {
   option: PriceOptionView;
@@ -307,6 +325,7 @@ function PackageCard({
   processTypeLabel?: string | null;
   purposeLabel: string;
   hasRequiredDocuments?: boolean;
+  hidePricingDetails?: boolean;
   onSelect: () => void;
 }) {
   const validity = option.entryValidity
@@ -363,6 +382,7 @@ function PackageCard({
       processingEta={processingEta}
       formattedTotal={option.formattedTotal}
       hasRequiredDocuments={hasRequiredDocuments}
+      hidePricingDetails={hidePricingDetails}
       onSelect={onSelect}
     />
   );
@@ -374,6 +394,7 @@ function ListingOptionCard({
   processingEta,
   purposeLabel,
   hasRequiredDocuments,
+  hidePricingDetails = false,
   onSelect,
 }: {
   listing: VisaKindListingOption;
@@ -381,6 +402,7 @@ function ListingOptionCard({
   processingEta: string | null;
   purposeLabel: string;
   hasRequiredDocuments?: boolean;
+  hidePricingDetails?: boolean;
   onSelect: () => void;
 }) {
   const stay = listing.stayDuration
@@ -428,6 +450,7 @@ function ListingOptionCard({
       processingEta={processingEta}
       formattedTotal={listing.formattedStartingPrice}
       hasRequiredDocuments={hasRequiredDocuments}
+      hidePricingDetails={hidePricingDetails}
       onSelect={onSelect}
     />
   );
@@ -444,6 +467,7 @@ export function VisaTypesOffered({
   visaKinds = [],
   currentListingId,
   hasRequiredDocuments = false,
+  hidePricingDetails = false,
   onVisaKindSelect,
 }: VisaTypesOfferedProps) {
   const router = useRouter();
@@ -457,6 +481,9 @@ export function VisaTypesOffered({
     (activeGroup
       ? visaPurposeTabLabel(activeGroup.purpose) || activeGroup.label
       : null) || 'Visa';
+  const isArrivalCard = usesArrivalCardCopy({
+    purpose: activeGroup?.purpose,
+  });
 
   const visibleOptions = useMemo(() => {
     if (expanded || priceOptions.length <= VISIBLE_OPTIONS) return priceOptions;
@@ -470,6 +497,7 @@ export function VisaTypesOffered({
     if (!activeGroup) return;
 
     switchingRef.current = true;
+    beginVisaKindNavigation();
     try {
       const kind: VisaKindOption = {
         ...activeGroup,
@@ -477,10 +505,10 @@ export function VisaTypesOffered({
         href: listing.href,
       };
       if (onVisaKindSelect) {
-        await onVisaKindSelect(kind);
+        const ok = await onVisaKindSelect(kind);
+        if (!ok) cancelVisaKindNavigation();
         return;
       }
-      beginVisaKindNavigation();
       router.push(listing.href, { scroll: false });
     } finally {
       switchingRef.current = false;
@@ -490,7 +518,7 @@ export function VisaTypesOffered({
   return (
     <div className="space-y-4 sm:space-y-5">
       <h2 className="font-basier text-2xl leading-tight text-portrait-ink sm:text-[2rem]">
-        All visa types offered.
+       All types offered
       </h2>
 
       <VisaKindTabs
@@ -503,7 +531,11 @@ export function VisaTypesOffered({
         <div
           className="space-y-3"
           role="radiogroup"
-          aria-label="Visa options for this type"
+          aria-label={
+            isArrivalCard
+              ? 'Arrival card options for this type'
+              : 'Visa options for this type'
+          }
         >
           {siblingListings.map((listing) => (
             <ListingOptionCard
@@ -517,6 +549,7 @@ export function VisaTypesOffered({
               hasRequiredDocuments={
                 listing.id === currentListingId ? hasRequiredDocuments : false
               }
+              hidePricingDetails={hidePricingDetails}
               onSelect={() => void selectListing(listing)}
             />
           ))}
@@ -527,7 +560,7 @@ export function VisaTypesOffered({
         <div
           className="space-y-3"
           role="radiogroup"
-          aria-label="Visa packages"
+          aria-label={isArrivalCard ? 'Arrival card packages' : 'Visa packages'}
         >
           {showListingOptions && priceOptions.length > 1 ? (
             <p className="text-xs uppercase tracking-[0.2em] text-slate-helper">
@@ -544,6 +577,7 @@ export function VisaTypesOffered({
               processTypeLabel={processTypeLabel}
               purposeLabel={purposeLabel}
               hasRequiredDocuments={hasRequiredDocuments}
+              hidePricingDetails={hidePricingDetails}
               onSelect={() => onSelectedIdChange(option.id)}
             />
           ))}

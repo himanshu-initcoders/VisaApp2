@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { requireRole } from '@/lib/auth-utils';
 import { getProcessWithAllRelations, getListingPrices } from '@/lib/db/queries/config';
 import { PriceOptionsManager } from '@/components/admin/config/PriceOptionsManager';
+import { isDigitalArrivalCard } from '@/lib/visa/processTypes';
 import { ChevronLeft } from 'lucide-react';
 
 /**
@@ -32,6 +33,8 @@ export default async function TiersPage({
     return String.fromCodePoint(...codePoints);
   };
 
+  const isArrivalCard = isDigitalArrivalCard(process.processType);
+
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -40,7 +43,7 @@ export default async function TiersPage({
           className="inline-flex items-center gap-2 text-sm text-slate-helper hover:text-portrait-ink transition-colors mb-6"
         >
           <ChevronLeft className="h-4 w-4" />
-          Back to Visa Listing
+          Back to {isArrivalCard ? 'Arrival Card Listing' : 'Visa Listing'}
         </Link>
 
         <div className="mb-8">

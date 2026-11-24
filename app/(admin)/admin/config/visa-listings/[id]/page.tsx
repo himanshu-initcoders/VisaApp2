@@ -7,6 +7,12 @@ import { ProcessTypeBadge } from '@/components/admin/config/ProcessTypeBadge';
 import { VisaListingVisibilityCard } from '@/components/admin/config/VisaListingVisibilityCard';
 import { MultiCountryChips } from '@/components/shared/MultiCountryChips';
 import { getCountryName, getLocalFlagUrl } from '@/lib/countries/catalog';
+import {
+  isDigitalArrivalCard,
+  productNoun,
+  productNounTitle,
+} from '@/lib/visa/processTypes';
+import { visaPurposeLabel } from '@/lib/visa/purposes';
 import { ChevronLeft } from 'lucide-react';
 
 /**
@@ -60,6 +66,9 @@ export default async function ProcessDetailPage({
   };
 
   const multiCountryCount = process.multiTripCountries?.length || 0;
+  const isArrivalCard = isDigitalArrivalCard(process.processType);
+  const noun = productNoun(process.processType);
+  const nounTitle = productNounTitle(process.processType);
 
   return (
     <div className="min-h-screen bg-white">
@@ -70,7 +79,7 @@ export default async function ProcessDetailPage({
           className="inline-flex items-center gap-2 text-sm text-slate-helper hover:text-portrait-ink transition-colors mb-6"
         >
           <ChevronLeft className="h-4 w-4" />
-          Back to Visa Listings
+          Back to {isArrivalCard ? 'Listings' : 'Visa Listings'}
         </Link>
 
         {/* Header */}
@@ -91,7 +100,7 @@ export default async function ProcessDetailPage({
                 <ProcessTypeBadge type={process.processType} />
                 <span className="text-slate-helper">•</span>
                 <span className="text-sm text-slate-helper capitalize">
-                  {process.purpose.replace('_', ' ')}
+                  {visaPurposeLabel(process.purpose)}
                 </span>
                 <span className="text-slate-helper">•</span>
                 <span className="text-sm text-slate-helper capitalize">
@@ -115,6 +124,7 @@ export default async function ProcessDetailPage({
             processId={id}
             processName={process.processName}
             isActive={process.isActive}
+            processType={process.processType}
           />
 
           {/* Multi-Country Info */}
@@ -126,7 +136,7 @@ export default async function ProcessDetailPage({
                   {multiCountryCount === 1 ? 'country' : 'countries'}
                 </span>
                 <span className="text-sm text-slate-helper">
-                  (1 visa for {multiCountryCount + 1} countries)
+                  (1 {noun} for {multiCountryCount + 1} countries)
                 </span>
                 <Link
                   href={`/admin/config/visa-listings/${id}/content`}
@@ -190,9 +200,9 @@ export default async function ProcessDetailPage({
             className="text-[31px] font-medium text-portrait-ink mb-6"
             style={{ fontFamily: 'Basier Circle', letterSpacing: '-0.4px' }}
           >
-            Manage Visa Listing
+            Manage {nounTitle} Listing
           </h2>
-          <ProcessHub processId={id} stats={stats} />
+          <ProcessHub processId={id} processType={process.processType} stats={stats} />
         </div>
       </div>
     </div>

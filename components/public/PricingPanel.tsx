@@ -4,9 +4,13 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, ExternalLink, Minus, Plus, Users } from 'lucide-react';
 import { AnimatedStatValue, AnimatedTabs, Badge, Button } from '@/components/ui';
-import { beginVisaKindNavigation } from '@/components/public/PreserveListingView';
+import {
+  beginVisaKindNavigation,
+  cancelVisaKindNavigation,
+} from '@/components/public/PreserveListingView';
 import { useApplyStartFlow } from '@/components/apply/useApplyStartFlow';
 import { formatPrice } from '@/lib/public';
+import { productNounTitle } from '@/lib/visa/processTypes';
 
 const INR = 'INR';
 const MIN_TRAVELLERS = 1;
@@ -89,6 +93,8 @@ interface PricingPanelProps {
   /** Official government / visa portal URL for DIY apply. */
   officialPortalUrl?: string | null;
   withFreeInsurance?: boolean;
+  /** Arrival card product — swap "visa" fee/portal copy. */
+  isArrivalCard?: boolean;
   countryCode: string;
   listingId: string;
   listingSlug?: string;
@@ -126,11 +132,13 @@ function VisaKindSelector({
   visaKinds,
   currentListingId,
   tone = 'dark',
+  typeLabel = 'Visa type',
   onSelect,
 }: {
   visaKinds: VisaKindOption[];
   currentListingId?: string;
   tone?: 'dark' | 'light';
+  typeLabel?: string;
   onSelect?: (kind: VisaKindOption) => Promise<boolean> | boolean;
 }) {
   const router = useRouter();
@@ -162,7 +170,7 @@ function VisaKindSelector({
           isDark ? 'text-white/50' : 'text-slate-helper'
         }`}
       >
-        Visa type
+        {typeLabel}
       </p>
       <AnimatedTabs
         items={visaKinds.map((kind) => ({
@@ -187,14 +195,17 @@ function VisaKindSelector({
 
           const navigate = async () => {
             switchingRef.current = true;
+            beginVisaKindNavigation();
             try {
               if (onSelect) {
                 const ok = await onSelect(kind);
-                if (!ok) setPendingPurpose(previousPurpose);
+                if (!ok) {
+                  setPendingPurpose(previousPurpose);
+                  cancelVisaKindNavigation();
+                }
                 return;
               }
 
-              beginVisaKindNavigation();
               router.push(kind.href, { scroll: false });
             } finally {
               switchingRef.current = false;
@@ -204,7 +215,7 @@ function VisaKindSelector({
           void navigate();
         }}
         tone={tone}
-        ariaLabel="Visa type"
+        ariaLabel={typeLabel}
         layoutId="visa-kind-tabs"
       />
     </div>
@@ -305,6 +316,7 @@ export function PricingPanel({
   visaFree = false,
   officialPortalUrl = null,
   withFreeInsurance = false,
+  isArrivalCard = false,
   countryCode,
   listingId,
   listingSlug,
@@ -333,6 +345,9 @@ export function PricingPanel({
   const portalOnlyFree = isFullyFreeVisa(selected) || (isFree && !freeWithServiceFee);
   const darkCta =
     'w-full border-white bg-white text-portrait-ink hover:bg-white/90 hover:text-portrait-ink group flex items-center justify-center';
+  const nounTitle = productNounTitle(isArrivalCard ? 'digital_arrival_card' : 'visa');
+  const feeLabel = `${nounTitle} fee`;
+  const typeLabel = isArrivalCard ? 'Arrival card type' : 'Visa type';
 
   const setSelectedId = (id: string) => {
     if (selectedIdProp === undefined) setInternalSelectedId(id);
@@ -398,7 +413,7 @@ export function PricingPanel({
       }
       size="lg"
     >
-      {portalUrl ? 'Open visa portal' : 'Portal link unavailable'}
+      {portalUrl ? 'Open official portal' : 'Portal link unavailable'}
       {portalUrl ? (
         <ExternalLink className="ml-2 h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
       ) : null}
@@ -413,20 +428,24 @@ export function PricingPanel({
             Official portal
           </p>
           <h3 className="mt-2 font-basier text-2xl text-white sm:mt-3 sm:text-3xl">
-            Free on the visa portal
+            Free on the official portal
           </h3>
           <p className="mt-1 text-xs text-white/65 sm:text-sm">
-            Visa fee is ₹0. Apply yourself on the official site.
+            {feeLabel} is ₹0. Apply yourself on the official site.
           </p>
         </div>
         <Badge className="shrink-0 border-0 bg-mint-wash text-portrait-ink text-[10px] sm:text-xs">
-          {visaFree ? 'Visa free · DIY' : 'DIY · Free'}
+          {visaFree
+            ? isArrivalCard
+              ? 'Free entry · DIY'
+              : 'Visa free · DIY'
+            : 'DIY · Free'}
         </Badge>
       </div>
 
       {/* <div className="mt-5 space-y-3 rounded-xl bg-white/8 p-4 sm:mt-6 sm:space-y-4 sm:rounded-[24px] sm:p-5">
         <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
-          <span>Visa fee</span>
+          <span>{feeLabel}</span>
           <span>FREE</span>
         </div>
         <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
@@ -440,7 +459,7 @@ export function PricingPanel({
           </div>
         )}
         <p className="text-xs leading-5 text-white/55 sm:text-sm sm:leading-6">
-          You fill and submit the form on the official visa portal. Viserv does
+          You fill and submit the form on the official portal. Viserv does
           not process this path or charge a fee.
         </p>
       </div> */}
@@ -457,6 +476,7 @@ export function PricingPanel({
           visaKinds={visaKinds}
           currentListingId={currentListingId}
           tone={tone}
+          typeLabel={typeLabel}
           onSelect={onVisaKindSelect}
         />
       )}
@@ -586,7 +606,7 @@ export function PricingPanel({
 
               <div className="mt-5 space-y-3 rounded-xl bg-white/8 p-4 sm:mt-6 sm:space-y-4 sm:rounded-[24px] sm:p-5">
                 <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
-                  <span>Visa fee</span>
+                  <span>{feeLabel}</span>
                   <span>FREE</span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
@@ -614,8 +634,8 @@ export function PricingPanel({
                   </div>
                 )}
                 <p className="text-xs leading-5 text-white/55 sm:text-sm sm:leading-6">
-                  Visa itself is free. You pay Viserv to complete the form, check
-                  documents, and process the application for you.
+                  {nounTitle} itself is free. You pay Viserv to complete the form,
+                  check documents, and process the application for you.
                 </p>
               </div>
 
@@ -667,7 +687,7 @@ export function PricingPanel({
 
         <div className="mt-5 space-y-3 rounded-xl bg-white/8 p-4 sm:mt-6 sm:space-y-4 sm:rounded-[24px] sm:p-5">
           <div className="flex items-center justify-between text-xs text-white/72 sm:text-sm">
-            <span>Visa fee</span>
+            <span>{feeLabel}</span>
             <span>
               <AnimatedStatValue
                 value={formatPrice(scaleAmount(selected.governmentFeeAmount), INR)}
