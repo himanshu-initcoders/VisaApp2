@@ -102,8 +102,12 @@ export const processBasicInfoSchema = z.object({
   showTripDetails: z.boolean(),
   showInsuranceInterest: z.boolean(),
   sourceUrl: z.union([z.string().url('Must be a valid URL'), z.literal('')]).nullable().optional(),
+  /** TinyMCE HTML overview shown on the public visa listing page. */
   description: z
-    .union([z.string().max(2000, 'Description must be at most 2000 characters'), z.literal('')])
+    .union([
+      z.string().max(50000, 'Overview content is too long'),
+      z.literal(''),
+    ])
     .nullable()
     .optional(),
 }).superRefine((data, ctx) => {

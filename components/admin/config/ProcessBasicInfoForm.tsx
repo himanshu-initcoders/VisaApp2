@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Check } from 'lucide-react';
 import { processBasicInfoSchema, type ProcessBasicInfo } from '@/lib/validations/config';
@@ -17,6 +18,19 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Button } from '@/components/ui/Button';
+
+const TinyMceEditor = dynamic(
+  () =>
+    import('@/components/admin/config/TinyMceEditor').then(
+      (mod) => mod.TinyMceEditor
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[280px] animate-pulse rounded-2xl border border-ash-divider bg-sky-wash/40" />
+    ),
+  }
+);
 
 interface ProcessBasicInfoFormProps {
   processId: string;
@@ -81,6 +95,7 @@ export function ProcessBasicInfoForm({
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const hasTinymceKey = Boolean(process.env.NEXT_PUBLIC_TINYMCE_API_KEY);
 
   const form = useForm<ProcessBasicInfo>({
     resolver: zodResolver(processBasicInfoSchema),
@@ -229,21 +244,44 @@ export function ProcessBasicInfoForm({
             >
               Overview
             </label>
-            <textarea
-              id="description"
-              rows={4}
-              placeholder="Short product overview shown on the public visa listing page…"
-              className="w-full px-4 py-3 border border-ash-divider rounded-2xl focus:outline-none focus:ring-2 focus:ring-portrait-ink/20 transition-shadow resize-y min-h-[112px]"
-              {...form.register('description')}
+            <p className="mb-2 text-xs text-slate-helper">
+              Shown below the Overview tab on the public visa listing page.
+              Use the visual editor, or the Code toolbar button for raw HTML.
+            </p>
+            <Controller
+              control={form.control}
+              name="description"
+              render={({ field }) =>
+                hasTinymceKey ? (
+                  <TinyMceEditor
+                    value={field.value || ''}
+                    onChange={field.onChange}
+                    height={280}
+                    disabled={isSubmitting}
+                  />
+                ) : (
+                  <textarea
+                    id="description"
+                    rows={8}
+                    placeholder="<p>Product overview shown on the public visa listing page…</p>"
+                    className="w-full min-h-[160px] resize-y rounded-2xl border border-ash-divider px-4 py-3 font-mono text-sm text-portrait-ink transition-shadow focus:outline-none focus:ring-2 focus:ring-portrait-ink/20"
+                    value={field.value || ''}
+                    onChange={field.onChange}
+                    disabled={isSubmitting}
+                  />
+                )
+              }
             />
             {form.formState.errors.description && (
               <p className="mt-1 text-sm text-red-600">
                 {form.formState.errors.description.message}
               </p>
             )}
-            <p className="mt-1.5 text-xs text-slate-helper">
-              Shown below the Overview tab on the public visa listing page.
-            </p>
+            {!hasTinymceKey ? (
+              <p className="mt-1.5 text-xs text-slate-helper">
+                TinyMCE key missing — editing as HTML.
+              </p>
+            ) : null}
           </div>
 
           <Checkbox

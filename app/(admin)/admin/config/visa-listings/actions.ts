@@ -31,6 +31,14 @@ import { validateVisibilityAgainstSiblings } from '@/lib/question-visibility';
 import { normalizeDocumentConditions } from '@/lib/document-conditions';
 import { sanitizeBlogHtml } from '@/lib/blog/sanitize';
 
+/** Sanitize TinyMCE overview HTML; empty / whitespace-only markup becomes null. */
+function normalizeOverviewHtml(html: string | null | undefined): string | null {
+  const cleaned = sanitizeBlogHtml(html ?? '').trim();
+  if (!cleaned) return null;
+  if (cleaned.replace(/<[^>]*>/g, '').trim().length === 0) return null;
+  return cleaned;
+}
+
 /**
  * Invalidate public static catalog pages whenever any listing attribute changes.
  */
@@ -211,7 +219,7 @@ export async function createVisaListing(data: unknown) {
           ? false
           : validated.showInsuranceInterest,
         sourceUrl: validated.sourceUrl || null,
-        description: validated.description?.trim() || null,
+        description: normalizeOverviewHtml(validated.description),
         slug: validated.slug,
       })
       .returning({ id: visaListings.id });
@@ -302,7 +310,7 @@ export async function updateProcessBasicInfo(processId: string, data: ProcessBas
           ? false
           : validated.showInsuranceInterest,
         sourceUrl: validated.sourceUrl || null,
-        description: validated.description?.trim() || null,
+        description: normalizeOverviewHtml(validated.description),
         updatedAt: new Date(),
       })
       .where(eq(visaListings.id, processId));

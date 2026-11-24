@@ -9,6 +9,10 @@ import {
   type VisaKindOption,
 } from '@/components/public/PricingPanel';
 import { VisaTypesOffered } from '@/components/public/VisaTypesOffered';
+import { sanitizeBlogHtml } from '@/lib/blog/sanitize';
+
+const OVERVIEW_RICH_TEXT_CLASS =
+  'max-w-3xl text-[15px] leading-7 text-portrait-ink sm:text-base sm:leading-8 [&_a]:text-nautical-teal [&_a]:underline [&_h2]:font-basier [&_h2]:text-2xl [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:font-basier [&_h3]:text-xl [&_h3]:mt-6 [&_h3]:mb-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-3 [&_strong]:font-semibold';
 
 interface ListingOverviewSectionProps {
   overview: string;
@@ -64,17 +68,35 @@ export function ListingOverviewSection({
     [priceOptions, selectedId]
   );
 
-  const overviewText = overview?.trim() || '';
+  const overviewHtml = useMemo(() => {
+    const raw = overview?.trim() || '';
+    if (!raw) return '';
+    return sanitizeBlogHtml(raw);
+  }, [overview]);
+
+  const hasOverview =
+    overviewHtml.replace(/<[^>]*>/g, '').trim().length > 0 ||
+    /<img\b/i.test(overviewHtml);
+
+  const isLegacyPlainText =
+    hasOverview && !/<[a-z][\s\S]*>/i.test(overview?.trim() || '');
 
   return (
     <section id="overview" className="scroll-mt-28 sm:scroll-mt-32">
       <div className="space-y-6 sm:space-y-0 lg:grid lg:grid-cols-[1fr_0.95fr] lg:gap-8">
         <div className="space-y-5 sm:space-y-6">
-          {overviewText ? (
+          {hasOverview ? (
             <MotionReveal>
-              <p className="max-w-3xl text-[15px] leading-7 text-portrait-ink sm:text-base sm:leading-8 whitespace-pre-line">
-                {overviewText}
-              </p>
+              {isLegacyPlainText ? (
+                <p className={`${OVERVIEW_RICH_TEXT_CLASS} whitespace-pre-line`}>
+                  {overview.trim()}
+                </p>
+              ) : (
+                <div
+                  className={OVERVIEW_RICH_TEXT_CLASS}
+                  dangerouslySetInnerHTML={{ __html: overviewHtml }}
+                />
+              )}
             </MotionReveal>
           ) : null}
 

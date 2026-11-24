@@ -50,6 +50,14 @@ function headlineVisaLabel(kind: string) {
   return `${kind} Visa`;
 }
 
+function plainTextFromHtml(value: string) {
+  return value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function heroDescription(
   countryName: string,
   purpose: string,
@@ -71,8 +79,9 @@ function heroDescription(
     return `Arrive in ${countryName} with clear Arrival Card guidance — what to prepare, what it costs, and how Viserv supports you.`;
   }
 
-  const firstSentence = fallback.split(/(?<=\.)\s/)[0];
-  return firstSentence || fallback;
+  const plain = plainTextFromHtml(fallback);
+  const firstSentence = plain.split(/(?<=\.)\s/)[0];
+  return firstSentence || plain;
 }
 
 function InfoPills({
