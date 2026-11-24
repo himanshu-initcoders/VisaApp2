@@ -61,10 +61,65 @@ export const requestCorrectionSchema = z.object({
   items: z.array(correctionItemInputSchema).min(1).max(40),
 });
 
-export const commentBodySchema = z.object({
-  applicationId: z.string().uuid(),
-  body: z.string().trim().min(1).max(5000),
+export const COMMENT_ATTACHMENT_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+] as const;
+
+export const COMMENT_ATTACHMENT_MAX_MB = 10;
+
+const commentAttachmentFileSchema = z.object({
+  filename: z.string().trim().min(1).max(255),
+  mimeType: z.string().trim().min(1).max(100),
+  bufferBase64: z.string().min(1),
 });
+
+export const commentBodySchema = z
+  .object({
+    applicationId: z.string().uuid(),
+    body: z.string().max(5000).optional().default(''),
+    file: commentAttachmentFileSchema.optional(),
+  })
+  .superRefine((data, ctx) => {
+    const body = data.body.trim();
+    const hasBody = body.length > 0;
+    const hasFile = Boolean(data.file);
+    if (!hasBody && !hasFile) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Write a comment or attach a file',
+        path: ['body'],
+      });
+    }
+    if (data.file) {
+      const mime = data.file.mimeType.split(';')[0]?.trim().toLowerCase() || '';
+      if (
+        !(COMMENT_ATTACHMENT_TYPES as readonly string[]).includes(mime)
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Only PDF, JPG, PNG, or WebP files are allowed',
+          path: ['file', 'mimeType'],
+        });
+      }
+      const approxBytes = Math.floor((data.file.bufferBase64.length * 3) / 4);
+      if (approxBytes > COMMENT_ATTACHMENT_MAX_MB * 1024 * 1024) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `File must be under ${COMMENT_ATTACHMENT_MAX_MB}MB`,
+          path: ['file', 'bufferBase64'],
+        });
+      }
+    }
+  })
+  .transform((data) => ({
+    applicationId: data.applicationId,
+    body: data.body.trim(),
+    file: data.file,
+  }));
 
 export const resolveCorrectionSchema = z.object({
   requestId: z.string().uuid(),
@@ -479,6 +534,14 @@ export async function getOpenCorrection(
   return { request, items };
 }
 
+export interface CommentAttachmentView {
+  key: string;
+  filename: string;
+  mimeType: string;
+  fileSize: number | null;
+  url: string;
+}
+
 export interface CommentView {
   id: string;
   body: string;
@@ -486,9 +549,11 @@ export interface CommentView {
   authorName: string;
   createdAt: Date;
   travellerId: string | null;
+  attachment: CommentAttachmentView | null;
 }
 
 export async function listComments(applicationId: string): Promise<CommentView[]> {
+  const { toAppMediaUrl } = await import('@/lib/upload/mediaUrl');
   const rows = await db
     .select({
       id: applicationComments.id,
@@ -497,16 +562,40 @@ export async function listComments(applicationId: string): Promise<CommentView[]
       authorName: users.name,
       createdAt: applicationComments.createdAt,
       travellerId: applicationComments.travellerId,
+      attachmentS3Key: applicationComments.attachmentS3Key,
+      attachmentFilename: applicationComments.attachmentFilename,
+      attachmentMimeType: applicationComments.attachmentMimeType,
+      attachmentFileSize: applicationComments.attachmentFileSize,
     })
     .from(applicationComments)
     .leftJoin(users, eq(applicationComments.authorId, users.id))
     .where(eq(applicationComments.applicationId, applicationId))
     .orderBy(desc(applicationComments.createdAt));
 
-  return rows.map((row) => ({
-    ...row,
-    authorName: row.authorName || 'Unknown',
-  }));
+  return rows.map((row) => {
+    const key = row.attachmentS3Key?.trim() || '';
+    const url = key ? toAppMediaUrl(key) : null;
+    const attachment =
+      key && url
+        ? {
+            key,
+            filename: row.attachmentFilename || 'attachment',
+            mimeType: row.attachmentMimeType || 'application/octet-stream',
+            fileSize: row.attachmentFileSize,
+            url,
+          }
+        : null;
+
+    return {
+      id: row.id,
+      body: row.body,
+      authorRole: row.authorRole,
+      authorName: row.authorName || 'Unknown',
+      createdAt: row.createdAt,
+      travellerId: row.travellerId,
+      attachment,
+    };
+  });
 }
 
 export interface CorrectionRoundView {

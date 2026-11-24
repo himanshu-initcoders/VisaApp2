@@ -14,11 +14,13 @@ import { auth } from '@/lib/auth';
 import {
   assertSafeMediaKey,
   extractProfileMediaUserId,
+  isConversationMediaKey,
   isPrivateMediaKey,
   isProfileMediaKey,
   isPublicMediaKey,
   sniffMediaContentType,
 } from '@/lib/upload/mediaUrl';
+import { canAccessConversationMedia } from '@/lib/upload/conversationMediaAccess';
 import {
   getCachedPublicMedia,
   setCachedPublicMedia,
@@ -105,10 +107,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const forceDownload =
+      request.nextUrl.searchParams.get('download') === '1' ||
+      request.nextUrl.searchParams.get('download') === 'true';
+
     if (isPrivateMediaKey(key) && !isPublicMediaKey(key)) {
       const session = await auth();
       if (!session?.user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      // Conversation attachments: owner or admin / assigned reviewer only.
+      if (isConversationMediaKey(key)) {
+        const allowed = await canAccessConversationMedia({
+          key,
+          userId: session.user.id,
+          role: session.user.role,
+        });
+        if (!allowed) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
       }
       // Profile vault keys embed the owner userId — require match (staff ok).
       if (isProfileMediaKey(key)) {
@@ -176,12 +193,18 @@ export async function GET(request: NextRequest) {
       setCachedPublicMedia(key, buffer, contentType);
     }
 
+    const filename = key.split('/').pop() || 'download';
+    const disposition = forceDownload
+      ? `attachment; filename="${filename.replace(/"/g, '')}"`
+      : undefined;
+
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': contentType,
         'Cache-Control': cacheControl,
         'Content-Length': String(buffer.length),
+        ...(disposition ? { 'Content-Disposition': disposition } : {}),
         ...(isPublic ? { 'X-Media-Cache': 'MISS' } : {}),
       },
     });

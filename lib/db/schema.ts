@@ -553,6 +553,11 @@ export const applicationComments = pgTable(
     }),
     authorRole: varchar('author_role', { length: 20 }).notNull(),
     body: text('body').notNull(),
+    /** Optional single PDF/image attachment (conversation thread). */
+    attachmentS3Key: varchar('attachment_s3_key', { length: 500 }),
+    attachmentFilename: varchar('attachment_filename', { length: 255 }),
+    attachmentMimeType: varchar('attachment_mime_type', { length: 100 }),
+    attachmentFileSize: integer('attachment_file_size'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [

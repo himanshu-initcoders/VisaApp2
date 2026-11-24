@@ -201,3 +201,25 @@ export function inferApplicationTypeFromObjectKey(
 }
 
 export const APPLICATION_UPLOAD_FOLDER = 'applications' as const;
+
+/**
+ * Conversation attachment keys:
+ * applications/conversation/{applicationId}/{commentId}/{safeName}.{ext}
+ */
+export function buildConversationAttachmentKey(input: {
+  applicationId: string;
+  commentId: string;
+  mimeType: string;
+  filename?: string;
+}): string {
+  const ext = extensionFromMime(input.mimeType, input.filename);
+  const rawBase = (input.filename || 'attachment').replace(/\.[^.]+$/, '');
+  const baseName = sanitizeSlotKey(rawBase);
+  return [
+    'applications',
+    'conversation',
+    sanitizePathSegment(input.applicationId),
+    sanitizePathSegment(input.commentId),
+    `${baseName}.${ext}`,
+  ].join('/');
+}

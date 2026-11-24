@@ -41,6 +41,8 @@ import {
 import { recomputeVisaCaseStatus } from '@/lib/visa/travellerStatus';
 import {
   buildCorrectableTargets,
+  COMMENT_ATTACHMENT_MAX_MB,
+  COMMENT_ATTACHMENT_TYPES,
   commentBodySchema,
   getOpenCorrection,
   readTargetValue,
@@ -84,6 +86,8 @@ import {
 import { uploadService } from '@/lib/upload';
 import { uploadApplicationDocuments } from '@/lib/upload/application-actions';
 import {
+  APPLICATION_UPLOAD_FOLDER,
+  buildConversationAttachmentKey,
   extractApplicationIdFromObjectKey,
   inferApplicationTypeFromObjectKey,
 } from '@/lib/upload/applicationKey';
@@ -2806,7 +2810,7 @@ export async function postStaffComment(
       return { success: false, message, error: message };
     }
 
-    const { applicationId, body } = parsed.data;
+    const { applicationId, body, file } = parsed.data;
 
     const [visaApplication] = await db
       .select({ id: visaApplications.id })
@@ -2842,11 +2846,56 @@ export async function postStaffComment(
     }
 
     const role = staffRole(session.user.role);
+    const commentId = crypto.randomUUID();
+    let attachmentS3Key: string | null = null;
+    let attachmentFilename: string | null = null;
+    let attachmentMimeType: string | null = null;
+    let attachmentFileSize: number | null = null;
+
+    if (file) {
+      const mimeType =
+        file.mimeType.split(';')[0]?.trim().toLowerCase() || '';
+      const buffer = Buffer.from(file.bufferBase64, 'base64');
+      if (buffer.byteLength > COMMENT_ATTACHMENT_MAX_MB * 1024 * 1024) {
+        return {
+          success: false,
+          message: `File must be under ${COMMENT_ATTACHMENT_MAX_MB}MB`,
+        };
+      }
+      const explicitKey = buildConversationAttachmentKey({
+        applicationId,
+        commentId,
+        mimeType,
+        filename: file.filename,
+      });
+      const uploaded = await uploadService.upload(buffer, {
+        folder: APPLICATION_UPLOAD_FOLDER,
+        filename: file.filename,
+        explicitKey,
+        maxSizeMB: COMMENT_ATTACHMENT_MAX_MB,
+        allowedTypes: [...COMMENT_ATTACHMENT_TYPES],
+        metadata: {
+          applicationId,
+          commentId,
+          slotKey: 'conversation',
+        },
+      });
+      attachmentS3Key = uploaded.key;
+      attachmentFilename = uploaded.filename || file.filename;
+      attachmentMimeType = uploaded.mimeType || mimeType;
+      attachmentFileSize = uploaded.size;
+    }
+
     await db.insert(applicationComments).values({
+      id: commentId,
       applicationId,
       authorId: session.user.id,
       authorRole: role,
       body,
+      attachmentS3Key,
+      attachmentFilename,
+      attachmentMimeType,
+      attachmentFileSize,
       createdAt: new Date(),
     });
 
@@ -2855,13 +2904,18 @@ export async function postStaffComment(
     } else {
       await revalidateVisaSurfaces(applicationId);
     }
+    const notifyBody = file
+      ? body
+        ? `${body}\n(attachment)`
+        : '(attachment)'
+      : body;
     try {
       await notifyCommentEvent({
         applicationId,
         authorId: session.user.id,
         authorName: session.user.name || 'Reviewer',
         authorRole: role,
-        body,
+        body: notifyBody,
       });
     } catch (notifyError) {
       console.error('Comment notification failed', notifyError);

@@ -24,6 +24,18 @@ export function isApplicationMediaKey(key: string): boolean {
   return key.startsWith('applications/');
 }
 
+/** Conversation attachments: applications/conversation/{applicationId}/... */
+export function isConversationMediaKey(key: string): boolean {
+  return key.startsWith('applications/conversation/');
+}
+
+export function extractConversationApplicationId(
+  objectKey: string
+): string | null {
+  const match = objectKey.match(/^applications\/conversation\/([^/]+)\//);
+  return match?.[1] ?? null;
+}
+
 /** Profile vault uploads: users/{userId}/profiles/{profileId}/... */
 export function isProfileMediaKey(key: string): boolean {
   return key.startsWith('users/') && key.includes('/profiles/');

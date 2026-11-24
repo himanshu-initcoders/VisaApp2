@@ -137,6 +137,7 @@
 - [ ] Progress indicators
 
 ### Communication
+- [x] Conversation tab attachments — applicant/admin/reviewer can send 1 PDF or image (≤10MB) per message; view/download via authenticated `/api/media` for application participants only (`0047_comment_attachments`)
 - [ ] In-app notifications
 - [ ] SMS notifications
 - [ ] Real-time chat support
