@@ -117,6 +117,17 @@ Pipeline stages: sync workspace → `/opt/visa` (keeps `.env`) → build → mig
 - Migrations run via `docker compose --profile migrate run --rm migrate`.
 - App recreate is probed at `/api/health`.
 
+### Post-deploy ChunkLoadError (expected without skew protection)
+
+Each build hashes client chunks (`page-<hash>.js`). Replacing the `app` container deletes the old files. **Open tabs** from before the deploy still request the old hashes → `404` → `ChunkLoadError` → “This page couldn't load”.
+
+Mitigations already in the app:
+
+- `ChunkLoadRecovery` + `app/error.tsx` / `app/global-error.tsx` reload **once** to pick up the new build.
+- Hard refresh also fixes it for you; users with an old tab get the auto-reload.
+
+Do **not** long-cache HTML at a CDN in front of Caddy. `/_next/static/*` may be cached forever (`immutable`); HTML/RSC must revalidate on deploy.
+
 Manual deploy without Jenkins:
 
 ```bash

@@ -90,6 +90,11 @@ pipeline {
             export DOCKER_BUILDKIT=0
             echo "WARN: docker buildx missing in Jenkins image — using classic builder"
           fi
+          # Snapshot the running image before overwrite so rollback / static-hash
+          # inspection still has the previous build.
+          if docker image inspect visa-app:latest >/dev/null 2>&1; then
+            docker tag visa-app:latest visa-app:previous || true
+          fi
           export BUILD_DATABASE_URL
           docker build \
             --network=host \

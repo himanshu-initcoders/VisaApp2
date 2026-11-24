@@ -17,8 +17,21 @@ export default function AdminError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log error to console for debugging
     console.error('Admin panel error:', error);
+    // Post-deploy: old tab requests hashed chunks that no longer exist.
+    const isChunk =
+      error.name === 'ChunkLoadError' ||
+      /Loading chunk [\w-]+ failed/i.test(error.message);
+    if (!isChunk) return;
+    try {
+      const key = 'viserv:chunk-reload-at';
+      const last = Number(sessionStorage.getItem(key) || '0');
+      if (Date.now() - last < 10_000) return;
+      sessionStorage.setItem(key, String(Date.now()));
+    } catch {
+      // ignore
+    }
+    window.location.reload();
   }, [error]);
 
   return (

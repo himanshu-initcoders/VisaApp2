@@ -5,6 +5,7 @@ import Script from 'next/script';
 import { AuthSessionProvider } from '@/components/auth/AuthSessionProvider';
 import { GtmRouteListener } from '@/components/analytics/GtmRouteListener';
 import { JsonLd } from '@/components/seo/JsonLd';
+import { ChunkLoadRecovery } from '@/components/shared/ChunkLoadRecovery';
 import { buildSiteGraphJsonLd, getSiteUrl } from '@/lib/seo/jsonld';
 import {
   DEFAULT_OG_IMAGE,
@@ -106,23 +107,11 @@ export default function RootLayout({
     >
       <head>
         <JsonLd data={buildSiteGraphJsonLd()} />
-        {/* Preload critical fonts */}
-        <link
-          rel="preload"
-          href="/fonts/BasierCircle-Regular.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
-        <link
-          rel="preload"
-          href="/fonts/Switzer-Regular.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
+        {/* Fonts: add files under public/fonts/ before re-enabling preload.
+            Preloading missing /fonts/*.woff2 caused permanent 404 noise in prod. */}
       </head>
       <body className="antialiased">
+        <ChunkLoadRecovery />
         {GTM_ID ? (
           <>
             <noscript>
