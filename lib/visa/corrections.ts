@@ -14,6 +14,7 @@ import {
   visaApplications,
 } from '@/lib/db/schema';
 import {
+  normalizeApplyFormConfig,
   type ApplyFormConfig,
   type ApplyTripQuestion,
 } from '@/lib/apply/applicationForm';
@@ -199,18 +200,34 @@ export function buildCorrectableTargets(
   config: ApplyFormConfig | null
 ): CorrectableTarget[] {
   const targets: CorrectableTarget[] = [];
-  const showGeneral = config?.showGeneralInfo !== false;
-  const showTrip = config?.showTripDetails === true;
+  const normalized = config ? normalizeApplyFormConfig(config) : null;
+  const showGeneral = normalized?.showGeneralInfo !== false;
+  const showTrip = normalized?.showTripDetails === true;
+  const steps = normalized?.steps ?? [];
+  const ocrStep = steps.find((s) => s.kind === 'ocr');
+  const tripStep = steps.find((s) => s.kind === 'trip');
 
   if (showGeneral) {
-    for (const group of PASSPORT_REVIEW_GROUPS) {
-      for (const field of group.fields) {
+    const ocrQuestions = ocrStep?.questions.filter((q) => q.systemKey) ?? [];
+    if (ocrQuestions.length > 0) {
+      for (const question of ocrQuestions) {
         targets.push({
           kind: 'field',
-          targetKey: `passport.${field.key}`,
-          label: field.label,
-          group: group.title,
+          targetKey: `passport.${question.systemKey}`,
+          label: question.label,
+          group: ocrStep?.title || 'Personal details',
         });
+      }
+    } else {
+      for (const group of PASSPORT_REVIEW_GROUPS) {
+        for (const field of group.fields) {
+          targets.push({
+            kind: 'field',
+            targetKey: `passport.${field.key}`,
+            label: field.label,
+            group: group.title,
+          });
+        }
       }
     }
     targets.push(
@@ -230,29 +247,56 @@ export function buildCorrectableTargets(
   }
 
   if (showTrip) {
-    for (const field of TRIP_FIELDS) {
-      targets.push({
-        kind: 'field',
-        targetKey: `trip.${field.key}`,
-        label: field.label,
-        group: 'Trip details',
-      });
+    const tripQuestions = tripStep?.questions.filter((q) => q.systemKey) ?? [];
+    if (tripQuestions.length > 0) {
+      for (const question of tripQuestions) {
+        targets.push({
+          kind: 'field',
+          targetKey: `trip.${question.systemKey}`,
+          label: question.label,
+          group: tripStep?.title || 'Trip details',
+        });
+      }
+    } else {
+      for (const field of TRIP_FIELDS) {
+        targets.push({
+          kind: 'field',
+          targetKey: `trip.${field.key}`,
+          label: field.label,
+          group: 'Trip details',
+        });
+      }
     }
   }
 
-  for (const question of config?.extraQuestions ?? []) {
+  const customFromSteps = steps
+    .filter((s) => s.kind === 'custom')
+    .flatMap((s) =>
+      s.questions
+        .filter((q) => !q.systemKey)
+        .map((q) => ({ ...q, group: s.title }))
+    );
+  const extraQuestions =
+    customFromSteps.length > 0
+      ? customFromSteps
+      : (normalized?.extraQuestions ?? []).map((q) => ({
+          ...q,
+          group: 'Additional questions',
+        }));
+
+  for (const question of extraQuestions) {
     targets.push({
       kind: 'field',
       targetKey: `extra.${question.key}`,
       label: question.label,
-      group: 'Additional questions',
+      group: question.group,
     });
   }
 
   const seenDocumentKeys = new Set(
     targets.filter((t) => t.kind === 'document').map((t) => t.targetKey)
   );
-  for (const slot of config?.documentSlots ?? []) {
+  for (const slot of normalized?.documentSlots ?? []) {
     // Passport front/back are already added above when showGeneral is on;
     // documentSlots also keeps passport-back for OCR-miss capture.
     if (seenDocumentKeys.has(slot.key)) continue;
@@ -797,7 +841,9 @@ export async function listApplicantActionItems(
   for (const row of rows) {
     if (!row.travellerId) continue;
     const key = `${row.applicationId}:${row.travellerId}`;
-    const config = (row.formSnapshot as ApplyFormConfig | null) ?? null;
+    const config = row.formSnapshot
+      ? normalizeApplyFormConfig(row.formSnapshot as ApplyFormConfig)
+      : null;
     const current = grouped.get(key) ?? {
       applicationId: row.applicationId,
       referenceNumber: row.referenceNumber,

@@ -5,6 +5,7 @@ import {
   countries,
   visaListings,
   visaListingPrices,
+  visaFormSteps,
   componentsRequired,
   additionalQuestions,
   faqs,
@@ -279,6 +280,14 @@ export async function getEntryProcessDetails(processId: string) {
       componentsRequired: {
         orderBy: [componentsRequired.sortOrder],
       },
+      formSteps: {
+        orderBy: [visaFormSteps.sortOrder],
+        with: {
+          questions: {
+            orderBy: [additionalQuestions.sortOrder],
+          },
+        },
+      },
       additionalQuestions: {
         orderBy: [additionalQuestions.sortOrder],
       },
@@ -320,6 +329,14 @@ const getCachedPublicProcessPageData = unstable_cache(
         },
         componentsRequired: {
           orderBy: [componentsRequired.sortOrder],
+        },
+        formSteps: {
+          orderBy: [visaFormSteps.sortOrder],
+          with: {
+            questions: {
+              orderBy: [additionalQuestions.sortOrder],
+            },
+          },
         },
         additionalQuestions: {
           orderBy: [additionalQuestions.sortOrder],
@@ -578,6 +595,7 @@ const getCachedPublicProcessPageData = unstable_cache(
             process.showInsuranceInterest && !process.withFreeInsurance,
           components: process.componentsRequired,
           questions: process.additionalQuestions,
+          formSteps: process.formSteps,
           documentTypeSamples: await getDocumentTypeSamplesByValues(
             process.componentsRequired.flatMap((item) =>
               [item.documentType, item.key].filter(Boolean) as string[]

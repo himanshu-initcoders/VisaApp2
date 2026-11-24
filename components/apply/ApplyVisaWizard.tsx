@@ -18,8 +18,12 @@ import { quoteVisaCheckout } from '@/lib/payments/actions';
 import type { PassportApplicationPayload } from '@/components/apply/passport/PassportReviewStage';
 import {
   defaultApplyFormConfig,
+  getOcrStep,
+  getTripStep,
   hasPassportBackImage,
   isAdditionalQuestionsComplete,
+  isConfiguredOcrComplete,
+  isConfiguredTripComplete,
   isCoreTripComplete,
   isDocumentsComplete,
   isMultiStopComplete,
@@ -28,7 +32,6 @@ import {
   type ApplyFormConfig,
 } from '@/lib/apply/applicationForm';
 import { getVisibleDocumentSlots } from '@/lib/document-conditions';
-import { isReviewComplete } from '@/lib/passport/schema';
 import type { ApplyStep, ApplyTraveller } from '@/lib/apply/types';
 import {
   isTravellerFilled,
@@ -203,19 +206,31 @@ function isListingApplicationComplete(
   formConfig: ApplyFormConfig
 ) {
   const generalComplete = formConfig.showGeneralInfo
-    ? Boolean(traveller.passportData && isReviewComplete(traveller.passportData))
+    ? Boolean(
+        traveller.passportData &&
+          isConfiguredOcrComplete(traveller.passportData, getOcrStep(formConfig))
+      )
     : true;
   const tripComplete = formConfig.showTripDetails
-    ? isCoreTripComplete(traveller.tripDetails) &&
-      isMultiStopComplete(traveller.tripDetails)
+    ? isConfiguredTripComplete(traveller.tripDetails, getTripStep(formConfig))
     : true;
+  const customSteps = (formConfig.steps ?? []).filter(
+    (s) => s.kind === 'custom' && s.questions.length > 0
+  );
   const additionalComplete =
-    formConfig.extraQuestions.length === 0
-      ? true
-      : isAdditionalQuestionsComplete(
-          traveller.tripDetails,
-          formConfig.extraQuestions
-        );
+    customSteps.length > 0
+      ? customSteps.every((step) => {
+          const qs = step.questions.filter((q) => !q.systemKey);
+          return qs.length === 0
+            ? true
+            : isAdditionalQuestionsComplete(traveller.tripDetails, qs);
+        })
+      : formConfig.extraQuestions.length === 0
+        ? true
+        : isAdditionalQuestionsComplete(
+            traveller.tripDetails,
+            formConfig.extraQuestions
+          );
   const visibleDocumentSlots = resolveDocumentSlotsWithPassportBack(
     getVisibleDocumentSlots(
       formConfig.documentSlots,
@@ -1807,8 +1822,10 @@ export function ApplyVisaWizard({
               return [];
             }
             if (
-              !isCoreTripComplete(traveller.tripDetails) ||
-              !isMultiStopComplete(traveller.tripDetails)
+              !isConfiguredTripComplete(
+                traveller.tripDetails,
+                getTripStep(formConfig)
+              )
             ) {
               return [];
             }

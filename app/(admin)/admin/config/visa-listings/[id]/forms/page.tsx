@@ -3,51 +3,46 @@ import Link from 'next/link';
 import { requireRole } from '@/lib/auth-utils';
 import {
   getProcessWithAllRelations,
-  getAdditionalQuestions,
   getComponentsRequired,
+  getVisaFormStepsWithQuestions,
   listDocumentTypes,
 } from '@/lib/db/queries/config';
 import { getLatestPublishedFormVersion } from '@/lib/db/queries/formVersions';
-import { QuestionsManager } from '@/components/admin/config/QuestionsManager';
-import { PublishFormVersionButton } from '@/components/admin/config/PublishFormVersionButton';
+import { VisaFormStepsManager } from '@/components/admin/config/VisaFormStepsManager';
 import { PASSPORT_DOCUMENT_TYPES } from '@/lib/document-types';
 import { isDigitalArrivalCard } from '@/lib/visa/processTypes';
+import { seedDefaultVisaFormSteps } from '@/lib/db/seedVisaFormSteps';
 import { ChevronLeft } from 'lucide-react';
+import type { VisaFormStepKind } from '@/lib/apply/visaSystemFields';
 
 /**
  * Form Builder Page
  *
- * Allows admins to manage country-specific dynamic questions for an entry process.
- * Features:
- * - Drag-and-drop reordering
- * - Add/edit/delete questions
- * - Support for 4 question types (text, date, dropdown, boolean)
- * - Required category from a hardcoded list (groups apply-form sections)
- * - Question keys are UUID-generated and hidden from the admin UI
- * - Manage dropdown options
- * - Publish immutable form versions for applicant submit (Phase 3)
+ * Passport-style steps: OCR (Personal details), Trip details, and custom steps.
+ * Admins can rename steps, edit/remove questions, and publish form versions.
  */
 export default async function FormsPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  // Require admin role
   await requireRole(['admin']);
 
-  // Await params (Next.js 16 requirement)
   const { id } = await params;
 
-  // Fetch process details
   const process = await getProcessWithAllRelations(id);
 
   if (!process) {
     notFound();
   }
 
-  // Fetch questions ordered by sortOrder + document catalog for conditional docs
-  const [questions, components, catalogRows] = await Promise.all([
-    getAdditionalQuestions(id),
+  let formSteps = await getVisaFormStepsWithQuestions(id);
+  if (formSteps.length === 0) {
+    await seedDefaultVisaFormSteps(id);
+    formSteps = await getVisaFormStepsWithQuestions(id);
+  }
+
+  const [components, catalogRows] = await Promise.all([
     getComponentsRequired(id),
     listDocumentTypes(),
   ]);
@@ -61,21 +56,45 @@ export default async function FormsPage({
     .map((item) => item.documentType || item.key)
     .filter((value): value is string => Boolean(value));
 
-  // Get flag emoji
   const getFlag = (iso2Code: string) => {
     const codePoints = iso2Code
       .toUpperCase()
       .split('')
-      .map(char => 127397 + char.charCodeAt(0));
+      .map((char) => 127397 + char.charCodeAt(0));
     return String.fromCodePoint(...codePoints);
   };
 
   const isArrivalCard = isDigitalArrivalCard(process.processType);
 
+  const initialSteps = formSteps.map((step) => ({
+    id: step.id,
+    title: step.title,
+    description: step.description,
+    kind: step.kind as VisaFormStepKind,
+    sortOrder: step.sortOrder,
+    questions: (step.questions ?? []).map((q) => ({
+      id: q.id,
+      key: q.key,
+      stepId: q.stepId ?? step.id,
+      systemKey: q.systemKey,
+      label: q.label,
+      description: q.description,
+      questionType: q.questionType,
+      required: q.required,
+      options: q.options,
+      visibility: q.visibility ?? undefined,
+      documentConditions: q.documentConditions ?? undefined,
+      sortOrder: q.sortOrder,
+      requiredDoc: q.requiredDoc,
+      extraInfo: q.extraInfo,
+      sourceUrl: q.sourceUrl,
+      catalogQuestionId: q.catalogQuestionId,
+    })),
+  }));
+
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Back Button */}
         <Link
           href={`/admin/config/visa-listings/${id}`}
           className="inline-flex items-center gap-2 text-sm text-slate-helper hover:text-portrait-ink transition-colors mb-6"
@@ -84,40 +103,23 @@ export default async function FormsPage({
           Back to {isArrivalCard ? 'Arrival Card Listing' : 'Visa Listing'}
         </Link>
 
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="text-2xl">{getFlag(process.country.iso2Code)}</span>
-            <h1
-              className="text-[44px] font-medium leading-tight tracking-tight text-portrait-ink"
-              style={{ fontFamily: 'Basier Circle', letterSpacing: '-1.15px' }}
-            >
-              Form Builder
-            </h1>
-          </div>
-          <p className="text-base text-slate-helper">
-            Configure dynamic questions for {process.processName}
-          </p>
+        <div className="mb-6 flex items-center gap-3">
+          <span className="text-2xl">{getFlag(process.country.iso2Code)}</span>
+          <p className="text-base text-slate-helper">{process.processName}</p>
         </div>
 
-        <div className="mb-8">
-          <PublishFormVersionButton
-            listingId={id}
-            latestVersion={latestVersion?.version ?? null}
-            latestPublishedAt={
-              latestVersion?.publishedAt
-                ? latestVersion.publishedAt.toISOString()
-                : null
-            }
-          />
-        </div>
-
-        {/* Questions Manager */}
-        <QuestionsManager
-          processId={id}
-          initialQuestions={questions}
-          documentCatalog={documentCatalog}
+        <VisaFormStepsManager
+          listingId={id}
+          productName={process.processName}
+          initialSteps={initialSteps}
+          catalog={documentCatalog}
           attachedDocumentTypes={attachedDocumentTypes}
+          latestVersion={latestVersion?.version ?? null}
+          latestPublishedAt={
+            latestVersion?.publishedAt
+              ? latestVersion.publishedAt.toISOString()
+              : null
+          }
         />
       </div>
     </div>

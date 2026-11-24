@@ -47,8 +47,11 @@ interface QuestionCardProps {
   onDelete: () => void;
   /** Override category badge (e.g. passport form step title). */
   groupLabel?: string;
+  /** Hide delete for locked OCR identity fields. */
+  disableDelete?: boolean;
+  /** Extra badge (e.g. "OCR" / "System"). */
+  systemBadge?: string | null;
 }
-
 /**
  * QuestionCard Component
  *
@@ -68,6 +71,8 @@ export function QuestionCard({
   onEdit,
   onDelete,
   groupLabel,
+  disableDelete = false,
+  systemBadge,
 }: QuestionCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: question.id,
@@ -145,6 +150,12 @@ export function QuestionCard({
             {groupLabel || questionCategoryLabel(question.category || 'other')}
           </span>
 
+          {systemBadge && (
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-peach-wash text-portrait-ink">
+              {systemBadge}
+            </span>
+          )}
+
           {isConditional && (
             <span className="px-3 py-1 rounded-full text-xs font-medium bg-peach-wash text-portrait-ink">
               {visibilityRule?.operator === 'is_empty'
@@ -196,9 +207,11 @@ export function QuestionCard({
         <Button onClick={onEdit} variant="secondary" size="sm">
           Edit
         </Button>
-        <Button onClick={onDelete} variant="ghost" size="sm">
-          Delete
-        </Button>
+        {!disableDelete && (
+          <Button onClick={onDelete} variant="ghost" size="sm">
+            Delete
+          </Button>
+        )}
       </div>
     </div>
   );

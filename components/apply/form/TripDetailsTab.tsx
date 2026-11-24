@@ -21,8 +21,13 @@ interface TripDetailsTabProps {
   onChange: (next: TravellerTripDetails) => void;
   editableKeys?: ReadonlySet<string>;
   comments?: Record<string, string>;
+  /** Form Builder trip step fields — when set, only configured system keys render. */
+  configuredFields?: Array<{
+    systemKey?: string | null;
+    label: string;
+    required: boolean;
+  }> | null;
 }
-
 function updateTrip(
   trip: TravellerTripDetails,
   patch: Partial<TravellerTripDetails>
@@ -118,8 +123,23 @@ export function TripDetailsTab({
   onChange,
   editableKeys,
   comments,
+  configuredFields = null,
 }: TripDetailsTabProps) {
   const normalized = emptyTripDetails(trip);
+  const show = (systemKey: string) =>
+    !configuredFields ||
+    configuredFields.some((f) => f.systemKey === systemKey);
+  const labelFor = (systemKey: string, fallback: string) =>
+    configuredFields?.find((f) => f.systemKey === systemKey)?.label ?? fallback;
+
+  const showArrival =
+    show('flightNumber') || show('arrivalFlightDate');
+  const showReturn =
+    show('returnFlightNumber') || show('returnFlightDate');
+  const showHotel =
+    show('accommodationName') ||
+    show('arrivalCity') ||
+    show('accommodationAddress');
 
   return (
     <div className="mx-auto max-w-3xl space-y-10">
@@ -155,107 +175,124 @@ export function TripDetailsTab({
         </div>
       </div>
 
-      <FlightRouteSection
-        title="Arrival flight details"
-        hint="The flight number that arrives into the destination country."
-        flightNumber={normalized.flightNumber}
-        date={normalized.arrivalFlightDate}
-        dateLabel="Arrival date"
-        numberKey="trip.flightNumber"
-        dateKey="trip.arrivalFlightDate"
-        editableKeys={editableKeys}
-        comments={comments}
-        onChange={({ flightNumber, date }) =>
-          onChange(
-            updateTrip(normalized, {
-              arrivalFlightMode: 'direct',
-              flightNumber,
-              arrivalFlightDate: date,
-              arrivalDate: date,
-              arrivalFlights: [{ flightNumber, date }],
-            })
-          )
-        }
-      />
+      {showArrival && (
+        <FlightRouteSection
+          title="Arrival flight details"
+          hint="The flight number that arrives into the destination country."
+          flightNumber={normalized.flightNumber}
+          date={normalized.arrivalFlightDate}
+          dateLabel={labelFor('arrivalFlightDate', 'Arrival date')}
+          numberKey="trip.flightNumber"
+          dateKey="trip.arrivalFlightDate"
+          editableKeys={editableKeys}
+          comments={comments}
+          onChange={({ flightNumber, date }) =>
+            onChange(
+              updateTrip(normalized, {
+                arrivalFlightMode: 'direct',
+                flightNumber,
+                arrivalFlightDate: date,
+                arrivalDate: date,
+                arrivalFlights: [{ flightNumber, date }],
+              })
+            )
+          }
+        />
+      )}
 
-      <FlightRouteSection
-        title="Return flight details"
-        hint="The flight number that departs from the destination country."
-        flightNumber={normalized.returnFlightNumber}
-        date={normalized.returnFlightDate}
-        dateLabel="Departure date"
-        numberKey="trip.returnFlightNumber"
-        dateKey="trip.returnFlightDate"
-        editableKeys={editableKeys}
-        comments={comments}
-        onChange={({ flightNumber, date }) =>
-          onChange(
-            updateTrip(normalized, {
-              returnFlightMode: 'direct',
-              returnFlightNumber: flightNumber,
-              returnFlightDate: date,
-              returnDate: date,
-              returnFlights: [{ flightNumber, date }],
-            })
-          )
-        }
-      />
+      {showReturn && (
+        <FlightRouteSection
+          title="Return flight details"
+          hint="The flight number that departs from the destination country."
+          flightNumber={normalized.returnFlightNumber}
+          date={normalized.returnFlightDate}
+          dateLabel={labelFor('returnFlightDate', 'Departure date')}
+          numberKey="trip.returnFlightNumber"
+          dateKey="trip.returnFlightDate"
+          editableKeys={editableKeys}
+          comments={comments}
+          onChange={({ flightNumber, date }) =>
+            onChange(
+              updateTrip(normalized, {
+                returnFlightMode: 'direct',
+                returnFlightNumber: flightNumber,
+                returnFlightDate: date,
+                returnDate: date,
+                returnFlights: [{ flightNumber, date }],
+              })
+            )
+          }
+        />
+      )}
 
-      <section className="space-y-5">
-        <div>
-          <h3 className="font-switzer text-sm font-semibold text-portrait-ink">
-            Hotel details
-          </h3>
-          <p className="mt-1 text-sm text-slate-helper">
-            Where this traveller will stay after arrival.
-          </p>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2">
-          <CorrectionGate
-            targetKey="trip.accommodationName"
-            editableKeys={editableKeys}
-            comment={comments?.['trip.accommodationName']}
-          >
-            <UnderlineField
-              label="Hotel / accommodation name"
-              value={normalized.accommodationName}
-              onChange={(value) =>
-                onChange(updateTrip(normalized, { accommodationName: value }))
-              }
-            />
-          </CorrectionGate>
-          <CorrectionGate
-            targetKey="trip.arrivalCity"
-            editableKeys={editableKeys}
-            comment={comments?.['trip.arrivalCity']}
-          >
-            <UnderlineField
-              label="Arrival city / port of entry"
-              value={normalized.arrivalCity}
-              onChange={(value) =>
-                onChange(updateTrip(normalized, { arrivalCity: value }))
-              }
-            />
-          </CorrectionGate>
-          <div className="sm:col-span-2">
-            <CorrectionGate
-              targetKey="trip.accommodationAddress"
-              editableKeys={editableKeys}
-              comment={comments?.['trip.accommodationAddress']}
-            >
-              <UnderlineField
-                label="Stay address"
-                value={normalized.accommodationAddress}
-                onChange={(value) =>
-                  onChange(
-                    updateTrip(normalized, { accommodationAddress: value })
-                  )
-                }
-              />
-            </CorrectionGate>
+      {showHotel && (
+        <section className="space-y-5">
+          <div>
+            <h3 className="font-switzer text-sm font-semibold text-portrait-ink">
+              Hotel details
+            </h3>
+            <p className="mt-1 text-sm text-slate-helper">
+              Where this traveller will stay after arrival.
+            </p>
           </div>
-        </div>
-      </section>
+          <div className="grid gap-5 sm:grid-cols-2">
+            {show('accommodationName') && (
+              <CorrectionGate
+                targetKey="trip.accommodationName"
+                editableKeys={editableKeys}
+                comment={comments?.['trip.accommodationName']}
+              >
+                <UnderlineField
+                  label={labelFor(
+                    'accommodationName',
+                    'Hotel / accommodation name'
+                  )}
+                  value={normalized.accommodationName}
+                  onChange={(value) =>
+                    onChange(
+                      updateTrip(normalized, { accommodationName: value })
+                    )
+                  }
+                />
+              </CorrectionGate>
+            )}
+            {show('arrivalCity') && (
+              <CorrectionGate
+                targetKey="trip.arrivalCity"
+                editableKeys={editableKeys}
+                comment={comments?.['trip.arrivalCity']}
+              >
+                <UnderlineField
+                  label={labelFor('arrivalCity', 'Arrival city / port of entry')}
+                  value={normalized.arrivalCity}
+                  onChange={(value) =>
+                    onChange(updateTrip(normalized, { arrivalCity: value }))
+                  }
+                />
+              </CorrectionGate>
+            )}
+            {show('accommodationAddress') && (
+              <div className="sm:col-span-2">
+                <CorrectionGate
+                  targetKey="trip.accommodationAddress"
+                  editableKeys={editableKeys}
+                  comment={comments?.['trip.accommodationAddress']}
+                >
+                  <UnderlineField
+                    label={labelFor('accommodationAddress', 'Stay address')}
+                    value={normalized.accommodationAddress}
+                    onChange={(value) =>
+                      onChange(
+                        updateTrip(normalized, { accommodationAddress: value })
+                      )
+                    }
+                  />
+                </CorrectionGate>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

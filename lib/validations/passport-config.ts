@@ -102,8 +102,8 @@ export const passportAdditionalQuestionSchema = z
       .min(2, 'Key must be at least 2 characters')
       .max(50, 'Key too long')
       .regex(
-        /^[a-z0-9_-]+$/,
-        'Key must be lowercase letters, numbers, hyphens, and underscores only'
+        /^[a-zA-Z0-9_.-]+$/,
+        'Key must be letters, numbers, dots, hyphens, and underscores only'
       )
       .optional(),
     stepId: z.string().uuid('Select a form step'),

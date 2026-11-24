@@ -4,6 +4,7 @@ import {
   countries,
   visaListings,
   visaListingPrices,
+  visaFormSteps,
   additionalQuestions,
   questionCatalog,
   componentsRequired,
@@ -176,6 +177,14 @@ export async function getProcessWithAllRelations(processId: string) {
         orderBy: [visaListingPrices.sortOrder]
       },
       multiTripCountries: true,
+      formSteps: {
+        orderBy: [visaFormSteps.sortOrder],
+        with: {
+          questions: {
+            orderBy: [additionalQuestions.sortOrder],
+          },
+        },
+      },
       additionalQuestions: {
         orderBy: [additionalQuestions.sortOrder]
       },
@@ -190,6 +199,41 @@ export async function getProcessWithAllRelations(processId: string) {
       }
     }
   });
+}
+
+/** Form Builder steps with nested questions for a listing. */
+export async function getVisaFormStepsWithQuestions(processId: string) {
+  return await db.query.visaFormSteps.findMany({
+    where: eq(visaFormSteps.visaListingId, processId),
+    orderBy: [visaFormSteps.sortOrder],
+    with: {
+      questions: {
+        orderBy: [additionalQuestions.sortOrder],
+      },
+    },
+  });
+}
+
+export async function getVisaFormStepById(stepId: string) {
+  return await db.query.visaFormSteps.findFirst({
+    where: eq(visaFormSteps.id, stepId),
+  });
+}
+
+export async function getMaxVisaStepSortOrder(processId: string) {
+  const result = await db
+    .select({ maxSort: sql<number>`max(${visaFormSteps.sortOrder})` })
+    .from(visaFormSteps)
+    .where(eq(visaFormSteps.visaListingId, processId));
+  return result[0]?.maxSort ?? -1;
+}
+
+export async function getMaxQuestionSortOrderForStep(stepId: string) {
+  const result = await db
+    .select({ maxSort: sql<number>`max(${additionalQuestions.sortOrder})` })
+    .from(additionalQuestions)
+    .where(eq(additionalQuestions.stepId, stepId));
+  return result[0]?.maxSort ?? -1;
 }
 
 /**
@@ -531,7 +575,7 @@ export async function searchAdditionalQuestionsByLabel(
       label: row.label,
       description: row.description,
       questionType: row.questionType,
-      category: row.category,
+      category: row.category ?? 'other',
       required: row.required,
       options: row.options,
       visibility: row.visibility,

@@ -2,13 +2,16 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
-import { countries, visaListings, visaListingPrices, additionalQuestions, questionCatalog, componentsRequired, faqs, postCheckoutSteps, multiTripCountries } from '@/lib/db/schema-extended';
+import { countries, visaListings, visaListingPrices, visaFormSteps, additionalQuestions, questionCatalog, componentsRequired, faqs, postCheckoutSteps, multiTripCountries } from '@/lib/db/schema-extended';
 import { eq, and, sql, ne } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth-utils';
-import { processBasicInfoSchema, type ProcessBasicInfo, createVisaListingSchema, visaListingPriceSchema, type VisaListingPriceInput, additionalQuestionSchema, type AdditionalQuestion, componentRequiredSchema, type ComponentRequired, createComponentsBulkSchema, type CreateComponentsBulk, faqSchema, type FAQ, postCheckoutStepSchema, type PostCheckoutStep, multiCountrySchema, type MultiCountry } from '@/lib/validations/config';
+import { processBasicInfoSchema, type ProcessBasicInfo, createVisaListingSchema, visaListingPriceSchema, type VisaListingPriceInput, additionalQuestionSchema, type AdditionalQuestion, visaFormStepSchema, type VisaFormStepInput, componentRequiredSchema, type ComponentRequired, createComponentsBulkSchema, type CreateComponentsBulk, faqSchema, type FAQ, postCheckoutStepSchema, type PostCheckoutStep, multiCountrySchema, type MultiCountry } from '@/lib/validations/config';
 import {
   getQuestionById,
   getMaxQuestionSortOrder,
+  getMaxQuestionSortOrderForStep,
+  getMaxVisaStepSortOrder,
+  getVisaFormStepById,
   getAdditionalQuestions,
   searchQuestionCatalogByLabel,
   getQuestionCatalogById,
@@ -25,6 +28,8 @@ import {
   getDocumentTypeByValue,
   getDocumentTypeSamplesByValues,
 } from '@/lib/db/queries/config';
+import { seedDefaultVisaFormSteps } from '@/lib/db/seedVisaFormSteps';
+import { isLockedOcrSystemKey } from '@/lib/apply/visaSystemFields';
 import { revalidatePublicVisaCatalog } from '@/lib/revalidate-public-catalog';
 import { documentTypeLabel } from '@/lib/document-types';
 import { validateVisibilityAgainstSiblings } from '@/lib/question-visibility';
@@ -213,8 +218,8 @@ export async function createVisaListing(data: unknown) {
         visaOnArrival: validated.visaOnArrival,
         visaFree: validated.visaFree,
         withFreeInsurance: validated.withFreeInsurance,
-        showGeneralInfo: validated.showGeneralInfo,
-        showTripDetails: validated.showTripDetails,
+        showGeneralInfo: true,
+        showTripDetails: true,
         showInsuranceInterest: validated.withFreeInsurance
           ? false
           : validated.showInsuranceInterest,
@@ -227,6 +232,8 @@ export async function createVisaListing(data: unknown) {
     if (!created) {
       return { success: false as const, error: 'Failed to create visa listing' };
     }
+
+    await seedDefaultVisaFormSteps(created.id);
 
     revalidatePath('/admin/config/visa-listings');
     revalidatePath(`/admin/config/visa-listings?country=${validated.destinationCountry}`);
@@ -304,8 +311,6 @@ export async function updateProcessBasicInfo(processId: string, data: ProcessBas
         visaOnArrival: validated.visaOnArrival,
         visaFree: validated.visaFree,
         withFreeInsurance: validated.withFreeInsurance,
-        showGeneralInfo: validated.showGeneralInfo,
-        showTripDetails: validated.showTripDetails,
         showInsuranceInterest: validated.withFreeInsurance
           ? false
           : validated.showInsuranceInterest,
@@ -598,8 +603,13 @@ export async function createQuestion(processId: string, data: AdditionalQuestion
       return { error: 'Visa listing not found' };
     }
 
-    // Get max sortOrder and increment
-    const maxOrder = await getMaxQuestionSortOrder(processId);
+    const step = await getVisaFormStepById(validated.stepId);
+    if (!step || step.visaListingId !== processId) {
+      return { error: 'Form step not found on this listing' };
+    }
+
+    // Get max sortOrder within the step
+    const maxOrder = await getMaxQuestionSortOrderForStep(validated.stepId);
 
     const siblings = await getAdditionalQuestions(processId);
     const visibilityError = validateVisibilityAgainstSiblings({
@@ -637,15 +647,16 @@ export async function createQuestion(processId: string, data: AdditionalQuestion
       questionKey = catalog.key;
     }
 
-    // Create listing attachment (category/required/visibility stay listing-local)
+    // Create listing attachment (step-scoped; category kept for legacy compat)
     await db.insert(additionalQuestions).values({
       visaListingId: processId,
+      stepId: validated.stepId,
       catalogQuestionId: catalogId,
       key: questionKey,
       label: validated.label,
       description: validated.description || null,
       questionType: validated.questionType,
-      category: validated.category,
+      category: validated.category ?? 'other',
       required: validated.required,
       familyEnabled: false,
       onlyB2b: false,
@@ -724,14 +735,20 @@ export async function updateQuestion(questionId: string, data: AdditionalQuestio
 
     const documentConditions = validated.documentConditions ?? null;
 
-    // Update listing row. Key + catalogQuestionId stay immutable after create.
+    const step = await getVisaFormStepById(validated.stepId);
+    if (!step || step.visaListingId !== question.visaListingId) {
+      return { error: 'Form step not found on this listing' };
+    }
+
+    // Update listing row. Key + catalogQuestionId + systemKey stay immutable after create.
     await db
       .update(additionalQuestions)
       .set({
+        stepId: validated.stepId,
         label: validated.label,
         description: validated.description || null,
         questionType: validated.questionType,
-        category: validated.category,
+        category: validated.category ?? question.category ?? 'other',
         required: validated.required,
         requiredDoc: validated.requiredDoc || null,
         options: validated.options || [],
@@ -804,6 +821,13 @@ export async function deleteQuestion(questionId: string) {
 
     if (!question) {
       return { error: 'Question not found' };
+    }
+
+    if (isLockedOcrSystemKey(question.systemKey)) {
+      return {
+        error:
+          'First name, last name, and passport number cannot be deleted from the OCR step',
+      };
     }
 
     // Delete question
@@ -1536,6 +1560,162 @@ export async function removeMultiTripCountry(countryId: string) {
 }
 
 /**
+ * Create a custom Form Builder step (OCR/Trip are seeded; OCR cannot be deleted).
+ */
+export async function createVisaFormStep(
+  listingId: string,
+  data: VisaFormStepInput
+) {
+  await requireRole(['admin']);
+
+  try {
+    const validated = visaFormStepSchema.parse(data);
+    const process = await db.query.visaListings.findFirst({
+      where: eq(visaListings.id, listingId),
+      columns: { id: true },
+    });
+    if (!process) return { error: 'Visa listing not found' };
+
+    const sortOrder = (await getMaxVisaStepSortOrder(listingId)) + 1;
+    const [created] = await db
+      .insert(visaFormSteps)
+      .values({
+        visaListingId: listingId,
+        title: validated.title,
+        description: validated.description || null,
+        kind: 'custom',
+        sortOrder: Math.max(sortOrder, 1),
+      })
+      .returning();
+
+    revalidatePath(`/admin/config/visa-listings/${listingId}/forms`);
+    await revalidateListingPublic(listingId);
+    return { success: true, message: 'Step created', step: created };
+  } catch (error) {
+    console.error('Error creating visa form step:', error);
+    return { error: 'Failed to create step' };
+  }
+}
+
+export async function updateVisaFormStep(
+  stepId: string,
+  data: VisaFormStepInput
+) {
+  await requireRole(['admin']);
+
+  try {
+    const validated = visaFormStepSchema.parse(data);
+    const step = await getVisaFormStepById(stepId);
+    if (!step) return { error: 'Step not found' };
+
+    await db
+      .update(visaFormSteps)
+      .set({
+        title: validated.title,
+        description: validated.description || null,
+      })
+      .where(eq(visaFormSteps.id, stepId));
+
+    revalidatePath(`/admin/config/visa-listings/${step.visaListingId}/forms`);
+    await revalidateListingPublic(step.visaListingId);
+    return { success: true, message: 'Step updated' };
+  } catch (error) {
+    console.error('Error updating visa form step:', error);
+    return { error: 'Failed to update step' };
+  }
+}
+
+export async function deleteVisaFormStep(stepId: string) {
+  await requireRole(['admin']);
+
+  try {
+    const step = await getVisaFormStepById(stepId);
+    if (!step) return { error: 'Step not found' };
+    if (step.kind === 'ocr') {
+      return { error: 'The Personal details (OCR) step cannot be deleted' };
+    }
+
+    await db.delete(visaFormSteps).where(eq(visaFormSteps.id, stepId));
+
+    revalidatePath(`/admin/config/visa-listings/${step.visaListingId}/forms`);
+    await revalidateListingPublic(step.visaListingId);
+    return { success: true, message: 'Step deleted' };
+  } catch (error) {
+    console.error('Error deleting visa form step:', error);
+    return { error: 'Failed to delete step' };
+  }
+}
+
+export async function reorderVisaFormSteps(
+  listingId: string,
+  stepIds: string[]
+) {
+  await requireRole(['admin']);
+
+  try {
+    const steps = await db.query.visaFormSteps.findMany({
+      where: eq(visaFormSteps.visaListingId, listingId),
+    });
+    const byId = new Map(steps.map((s) => [s.id, s]));
+
+    const ocr = steps.find((s) => s.kind === 'ocr');
+    let ordered = stepIds.filter((id) => byId.has(id));
+    if (ocr) {
+      ordered = [ocr.id, ...ordered.filter((id) => id !== ocr.id)];
+    }
+
+    await Promise.all(
+      ordered.map((id, index) =>
+        db
+          .update(visaFormSteps)
+          .set({ sortOrder: index })
+          .where(eq(visaFormSteps.id, id))
+      )
+    );
+
+    revalidatePath(`/admin/config/visa-listings/${listingId}/forms`);
+    await revalidateListingPublic(listingId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error reordering visa form steps:', error);
+    return { error: 'Failed to reorder steps' };
+  }
+}
+
+export async function reorderVisaStepQuestions(
+  stepId: string,
+  questionIds: string[]
+) {
+  await requireRole(['admin']);
+
+  try {
+    const step = await getVisaFormStepById(stepId);
+    if (!step) return { error: 'Step not found' };
+
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < questionIds.length; i++) {
+        await tx
+          .update(additionalQuestions)
+          .set({ sortOrder: i })
+          .where(
+            and(
+              eq(additionalQuestions.id, questionIds[i]),
+              eq(additionalQuestions.stepId, stepId)
+            )
+          );
+      }
+    });
+
+    revalidatePath(`/admin/config/visa-listings/${step.visaListingId}/forms`);
+    await revalidateListingPublic(step.visaListingId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error reordering visa step questions:', error);
+    return { error: 'Failed to reorder questions' };
+  }
+}
+
+/**
  * Publish an immutable form version snapshot for a listing (Phase 3).
  * Freezes buildApplyFormConfig output so submitted apps keep historical labels.
  */
@@ -1570,6 +1750,7 @@ export async function publishFormVersion(listingId: string) {
         process.showInsuranceInterest && !process.withFreeInsurance,
       components: process.componentsRequired,
       questions: process.additionalQuestions,
+      formSteps: process.formSteps,
       documentTypeSamples,
     });
 

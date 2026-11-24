@@ -150,8 +150,6 @@ export function CreateVisaListingWizard({
       visaOnArrival: false,
       visaFree: false,
       withFreeInsurance: false,
-      showGeneralInfo: true,
-      showTripDetails: false,
       showInsuranceInterest: false,
       sourceUrl: '',
       description: '',
@@ -593,24 +591,8 @@ export function CreateVisaListingWizard({
                   </>
                 ) : null}
                 <Checkbox
-                  label="Personal details"
-                  description="Show passport biodata on apply. Off = Fill Application (no OCR)."
-                  checked={form.watch('showGeneralInfo') ?? true}
-                  onChange={(checked) =>
-                    form.setValue('showGeneralInfo', checked, { shouldDirty: true })
-                  }
-                />
-                <Checkbox
-                  label="Trip Details"
-                  description="Show purpose, dates, and accommodation on apply."
-                  checked={form.watch('showTripDetails') ?? false}
-                  onChange={(checked) =>
-                    form.setValue('showTripDetails', checked, { shouldDirty: true })
-                  }
-                />
-                <Checkbox
                   label="Are you looking for visa insurance also? (optional)"
-                  description="Shows an optional insurance-interest question on checkout. Disabled when With Free Insurance is on."
+                  description="Shows an optional insurance-interest question on checkout. Disabled when With Free Insurance is on. Personal and Trip fields are configured in Form Builder after create."
                   checked={form.watch('showInsuranceInterest')}
                   disabled={form.watch('withFreeInsurance')}
                   onChange={(checked) =>

@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import {
   earliestFutureDateIso,
+  isReviewComplete,
 } from '@/lib/passport/schema';
+import type { IndianPassportFields } from '@/lib/passport/types';
 import {
   QUESTION_CATEGORIES,
   isQuestionCategory,
@@ -26,16 +28,29 @@ import {
   type DocumentConditions,
   type DocumentSlotVisibility,
 } from '@/lib/document-conditions';
+import {
+  DEFAULT_OCR_STEP_TITLE,
+  DEFAULT_OCR_SYSTEM_FIELDS,
+  DEFAULT_TRIP_STEP_TITLE,
+  DEFAULT_TRIP_SYSTEM_FIELDS,
+  type VisaFormStepKind,
+} from '@/lib/apply/visaSystemFields';
 
-export const APPLICATION_FORM_TABS = [
-  { id: 'general', label: 'Personal details' },
-  { id: 'trip', label: 'Trip details' },
-  { id: 'additional', label: 'Additional questions' },
+/** Built-in + terminal tabs. Form Builder steps use their own ids. */
+export const APPLICATION_FORM_TERMINAL_TABS = [
   { id: 'documents', label: 'Documents' },
   { id: 'review', label: 'Review & submit' },
 ] as const;
 
-export type ApplicationFormTabId = (typeof APPLICATION_FORM_TABS)[number]['id'];
+/** @deprecated Prefer config.steps; kept for legacy snapshots / shims. */
+export const APPLICATION_FORM_TABS = [
+  { id: 'general', label: 'Personal details' },
+  { id: 'trip', label: 'Trip details' },
+  { id: 'additional', label: 'Additional questions' },
+  ...APPLICATION_FORM_TERMINAL_TABS,
+] as const;
+
+export type ApplicationFormTabId = string;
 
 export const TRIP_PURPOSE_OPTIONS = [
   { value: 'tourism', label: 'Tourism' },
@@ -112,7 +127,20 @@ export interface ApplyTripQuestion {
   visibility?: QuestionVisibility;
   /** When answer matches, show/require listed document types. */
   documentConditions?: DocumentConditions;
+  /** Built-in OCR/trip binding when set. */
+  systemKey?: string | null;
 }
+
+export type ApplyFormStepQuestion = ApplyTripQuestion;
+
+export type ApplyFormStep = {
+  id: string;
+  title: string;
+  description?: string | null;
+  kind: VisaFormStepKind;
+  sortOrder: number;
+  questions: ApplyFormStepQuestion[];
+};
 
 export type ApplyTripQuestionGroup = {
   category: QuestionCategory;
@@ -241,10 +269,18 @@ export interface ApplyFormConfig {
   purpose: string;
   countryName: string;
   processName: string;
+  /** Derived from steps (OCR step present). Legacy snapshots may set directly. */
   showGeneralInfo: boolean;
+  /** Derived from steps (Trip step present). */
   showTripDetails: boolean;
   /** When true, checkout shows optional insurance-interest checkbox. */
   showInsuranceInterest: boolean;
+  /** Ordered Form Builder steps (OCR / Trip / custom). */
+  steps: ApplyFormStep[];
+  /**
+   * Non-system custom questions (for visibility gating + legacy UIs).
+   * Prefer reading per-step questions from `steps`.
+   */
   extraQuestions: ApplyTripQuestion[];
   documentSlots: ApplyDocumentSlot[];
 }
@@ -578,6 +614,147 @@ export type DocumentTypeSampleLookup = ReadonlyMap<
   }
 >;
 
+type BuildQuestionInput = {
+  id: string;
+  key: string;
+  label: string;
+  description?: string | null;
+  questionType: string;
+  category?: string | null;
+  required?: boolean | null;
+  extraInfo?: string | null;
+  options?: Array<{ label: string; value: string }> | null;
+  visibility?: QuestionVisibility;
+  documentConditions?: DocumentConditions;
+  systemKey?: string | null;
+  stepId?: string | null;
+  sortOrder?: number | null;
+};
+
+function mapToApplyQuestion(question: BuildQuestionInput): ApplyTripQuestion {
+  const rawCategory = question.category ?? 'other';
+  return {
+    id: question.id,
+    key: question.key,
+    label: question.label,
+    description: question.description || question.extraInfo || undefined,
+    category: isQuestionCategory(rawCategory) ? rawCategory : 'other',
+    type: mapQuestionType(question.questionType),
+    required: Boolean(question.required),
+    options: question.options ?? undefined,
+    visibility: normalizeQuestionVisibility(question.visibility),
+    documentConditions: normalizeDocumentConditions(question.documentConditions),
+    systemKey: question.systemKey ?? null,
+  };
+}
+
+function syntheticSystemQuestions(
+  fields: typeof DEFAULT_OCR_SYSTEM_FIELDS,
+  category: QuestionCategory
+): ApplyTripQuestion[] {
+  return fields.map((field) => ({
+    id: `synthetic-${field.systemKey}`,
+    key: field.key,
+    label: field.label,
+    description: field.description,
+    category,
+    type: field.questionType,
+    required: field.required,
+    options: field.options,
+    systemKey: field.systemKey,
+  }));
+}
+
+/** Build steps from DB form steps, or synthesize from legacy flags + flat questions. */
+function resolveApplyFormSteps(input: {
+  formSteps?: Array<{
+    id: string;
+    title: string;
+    description?: string | null;
+    kind: string;
+    sortOrder: number;
+    questions?: BuildQuestionInput[];
+  }>;
+  questions: BuildQuestionInput[];
+  showGeneralInfo?: boolean | null;
+  showTripDetails?: boolean | null;
+}): ApplyFormStep[] {
+  if (input.formSteps && input.formSteps.length > 0) {
+    return [...input.formSteps]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((step) => {
+        const kind = (
+          step.kind === 'ocr' || step.kind === 'trip' ? step.kind : 'custom'
+        ) as VisaFormStepKind;
+        const questions = [...(step.questions ?? [])]
+          .filter(
+            (q) =>
+              !isFileQuestionType(q.questionType) &&
+              !CORE_TRIP_QUESTION_KEYS.has(q.key.toLowerCase())
+          )
+          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+          .map(mapToApplyQuestion);
+        return {
+          id: step.id,
+          title: step.title,
+          description: step.description ?? null,
+          kind,
+          sortOrder: step.sortOrder,
+          questions,
+        };
+      });
+  }
+
+  // Legacy shim: no steps table / old published snapshot
+  const steps: ApplyFormStep[] = [];
+  let sortOrder = 0;
+  if (input.showGeneralInfo !== false) {
+    steps.push({
+      id: 'legacy-ocr',
+      title: DEFAULT_OCR_STEP_TITLE,
+      kind: 'ocr',
+      sortOrder: sortOrder++,
+      questions: syntheticSystemQuestions(
+        DEFAULT_OCR_SYSTEM_FIELDS,
+        'passenger_details'
+      ),
+    });
+  }
+  if (input.showTripDetails === true) {
+    steps.push({
+      id: 'legacy-trip',
+      title: DEFAULT_TRIP_STEP_TITLE,
+      kind: 'trip',
+      sortOrder: sortOrder++,
+      questions: syntheticSystemQuestions(
+        DEFAULT_TRIP_SYSTEM_FIELDS,
+        'travel_details'
+      ),
+    });
+  }
+
+  const customQuestions = input.questions
+    .filter(
+      (q) =>
+        !q.systemKey &&
+        !isFileQuestionType(q.questionType) &&
+        !CORE_TRIP_QUESTION_KEYS.has(q.key.toLowerCase())
+    )
+    .map(mapToApplyQuestion);
+
+  if (customQuestions.length > 0) {
+    steps.push({
+      id: 'legacy-additional',
+      title: 'Additional questions',
+      kind: 'custom',
+      sortOrder: sortOrder++,
+      questions: customQuestions,
+    });
+  }
+
+  return steps;
+}
+
 export function buildApplyFormConfig(input: {
   purpose: string;
   countryName: string;
@@ -593,43 +770,31 @@ export function buildApplyFormConfig(input: {
     attributes?: string[] | null;
     sourceUrl?: string | null;
   }>;
-  questions: Array<{
+  questions: BuildQuestionInput[];
+  formSteps?: Array<{
     id: string;
-    key: string;
-    label: string;
+    title: string;
     description?: string | null;
-    questionType: string;
-    category?: string | null;
-    required?: boolean | null;
-    extraInfo?: string | null;
-    options?: Array<{ label: string; value: string }> | null;
-    visibility?: QuestionVisibility;
-    documentConditions?: DocumentConditions;
+    kind: string;
+    sortOrder: number;
+    questions?: BuildQuestionInput[];
   }>;
   /** Catalog samples keyed by document type slug (and optionally component key). */
   documentTypeSamples?: DocumentTypeSampleLookup;
 }): ApplyFormConfig {
-  const extraQuestions = input.questions
-    .filter(
-      (question) =>
-        !isFileQuestionType(question.questionType) &&
-        !CORE_TRIP_QUESTION_KEYS.has(question.key.toLowerCase())
-    )
-    .map((question) => {
-      const rawCategory = question.category ?? 'other';
-      return {
-        id: question.id,
-        key: question.key,
-        label: question.label,
-        description: question.description || question.extraInfo || undefined,
-        category: isQuestionCategory(rawCategory) ? rawCategory : 'other',
-        type: mapQuestionType(question.questionType),
-        required: Boolean(question.required),
-        options: question.options ?? undefined,
-        visibility: normalizeQuestionVisibility(question.visibility),
-        documentConditions: normalizeDocumentConditions(question.documentConditions),
-      };
-    });
+  const steps = resolveApplyFormSteps(input);
+
+  // Empty steps are kept in admin config but hidden on apply.
+  const showGeneralInfo = steps.some(
+    (s) => s.kind === 'ocr' && s.questions.length > 0
+  );
+  const showTripDetails = steps.some(
+    (s) => s.kind === 'trip' && s.questions.length > 0
+  );
+
+  const extraQuestions = steps
+    .flatMap((step) => step.questions)
+    .filter((q) => !q.systemKey);
 
   const gatingByType = buildDocumentTypeGatingMap(extraQuestions);
 
@@ -743,12 +908,121 @@ export function buildApplyFormConfig(input: {
     purpose: input.purpose,
     countryName: input.countryName,
     processName: input.processName,
-    showGeneralInfo: input.showGeneralInfo !== false,
-    showTripDetails: input.showTripDetails === true,
+    showGeneralInfo,
+    showTripDetails,
     showInsuranceInterest: input.showInsuranceInterest === true,
+    steps,
     extraQuestions,
     documentSlots,
   };
+}
+
+/**
+ * Ensure a published/live config always has `steps` (legacy snapshots may omit it).
+ */
+export function normalizeApplyFormConfig(
+  config: ApplyFormConfig | null | undefined
+): ApplyFormConfig {
+  if (!config) return defaultApplyFormConfig();
+  if (config.steps && config.steps.length > 0) return config;
+  return {
+    ...config,
+    steps: resolveApplyFormSteps({
+      questions: (config.extraQuestions ?? []).map((q) => ({
+        id: q.id,
+        key: q.key,
+        label: q.label,
+        description: q.description,
+        questionType: q.type,
+        category: q.category,
+        required: q.required,
+        options: q.options,
+        visibility: q.visibility,
+        documentConditions: q.documentConditions,
+        systemKey: q.systemKey,
+      })),
+      showGeneralInfo: config.showGeneralInfo,
+      showTripDetails: config.showTripDetails,
+    }),
+  };
+}
+
+export function getOcrStep(
+  config: Pick<ApplyFormConfig, 'steps'>
+): ApplyFormStep | undefined {
+  return config.steps?.find((s) => s.kind === 'ocr');
+}
+
+export function getTripStep(
+  config: Pick<ApplyFormConfig, 'steps'>
+): ApplyFormStep | undefined {
+  return config.steps?.find((s) => s.kind === 'trip');
+}
+
+export function getCustomSteps(
+  config: Pick<ApplyFormConfig, 'steps'>
+): ApplyFormStep[] {
+  return (config.steps ?? []).filter((s) => s.kind === 'custom');
+}
+
+/** Required OCR system fields from the step config (locked keys always required). */
+export function getRequiredOcrSystemKeys(
+  step: ApplyFormStep | undefined
+): string[] {
+  const keys = new Set<string>(['givenNames', 'surname', 'passportNumber']);
+  for (const q of step?.questions ?? []) {
+    if (q.systemKey && q.required) keys.add(q.systemKey);
+  }
+  return [...keys];
+}
+
+export function isConfiguredOcrComplete(
+  data: Partial<IndianPassportFields> | undefined,
+  step: ApplyFormStep | undefined
+): boolean {
+  if (!step) return true;
+  // Fall back to full schema when using synthetic legacy full field set
+  if (!step.questions.some((q) => q.systemKey) || step.id.startsWith('legacy-')) {
+    return isReviewComplete(data ?? {});
+  }
+
+  const required = getRequiredOcrSystemKeys(step);
+  for (const key of required) {
+    const value = String((data as Record<string, unknown>)?.[key] ?? '').trim();
+    if (!value) return false;
+  }
+  // Keep contact validation when those fields are present & required
+  const emailQ = step.questions.find((q) => q.systemKey === 'email');
+  if (emailQ?.required) {
+    const email = (data?.email ?? '').trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
+  }
+  const phoneQ = step.questions.find((q) => q.systemKey === 'phone');
+  if (phoneQ?.required) {
+    const phone = (data?.phone ?? '').trim();
+    if (!/^\d{10}$/.test(phone)) return false;
+  }
+  return true;
+}
+
+export function isConfiguredTripComplete(
+  trip: TravellerTripDetails | undefined,
+  step: ApplyFormStep | undefined
+): boolean {
+  if (!step) return true;
+  const normalized = emptyTripDetails(trip);
+  for (const q of step.questions) {
+    if (!q.required) continue;
+    if (q.systemKey) {
+      const raw = String(
+        (normalized as unknown as Record<string, unknown>)[q.systemKey] ?? ''
+      ).trim();
+      if (!raw) return false;
+      continue;
+    }
+    if (!(normalized.extra[q.key] ?? '').trim()) return false;
+  }
+  return getCoreTripIssues(normalized).length === 0;
 }
 
 export function getCoreTripIssues(trip: TravellerTripDetails | undefined) {
@@ -911,75 +1185,66 @@ export function resolveDocumentSlotsWithPassportBack(
   return slots.filter((slot) => !isPassportBackDocument(slot));
 }
 
-/** Tabs shown for this listing based on admin flags + configured questions. */
+/** Tabs shown for this listing based on Form Builder steps (+ documents/review). */
 export function getVisibleApplicationTabs(
   config: Pick<
     ApplyFormConfig,
-    'showGeneralInfo' | 'showTripDetails' | 'extraQuestions'
+    'steps' | 'showGeneralInfo' | 'showTripDetails' | 'extraQuestions'
   >
 ): ApplicationFormTabId[] {
+  if (config.steps && config.steps.length > 0) {
+    return [
+      ...[...config.steps]
+        .filter((s) => s.questions.length > 0)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((s) => s.id),
+      'documents',
+      'review',
+    ];
+  }
+
+  // Legacy snapshot without steps
   const tabs: ApplicationFormTabId[] = [];
   if (config.showGeneralInfo) tabs.push('general');
   if (config.showTripDetails) tabs.push('trip');
-  if (config.extraQuestions.length > 0) tabs.push('additional');
+  if ((config.extraQuestions?.length ?? 0) > 0) tabs.push('additional');
   tabs.push('documents', 'review');
   return tabs;
 }
 
 export function tabUnlockState(input: {
   visibleTabs: ApplicationFormTabId[];
-  generalComplete: boolean;
-  tripComplete: boolean;
-  additionalComplete: boolean;
+  /** Map of tab id → whether that tab's required content is complete. */
+  stepComplete: Record<string, boolean>;
   documentsComplete: boolean;
 }): Record<ApplicationFormTabId, boolean> {
-  const complete: Record<ApplicationFormTabId, boolean> = {
-    general: input.generalComplete,
-    trip: input.tripComplete,
-    additional: input.additionalComplete,
-    documents: input.documentsComplete,
-    review: true,
-  };
-
-  const unlocked: Record<ApplicationFormTabId, boolean> = {
-    general: false,
-    trip: false,
-    additional: false,
-    documents: false,
-    review: false,
-  };
-
+  const unlocked: Record<ApplicationFormTabId, boolean> = {};
   let priorComplete = true;
   for (const tab of input.visibleTabs) {
     unlocked[tab] = priorComplete;
-    if (tab !== 'review') {
-      priorComplete = priorComplete && complete[tab];
-    }
+    if (tab === 'review') continue;
+    const done =
+      tab === 'documents'
+        ? input.documentsComplete
+        : Boolean(input.stepComplete[tab]);
+    priorComplete = priorComplete && done;
   }
-
   return unlocked;
 }
 
 export function firstIncompleteTab(input: {
   visibleTabs: ApplicationFormTabId[];
-  generalComplete: boolean;
-  tripComplete: boolean;
-  additionalComplete: boolean;
+  stepComplete: Record<string, boolean>;
   documentsComplete: boolean;
 }): ApplicationFormTabId {
-  const complete: Record<ApplicationFormTabId, boolean> = {
-    general: input.generalComplete,
-    trip: input.tripComplete,
-    additional: input.additionalComplete,
-    documents: input.documentsComplete,
-    review: true,
-  };
-
   for (const tab of input.visibleTabs) {
     if (tab === 'review') return 'review';
-    if (!complete[tab]) return tab;
+    const done =
+      tab === 'documents'
+        ? input.documentsComplete
+        : Boolean(input.stepComplete[tab]);
+    if (!done) return tab;
   }
-
   return input.visibleTabs[input.visibleTabs.length - 1] ?? 'review';
 }
 
@@ -991,9 +1256,7 @@ export function resolvePreferredFormTab(
   preferred: ApplicationFormTabId | null | undefined,
   input: {
     visibleTabs: ApplicationFormTabId[];
-    generalComplete: boolean;
-    tripComplete: boolean;
-    additionalComplete: boolean;
+    stepComplete: Record<string, boolean>;
     documentsComplete: boolean;
   }
 ): ApplicationFormTabId {

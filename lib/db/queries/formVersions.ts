@@ -60,6 +60,7 @@ export async function ensureFormVersionForSubmit(
       process.showInsuranceInterest && !process.withFreeInsurance,
     components: process.componentsRequired,
     questions: process.additionalQuestions,
+    formSteps: process.formSteps,
     documentTypeSamples,
   });
 

@@ -59,8 +59,6 @@ interface ProcessBasicInfoFormProps {
     visaOnArrival: boolean | null;
     visaFree: boolean | null;
     withFreeInsurance?: boolean | null;
-    showGeneralInfo?: boolean | null;
-    showTripDetails?: boolean | null;
     showInsuranceInterest?: boolean | null;
     sourceUrl: string | null;
     description?: string | null;
@@ -104,8 +102,6 @@ export function ProcessBasicInfoForm({
       visaOnArrival: initialData.visaOnArrival ?? false,
       visaFree: initialData.visaFree ?? false,
       withFreeInsurance: initialData.withFreeInsurance ?? false,
-      showGeneralInfo: initialData.showGeneralInfo ?? true,
-      showTripDetails: initialData.showTripDetails ?? false,
       showInsuranceInterest: initialData.showInsuranceInterest ?? false,
       sourceUrl: initialData.sourceUrl || '',
       description: initialData.description || '',
@@ -343,26 +339,15 @@ export function ProcessBasicInfoForm({
         <section className="border-t border-ash-divider pt-8 space-y-6">
           <div>
             <h2 className="text-xl font-medium text-portrait-ink mb-2" style={{ fontFamily: 'Basier Circle' }}>
-              Apply form sections
+              Apply form options
             </h2>
             <p className="text-sm text-slate-helper">
-              Control which built-in sections appear on the public apply form. Additional questions from Form Builder always appear in their own tab when configured.
+              Personal details and Trip details are configured in Form Builder.
+              Use the option below for checkout only.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Checkbox
-              label="Personal details"
-              description="Passport biodata fields. When off, travellers use Fill Application instead of passport OCR upload."
-              checked={form.watch('showGeneralInfo') ?? true}
-              onChange={(checked) => form.setValue('showGeneralInfo', checked, { shouldDirty: true })}
-            />
-            <Checkbox
-              label="Trip Details"
-              description="Purpose, dates, accommodation, and flight fields on the apply form."
-              checked={form.watch('showTripDetails') ?? false}
-              onChange={(checked) => form.setValue('showTripDetails', checked, { shouldDirty: true })}
-            />
             <Checkbox
               label="Are you looking for visa insurance also? (optional)"
               description="Shows an optional insurance-interest question on the applicant checkout page. Disabled when With Free Insurance is already on."

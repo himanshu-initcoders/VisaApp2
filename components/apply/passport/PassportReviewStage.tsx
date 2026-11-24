@@ -12,20 +12,21 @@ import { ReviewSubmitTab } from '@/components/apply/form/ReviewSubmitTab';
 import { PassportScanStage } from '@/components/apply/passport/PassportScanStage';
 import { createPdfFirstPagePreviewUrl } from '@/lib/apply/pdfFirstPagePreview';
 import {
-  APPLICATION_FORM_TABS,
   DOCUMENT_FILE_ACCEPT,
   defaultApplyFormConfig,
   emptyTripDetails,
   getAdditionalQuestionIssues,
   getCoreTripIssues,
   getMultiStopIssues,
+  getOcrStep,
+  getTripStep,
   getVisibleApplicationTabs,
   hasPassportBackImage,
   isAdditionalQuestionsComplete,
   isAllowedPassportFile,
-  isCoreTripComplete,
+  isConfiguredOcrComplete,
+  isConfiguredTripComplete,
   isDocumentsComplete,
-  isMultiStopComplete,
   isWithinUploadLimit,
   resolveDocumentSlotsWithPassportBack,
   resolvePreferredFormTab,
@@ -61,7 +62,6 @@ import type {
   IndianPassportExtraction,
   IndianPassportFields,
 } from '@/lib/passport/types';
-import { isReviewComplete } from '@/lib/passport/schema';
 import { isPassportBackDocument } from '@/lib/document-types';
 import { sniffFileKind } from '@/lib/apply/sniffFileType';
 import { extensionFromMime } from '@/lib/upload/applicationKey';
@@ -253,10 +253,26 @@ export function PassportReviewStage({
     () => getVisibleApplicationTabs(formConfig),
     [formConfig]
   );
+  const stepsById = useMemo(() => {
+    const map = new Map(
+      (formConfig.steps ?? []).map((step) => [step.id, step])
+    );
+    return map;
+  }, [formConfig.steps]);
+  const ocrStep = useMemo(() => getOcrStep(formConfig), [formConfig]);
+  const tripStep = useMemo(() => getTripStep(formConfig), [formConfig]);
   const tabMeta = useMemo(
     () =>
-      APPLICATION_FORM_TABS.filter((item) => visibleTabs.includes(item.id)),
-    [visibleTabs]
+      visibleTabs.map((id) => {
+        if (id === 'documents') return { id, label: 'Documents' };
+        if (id === 'review') return { id, label: 'Review & submit' };
+        if (id === 'general') return { id, label: 'Personal details' };
+        if (id === 'trip') return { id, label: 'Trip details' };
+        if (id === 'additional') return { id, label: 'Additional questions' };
+        const step = stepsById.get(id);
+        return { id, label: step?.title ?? id };
+      }),
+    [visibleTabs, stepsById]
   );
 
   const [form, setForm] = useState<IndianPassportFields>({
@@ -696,8 +712,11 @@ export function PassportReviewStage({
   );
 
   const generalComplete = useMemo(
-    () => (formConfig.showGeneralInfo ? isReviewComplete(form) : true),
-    [form, formConfig.showGeneralInfo]
+    () =>
+      formConfig.showGeneralInfo
+        ? isConfiguredOcrComplete(form, ocrStep)
+        : true,
+    [form, formConfig.showGeneralInfo, ocrStep]
   );
   const coreTripIssues = useMemo(() => getCoreTripIssues(trip), [trip]);
   const multiStopIssues = useMemo(() => getMultiStopIssues(trip), [trip]);
@@ -708,9 +727,9 @@ export function PassportReviewStage({
   const tripComplete = useMemo(
     () =>
       formConfig.showTripDetails
-        ? isCoreTripComplete(trip) && isMultiStopComplete(trip)
+        ? isConfiguredTripComplete(trip, tripStep)
         : true,
-    [trip, formConfig.showTripDetails]
+    [trip, formConfig.showTripDetails, tripStep]
   );
   const additionalIssues = useMemo(
     () => getAdditionalQuestionIssues(trip, formConfig.extraQuestions),
@@ -723,6 +742,29 @@ export function PassportReviewStage({
         : isAdditionalQuestionsComplete(trip, formConfig.extraQuestions),
     [trip, formConfig.extraQuestions]
   );
+  const stepComplete = useMemo(() => {
+    const map: Record<string, boolean> = {
+      general: generalComplete,
+      trip: tripComplete,
+      additional: additionalComplete,
+    };
+    for (const step of formConfig.steps ?? []) {
+      if (step.kind === 'ocr') map[step.id] = generalComplete;
+      else if (step.kind === 'trip') map[step.id] = tripComplete;
+      else {
+        const qs = step.questions.filter((q) => !q.systemKey);
+        map[step.id] =
+          qs.length === 0 ? true : isAdditionalQuestionsComplete(trip, qs);
+      }
+    }
+    return map;
+  }, [
+    formConfig.steps,
+    generalComplete,
+    tripComplete,
+    additionalComplete,
+    trip,
+  ]);
   const hasBackImage = hasPassportBackImage({
     passportBackUrl: backPreviewUrl,
     uploads: documents,
@@ -756,9 +798,7 @@ export function PassportReviewStage({
   );
   const unlocked = tabUnlockState({
     visibleTabs,
-    generalComplete,
-    tripComplete,
-    additionalComplete,
+    stepComplete,
     documentsComplete,
   });
 
@@ -774,18 +814,34 @@ export function PassportReviewStage({
         uploads: savedDocuments,
       })
     );
-    return resolvePreferredFormTab(preferredFormTab, {
-      visibleTabs,
-      generalComplete: formConfig.showGeneralInfo
-        ? isReviewComplete(form)
+    const initialStepComplete: Record<string, boolean> = {
+      general: formConfig.showGeneralInfo
+        ? isConfiguredOcrComplete(form, ocrStep)
         : true,
-      tripComplete: formConfig.showTripDetails
-        ? isCoreTripComplete(trip) && isMultiStopComplete(trip)
+      trip: formConfig.showTripDetails
+        ? isConfiguredTripComplete(trip, tripStep)
         : true,
-      additionalComplete:
+      additional:
         formConfig.extraQuestions.length === 0
           ? true
           : isAdditionalQuestionsComplete(trip, formConfig.extraQuestions),
+    };
+    for (const step of formConfig.steps ?? []) {
+      if (step.kind === 'ocr') {
+        initialStepComplete[step.id] = initialStepComplete.general;
+      } else if (step.kind === 'trip') {
+        initialStepComplete[step.id] = initialStepComplete.trip;
+      } else {
+        const qs = step.questions.filter((q) => !q.systemKey);
+        initialStepComplete[step.id] =
+          qs.length === 0
+            ? true
+            : isAdditionalQuestionsComplete(trip, qs);
+      }
+    }
+    return resolvePreferredFormTab(preferredFormTab, {
+      visibleTabs,
+      stepComplete: initialStepComplete,
       documentsComplete: isDocumentsComplete(
         savedDocuments ?? [],
         initialVisibleSlots
@@ -827,10 +883,8 @@ export function PassportReviewStage({
   const goNext = () => {
     if (stepCommitting) return;
     const index = visibleTabs.indexOf(tab);
-    if (tab === 'general' && !generalComplete) return;
-    if (tab === 'trip' && !tripComplete) return;
-    if (tab === 'additional' && !additionalComplete) return;
     if (tab === 'documents' && !documentsComplete) return;
+    if (tab !== 'documents' && tab !== 'review' && !stepComplete[tab]) return;
     if (tab === 'review') {
       onContinue(buildPayload());
       return;
@@ -883,15 +937,16 @@ export function PassportReviewStage({
         : 'Continue';
   const continueDisabled =
     stepCommitting ||
-    (tab === 'general' && !generalComplete) ||
-    (tab === 'trip' && !tripComplete) ||
-    (tab === 'additional' && !additionalComplete) ||
-    (tab === 'documents' && !documentsComplete);
+    (tab === 'documents'
+      ? !documentsComplete
+      : tab !== 'review' && !stepComplete[tab]);
 
+  const activeStep = stepsById.get(tab);
   const footerHint =
-    tab === 'trip' && tripStepIssues.length > 0
+    (activeStep?.kind === 'trip' || tab === 'trip') && tripStepIssues.length > 0
       ? tripStepIssues[0]
-      : tab === 'additional' && additionalIssues.length > 0
+      : (activeStep?.kind === 'custom' || tab === 'additional') &&
+          additionalIssues.length > 0
         ? additionalIssues[0]
         : replaceError;
 
@@ -983,7 +1038,8 @@ export function PassportReviewStage({
       </div>
 
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        {tab === 'general' && formConfig.showGeneralInfo && (
+        {((activeStep?.kind === 'ocr' || tab === 'general') &&
+          formConfig.showGeneralInfo) && (
           <GeneralDetailsTab
             form={form}
             onChange={setForm}
@@ -1019,6 +1075,7 @@ export function PassportReviewStage({
             ownerUserId={ownerUserId}
             warnings={ocrWarnings}
             replaceBusy={replaceBusy}
+            configuredFields={ocrStep?.questions ?? null}
             onEditFront={() => frontInputRef.current?.click()}
             onEditBack={
               backPreviewUrl ||
@@ -1030,18 +1087,28 @@ export function PassportReviewStage({
             }
           />
         )}
-        {tab === 'trip' && formConfig.showTripDetails && (
+        {((activeStep?.kind === 'trip' || tab === 'trip') &&
+          formConfig.showTripDetails) && (
           <TripDetailsTab
             trip={trip}
             countryName={formConfig.countryName}
             tripSources={tripSources}
             onChange={setTrip}
+            configuredFields={tripStep?.questions ?? null}
           />
         )}
-        {tab === 'additional' && formConfig.extraQuestions.length > 0 && (
+        {(activeStep?.kind === 'custom' || tab === 'additional') &&
+          (activeStep?.kind === 'custom'
+            ? activeStep.questions.filter((q) => !q.systemKey)
+            : formConfig.extraQuestions
+          ).length > 0 && (
           <AdditionalQuestionsTab
             trip={trip}
-            extraQuestions={formConfig.extraQuestions}
+            extraQuestions={
+              activeStep?.kind === 'custom'
+                ? activeStep.questions.filter((q) => !q.systemKey)
+                : formConfig.extraQuestions
+            }
             onChange={setTrip}
           />
         )}

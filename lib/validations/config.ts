@@ -96,8 +96,6 @@ export const processBasicInfoSchema = z.object({
   visaOnArrival: z.boolean(),
   visaFree: z.boolean(),
   withFreeInsurance: z.boolean(),
-  showGeneralInfo: z.boolean(),
-  showTripDetails: z.boolean(),
   showInsuranceInterest: z.boolean(),
   sourceUrl: z.union([z.string().url('Must be a valid URL'), z.literal('')]).nullable().optional(),
   /** TinyMCE HTML overview shown on the public visa listing page. */
@@ -186,6 +184,19 @@ export const questionOptionSchema = z
     value: opt.value?.trim() ? opt.value.trim() : crypto.randomUUID(),
   }));
 
+export const visaFormStepSchema = z.object({
+  title: z
+    .string()
+    .min(2, 'Title must be at least 2 characters')
+    .max(120, 'Title too long'),
+  description: z
+    .union([z.string().max(500, 'Description too long'), z.literal('')])
+    .nullable()
+    .optional(),
+});
+
+export type VisaFormStepInput = z.infer<typeof visaFormStepSchema>;
+
 export const additionalQuestionSchema = z.object({
   /** Shared catalog identity — when set on create, reuse catalog.key instead of minting a new one. */
   catalogQuestionId: z.string().uuid('Invalid catalog question id').optional().nullable(),
@@ -193,15 +204,22 @@ export const additionalQuestionSchema = z.object({
     .string()
     .min(2, 'Key must be at least 2 characters')
     .max(50, 'Key too long')
-    .regex(/^[a-z0-9_-]+$/, 'Key must be lowercase letters, numbers, hyphens, and underscores only')
+    // Allow camelCase for built-in system keys (e.g. sys.givenNames).
+    .regex(
+      /^[a-zA-Z0-9_.-]+$/,
+      'Key must be letters, numbers, dots, hyphens, and underscores only'
+    )
     .optional(),
+  /** Form Builder step (required for new step-based builder). */
+  stepId: z.string().uuid('Select a form step'),
   label: z.string().min(3, 'Label must be at least 3 characters').max(255, 'Label too long'),
   description: z.union([z.string().max(500, 'Description too long'), z.literal('')]).nullable().optional(),
   questionType: z.enum(
     ['text', 'date', 'dropdown', 'boolean', 'checkbox', 'radio'],
     'Invalid question type'
   ),
-  category: z.enum(QUESTION_CATEGORY_VALUES, 'Invalid question category'),
+  /** @deprecated Prefer steps; optional for legacy. */
+  category: z.enum(QUESTION_CATEGORY_VALUES, 'Invalid question category').optional().default('other'),
   required: z.boolean(),
   familyEnabled: z.boolean().optional().default(false),
   onlyB2b: z.boolean().optional().default(false),

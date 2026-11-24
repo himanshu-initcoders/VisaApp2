@@ -344,6 +344,20 @@
       "when": 1796000000000,
       "tag": "0048_digital_arrival_card",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1796100000000,
+      "tag": "0049_visa_form_steps",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1796200000000,
+      "tag": "0050_trim_ocr_default_fields",
+      "breakpoints": true
     }
   ]
 }

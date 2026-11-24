@@ -206,6 +206,8 @@ export function QuestionFormModal({
 }: QuestionFormModalProps) {
   const isEditMode = !!initialData;
   const isPassport = variant === 'passport';
+  /** Visa Form Builder now uses steps like passport when stepOptions are passed. */
+  const useSteps = isPassport || stepOptions.length > 0;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [suggestions, setSuggestions] = useState<QuestionLabelSuggestion[]>([]);
@@ -266,11 +268,15 @@ export function QuestionFormModal({
     defaultValues: initialData
       ? {
           catalogQuestionId: initialData.catalogQuestionId ?? null,
-          key: initialData.key,
+          // Key is immutable after create — omit so camelCase system keys
+          // (sys.givenNames) are not re-validated on edit.
+          key: undefined,
           label: initialData.label,
           description: initialData.description || '',
           questionType: toAdminQuestionType(initialData.questionType),
-          category: toAdminCategory(initialData.category),
+          ...(isPassport
+            ? {}
+            : { category: toAdminCategory(initialData.category) }),
           stepId: resolvedStepId,
           required: initialData.required ?? true,
           requiredDoc: initialData.requiredDoc || '',
@@ -284,7 +290,7 @@ export function QuestionFormModal({
           label: '',
           description: '',
           questionType: 'text' as const,
-          category: 'other' as const,
+          ...(isPassport ? {} : { category: 'other' as const }),
           stepId: resolvedStepId,
           required: true,
           requiredDoc: '',
@@ -812,17 +818,19 @@ export function QuestionFormModal({
       }
     } else if (errors.label?.message) {
       message = errors.label.message;
+    } else if ((errors as { key?: { message?: string } }).key?.message) {
+      message = String((errors as { key?: { message?: string } }).key?.message);
     } else if (errors.options) {
       message = 'Dropdown questions need at least one option.';
     } else if (
-      isPassport &&
+      useSteps &&
       (errors as { stepId?: { message?: string } }).stepId?.message
     ) {
       message = String(
         (errors as { stepId?: { message?: string } }).stepId?.message
       );
     } else if (
-      !isPassport &&
+      !useSteps &&
       (errors as { category?: { message?: string } }).category?.message
     ) {
       message = String(
@@ -958,7 +966,7 @@ export function QuestionFormModal({
               {...form.register('questionType')}
             />
 
-            {isPassport ? (
+            {useSteps ? (
               <Select
                 label="Form step / tab"
                 helperText="Applicant sees this question under the selected step"
@@ -981,7 +989,7 @@ export function QuestionFormModal({
                   (form.formState.errors as { category?: { message?: string } })
                     .category?.message
                 }
-                {...form.register('category')}
+                {...form.register('category' as 'stepId')}
               />
             )}
 

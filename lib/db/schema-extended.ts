@@ -68,6 +68,13 @@ export const unitEnum = pgEnum('unit', [
   'years'
 ]);
 
+/** Visa Form Builder step kinds — OCR is always first and non-deletable. */
+export const visaFormStepKindEnum = pgEnum('visa_form_step_kind', [
+  'ocr',
+  'trip',
+  'custom',
+]);
+
 // ============================================================================
 // COUNTRY & VISA CONFIGURATION TABLES
 // ============================================================================
@@ -276,21 +283,53 @@ export const questionCatalog = pgTable(
 );
 
 /**
+ * Admin-defined form steps (tabs) for the visa apply wizard.
+ * kind=ocr is always first and cannot be deleted; kind=trip is optional.
+ */
+export const visaFormSteps = pgTable(
+  'visa_form_steps',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    visaListingId: uuid('visa_listing_id')
+      .references(() => visaListings.id, { onDelete: 'cascade' })
+      .notNull(),
+    title: varchar('title', { length: 120 }).notNull(),
+    description: text('description'),
+    kind: visaFormStepKindEnum('kind').default('custom').notNull(),
+    sortOrder: integer('sort_order').default(0).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    listingIdx: index('visa_form_steps_visa_listing_id_idx').on(table.visaListingId),
+  })
+);
+
+/**
  * Additional Questions - Country-specific dynamic form fields
  */
 export const additionalQuestions = pgTable('additional_questions', {
   id: uuid('id').primaryKey().defaultRandom(),
   visaListingId: uuid('visa_listing_id').references(() => visaListings.id, { onDelete: 'cascade' }).notNull(),
+  /** Form Builder step — required after visa form steps migration. */
+  stepId: uuid('step_id').references(() => visaFormSteps.id, { onDelete: 'cascade' }),
   /** Shared identity — references question_catalog. Answers/autofill use this key. */
   catalogQuestionId: uuid('catalog_question_id').references(() => questionCatalog.id, {
     onDelete: 'restrict',
   }),
   key: varchar('key', { length: 50 }).notNull(), // matches catalog.key when linked
+  /**
+   * Built-in OCR/trip binding (e.g. givenNames, flightNumber).
+   * When set, answers write to passportData / tripDetails core — not tripDetails.extra.
+   */
+  systemKey: varchar('system_key', { length: 50 }),
   label: text('label').notNull(),
   description: text('description'),
   questionType: questionTypeEnum('question_type').notNull(),
-  /** Listing-only: same catalog question may sit in different categories per visa. */
-  category: varchar('category', { length: 50 }).notNull().default('other'),
+  /**
+   * Legacy category grouping — kept for migration/compat; Form Builder uses steps now.
+   * Nullable after steps migration; new rows may omit it.
+   */
+  category: varchar('category', { length: 50 }).default('other'),
   required: boolean('required').default(false),
   familyEnabled: boolean('family_enabled').default(false),
   onlyB2b: boolean('only_b2b').default(false),
@@ -324,6 +363,7 @@ export const additionalQuestions = pgTable('additional_questions', {
   createdAt: timestamp('created_at').defaultNow().notNull()
 }, (table) => ({
   visaListingIdIdx: index('additional_questions_visa_listing_id_idx').on(table.visaListingId),
+  stepIdIdx: index('additional_questions_step_id_idx').on(table.stepId),
   catalogQuestionIdIdx: index('additional_questions_catalog_question_id_idx').on(
     table.catalogQuestionId
   ),
@@ -534,12 +574,21 @@ export const visaListingsRelations = relations(visaListings, ({ one, many }) => 
   }),
   prices: many(visaListingPrices),
   multiTripCountries: many(multiTripCountries),
+  formSteps: many(visaFormSteps),
   additionalQuestions: many(additionalQuestions),
   componentsRequired: many(componentsRequired),
   passportOcrSettings: one(passportOcrSettings),
   photoValidationSettings: many(photoValidationSettings),
   faqs: many(faqs),
   postCheckoutSteps: many(postCheckoutSteps)
+}));
+
+export const visaFormStepsRelations = relations(visaFormSteps, ({ one, many }) => ({
+  visaListing: one(visaListings, {
+    fields: [visaFormSteps.visaListingId],
+    references: [visaListings.id],
+  }),
+  questions: many(additionalQuestions),
 }));
 
 export const visaListingPricesRelations = relations(visaListingPrices, ({ one }) => ({
@@ -565,6 +614,10 @@ export const additionalQuestionsRelations = relations(additionalQuestions, ({ on
   visaListing: one(visaListings, {
     fields: [additionalQuestions.visaListingId],
     references: [visaListings.id]
+  }),
+  step: one(visaFormSteps, {
+    fields: [additionalQuestions.stepId],
+    references: [visaFormSteps.id],
   }),
   catalogQuestion: one(questionCatalog, {
     fields: [additionalQuestions.catalogQuestionId],
@@ -640,6 +693,9 @@ export type NewVisaRisk = typeof visaRisks.$inferInsert;
 
 export type QuestionCatalog = typeof questionCatalog.$inferSelect;
 export type NewQuestionCatalog = typeof questionCatalog.$inferInsert;
+
+export type VisaFormStep = typeof visaFormSteps.$inferSelect;
+export type NewVisaFormStep = typeof visaFormSteps.$inferInsert;
 
 export type AdditionalQuestion = typeof additionalQuestions.$inferSelect;
 export type NewAdditionalQuestion = typeof additionalQuestions.$inferInsert;
