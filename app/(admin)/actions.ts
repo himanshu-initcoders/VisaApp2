@@ -1735,7 +1735,11 @@ export async function assignPassportReviewer(
       snapshot?.productName ||
       (application.serviceType === 'reissue'
         ? 'Passport reissue'
-        : 'New passport');
+        : application.serviceType === 'reissue_infant'
+          ? 'Passport reissue (Infant)'
+          : application.serviceType === 'fresh_infant'
+            ? 'New passport (Infant)'
+            : 'New passport');
     const referenceNumber =
       application.referenceNumber || application.id.slice(0, 8);
 

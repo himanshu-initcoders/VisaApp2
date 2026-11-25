@@ -53,6 +53,8 @@ function formatAppDate(date: Date | string) {
 function passportTitle(serviceType: string | null | undefined) {
   if (serviceType === 'reissue') return 'Passport reissue';
   if (serviceType === 'fresh') return 'New passport';
+  if (serviceType === 'reissue_infant') return 'Passport reissue (Infant)';
+  if (serviceType === 'fresh_infant') return 'New passport (Infant)';
   return serviceType ? `Passport · ${serviceType}` : 'Passport';
 }
 

@@ -424,7 +424,13 @@ export async function listPassportApplicantActionItems(
     const config = (row.formSnapshot as PassportApplyFormConfig | null) ?? null;
     const productName =
       config?.productName ||
-      (row.serviceType === 'reissue' ? 'Passport reissue' : 'New passport');
+      (row.serviceType === 'reissue'
+        ? 'Passport reissue'
+        : row.serviceType === 'reissue_infant'
+          ? 'Passport reissue (Infant)'
+          : row.serviceType === 'fresh_infant'
+            ? 'New passport (Infant)'
+            : 'New passport');
     const current = grouped.get(key) ?? {
       applicationId: row.applicationId,
       referenceNumber: row.referenceNumber,

@@ -84,11 +84,11 @@
 
 ### Passport Services
 - [x] Non-affiliation disclaimer (private service + Passport Seva DIY link) on hub, pricing card, apply review, footer, Terms §4, FAQ
-- [x] India-only catalog: Fresh + Re-issue (`passport_listings` + admin hub)
+- [x] India-only catalog: Fresh + Re-issue + Infant variants (`passport_listings` + admin hub)
 - [x] Pricing matrix (Normal/Tatkaal × 36/60 pages) + public hero card from DB
 - [x] Documents from shared document-types catalog + FAQs per product
 - [x] Form builder with admin-defined steps/tabs + publish `passport_form_versions`
-- [x] In-app apply wizard (`/passport/{fresh|reissue}/apply`) — steps → documents → review → pay/submit
+- [x] In-app apply wizard (`/passport/{fresh|reissue|fresh_infant|reissue_infant}/apply`) — steps → documents → review → pay/submit
 - [x] Email/WhatsApp notifications on passport submit
 - [ ] Staff draft-on-behalf for passport (parity with visa)
 

@@ -310,7 +310,7 @@ export default async function PassportPage() {
 
   const heroListings = listings.map((listing) => ({
     id: listing.id,
-    serviceType: listing.serviceType as 'fresh' | 'reissue',
+    serviceType: listing.serviceType,
     name: listing.name,
     prices: listing.prices.map((price) => ({
       id: price.id,
@@ -337,10 +337,7 @@ export default async function PassportPage() {
   const dbDocumentGroups = listings
     .filter((listing) => listing.componentsRequired.length > 0)
     .map((listing) => ({
-      title:
-        listing.serviceType === 'fresh'
-          ? 'Fresh passport essentials'
-          : 'Re-issue essentials',
+      title: `${listing.name} essentials`,
       bullets: listing.componentsRequired.map(
         (doc) => doc.label || doc.documentType || 'Document'
       ),

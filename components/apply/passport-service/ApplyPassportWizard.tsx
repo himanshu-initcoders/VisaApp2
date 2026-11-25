@@ -21,7 +21,10 @@ import {
 } from '@/lib/apply/passportDraftFiles';
 import { deleteServerDraftFile } from '@/lib/apply/deleteDraftFileClient';
 import { trackEvent } from '@/lib/analytics/gtm';
-import { passportPriceLabel } from '@/lib/passport/constants';
+import {
+  passportPriceLabel,
+  type PassportServiceType,
+} from '@/lib/passport/constants';
 import {
   createPassportCheckoutOrder,
   quotePassportCheckout,
@@ -57,7 +60,7 @@ type MacroStage = 'form' | 'documents' | 'review';
 
 interface ApplyPassportWizardProps {
   listingId: string;
-  serviceType: 'fresh' | 'reissue';
+  serviceType: PassportServiceType;
   productName: string;
   /** e.g. "Fresh Indian passport · Normal · 36 pages" from URL selection */
   selectionLabel: string;

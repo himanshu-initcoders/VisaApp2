@@ -5,6 +5,7 @@ import type {
   PassportListing,
 } from '@/lib/db/schema-passport';
 import type { DocumentTypeSampleLookup } from '@/lib/apply/applicationForm';
+import type { PassportServiceType } from '@/lib/passport/constants';
 
 export type PassportApplyQuestion = {
   key: string;
@@ -68,7 +69,7 @@ export function getMissingPassportDocuments(
 }
 
 export type PassportApplyFormConfig = {
-  serviceType: 'fresh' | 'reissue';
+  serviceType: PassportServiceType;
   productName: string;
   description: string | null;
   steps: PassportApplyStep[];

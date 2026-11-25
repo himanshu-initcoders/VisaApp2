@@ -6,7 +6,11 @@ import { usePassportApplyStartFlow } from '@/components/apply/usePassportApplySt
 import { Button } from '@/components/ui/Button';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { cn } from '@/lib/utils';
-import { passportPriceLabel } from '@/lib/passport/constants';
+import {
+  passportPriceLabel,
+  passportServiceTypeLabel,
+  type PassportServiceType,
+} from '@/lib/passport/constants';
 import { PrivateServiceDisclaimer } from '@/components/public/PrivateServiceDisclaimer';
 
 const CONSULTATION_URL =
@@ -26,12 +30,12 @@ export type PassportHeroPriceOption = {
 
 export type PassportHeroListing = {
   id: string;
-  serviceType: 'fresh' | 'reissue';
+  serviceType: PassportServiceType;
   name: string;
   prices: PassportHeroPriceOption[];
 };
 
-type ApplyingForId = 'fresh' | 'reissue';
+type ApplyingForId = PassportServiceType;
 
 function IndiaFlagIcon({ className }: { className?: string }) {
   return (
@@ -149,8 +153,7 @@ export function PassportHeroPricingCard({
     () =>
       listings.map((listing) => ({
         id: listing.serviceType as ApplyingForId,
-        label:
-          listing.serviceType === 'fresh' ? 'Fresh passport' : 'Re-issue',
+        label: listing.name || passportServiceTypeLabel(listing.serviceType),
       })),
     [listings]
   );

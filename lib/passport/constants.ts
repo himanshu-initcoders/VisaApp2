@@ -4,6 +4,8 @@ export const PASSPORT_SEVA_URL = 'https://www.passportindia.gov.in/';
 export const PASSPORT_SERVICE_TYPES = [
   { value: 'fresh', label: 'Fresh passport' },
   { value: 'reissue', label: 'Re-issue' },
+  { value: 'fresh_infant', label: 'Fresh Passport (Infant)' },
+  { value: 'reissue_infant', label: 'Re-Issue (Infant)' },
 ] as const;
 
 export type PassportServiceType =
@@ -27,7 +29,7 @@ export type PassportBookletPages =
 export function isPassportServiceType(
   value: string
 ): value is PassportServiceType {
-  return value === 'fresh' || value === 'reissue';
+  return PASSPORT_SERVICE_TYPES.some((t) => t.value === value);
 }
 
 export function passportServiceTypeLabel(value: string): string {
@@ -56,7 +58,11 @@ export function formatPassportApplyLabel(input: {
       ? 'Fresh Indian passport'
       : input.serviceType === 'reissue'
         ? 'Re-issue Indian passport'
-        : `${passportServiceTypeLabel(input.serviceType)} Indian passport`;
+        : input.serviceType === 'fresh_infant'
+          ? 'Fresh Indian passport (Infant)'
+          : input.serviceType === 'reissue_infant'
+            ? 'Re-issue Indian passport (Infant)'
+            : `${passportServiceTypeLabel(input.serviceType)} Indian passport`;
   const schemeLabel = input.scheme
     ? PASSPORT_SCHEMES.find((s) => s.value === input.scheme)?.label ??
       input.scheme

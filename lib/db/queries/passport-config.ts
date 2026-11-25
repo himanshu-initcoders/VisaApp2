@@ -9,6 +9,7 @@ import {
   passportFaqs,
 } from '@/lib/db/schema-passport';
 import { passportFormVersions } from '@/lib/db/schema';
+import type { PassportServiceType } from '@/lib/passport/constants';
 
 export type PassportQuestionLabelSuggestion = {
   id: string;
@@ -62,7 +63,7 @@ export async function getPassportListingById(id: string) {
 }
 
 export async function getPassportListingByServiceType(
-  serviceType: 'fresh' | 'reissue'
+  serviceType: PassportServiceType
 ) {
   return db.query.passportListings.findFirst({
     where: eq(passportListings.serviceType, serviceType),

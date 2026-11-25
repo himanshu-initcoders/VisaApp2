@@ -227,7 +227,11 @@ export function buildPassportServiceJsonLd(input: {
         ? 'Fresh passport'
         : input.serviceType === 'reissue'
           ? 'Passport re-issue'
-          : input.serviceType
+          : input.serviceType === 'fresh_infant'
+            ? 'Fresh passport (Infant)'
+            : input.serviceType === 'reissue_infant'
+              ? 'Passport re-issue (Infant)'
+              : input.serviceType
       : 'Passport',
     provider: { '@id': `${siteUrl}/#organization` },
     areaServed: {

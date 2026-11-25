@@ -5,10 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { ApplyLoginModal } from '@/components/apply/ApplyLoginModal';
 import { trackEvent } from '@/lib/analytics/gtm';
-import { isPassportServiceType } from '@/lib/passport/constants';
+import {
+  isPassportServiceType,
+  type PassportServiceType,
+} from '@/lib/passport/constants';
 
 interface UsePassportApplyStartFlowOptions {
-  serviceType: 'fresh' | 'reissue';
+  serviceType: PassportServiceType;
   listingId?: string;
   priceOptionId?: string;
   value?: number;
@@ -35,7 +38,7 @@ export function usePassportApplyStartFlow({
   const [loginOpen, setLoginOpen] = useState(false);
   const pendingAfterLoginRef = useRef(false);
   const pendingQueryRef = useRef<{
-    serviceType?: 'fresh' | 'reissue';
+    serviceType?: PassportServiceType;
     priceOptionId?: string;
   } | null>(null);
   const consumedStartApplyRef = useRef(false);

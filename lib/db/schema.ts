@@ -243,7 +243,7 @@ export const passportFormVersions = pgTable(
 
 /**
  * Passport Services — draft / submitted Indian passport applications.
- * serviceType: fresh | reissue
+ * serviceType: fresh | reissue | fresh_infant | reissue_infant
  * In-progress apply rows use status=draft (same table + storage path as submitted).
  */
 export const passportServices = pgTable(
@@ -253,7 +253,7 @@ export const passportServices = pgTable(
     userId: uuid('user_id')
       .references(() => users.id)
       .notNull(),
-    /** fresh | reissue */
+    /** fresh | reissue | fresh_infant | reissue_infant */
     serviceType: varchar('service_type', { length: 50 }).notNull(),
     passportListingId: uuid('passport_listing_id').references(
       () => passportListings.id,

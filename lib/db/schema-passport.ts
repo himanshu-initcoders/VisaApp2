@@ -1,5 +1,5 @@
 /**
- * Passport service catalog — India-only Fresh / Re-issue products.
+ * Passport service catalog — India-only Fresh / Re-issue (+ infant) products.
  * Separate from visa_listings; applications live in passport_services (schema.ts).
  */
 
@@ -23,6 +23,8 @@ import { questionCatalog, questionTypeEnum, unitEnum } from './schema-extended';
 export const passportServiceTypeEnum = pgEnum('passport_service_type', [
   'fresh',
   'reissue',
+  'fresh_infant',
+  'reissue_infant',
 ]);
 
 export const passportSchemeEnum = pgEnum('passport_scheme', [
@@ -36,7 +38,7 @@ export const passportBookletPagesEnum = pgEnum('passport_booklet_pages', [
 ]);
 
 /**
- * Passport Listings — Fresh and Re-issue product roots (India only).
+ * Passport Listings — Fresh / Re-issue (+ infant) product roots (India only).
  */
 export const passportListings = pgTable(
   'passport_listings',

@@ -132,7 +132,13 @@ function passportServiceLabel(passport: PassportNotifyContext) {
 function passportProductLabel(passport: PassportNotifyContext) {
   return (
     passport.productName?.trim() ||
-    (passport.serviceType === 'reissue' ? 'Passport reissue' : 'New passport')
+    (passport.serviceType === 'reissue'
+      ? 'Passport reissue'
+      : passport.serviceType === 'reissue_infant'
+        ? 'Passport reissue (Infant)'
+        : passport.serviceType === 'fresh_infant'
+          ? 'New passport (Infant)'
+          : 'New passport')
   );
 }
 
