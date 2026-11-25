@@ -419,8 +419,7 @@ const getCachedPublicProcessPageData = unstable_cache(
           isFree: preferred.isFree,
           listings,
         };
-      })
-      .slice(0, 4);
+      });
 
     // One tab per purpose (tourism → … → visa_on_arrival). Same-purpose
     // listings share a tab; their options render under that tab.
