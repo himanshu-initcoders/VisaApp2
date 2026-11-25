@@ -185,8 +185,8 @@ export const visaListings = pgTable('visa_listings', {
   /** Listing-specific disclaimer (TinyMCE HTML), shown on the public listing page. */
   disclaimer: text('disclaimer'),
   /**
-   * Public URL segment, e.g. Japan-Tourism-Visa.
-   * Unique per destination country. Stored in title case.
+   * Public URL segment, e.g. japan-tourism-visa.
+   * Unique per destination country. Stored lowercase.
    */
   slug: varchar('slug', { length: 120 }).notNull(),
 

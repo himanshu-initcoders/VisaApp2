@@ -36,10 +36,36 @@ function matchPassportApplyPath(pathname: string) {
   return { serviceType: match[1].toLowerCase() };
 }
 
+/** /visa/{country}/{listing} or /visa/{country}/{listing}/apply — force lowercase segments. */
+function matchVisaListingPath(pathname: string) {
+  const match = pathname.match(/^\/visa\/([^/]+)\/([^/]+)(\/apply)?\/?$/i);
+  if (!match) return null;
+  return {
+    countryCode: match[1],
+    listingId: match[2],
+    applySuffix: match[3] || '',
+  };
+}
+
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const role = req.auth?.user?.role;
   const { pathname } = req.nextUrl;
+
+  // Canonical public listing URLs are lowercase country + slug.
+  const visaListing = matchVisaListingPath(pathname);
+  if (visaListing) {
+    const country = visaListing.countryCode.toLowerCase();
+    const listing = visaListing.listingId.toLowerCase();
+    if (
+      visaListing.countryCode !== country ||
+      visaListing.listingId !== listing
+    ) {
+      const url = req.nextUrl.clone();
+      url.pathname = `/visa/${country}/${listing}${visaListing.applySuffix}`;
+      return NextResponse.redirect(url, 301);
+    }
+  }
 
   // Legacy staff login URL
   if (pathname === '/login') {

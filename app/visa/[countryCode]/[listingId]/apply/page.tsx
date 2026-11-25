@@ -5,7 +5,7 @@ import { auth } from '@/lib/auth';
 import { getPublicProcessPageData } from '@/lib/db/queries/public';
 import { getApplyPreviousProfiles } from '@/lib/apply/previousProfilesAutofill';
 import { getApplicantSummaryForDraft } from '@/lib/apply/serverDraft';
-import { formatFullVisaLabel } from '@/lib/public';
+import { buildProcessHref, formatFullVisaLabel } from '@/lib/public';
 import {
   buildBreadcrumbJsonLd,
   buildWebPageJsonLd,
@@ -96,7 +96,7 @@ export default async function ApplyVisaPage({ params, searchParams }: PageProps)
     notFound();
   }
 
-  if (listingId !== data.process.slug) {
+  if (buildProcessHref(countryCode, listingId) !== data.href) {
     permanentRedirect(withSearchQuery(`${data.href}/apply`, query));
   }
 

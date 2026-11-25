@@ -38,6 +38,13 @@ Canonical public SEO for Viserv (`viserv.in`).
 
 Country `seo.metaTitle` / `seo.metaDescription` (admin) override the generated listing title/description when set.
 
+## Listing slugs
+
+- Canonical form: **lowercase** hyphenated words (`australia-tourism-visa`).
+- Admin URL slug field + Zod `normalizeVisaListingSlug` force lowercase on type/save.
+- `proxy.ts` 301s any mixed-case `/visa/{country}/{slug}` to lowercase.
+- Migration `0051_visa_listing_slug_lowercase` lowercases existing rows.
+
 ## Listing slug moves
 
 When a public listing slug is renamed or a listing is removed, add a row in `lib/seo/legacyVisaListingRedirects.ts` (source → current canonical). Admin Basic Info updates also call `revalidatePath('/sitemap.xml')` via `revalidatePublicVisaCatalog`, so crawlers stop seeing stale listing URLs.

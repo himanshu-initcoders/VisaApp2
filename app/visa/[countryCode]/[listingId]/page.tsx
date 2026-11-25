@@ -7,7 +7,7 @@ import {
   getPublicProcessPageData,
 } from '@/lib/db/queries/public';
 import { getPublishedPostsForCountry } from '@/lib/db/queries/blog';
-import { getCountryOgImage } from '@/lib/public';
+import { buildProcessHref, getCountryOgImage } from '@/lib/public';
 import { toAppMediaUrl } from '@/lib/upload/mediaUrl';
 import {
   buildBreadcrumbJsonLd,
@@ -120,8 +120,9 @@ export default async function PublicProcessPage({ params, searchParams }: PagePr
     notFound();
   }
 
-  if (listingId !== data.process.slug) {
-    // Only touch searchParams on legacy UUID URLs so slug pages stay static.
+  // Redirect UUID / wrong slug only. Compare canonical paths (lowercased) so a
+  // casing-only mismatch cannot 308-loop onto the same URL.
+  if (buildProcessHref(countryCode, listingId) !== data.href) {
     const query = await searchParams;
     permanentRedirect(withSearchQuery(data.href, query));
   }

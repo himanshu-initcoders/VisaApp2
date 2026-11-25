@@ -363,22 +363,9 @@ export function CreateVisaListingWizard({
                   countryCode={watchedCountry || ''}
                   value={form.watch('slug') || ''}
                   error={form.formState.errors.slug?.message}
-                  registration={{
-                    ...form.register('slug'),
-                    onChange: (event) => {
-                      slugEditedRef.current = true;
-                      return form.register('slug').onChange(event);
-                    },
-                    onBlur: (event) => {
-                      const normalized = normalizeVisaListingSlug(event.target.value);
-                      if (normalized && normalized !== event.target.value) {
-                        form.setValue('slug', normalized, {
-                          shouldDirty: true,
-                          shouldValidate: true,
-                        });
-                      }
-                      return form.register('slug').onBlur(event);
-                    },
+                  registration={form.register('slug')}
+                  onEdited={() => {
+                    slugEditedRef.current = true;
                   }}
                 />
 

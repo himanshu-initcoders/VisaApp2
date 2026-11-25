@@ -202,5 +202,5 @@ export function slugifyProcessName(name: string) {
 }
 
 export function buildProcessHref(countryCode: string, slug: string) {
-  return `/visa/${countryCode.toLowerCase()}/${slug}`;
+  return `/visa/${countryCode.toLowerCase()}/${slug.toLowerCase()}`;
 }

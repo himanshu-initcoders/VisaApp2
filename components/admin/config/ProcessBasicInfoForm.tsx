@@ -87,7 +87,7 @@ export function ProcessBasicInfoForm({
     resolver: zodResolver(processBasicInfoSchema),
     defaultValues: {
       processName: initialData.processName,
-      slug: initialData.slug,
+      slug: normalizeVisaListingSlug(initialData.slug),
       processType: initialData.processType,
       purpose: initialData.purpose,
       processTypeLabel: initialData.processTypeLabel || '',
@@ -192,19 +192,7 @@ export function ProcessBasicInfoForm({
               countryCode={countryCode}
               value={form.watch('slug') || ''}
               error={form.formState.errors.slug?.message}
-              registration={{
-                ...form.register('slug'),
-                onBlur: (event) => {
-                  const normalized = normalizeVisaListingSlug(event.target.value);
-                  if (normalized && normalized !== event.target.value) {
-                    form.setValue('slug', normalized, {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    });
-                  }
-                  return form.register('slug').onBlur(event);
-                },
-              }}
+              registration={form.register('slug')}
             />
 
             <Input
