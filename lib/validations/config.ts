@@ -157,11 +157,24 @@ const unitSchema = z.enum(
   'Invalid time unit'
 );
 
+/** Coerce empty/NaN RHF number inputs to null (used for Digital Arrival Card packages). */
+const optionalPositiveInt = z.preprocess((value) => {
+  if (value === '' || value === undefined || value === null) return null;
+  if (typeof value === 'number' && Number.isNaN(value)) return null;
+  return value;
+}, z.number().int().positive('Must be a positive number').nullable());
+
+const optionalUnit = z.preprocess((value) => {
+  if (value === '' || value === undefined || value === null) return null;
+  return value;
+}, unitSchema.nullable());
+
 export const visaListingPriceSchema = z.object({
-  entryValidityAmount: z.number().int().positive('Validity amount must be positive'),
-  entryValidityUnit: unitSchema,
-  entryLengthStayAmount: z.number().int().positive('Stay duration must be positive'),
-  entryLengthStayUnit: unitSchema,
+  // Optional for Digital Arrival Card — those listings have fees only, no validity/stay.
+  entryValidityAmount: optionalPositiveInt,
+  entryValidityUnit: optionalUnit,
+  entryLengthStayAmount: optionalPositiveInt,
+  entryLengthStayUnit: optionalUnit,
   governmentFeeAmount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Must be a valid amount'),
   serviceFeeAmount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Must be a valid amount'),
   governmentGstFeeAmount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Must be a valid amount'),

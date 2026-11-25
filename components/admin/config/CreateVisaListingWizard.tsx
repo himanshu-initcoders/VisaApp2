@@ -646,7 +646,11 @@ export function CreateVisaListingWizard({
             </p>
           </div>
 
-          <PriceOptionsManager processId={listingId} initialPrices={initialPrices} />
+          <PriceOptionsManager
+            processId={listingId}
+            initialPrices={initialPrices}
+            processType={watchedProcessType}
+          />
 
           <div className="flex flex-wrap gap-3 pt-2">
             <Button type="button" variant="primary" size="md" onClick={() => goToStep('documents')}>

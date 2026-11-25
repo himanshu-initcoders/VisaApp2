@@ -57,11 +57,17 @@ export default async function TiersPage({
             </h1>
           </div>
           <p className="text-base text-slate-helper">
-            Multiple packages for {process.processName} — each with validity, stay, and fees
+            {isArrivalCard
+              ? `Multiple packages for ${process.processName} — fees only (no validity or stay)`
+              : `Multiple packages for ${process.processName} — each with validity, stay, and fees`}
           </p>
         </div>
 
-        <PriceOptionsManager processId={id} initialPrices={prices} />
+        <PriceOptionsManager
+          processId={id}
+          initialPrices={prices}
+          processType={process.processType}
+        />
       </div>
     </div>
   );

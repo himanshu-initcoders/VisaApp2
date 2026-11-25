@@ -21,7 +21,10 @@ import type {
 } from '@/components/public/PricingPanel';
 import { AnimatedTabs } from '@/components/ui';
 import { visaPurposeTabLabel } from '@/lib/visa/purposes';
-import { usesArrivalCardCopy } from '@/lib/visa/processTypes';
+import {
+  isDigitalArrivalCard,
+  usesArrivalCardCopy,
+} from '@/lib/visa/processTypes';
 import { cn } from '@/lib/utils';
 
 const VISIBLE_OPTIONS = 2;
@@ -41,9 +44,13 @@ function entryWord(isMultipleEntry: boolean) {
 function packageTitle(
   option: PriceOptionView,
   isMultipleEntry: boolean,
-  processTypeLabel?: string | null
+  processTypeLabel?: string | null,
+  hideValidityStay = false
 ) {
   if (processTypeLabel?.trim()) return processTypeLabel.trim();
+  if (hideValidityStay) {
+    return `${option.formattedTotal} · ${entryLabel(isMultipleEntry)}`;
+  }
   const stay = titleCaseDuration(
     (option.stayDuration || option.daysLabel || 'Package').trim()
   );
@@ -95,6 +102,7 @@ interface VisaTypesOfferedProps {
   processingEta: string | null;
   isMultipleEntry: boolean;
   processTypeLabel?: string | null;
+  processType?: string | null;
   priceOptions: PriceOptionView[];
   selectedId?: string;
   onSelectedIdChange: (id: string) => void;
@@ -316,6 +324,7 @@ function PackageCard({
   purposeLabel,
   hasRequiredDocuments,
   hidePricingDetails = false,
+  hideValidityStay = false,
   onSelect,
 }: {
   option: PriceOptionView;
@@ -326,16 +335,20 @@ function PackageCard({
   purposeLabel: string;
   hasRequiredDocuments?: boolean;
   hidePricingDetails?: boolean;
+  hideValidityStay?: boolean;
   onSelect: () => void;
 }) {
-  const validity = option.entryValidity
-    ? titleCaseDuration(option.entryValidity)
-    : null;
-  const stay = option.stayDuration
-    ? titleCaseDuration(option.stayDuration)
-    : option.daysLabel
-      ? titleCaseDuration(option.daysLabel)
+  const validity =
+    !hideValidityStay && option.entryValidity
+      ? titleCaseDuration(option.entryValidity)
       : null;
+  const stay = hideValidityStay
+    ? null
+    : option.stayDuration
+      ? titleCaseDuration(option.stayDuration)
+      : option.daysLabel
+        ? titleCaseDuration(option.daysLabel)
+        : null;
   const processText = processingLabel(processingEta, purposeLabel);
 
   const detail = [
@@ -373,7 +386,12 @@ function PackageCard({
 
   return (
     <SelectableCard
-      title={packageTitle(option, isMultipleEntry, processTypeLabel)}
+      title={packageTitle(
+        option,
+        isMultipleEntry,
+        processTypeLabel,
+        hideValidityStay
+      )}
       price={option.formattedTotal}
       selected={selected}
       detail={detail}
@@ -395,6 +413,7 @@ function ListingOptionCard({
   purposeLabel,
   hasRequiredDocuments,
   hidePricingDetails = false,
+  hideValidityStay = false,
   onSelect,
 }: {
   listing: VisaKindListingOption;
@@ -403,11 +422,13 @@ function ListingOptionCard({
   purposeLabel: string;
   hasRequiredDocuments?: boolean;
   hidePricingDetails?: boolean;
+  hideValidityStay?: boolean;
   onSelect: () => void;
 }) {
-  const stay = listing.stayDuration
-    ? titleCaseDuration(listing.stayDuration)
-    : null;
+  const stay =
+    !hideValidityStay && listing.stayDuration
+      ? titleCaseDuration(listing.stayDuration)
+      : null;
   const processText = selected
     ? processingLabel(processingEta, purposeLabel)
     : null;
@@ -461,6 +482,7 @@ export function VisaTypesOffered({
   processingEta,
   isMultipleEntry,
   processTypeLabel,
+  processType = null,
   priceOptions,
   selectedId,
   onSelectedIdChange,
@@ -482,8 +504,10 @@ export function VisaTypesOffered({
       ? visaPurposeTabLabel(activeGroup.purpose) || activeGroup.label
       : null) || 'Visa';
   const isArrivalCard = usesArrivalCardCopy({
+    processType,
     purpose: activeGroup?.purpose,
   });
+  const hideValidityStay = isDigitalArrivalCard(processType);
 
   const visibleOptions = useMemo(() => {
     if (expanded || priceOptions.length <= VISIBLE_OPTIONS) return priceOptions;
@@ -550,6 +574,7 @@ export function VisaTypesOffered({
                 listing.id === currentListingId ? hasRequiredDocuments : false
               }
               hidePricingDetails={hidePricingDetails}
+              hideValidityStay={hideValidityStay}
               onSelect={() => void selectListing(listing)}
             />
           ))}
@@ -564,7 +589,7 @@ export function VisaTypesOffered({
         >
           {showListingOptions && priceOptions.length > 1 ? (
             <p className="text-xs uppercase tracking-[0.2em] text-slate-helper">
-              Stay options
+              {hideValidityStay ? 'Fee packages' : 'Stay options'}
             </p>
           ) : null}
           {visibleOptions.map((option) => (
@@ -578,6 +603,7 @@ export function VisaTypesOffered({
               purposeLabel={purposeLabel}
               hasRequiredDocuments={hasRequiredDocuments}
               hidePricingDetails={hidePricingDetails}
+              hideValidityStay={hideValidityStay}
               onSelect={() => onSelectedIdChange(option.id)}
             />
           ))}

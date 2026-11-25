@@ -10,7 +10,10 @@ import {
 } from '@/components/public/PreserveListingView';
 import { useApplyStartFlow } from '@/components/apply/useApplyStartFlow';
 import { formatPrice } from '@/lib/public';
-import { productNounTitle } from '@/lib/visa/processTypes';
+import {
+  isDigitalArrivalCard,
+  productNounTitle,
+} from '@/lib/visa/processTypes';
 
 const INR = 'INR';
 const MIN_TRAVELLERS = 1;
@@ -95,6 +98,8 @@ interface PricingPanelProps {
   withFreeInsurance?: boolean;
   /** Arrival card product — swap "visa" fee/portal copy. */
   isArrivalCard?: boolean;
+  /** Process type — Digital Arrival Card hides validity/stay package labels. */
+  processType?: string | null;
   countryCode: string;
   listingId: string;
   listingSlug?: string;
@@ -111,7 +116,8 @@ interface PricingPanelProps {
   onVisaKindSelect?: (kind: VisaKindOption) => Promise<boolean> | boolean;
 }
 
-function stayDaysLabel(option: PriceOptionView) {
+function stayDaysLabel(option: PriceOptionView, hideValidityStay = false) {
+  if (hideValidityStay) return option.formattedTotal || 'Package';
   return option.stayDuration || option.daysLabel || option.entryValidity || 'Package';
 }
 
@@ -317,6 +323,7 @@ export function PricingPanel({
   officialPortalUrl = null,
   withFreeInsurance = false,
   isArrivalCard = false,
+  processType = null,
   countryCode,
   listingId,
   listingSlug,
@@ -345,6 +352,7 @@ export function PricingPanel({
   const portalOnlyFree = isFullyFreeVisa(selected) || (isFree && !freeWithServiceFee);
   const darkCta =
     'w-full border-white bg-white text-portrait-ink hover:bg-white/90 hover:text-portrait-ink group flex items-center justify-center';
+  const hideValidityStay = isDigitalArrivalCard(processType);
   const nounTitle = productNounTitle(isArrivalCard ? 'digital_arrival_card' : 'visa');
   const feeLabel = `${nounTitle} fee`;
   const typeLabel = isArrivalCard ? 'Arrival card type' : 'Visa type';
@@ -379,7 +387,7 @@ export function PricingPanel({
     : 0;
 
   const displayHeadline = selected
-    ? selected.daysLabel
+    ? selected.daysLabel && !hideValidityStay
       ? `${formatPrice(scaledTotal, INR)} · ${selected.daysLabel}`
       : formatPrice(scaledTotal, INR)
     : headline || 'FREE';
@@ -492,17 +500,17 @@ export function PricingPanel({
               tone === 'dark' ? 'text-white/50' : 'text-slate-helper'
             }`}
           >
-            Stay
+            {hideValidityStay ? 'Package' : 'Stay'}
           </p>
           <AnimatedTabs
             items={priceOptions.map((option) => ({
               id: option.id,
-              label: stayDaysLabel(option),
+              label: stayDaysLabel(option, hideValidityStay),
             }))}
             value={selected.id}
             onChange={setSelectedId}
             tone={tone}
-            ariaLabel="Stay duration"
+            ariaLabel={hideValidityStay ? 'Fee package' : 'Stay duration'}
             layoutId={`stay-days${stayTabsId}`}
           />
         </div>
@@ -666,9 +674,11 @@ export function PricingPanel({
             <p className="mt-1 text-xs text-white/65 sm:text-sm">
               <AnimatedStatValue
                 value={`${
-                  selected.daysLabel
+                  selected.daysLabel && !hideValidityStay
                     ? `Package: ${selected.daysLabel}`
-                    : 'Choose a validity and stay package'
+                    : hideValidityStay
+                      ? 'Fee package'
+                      : 'Choose a validity and stay package'
                 }${travellers > 1 ? ` · ${travellers} travellers` : ''}`}
               />
             </p>

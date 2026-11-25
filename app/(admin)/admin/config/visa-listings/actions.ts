@@ -416,10 +416,10 @@ export async function createListingPrice(processId: string, data: VisaListingPri
 
     await db.insert(visaListingPrices).values({
       visaListingId: processId,
-      entryValidityAmount: validated.entryValidityAmount,
-      entryValidityUnit: validated.entryValidityUnit,
-      entryLengthStayAmount: validated.entryLengthStayAmount,
-      entryLengthStayUnit: validated.entryLengthStayUnit,
+      entryValidityAmount: validated.entryValidityAmount ?? null,
+      entryValidityUnit: validated.entryValidityUnit ?? null,
+      entryLengthStayAmount: validated.entryLengthStayAmount ?? null,
+      entryLengthStayUnit: validated.entryLengthStayUnit ?? null,
       governmentFeeAmount: validated.governmentFeeAmount,
       serviceFeeAmount: validated.serviceFeeAmount,
       governmentGstFeeAmount: validated.governmentGstFeeAmount,
@@ -464,10 +464,10 @@ export async function updateListingPrice(priceId: string, data: VisaListingPrice
     await db
       .update(visaListingPrices)
       .set({
-        entryValidityAmount: validated.entryValidityAmount,
-        entryValidityUnit: validated.entryValidityUnit,
-        entryLengthStayAmount: validated.entryLengthStayAmount,
-        entryLengthStayUnit: validated.entryLengthStayUnit,
+        entryValidityAmount: validated.entryValidityAmount ?? null,
+        entryValidityUnit: validated.entryValidityUnit ?? null,
+        entryLengthStayAmount: validated.entryLengthStayAmount ?? null,
+        entryLengthStayUnit: validated.entryLengthStayUnit ?? null,
         governmentFeeAmount: validated.governmentFeeAmount,
         serviceFeeAmount: validated.serviceFeeAmount,
         governmentGstFeeAmount: validated.governmentGstFeeAmount,

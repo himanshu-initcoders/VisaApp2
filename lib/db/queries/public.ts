@@ -26,7 +26,7 @@ import {
   purposeTabSortIndex,
   visaPurposeTabLabel,
 } from '@/lib/visa/purposes';
-import { usesArrivalCardCopy } from '@/lib/visa/processTypes';
+import { isDigitalArrivalCard, usesArrivalCardCopy } from '@/lib/visa/processTypes';
 import {
   getDemoHighlights,
   getDemoPriceOptions,
@@ -526,20 +526,27 @@ const getCachedPublicProcessPageData = unstable_cache(
         withFreeInsurance: mappedProcess.withFreeInsurance,
         weeklyApplications,
         highlights: getDemoHighlights(mappedProcess, process.country.name),
-        stats: [
-          {
-            label: 'Entry validity',
-            value: mappedProcess.entryValidity || 'Varies by traveler',
-          },
-          {
-            label: 'Purpose',
-            value: process.entryType || process.purpose.replace(/_/g, ' '),
-          },
-          {
-            label: 'Max stay',
-            value: mappedProcess.stayDuration || 'Check requirements',
-          },
-        ],
+        stats: isDigitalArrivalCard(process.processType)
+          ? [
+              {
+                label: 'Purpose',
+                value: process.entryType || process.purpose.replace(/_/g, ' '),
+              },
+            ]
+          : [
+              {
+                label: 'Entry validity',
+                value: mappedProcess.entryValidity || 'Varies by traveler',
+              },
+              {
+                label: 'Purpose',
+                value: process.entryType || process.purpose.replace(/_/g, ' '),
+              },
+              {
+                label: 'Max stay',
+                value: mappedProcess.stayDuration || 'Check requirements',
+              },
+            ],
         overview:
           process.description?.trim() ||
           process.country.seo?.headline ||

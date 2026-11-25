@@ -161,7 +161,11 @@ export default async function ProcessDetailPage({
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div
+          className={`grid grid-cols-2 gap-4 mb-8 ${
+            isArrivalCard ? 'md:grid-cols-2' : 'md:grid-cols-4'
+          }`}
+        >
           <div className="bg-white border border-ash-divider rounded-2xl p-4">
             <p className="text-xs text-slate-helper mb-1">From (first package)</p>
             <p className="text-xl font-medium text-portrait-ink">
@@ -176,22 +180,26 @@ export default async function ProcessDetailPage({
                 : '—'}
             </p>
           </div>
-          <div className="bg-white border border-ash-divider rounded-2xl p-4">
-            <p className="text-xs text-slate-helper mb-1">Entry Validity</p>
-            <p className="text-xl font-medium text-portrait-ink">
-              {firstPrice?.entryValidityAmount && firstPrice?.entryValidityUnit
-                ? `${firstPrice.entryValidityAmount} ${firstPrice.entryValidityUnit}`
-                : '—'}
-            </p>
-          </div>
-          <div className="bg-white border border-ash-divider rounded-2xl p-4">
-            <p className="text-xs text-slate-helper mb-1">Stay Duration</p>
-            <p className="text-xl font-medium text-portrait-ink">
-              {firstPrice?.entryLengthStayAmount && firstPrice?.entryLengthStayUnit
-                ? `${firstPrice.entryLengthStayAmount} ${firstPrice.entryLengthStayUnit}`
-                : '—'}
-            </p>
-          </div>
+          {!isArrivalCard ? (
+            <>
+              <div className="bg-white border border-ash-divider rounded-2xl p-4">
+                <p className="text-xs text-slate-helper mb-1">Entry Validity</p>
+                <p className="text-xl font-medium text-portrait-ink">
+                  {firstPrice?.entryValidityAmount && firstPrice?.entryValidityUnit
+                    ? `${firstPrice.entryValidityAmount} ${firstPrice.entryValidityUnit}`
+                    : '—'}
+                </p>
+              </div>
+              <div className="bg-white border border-ash-divider rounded-2xl p-4">
+                <p className="text-xs text-slate-helper mb-1">Stay Duration</p>
+                <p className="text-xl font-medium text-portrait-ink">
+                  {firstPrice?.entryLengthStayAmount && firstPrice?.entryLengthStayUnit
+                    ? `${firstPrice.entryLengthStayAmount} ${firstPrice.entryLengthStayUnit}`
+                    : '—'}
+                </p>
+              </div>
+            </>
+          ) : null}
         </div>
 
         {/* Management Hub - 6 Cards */}

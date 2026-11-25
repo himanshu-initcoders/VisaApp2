@@ -125,6 +125,7 @@ export function ListingOverviewSection({
               processingEta={processingEta}
               isMultipleEntry={isMultipleEntry}
               processTypeLabel={processTypeLabel}
+              processType={processType}
               priceOptions={priceOptions}
               selectedId={selected?.id}
               onSelectedIdChange={setSelectedId}
@@ -182,6 +183,7 @@ export function ListingOverviewSection({
                 isFree={isFree}
                 visaFree={visaFree}
                 isArrivalCard={isArrivalCard}
+                processType={processType}
                 officialPortalUrl={officialPortalUrl}
                 withFreeInsurance={withFreeInsurance}
                 priceOptions={priceOptions}

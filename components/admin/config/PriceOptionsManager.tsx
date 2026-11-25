@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { isDigitalArrivalCard } from '@/lib/visa/processTypes';
 import { Plus, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -35,6 +36,8 @@ export interface ListingPrice {
 interface PriceOptionsManagerProps {
   processId: string;
   initialPrices: ListingPrice[];
+  /** When Digital Arrival Card, validity/stay fields are omitted. */
+  processType?: string | null;
 }
 
 const UNIT_OPTIONS = [
@@ -63,10 +66,22 @@ function totalFees(price: ListingPrice) {
   );
 }
 
+function stripValidityStay(data: VisaListingPriceInput): VisaListingPriceInput {
+  return {
+    ...data,
+    entryValidityAmount: null,
+    entryValidityUnit: null,
+    entryLengthStayAmount: null,
+    entryLengthStayUnit: null,
+  };
+}
+
 function PriceFormFields({
   form,
+  hideValidityStay,
 }: {
   form: ReturnType<typeof useForm<VisaListingPriceInput>>;
+  hideValidityStay: boolean;
 }) {
   const govt = parseFloat(form.watch('governmentFeeAmount') || '0');
   const service = parseFloat(form.watch('serviceFeeAmount') || '0');
@@ -77,30 +92,32 @@ function PriceFormFields({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4">
-        <Input
-          label="Entry Validity"
-          type="number"
-          error={form.formState.errors.entryValidityAmount?.message}
-          {...form.register('entryValidityAmount', { valueAsNumber: true })}
-        />
-        <Select
-          label="Validity Unit"
-          options={UNIT_OPTIONS}
-          {...form.register('entryValidityUnit')}
-        />
-        <Input
-          label="Stay Duration"
-          type="number"
-          error={form.formState.errors.entryLengthStayAmount?.message}
-          {...form.register('entryLengthStayAmount', { valueAsNumber: true })}
-        />
-        <Select
-          label="Stay Unit"
-          options={UNIT_OPTIONS}
-          {...form.register('entryLengthStayUnit')}
-        />
-      </div>
+      {!hideValidityStay ? (
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label="Entry Validity"
+            type="number"
+            error={form.formState.errors.entryValidityAmount?.message}
+            {...form.register('entryValidityAmount', { valueAsNumber: true })}
+          />
+          <Select
+            label="Validity Unit"
+            options={UNIT_OPTIONS}
+            {...form.register('entryValidityUnit')}
+          />
+          <Input
+            label="Stay Duration"
+            type="number"
+            error={form.formState.errors.entryLengthStayAmount?.message}
+            {...form.register('entryLengthStayAmount', { valueAsNumber: true })}
+          />
+          <Select
+            label="Stay Unit"
+            options={UNIT_OPTIONS}
+            {...form.register('entryLengthStayUnit')}
+          />
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Input
@@ -142,6 +159,7 @@ function PriceFormFields({
 function PriceCard({
   price,
   isEditing,
+  hideValidityStay,
   onEdit,
   onCancel,
   onSuccess,
@@ -149,6 +167,7 @@ function PriceCard({
 }: {
   price: ListingPrice;
   isEditing: boolean;
+  hideValidityStay: boolean;
   onEdit: () => void;
   onCancel: () => void;
   onSuccess: () => void;
@@ -157,22 +176,34 @@ function PriceCard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const form = useForm<VisaListingPriceInput>({
     resolver: zodResolver(visaListingPriceSchema),
-    defaultValues: {
-      entryValidityAmount: price.entryValidityAmount || 30,
-      entryValidityUnit: price.entryValidityUnit || 'days',
-      entryLengthStayAmount: price.entryLengthStayAmount || 30,
-      entryLengthStayUnit: price.entryLengthStayUnit || 'days',
-      governmentFeeAmount: price.governmentFeeAmount || '0',
-      serviceFeeAmount: price.serviceFeeAmount || '0',
-      governmentGstFeeAmount: price.governmentGstFeeAmount || '0',
-      sortOrder: price.sortOrder,
-    },
+    defaultValues: hideValidityStay
+      ? {
+          entryValidityAmount: null,
+          entryValidityUnit: null,
+          entryLengthStayAmount: null,
+          entryLengthStayUnit: null,
+          governmentFeeAmount: price.governmentFeeAmount || '0',
+          serviceFeeAmount: price.serviceFeeAmount || '0',
+          governmentGstFeeAmount: price.governmentGstFeeAmount || '0',
+          sortOrder: price.sortOrder,
+        }
+      : {
+          entryValidityAmount: price.entryValidityAmount || 30,
+          entryValidityUnit: price.entryValidityUnit || 'days',
+          entryLengthStayAmount: price.entryLengthStayAmount || 30,
+          entryLengthStayUnit: price.entryLengthStayUnit || 'days',
+          governmentFeeAmount: price.governmentFeeAmount || '0',
+          serviceFeeAmount: price.serviceFeeAmount || '0',
+          governmentGstFeeAmount: price.governmentGstFeeAmount || '0',
+          sortOrder: price.sortOrder,
+        },
   });
 
   const onSubmit = async (data: VisaListingPriceInput) => {
     setIsSubmitting(true);
     try {
-      const result = await updateListingPrice(price.id, data);
+      const payload = hideValidityStay ? stripValidityStay(data) : data;
+      const result = await updateListingPrice(price.id, payload);
       if (result.success) onSuccess();
       else alert(result.error || 'Failed to update');
     } catch {
@@ -194,7 +225,7 @@ function PriceCard({
         >
           Edit Price Option
         </h3>
-        <PriceFormFields form={form} />
+        <PriceFormFields form={form} hideValidityStay={hideValidityStay} />
         <div className="flex gap-3 mt-8">
           <Button type="submit" variant="primary" size="md" disabled={isSubmitting}>
             {isSubmitting ? 'Saving...' : 'Save Changes'}
@@ -207,18 +238,34 @@ function PriceCard({
     );
   }
 
+  const total = totalFees(price);
+
   return (
     <div className="bg-white border border-ash-divider rounded-3xl p-6">
       <div className="mb-4">
-        <h3
-          className="text-xl font-medium text-portrait-ink"
-          style={{ fontFamily: 'Basier Circle' }}
-        >
-          {formatDuration(price.entryValidityAmount, price.entryValidityUnit)} validity
-        </h3>
-        <p className="text-sm text-slate-helper">
-          Stay up to {formatDuration(price.entryLengthStayAmount, price.entryLengthStayUnit)}
-        </p>
+        {hideValidityStay ? (
+          <>
+            <h3
+              className="text-xl font-medium text-portrait-ink"
+              style={{ fontFamily: 'Basier Circle' }}
+            >
+              {total === 0 ? 'Free' : `₹${total.toLocaleString('en-IN')}`} package
+            </h3>
+            <p className="text-sm text-slate-helper">Fees only — no validity or stay</p>
+          </>
+        ) : (
+          <>
+            <h3
+              className="text-xl font-medium text-portrait-ink"
+              style={{ fontFamily: 'Basier Circle' }}
+            >
+              {formatDuration(price.entryValidityAmount, price.entryValidityUnit)} validity
+            </h3>
+            <p className="text-sm text-slate-helper">
+              Stay up to {formatDuration(price.entryLengthStayAmount, price.entryLengthStayUnit)}
+            </p>
+          </>
+        )}
       </div>
 
       <div className="space-y-3 mb-6">
@@ -243,7 +290,7 @@ function PriceCard({
         <div className="flex justify-between py-2 text-sm">
           <span className="text-slate-helper">Total</span>
           <span className="font-medium text-portrait-ink">
-            ₹{totalFees(price).toLocaleString('en-IN')}
+            ₹{total.toLocaleString('en-IN')}
           </span>
         </div>
       </div>
@@ -262,31 +309,44 @@ function PriceCard({
 
 function AddPriceModal({
   processId,
+  hideValidityStay,
   onClose,
   onSuccess,
 }: {
   processId: string;
+  hideValidityStay: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const form = useForm<VisaListingPriceInput>({
     resolver: zodResolver(visaListingPriceSchema),
-    defaultValues: {
-      entryValidityAmount: 90,
-      entryValidityUnit: 'days',
-      entryLengthStayAmount: 30,
-      entryLengthStayUnit: 'days',
-      governmentFeeAmount: '0',
-      serviceFeeAmount: '0',
-      governmentGstFeeAmount: '0',
-    },
+    defaultValues: hideValidityStay
+      ? {
+          entryValidityAmount: null,
+          entryValidityUnit: null,
+          entryLengthStayAmount: null,
+          entryLengthStayUnit: null,
+          governmentFeeAmount: '0',
+          serviceFeeAmount: '0',
+          governmentGstFeeAmount: '0',
+        }
+      : {
+          entryValidityAmount: 90,
+          entryValidityUnit: 'days',
+          entryLengthStayAmount: 30,
+          entryLengthStayUnit: 'days',
+          governmentFeeAmount: '0',
+          serviceFeeAmount: '0',
+          governmentGstFeeAmount: '0',
+        },
   });
 
   const onSubmit = async (data: VisaListingPriceInput) => {
     setIsSubmitting(true);
     try {
-      const result = await createListingPrice(processId, data);
+      const payload = hideValidityStay ? stripValidityStay(data) : data;
+      const result = await createListingPrice(processId, payload);
       if (result.success) onSuccess();
       else alert(result.error || 'Failed to create');
     } catch {
@@ -315,7 +375,7 @@ function AddPriceModal({
           </button>
         </div>
         <form onSubmit={form.handleSubmit(onSubmit)} className="p-6">
-          <PriceFormFields form={form} />
+          <PriceFormFields form={form} hideValidityStay={hideValidityStay} />
           <div className="flex gap-3 mt-8">
             <Button type="submit" variant="primary" size="md" disabled={isSubmitting}>
               {isSubmitting ? 'Creating...' : 'Create'}
@@ -332,15 +392,18 @@ function AddPriceModal({
 
 /**
  * Manage multiple price options per listing (validity + stay + 3 fees).
+ * Digital Arrival Card listings show fees only.
  */
 export function PriceOptionsManager({
   processId,
   initialPrices,
+  processType,
 }: PriceOptionsManagerProps) {
   const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const hideValidityStay = isDigitalArrivalCard(processType);
 
   const refresh = () => router.refresh();
 
@@ -359,8 +422,10 @@ export function PriceOptionsManager({
     <>
       <div className="flex justify-end mb-4">
         <Button onClick={() => setShowAdd(true)} variant="primary" size="md">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Price Option
+          <span className="inline-flex items-center gap-2">
+            <Plus className="h-4 w-4 shrink-0" />
+            Add Price Option
+          </span>
         </Button>
       </div>
 
@@ -368,7 +433,9 @@ export function PriceOptionsManager({
         <div className="bg-white border border-dashed border-ash-divider rounded-3xl p-12 text-center">
           <p className="text-portrait-ink font-medium mb-2">No price options yet</p>
           <p className="text-sm text-slate-helper mb-4">
-            Add packages with entry validity, stay duration, and fees.
+            {hideValidityStay
+              ? 'Add packages with government, service, and GST fees.'
+              : 'Add packages with entry validity, stay duration, and fees.'}
           </p>
           <Button onClick={() => setShowAdd(true)} variant="primary" size="md">
             Add first option
@@ -380,6 +447,7 @@ export function PriceOptionsManager({
             <PriceCard
               key={price.id}
               price={price}
+              hideValidityStay={hideValidityStay}
               isEditing={editingId === price.id}
               onEdit={() => setEditingId(price.id)}
               onCancel={() => setEditingId(null)}
@@ -396,6 +464,7 @@ export function PriceOptionsManager({
       {showAdd && (
         <AddPriceModal
           processId={processId}
+          hideValidityStay={hideValidityStay}
           onClose={() => setShowAdd(false)}
           onSuccess={() => {
             setShowAdd(false);
@@ -409,7 +478,11 @@ export function PriceOptionsManager({
         onClose={() => setDeletingId(null)}
         onConfirm={handleDelete}
         title="Delete Price Option"
-        message="Remove this validity/stay package and its fees? This cannot be undone."
+        message={
+          hideValidityStay
+            ? 'Remove this fee package? This cannot be undone.'
+            : 'Remove this validity/stay package and its fees? This cannot be undone.'
+        }
         confirmText="Delete"
         destructive
       />

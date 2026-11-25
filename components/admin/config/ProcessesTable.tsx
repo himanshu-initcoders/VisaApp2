@@ -39,7 +39,10 @@ interface ProcessesTableProps {
   processes: ProcessWithCountry[];
 }
 
-function firstPackageLabel(prices: ProcessWithCountry['prices']) {
+function firstPackageLabel(
+  prices: ProcessWithCountry['prices'],
+  processType: ProcessType
+) {
   const first = prices[0];
   if (!first) return '—';
   const total =
@@ -47,6 +50,7 @@ function firstPackageLabel(prices: ProcessWithCountry['prices']) {
     parseFloat(first.serviceFeeAmount || '0') +
     parseFloat(first.governmentGstFeeAmount || '0');
   const price = total === 0 ? 'FREE' : `₹${Math.round(total).toLocaleString('en-IN')}`;
+  if (processType === 'digital_arrival_card') return price;
   const days =
     first.entryLengthStayAmount && first.entryLengthStayUnit
       ? ` · ${first.entryLengthStayAmount} ${first.entryLengthStayUnit}`
@@ -135,7 +139,7 @@ export function ProcessesTable({ processes }: ProcessesTableProps) {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <span className="font-medium text-portrait-ink text-sm">
-                    {firstPackageLabel(process.prices)}
+                    {firstPackageLabel(process.prices, process.processType)}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-center">
