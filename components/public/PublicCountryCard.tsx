@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowUpRight, Sparkles } from 'lucide-react';
-import { AutoFitText, Badge } from '@/components/ui';
+import { Badge } from '@/components/ui';
 import { MediaImage } from '@/components/shared/MediaImage';
 import { cn } from '@/lib/utils';
 import { formatPrice, getCountryCardImage, getFlagEmoji } from '@/lib/public';
@@ -43,11 +43,6 @@ export function PublicCountryCard({
   showExploreFooter = false,
 }: PublicCountryCardProps) {
   const cardImage = getCountryCardImage(country.images);
-  const listingNames = country.listings.map((listing) => listing.processName);
-  const extraCount = Math.max(listingNames.length - 2, 0);
-  const visibleNames = listingNames.slice(0, 2);
-  const listingLine =
-    visibleNames.join(' · ') + (extraCount > 0 ? ` · +${extraCount}` : '');
   const hasFreeInsurance = country.listings.some(
     (listing) => listing.withFreeInsurance
   );
@@ -90,14 +85,7 @@ export function PublicCountryCard({
 
           <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 sm:p-5">
             <div className="min-w-0 flex-1">
-              <AutoFitText
-                maxPx={12}
-                minPx={8}
-                className="font-medium uppercase tracking-[0.16em] text-white/70"
-              >
-                {listingLine}
-              </AutoFitText>
-              <h3 className="mt-1.5 font-serif text-[1.75rem] leading-[1.05] tracking-[-0.02em] text-white sm:text-[2rem]">
+              <h3 className="font-serif text-[1.75rem] leading-[1.05] tracking-[-0.02em] text-white sm:text-[2rem]">
                 {country.name}
               </h3>
               <p className="mt-2 text-sm font-medium text-white/90">
