@@ -62,7 +62,7 @@ export function PublicCountryCard({
               src={cardImage.url}
               alt={cardImage.alt || country.name}
               fill
-              sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+              sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, 50vw"
               className="object-cover transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
@@ -83,12 +83,12 @@ export function PublicCountryCard({
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 sm:p-5">
+          <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3 sm:gap-3 sm:p-5">
             <div className="min-w-0 flex-1">
-              <h3 className="font-serif text-[1.75rem] leading-[1.05] tracking-[-0.02em] text-white sm:text-[2rem]">
+              <h3 className="font-serif text-[1.25rem] leading-[1.05] tracking-[-0.02em] text-white sm:text-[2rem]">
                 {country.name}
               </h3>
-              <p className="mt-2 text-sm font-medium text-white/90">
+              <p className="mt-1.5 text-xs font-medium text-white/90 sm:mt-2 sm:text-sm">
                 From{' '}
                 {country.isFree || country.startingPrice === 0
                   ? 'FREE'
@@ -96,8 +96,8 @@ export function PublicCountryCard({
               </p>
             </div>
 
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/95 text-portrait-ink transition-transform duration-300 group-hover:scale-105">
-              <ArrowUpRight className="h-5 w-5" />
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/95 text-portrait-ink transition-transform duration-300 group-hover:scale-105 sm:h-10 sm:w-10">
+              <ArrowUpRight className="h-4 w-4 sm:h-5 sm:w-5" />
             </span>
           </div>
         </div>
