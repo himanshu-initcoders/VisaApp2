@@ -83,17 +83,23 @@ async function main() {
       process.exit(code ?? 1);
     }
 
-    // Safety net: 0027 was briefly generated with conflicting visa_listings
-    // statements; ensure blog_posts exists even if that migration was skipped.
+    // Post-migrate ensures (must run after drizzle commits — separate connections).
+    // 1) blog_posts: 0027 was briefly generated with conflicting visa_listings statements
+    // 2) infant passport listings: cannot seed in same TX as 0052 ADD VALUE
     try {
       const { spawnSync } = await import('child_process');
-      const ensure = spawnSync('npx tsx scripts/ensure-blog-posts.ts', {
-        stdio: 'inherit',
-        shell: true,
-        env: process.env,
-      });
-      if (ensure.status !== 0) {
-        process.exit(ensure.status ?? 1);
+      for (const script of [
+        'scripts/ensure-blog-posts.ts',
+        'scripts/ensure-passport-infant-listings.ts',
+      ]) {
+        const ensure = spawnSync(`npx tsx ${script}`, {
+          stdio: 'inherit',
+          shell: true,
+          env: process.env,
+        });
+        if (ensure.status !== 0) {
+          process.exit(ensure.status ?? 1);
+        }
       }
     } catch (error) {
       console.error(error instanceof Error ? error.message : error);

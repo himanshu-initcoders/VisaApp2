@@ -22,7 +22,9 @@ India-only passport products mirror the visa listing hub, but use separate table
 - Wizard: form steps → documents → review → Razorpay pay / free submit
 
 ## Infant clones
-- Migration `0052` adds enum values; `0053` clones Fresh → Fresh Passport (Infant) and Re-issue → Re-Issue (Infant) (prices, steps, questions, documents, FAQs).
+- Migration `0052` adds enum values `fresh_infant` / `reissue_infant`.
+- `0053` is a no-op placeholder (Drizzle runs pending migrations in **one transaction**; Postgres cannot use a newly added enum label until commit).
+- Post-migrate seed: `npm run db:ensure-passport-infant` (`scripts/ensure-passport-infant-listings.ts`), also wired from `db:migrate` — clones prices, steps, questions, documents, FAQs.
 
 ## Related
 - [[Database Schema Documentation]]
