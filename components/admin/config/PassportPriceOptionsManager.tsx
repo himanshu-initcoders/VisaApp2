@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ModalFrame } from '@/components/ui/ModalFrame';
 import { Plus, X } from 'lucide-react';
 import {
   PASSPORT_BOOKLET_PAGES,
@@ -174,62 +175,59 @@ export function PassportPriceOptionsManager({
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setShowForm(false)}
-          />
-          <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-elevated">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-medium text-portrait-ink">
-                {editing ? 'Edit package' : 'Add package'}
-              </h2>
-              <button type="button" onClick={() => setShowForm(false)}>
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <Select
-                  label="Scheme"
-                  options={PASSPORT_SCHEMES.map((s) => ({
-                    value: s.value,
-                    label: s.label,
-                  }))}
-                  {...form.register('scheme')}
-                />
-                <Select
-                  label="Booklet pages"
-                  options={PASSPORT_BOOKLET_PAGES.map((p) => ({
-                    value: p.value,
-                    label: p.label,
-                  }))}
-                  {...form.register('bookletPages')}
-                />
-              </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <Input
-                  label="Gov fee (₹)"
-                  {...form.register('governmentFeeAmount')}
-                  error={form.formState.errors.governmentFeeAmount?.message}
-                />
-                <Input
-                  label="Service fee (₹)"
-                  {...form.register('serviceFeeAmount')}
-                  error={form.formState.errors.serviceFeeAmount?.message}
-                />
-                <Input
-                  label="GST (₹)"
-                  {...form.register('governmentGstFeeAmount')}
-                  error={form.formState.errors.governmentGstFeeAmount?.message}
-                />
-              </div>
-              <Button type="submit" variant="primary" className="w-full">
-                Save package
-              </Button>
-            </form>
+        <ModalFrame
+          onClose={() => setShowForm(false)}
+          panelClassName="max-w-lg p-6"
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-medium text-portrait-ink">
+              {editing ? 'Edit package' : 'Add package'}
+            </h2>
+            <button type="button" onClick={() => setShowForm(false)}>
+              <X className="h-5 w-5" />
+            </button>
           </div>
-        </div>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Select
+                label="Scheme"
+                options={PASSPORT_SCHEMES.map((s) => ({
+                  value: s.value,
+                  label: s.label,
+                }))}
+                {...form.register('scheme')}
+              />
+              <Select
+                label="Booklet pages"
+                options={PASSPORT_BOOKLET_PAGES.map((p) => ({
+                  value: p.value,
+                  label: p.label,
+                }))}
+                {...form.register('bookletPages')}
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Input
+                label="Gov fee (₹)"
+                {...form.register('governmentFeeAmount')}
+                error={form.formState.errors.governmentFeeAmount?.message}
+              />
+              <Input
+                label="Service fee (₹)"
+                {...form.register('serviceFeeAmount')}
+                error={form.formState.errors.serviceFeeAmount?.message}
+              />
+              <Input
+                label="GST (₹)"
+                {...form.register('governmentGstFeeAmount')}
+                error={form.formState.errors.governmentGstFeeAmount?.message}
+              />
+            </div>
+            <Button type="submit" variant="primary" className="w-full">
+              Save package
+            </Button>
+          </form>
+        </ModalFrame>
       )}
 
       <ConfirmDialog
