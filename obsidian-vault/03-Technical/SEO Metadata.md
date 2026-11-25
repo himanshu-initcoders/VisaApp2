@@ -1,6 +1,6 @@
 # SEO Metadata
 
-Canonical public SEO for Viserv (`viserv.in`).
+Canonical public SEO for Viserv (`www.viserv.in`).
 
 ## Source of truth
 
@@ -18,7 +18,7 @@ Canonical public SEO for Viserv (`viserv.in`).
 
 1. **One title brand suffix** — Root layout uses `title.template: "%s | Viserv"`. Page titles omit the brand. Home uses `absolute`.
 2. **Unique descriptions** — Every indexable route has distinct copy in `SEO_PAGES` or listing/blog generators.
-3. **Canonical** — Set via `alternates.canonical` on each public page (apex `NEXT_PUBLIC_APP_URL`).
+3. **Canonical** — Set via `alternates.canonical` on each public page (www `NEXT_PUBLIC_APP_URL=https://www.viserv.in`). Apex `viserv.in` 301s to www via Caddy.
 4. **OG / Twitter** — Always include an image (`DEFAULT_OG_IMAGE` or page-specific).
 5. **H1** — One H1 per public page (visible or `sr-only` when the hero is interactive-only).
 6. **Noindex** — Auth, dashboard, and admin layouts export `NOINDEX_METADATA`. Apply funnels also set `robots: noindex`.

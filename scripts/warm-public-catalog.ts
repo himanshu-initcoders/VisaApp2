@@ -4,7 +4,7 @@
  * Usage:
  *   npm run warm:public
  *   npm run warm:public -- --country=AE
- *   npm run warm:public -- --origin=https://viserv.in
+ *   npm run warm:public -- --origin=https://www.viserv.in
  */
 import 'dotenv/config';
 import { warmPublicVisaCatalog } from '../lib/warm-public-catalog';

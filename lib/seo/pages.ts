@@ -74,7 +74,7 @@ export const SEO_PAGES = {
     path: '/terms',
     title: 'Terms and Conditions',
     description:
-      'Terms and Conditions for using Viserv visa and passport assistance on viserv.in and related channels.',
+      'Terms and Conditions for using Viserv visa and passport assistance on www.viserv.in and related channels.',
     keywords: ['Viserv terms', 'visa assistance terms'],
   },
   refund: {

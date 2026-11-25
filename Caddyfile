@@ -2,13 +2,13 @@
 	email {$CADDY_EMAIL:hello@viserv.in}
 }
 
-# www → apex (301). Canonical / sitemap / robots / metadataBase all use https://viserv.in.
+# apex → www (301). Canonical / sitemap / robots / metadataBase all use https://www.viserv.in.
 # Serving both hosts as 200 creates duplicate URLs for crawlers.
-www.viserv.in {
-	redir https://viserv.in{uri} permanent
+viserv.in {
+	redir https://www.viserv.in{uri} permanent
 }
 
-viserv.in {
+www.viserv.in {
 	encode gzip zstd
 	reverse_proxy app:3000 {
 		header_up Host {host}

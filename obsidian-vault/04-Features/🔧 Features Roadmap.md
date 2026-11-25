@@ -151,7 +151,7 @@
 - [x] JSON-LD structured data (Organization, WebSite, WebPage, Breadcrumb, Service, FAQ, BlogPosting)
 - [x] Sitemap (`/sitemap.xml`) + robots (`/robots.txt`)
 - [x] Public SEO layer: unique titles/descriptions/keywords/OG/canonicals, H1s, JSON-LD contact, noindex for auth/dashboard/admin (`lib/seo/*`)
-- [x] www → apex host redirect (`Caddyfile`: `www.viserv.in` → `https://viserv.in`)
+- [x] apex → www host redirect (`Caddyfile`: `viserv.in` → `https://www.viserv.in`; SEO/sitemap/JSON-LD use www)
 - [x] Blog index + post pages in sitemap, footer, header, `view_blog_post` analytics
 - [x] Recent blogs teaser (3 posts) on home + `/passport`
 - [ ] Analytics dashboard

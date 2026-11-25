@@ -1173,7 +1173,7 @@ export async function notifyVisaOutcomeDeliveredEvent(input: {
     }
   } else {
     console.warn(
-      '[notify] Visa outcome media WhatsApp skipped — set WA_MEDIA_PUBLIC_BASE_URL=https://viserv.in (public HTTPS)'
+      '[notify] Visa outcome media WhatsApp skipped — set WA_MEDIA_PUBLIC_BASE_URL=https://www.viserv.in (public HTTPS)'
     );
   }
 

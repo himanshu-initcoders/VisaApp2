@@ -36,7 +36,7 @@ export default function robots(): MetadataRoute.Robots {
       ],
     },
     sitemap: `${siteUrl}/sitemap.xml`,
-    // Host directive: bare hostname (no scheme). Must match getSiteUrl() apex.
+    // Host directive: bare hostname (no scheme). Must match getSiteUrl() (www).
     host: new URL(siteUrl).host,
   };
 }

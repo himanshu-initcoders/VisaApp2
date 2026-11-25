@@ -601,7 +601,7 @@ export async function notifyStatusApprovedWithDocumentWhatsApp(input: {
   notes?: string | null;
   /**
    * Full downloadable media URL for Twilio {{7}}.
-   * Example: https://viserv.in/api/wa-media/{token}.pdf
+   * Example: https://www.viserv.in/api/wa-media/{token}.pdf
    */
   mediaUrl: string;
 }): Promise<boolean> {
