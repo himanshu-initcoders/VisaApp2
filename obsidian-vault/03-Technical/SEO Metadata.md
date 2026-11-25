@@ -10,8 +10,9 @@ Canonical public SEO for Viserv (`viserv.in`).
 | `lib/seo/pages.ts` | Unique title/description/keywords per static public route |
 | `lib/seo/metadata.ts` | `buildPageMetadata()` + `NOINDEX_METADATA` |
 | `lib/seo/jsonld.ts` | Organization, WebSite, WebPage, Service, FAQ, BlogPosting, breadcrumbs |
-| `app/sitemap.ts` | Indexable URLs (static + visa listings + blogs) |
+| `app/sitemap.ts` | Indexable URLs (static + visa listings + blogs); ISR 1h + purged on catalog/blog revalidate |
 | `app/robots.ts` | Allow marketing; disallow admin/API/auth/apply |
+| `lib/seo/legacyVisaListingRedirects.ts` | 301 map for retired/renamed listing slugs (wired in `next.config.ts`) |
 
 ## Rules
 
@@ -37,4 +38,8 @@ Canonical public SEO for Viserv (`viserv.in`).
 
 Country `seo.metaTitle` / `seo.metaDescription` (admin) override the generated listing title/description when set.
 
-**Last updated**: 2026-11-20
+## Listing slug moves
+
+When a public listing slug is renamed or a listing is removed, add a row in `lib/seo/legacyVisaListingRedirects.ts` (source → current canonical). Admin Basic Info updates also call `revalidatePath('/sitemap.xml')` via `revalidatePublicVisaCatalog`, so crawlers stop seeing stale listing URLs.
+
+**Last updated**: 2026-11-25

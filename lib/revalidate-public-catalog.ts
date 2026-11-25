@@ -33,6 +33,8 @@ export async function revalidatePublicVisaCatalog(options?: {
   try {
     revalidatePath('/');
     revalidatePath('/visa');
+    // Keep /sitemap.xml in sync when listings are added, hidden, or slug-renamed.
+    revalidatePath('/sitemap.xml');
   } catch (err) {
     console.warn('revalidatePath catalog routes error:', err);
   }

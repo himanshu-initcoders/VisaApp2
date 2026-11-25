@@ -1,10 +1,22 @@
 import type { NextConfig } from 'next';
+import { LEGACY_VISA_LISTING_REDIRECTS } from './lib/seo/legacyVisaListingRedirects';
 
 const nextConfig: NextConfig = {
   /* config options here */
   // Required for the production Docker image (copies a minimal server into the runner).
   output: 'standalone',
   reactStrictMode: true,
+  // 301 retired listing slugs (and /apply) so Google-indexed URLs do not 404.
+  async redirects() {
+    return LEGACY_VISA_LISTING_REDIRECTS.flatMap(({ source, destination }) => [
+      { source, destination, statusCode: 301 as const },
+      {
+        source: `${source}/:path*`,
+        destination: `${destination}/:path*`,
+        statusCode: 301 as const,
+      },
+    ]);
+  },
   // Dev-only: allow ngrok / Cloudflare tunnels so login, Server Actions, and
   // /_next assets work when the browser Origin is the tunnel host (not localhost).
   // Hostnames only — no scheme or port. Restart `next dev` after changing this.

@@ -3,6 +3,9 @@ import { getPublishedPosts } from '@/lib/db/queries/blog';
 import { getEnabledCountriesWithProcesses } from '@/lib/db/queries/public';
 import { absoluteUrl, getSiteUrl } from '@/lib/seo/jsonld';
 
+/** Refresh when admin catalog changes call revalidatePath('/sitemap.xml'). */
+export const revalidate = 3600;
+
 /** Public marketing + catalog URLs for search crawlers. */
 const STATIC_PATHS: Array<{
   path: string;
