@@ -157,17 +157,37 @@ const unitSchema = z.enum(
   'Invalid time unit'
 );
 
-/** Coerce empty/NaN RHF number inputs to null (used for Digital Arrival Card packages). */
-const optionalPositiveInt = z.preprocess((value) => {
-  if (value === '' || value === undefined || value === null) return null;
-  if (typeof value === 'number' && Number.isNaN(value)) return null;
-  return value;
-}, z.number().int().positive('Must be a positive number').nullable());
+/**
+ * Coerce empty/NaN RHF number inputs to null (Digital Arrival Card packages).
+ * Avoid z.preprocess — Zod 4 types preprocess input as unknown and breaks zodResolver.
+ */
+const optionalPositiveInt = z
+  .union([
+    z.number(),
+    z.nan(),
+    z.literal(''),
+    z.null(),
+    z.undefined(),
+  ])
+  .transform((value): number | null => {
+    if (
+      value === '' ||
+      value === undefined ||
+      value === null ||
+      (typeof value === 'number' && Number.isNaN(value))
+    ) {
+      return null;
+    }
+    return value;
+  })
+  .pipe(z.number().int().positive('Must be a positive number').nullable());
 
-const optionalUnit = z.preprocess((value) => {
-  if (value === '' || value === undefined || value === null) return null;
-  return value;
-}, unitSchema.nullable());
+const optionalUnit = z
+  .union([unitSchema, z.literal(''), z.null(), z.undefined()])
+  .transform((value) =>
+    value === '' || value === undefined || value === null ? null : value
+  )
+  .pipe(unitSchema.nullable());
 
 export const visaListingPriceSchema = z.object({
   // Optional for Digital Arrival Card — those listings have fees only, no validity/stay.
@@ -181,7 +201,8 @@ export const visaListingPriceSchema = z.object({
   sortOrder: z.number().int().nonnegative().optional(),
 });
 
-export type VisaListingPriceInput = z.infer<typeof visaListingPriceSchema>;
+export type VisaListingPriceInput = z.output<typeof visaListingPriceSchema>;
+export type VisaListingPriceFormValues = z.input<typeof visaListingPriceSchema>;
 
 // ============================================================================
 // DYNAMIC QUESTION SCHEMAS

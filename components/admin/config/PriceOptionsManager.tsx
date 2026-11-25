@@ -1,9 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { visaListingPriceSchema, type VisaListingPriceInput } from '@/lib/validations/config';
+import {
+  visaListingPriceSchema,
+  type VisaListingPriceFormValues,
+  type VisaListingPriceInput,
+} from '@/lib/validations/config';
 import {
   createListingPrice,
   updateListingPrice,
@@ -80,7 +84,11 @@ function PriceFormFields({
   form,
   hideValidityStay,
 }: {
-  form: ReturnType<typeof useForm<VisaListingPriceInput>>;
+  form: UseFormReturn<
+    VisaListingPriceFormValues,
+    unknown,
+    VisaListingPriceInput
+  >;
   hideValidityStay: boolean;
 }) {
   const govt = parseFloat(form.watch('governmentFeeAmount') || '0');
@@ -174,7 +182,11 @@ function PriceCard({
   onDelete: () => void;
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const form = useForm<VisaListingPriceInput>({
+  const form = useForm<
+    VisaListingPriceFormValues,
+    unknown,
+    VisaListingPriceInput
+  >({
     resolver: zodResolver(visaListingPriceSchema),
     defaultValues: hideValidityStay
       ? {
@@ -319,7 +331,11 @@ function AddPriceModal({
   onSuccess: () => void;
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const form = useForm<VisaListingPriceInput>({
+  const form = useForm<
+    VisaListingPriceFormValues,
+    unknown,
+    VisaListingPriceInput
+  >({
     resolver: zodResolver(visaListingPriceSchema),
     defaultValues: hideValidityStay
       ? {
