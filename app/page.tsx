@@ -14,12 +14,17 @@ import {
   getEnabledComingSoonCountries,
   getEnabledCountriesWithProcesses,
 } from '@/lib/db/queries/public';
+import { SiteFaqSection } from '@/components/public/SiteFaqSection';
 import {
   buildBreadcrumbJsonLd,
+  buildFaqPageJsonLd,
+  buildHowToJsonLd,
   buildWebPageJsonLd,
 } from '@/lib/seo/jsonld';
+import { HOW_IT_WORKS_STEPS } from '@/lib/seo/howItWorksSteps';
 import { buildPageMetadata } from '@/lib/seo/metadata';
 import { SEO_PAGES } from '@/lib/seo/pages';
+import { SITE_FAQS } from '@/lib/seo/siteFaqs';
 import { pickPreferredCountryListing } from '@/lib/visa/purposes';
 
 /** Static at build; refresh hourly or when admin emits catalog revalidation. */
@@ -35,37 +40,6 @@ export const metadata: Metadata = buildPageMetadata({
   path: HOME.path,
   keywords: HOME.keywords,
 });
-
-const HOW_IT_WORKS_STEPS = [
-  {
-    id: 'destination',
-    title: 'Choose your destination',
-    description:
-      'Pick the country you’re visiting and the visa that fits your trip: tourist, business.',
-    stepNumber: 1,
-  },
-  {
-    id: 'docs',
-    title: 'Check documents and price',
-    description:
-      'See the full cost, how long it takes, and the exact documents you’ll need, before you pay.',
-    stepNumber: 2,
-  },
-  {
-    id: 'apply',
-    title: 'Apply in one go',
-    description:
-      'Add travellers, upload your documents and pay. Our experts review everything before it’s submitted.',
-    stepNumber: 3,
-  },
-  {
-    id: 'track',
-    title: 'Track your visa',
-    description:
-      'Get updates at every stage, so you always know where your application stands.',
-    stepNumber: 4,
-  },
-];
 
 export default async function Home() {
   const [countriesWithProcesses, comingSoonCountries, recentPosts] =
@@ -119,6 +93,13 @@ export default async function Home() {
     }))
   );
 
+  const faqSchema = buildFaqPageJsonLd(
+    SITE_FAQS.map((faq) => ({
+      question: faq.question,
+      answer: faq.answer,
+    }))
+  );
+
   return (
     <>
       {/* LCP hero: discoverable in initial HTML before the client LandingHero tree. */}
@@ -137,6 +118,17 @@ export default async function Home() {
             path: HOME.path,
           }),
           buildBreadcrumbJsonLd([{ name: 'Home', path: '/' }]),
+          buildHowToJsonLd({
+            name: 'Apply for a visa with Viserv in four steps',
+            description: HOME.description,
+            path: HOME.path,
+            steps: HOW_IT_WORKS_STEPS.map((step) => ({
+              title: step.title,
+              description: step.description,
+              stepNumber: step.stepNumber,
+            })),
+          }),
+          ...(faqSchema ? [faqSchema] : []),
         ]}
       />
       <main className="min-h-screen bg-[#f8f6f1]">
@@ -159,7 +151,7 @@ export default async function Home() {
               Clear guidance for first-time travellers, and no repeated paperwork for frequent ones.
             </p>
           </MotionReveal>
-          <ProcessTimeline steps={HOW_IT_WORKS_STEPS} />
+          <ProcessTimeline steps={[...HOW_IT_WORKS_STEPS]} />
         </section>
 
         <section className="mx-auto max-w-7xl px-4 pb-8 pt-2 sm:px-6 sm:pb-10 sm:pt-4 lg:px-8">
@@ -191,6 +183,7 @@ export default async function Home() {
           </MotionReveal>
         </section>
 
+        <SiteFaqSection />
         <RecentBlogsSection posts={recentPosts} compactBottom />
         <ContactBar />
       </main>

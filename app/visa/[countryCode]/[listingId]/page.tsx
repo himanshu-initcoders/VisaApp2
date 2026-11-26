@@ -15,6 +15,8 @@ import {
   buildVisaServiceJsonLd,
   buildWebPageJsonLd,
 } from '@/lib/seo/jsonld';
+import { buildCountryHubPath } from '@/lib/seo/countryHubFaqs';
+import { buildListingKeyFacts } from '@/lib/seo/listingKeyFacts';
 import { buildPageMetadata } from '@/lib/seo/metadata';
 import { DEFAULT_OG_IMAGE, SITE_NAME } from '@/lib/seo/site';
 import { withSearchQuery } from '@/lib/visa/listingSlug';
@@ -80,13 +82,9 @@ export async function generateMetadata({
 
   if (!data) return {};
 
-  const countrySeo = data.country.seo;
-  const title =
-    countrySeo?.metaTitle?.trim() ||
-    `${data.country.name} ${data.process.processName} for Indians — price, documents & time`;
-  const description =
-    countrySeo?.metaDescription?.trim() ||
-    `${data.process.processName} for Indian travellers to ${data.country.name}. See pricing, timeline, and document requirements before you apply with ${SITE_NAME}.`;
+  // Listing titles stay listing-specific. Country seo.meta* belongs on /visa/{cc}.
+  const title = `${data.country.name} ${data.process.processName} for Indians — price, documents & time`;
+  const description = `${data.process.processName} for Indian travellers to ${data.country.name}. See pricing, timeline, and document requirements before you apply with ${SITE_NAME}.`;
   const ogImage = getCountryOgImage(data.country.images);
   const keywords = [
     `${data.country.name} visa for Indians`,
@@ -127,14 +125,18 @@ export default async function PublicProcessPage({ params, searchParams }: PagePr
     permanentRedirect(withSearchQuery(data.href, query));
   }
 
-  const countrySeo = data.country.seo;
-  const title =
-    countrySeo?.metaTitle?.trim() ||
-    `${data.country.name} ${data.process.processName} for Indians — price, documents & time`;
-  const description =
-    countrySeo?.metaDescription?.trim() ||
-    `${data.process.processName} for Indian travellers to ${data.country.name}. See pricing, timeline, and document requirements before you apply with ${SITE_NAME}.`;
+  const title = `${data.country.name} ${data.process.processName} for Indians — price, documents & time`;
+  const description = `${data.process.processName} for Indian travellers to ${data.country.name}. See pricing, timeline, and document requirements before you apply with ${SITE_NAME}.`;
   const price = data.page.pricing.priceOptions[0]?.totalAmount;
+  const countryHubPath = buildCountryHubPath(data.country.iso2Code);
+  const keyFacts = buildListingKeyFacts({
+    startingPrice: data.process.startingPrice,
+    isFree: data.page.isFree,
+    formattedStartingPrice: data.page.pricing.headline,
+    processingEta: data.process.standardEta,
+    priceOption: data.page.pricing.priceOptions[0] ?? null,
+    documentCount: data.page.requirements.length,
+  });
   const faqSchema = buildFaqPageJsonLd(
     (data.page.faqs ?? []).map((faq) => ({
       question: faq.question,
@@ -149,8 +151,7 @@ export default async function PublicProcessPage({ params, searchParams }: PagePr
     }),
     buildBreadcrumbJsonLd([
       { name: 'Home', path: '/' },
-      { name: 'Destinations', path: '/' },
-      { name: data.country.name, path: data.href },
+      { name: data.country.name, path: countryHubPath },
       { name: data.process.processName, path: data.href },
     ]),
     buildVisaServiceJsonLd({
@@ -161,6 +162,10 @@ export default async function PublicProcessPage({ params, searchParams }: PagePr
       countryCode: data.country.iso2Code,
       price,
       currency: 'INR',
+      additionalProperties: keyFacts.map((fact) => ({
+        name: fact.label,
+        value: fact.value,
+      })),
     }),
     ...(faqSchema ? [faqSchema] : []),
   ];

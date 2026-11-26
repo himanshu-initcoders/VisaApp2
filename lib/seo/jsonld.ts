@@ -121,6 +121,17 @@ export function buildBreadcrumbJsonLd(
   };
 }
 
+/** Strip HTML/markdown noise so FAQ answers stay quotable in AI excerpts. */
+export function stripToPlainText(value: string): string {
+  return value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]+)]\([^)]*\)/g, '$1')
+    .replace(/[*_~`#>]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function buildFaqPageJsonLd(
   faqs: Array<{ question: string; answer: string }>,
   siteUrl = getSiteUrl()
@@ -131,13 +142,70 @@ export function buildFaqPageJsonLd(
     '@type': 'FAQPage',
     mainEntity: faqs.map((faq) => ({
       '@type': 'Question',
-      name: faq.question,
+      name: stripToPlainText(faq.question),
       acceptedAnswer: {
         '@type': 'Answer',
-        text: faq.answer,
+        text: stripToPlainText(faq.answer),
       },
     })),
     isPartOf: { '@id': `${siteUrl}/#website` },
+  };
+}
+
+export function buildHowToJsonLd(input: {
+  name: string;
+  description: string;
+  path: string;
+  steps: Array<{ title: string; description: string; stepNumber?: number }>;
+  siteUrl?: string;
+}): JsonLdDocument {
+  const siteUrl = input.siteUrl ?? getSiteUrl();
+  const url = absoluteUrl(input.path, siteUrl);
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'HowTo',
+    '@id': `${url}#howto`,
+    name: input.name,
+    description: input.description,
+    url,
+    inLanguage: 'en-IN',
+    step: input.steps.map((step, index) => ({
+      '@type': 'HowToStep',
+      position: step.stepNumber ?? index + 1,
+      name: step.title,
+      text: step.description,
+      url: `${url}#step-${step.stepNumber ?? index + 1}`,
+    })),
+  };
+}
+
+export function buildItemListJsonLd(input: {
+  name: string;
+  description: string;
+  path: string;
+  items: Array<{ name: string; path: string }>;
+  siteUrl?: string;
+}): JsonLdDocument {
+  const siteUrl = input.siteUrl ?? getSiteUrl();
+  const url = absoluteUrl(input.path, siteUrl);
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    '@id': `${url}#collection`,
+    name: input.name,
+    description: input.description,
+    url,
+    isPartOf: { '@id': `${siteUrl}/#website` },
+    inLanguage: 'en-IN',
+    mainEntity: {
+      '@type': 'ItemList',
+      itemListElement: input.items.map((item, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        name: item.name,
+        url: absoluteUrl(item.path, siteUrl),
+      })),
+    },
   };
 }
 
@@ -149,6 +217,7 @@ export function buildVisaServiceJsonLd(input: {
   countryCode: string;
   price?: number;
   currency?: string;
+  additionalProperties?: Array<{ name: string; value: string }>;
   siteUrl?: string;
 }): JsonLdDocument {
   const siteUrl = input.siteUrl ?? getSiteUrl();
@@ -162,6 +231,15 @@ export function buildVisaServiceJsonLd(input: {
           availability: 'https://schema.org/InStock',
           url,
         }
+      : undefined;
+
+  const additionalProperty =
+    input.additionalProperties && input.additionalProperties.length > 0
+      ? input.additionalProperties.map((prop) => ({
+          '@type': 'PropertyValue',
+          name: prop.name,
+          value: prop.value,
+        }))
       : undefined;
 
   return {
@@ -185,6 +263,7 @@ export function buildVisaServiceJsonLd(input: {
       },
     },
     ...(offer ? { offers: offer } : {}),
+    ...(additionalProperty ? { additionalProperty } : {}),
   };
 }
 

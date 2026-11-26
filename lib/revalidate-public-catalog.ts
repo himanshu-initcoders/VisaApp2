@@ -33,8 +33,9 @@ export async function revalidatePublicVisaCatalog(options?: {
   try {
     revalidatePath('/');
     revalidatePath('/visa');
-    // Keep /sitemap.xml in sync when listings are added, hidden, or slug-renamed.
+    // Keep /sitemap.xml and /llms.txt in sync when listings are added, hidden, or slug-renamed.
     revalidatePath('/sitemap.xml');
+    revalidatePath('/llms.txt');
   } catch (err) {
     console.warn('revalidatePath catalog routes error:', err);
   }
@@ -83,6 +84,7 @@ export async function revalidatePublicVisaCatalog(options?: {
 
   // Refresh dynamic route patterns
   try {
+    revalidatePath('/visa/[countryCode]', 'page');
     revalidatePath('/visa/[countryCode]/[listingId]', 'page');
     revalidatePath('/visa/[countryCode]/[listingId]/apply', 'page');
   } catch (err) {

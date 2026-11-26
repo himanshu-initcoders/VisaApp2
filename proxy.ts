@@ -47,6 +47,13 @@ function matchVisaListingPath(pathname: string) {
   };
 }
 
+/** /visa/{country} hub — force lowercase ISO2. */
+function matchVisaCountryHubPath(pathname: string) {
+  const match = pathname.match(/^\/visa\/([^/]+)\/?$/i);
+  if (!match) return null;
+  return { countryCode: match[1] };
+}
+
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const role = req.auth?.user?.role;
@@ -63,6 +70,16 @@ export default auth((req) => {
     ) {
       const url = req.nextUrl.clone();
       url.pathname = `/visa/${country}/${listing}${visaListing.applySuffix}`;
+      return NextResponse.redirect(url, 301);
+    }
+  }
+
+  const visaCountryHub = matchVisaCountryHubPath(pathname);
+  if (visaCountryHub) {
+    const country = visaCountryHub.countryCode.toLowerCase();
+    if (visaCountryHub.countryCode !== country) {
+      const url = req.nextUrl.clone();
+      url.pathname = `/visa/${country}`;
       return NextResponse.redirect(url, 301);
     }
   }
@@ -166,6 +183,6 @@ export default auth((req) => {
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|sitemap\\.xml|robots\\.txt).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|sitemap\\.xml|robots\\.txt|llms\\.txt).*)',
   ],
 };

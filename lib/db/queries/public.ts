@@ -28,6 +28,7 @@ import {
 } from '@/lib/visa/purposes';
 import { isDigitalArrivalCard, usesArrivalCardCopy } from '@/lib/visa/processTypes';
 import {
+  getDemoFaqs,
   getDemoHighlights,
   getDemoPriceOptions,
 } from '@/lib/public-demo';
@@ -578,7 +579,10 @@ const getCachedPublicProcessPageData = unstable_cache(
           stepNumber: index + 1,
         })),
         hasTimeline: process.postCheckoutSteps.length > 0,
-        faqs: process.faqs,
+        faqs:
+          process.faqs.length > 0
+            ? process.faqs
+            : getDemoFaqs(process.country.name, mappedProcess),
         exemption: process.country.exemption?.trim() || null,
         disclaimer: process.disclaimer?.trim() || null,
         multiCountries: (process.multiTripCountries ?? []).map((row) => {

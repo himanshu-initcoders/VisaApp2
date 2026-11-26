@@ -154,6 +154,7 @@
 - [x] apex → www host redirect (`Caddyfile`: `viserv.in` → `https://www.viserv.in`; SEO/sitemap/JSON-LD use www)
 - [x] Blog index + post pages in sitemap, footer, header, `view_blog_post` analytics
 - [x] Recent blogs teaser (3 posts) on home + `/passport`
+- [x] AEO/GEO layer: `/llms.txt`, AI bot allow in robots, HowTo + hub FAQs, `/visa/{cc}` country hubs, listing key facts + unique listing meta, demo FAQ fallback ([[SEO Metadata]])
 - [ ] Analytics dashboard
 - [ ] Reporting system
 

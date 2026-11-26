@@ -9,6 +9,7 @@ import { StickySectionNav } from '@/components/public/StickySectionNav';
 import { RequirementsGrid } from '@/components/public/RequirementsGrid';
 import { ListingHero } from '@/components/public/ListingHero';
 import { ListingOverviewSection } from '@/components/public/ListingOverviewSection';
+import { ListingKeyFacts } from '@/components/public/ListingKeyFacts';
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
 import { FaqAccordion } from '@/components/public/FaqAccordion';
 import { ExploreMoreRail } from '@/components/public/ExploreMoreRail';
@@ -25,6 +26,7 @@ import { sanitizeBlogHtml } from '@/lib/blog/sanitize';
 import type { BlogPost } from '@/lib/db/queries/blog';
 import type { PublicProcessPageData } from '@/lib/db/queries/public';
 import type { VisaKindOption } from '@/components/public/PricingPanel';
+import { buildListingKeyFacts } from '@/lib/seo/listingKeyFacts';
 import {
   isInfoOnlyFreeEntry,
   productNoun,
@@ -270,6 +272,14 @@ export function PublicListingExperience({
     processType: data.process.processType,
     priceOptions: data.page.pricing.priceOptions,
   });
+  const keyFacts = buildListingKeyFacts({
+    startingPrice: data.process.startingPrice,
+    isFree: data.page.isFree,
+    formattedStartingPrice: data.page.pricing.headline,
+    processingEta: data.process.standardEta,
+    priceOption: data.page.pricing.priceOptions[0] ?? null,
+    documentCount: data.page.requirements.length,
+  });
 
   return (
     <>
@@ -295,6 +305,13 @@ export function PublicListingExperience({
         />
 
         <div className="mx-auto max-w-7xl space-y-12 px-4 pb-10 pt-4 sm:space-y-20 sm:px-6 sm:pb-16 sm:pt-6 lg:px-8">
+          <section
+            aria-label="Key facts"
+            className="scroll-mt-28 border-b border-ash-divider/70 pb-8 sm:scroll-mt-32 sm:pb-10"
+          >
+            <ListingKeyFacts facts={keyFacts} />
+          </section>
+
           <ListingOverviewSection
             overview={data.page.overview}
             processingEta={data.process.standardEta}

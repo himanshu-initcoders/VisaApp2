@@ -32,10 +32,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: entry.priority,
   }));
 
+  let countryHubEntries: MetadataRoute.Sitemap = [];
   let listingEntries: MetadataRoute.Sitemap = [];
   let blogEntries: MetadataRoute.Sitemap = [];
   try {
     const countries = await getEnabledCountriesWithProcesses();
+    countryHubEntries = countries.map((country) => ({
+      url: absoluteUrl(`/visa/${country.iso2Code.toLowerCase()}`, siteUrl),
+      lastModified: now,
+      changeFrequency: 'weekly' as const,
+      priority: 0.85,
+    }));
     listingEntries = countries.flatMap((country) =>
       country.visaListings.map((listing) => ({
         url: absoluteUrl(listing.href, siteUrl),
@@ -46,6 +53,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     );
   } catch {
     // Catalog DB unavailable at build/request time — still ship static URLs.
+    countryHubEntries = [];
     listingEntries = [];
   }
 
@@ -61,5 +69,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     blogEntries = [];
   }
 
-  return [...staticEntries, ...listingEntries, ...blogEntries];
+  return [
+    ...staticEntries,
+    ...countryHubEntries,
+    ...listingEntries,
+    ...blogEntries,
+  ];
 }

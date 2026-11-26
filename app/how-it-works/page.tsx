@@ -3,13 +3,19 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { MotionReveal } from '@/components/public/MotionReveal';
 import { ProcessTimeline } from '@/components/public/ProcessTimeline';
+import { SiteFaqSection } from '@/components/public/SiteFaqSection';
 import { JsonLd } from '@/components/seo/JsonLd';
 import {
   buildBreadcrumbJsonLd,
+  buildFaqPageJsonLd,
+  buildHowToJsonLd,
   buildWebPageJsonLd,
 } from '@/lib/seo/jsonld';
+import { HOW_IT_WORKS_STEPS } from '@/lib/seo/howItWorksSteps';
 import { buildPageMetadata } from '@/lib/seo/metadata';
 import { SEO_PAGES } from '@/lib/seo/pages';
+import { SITE_FAQS } from '@/lib/seo/siteFaqs';
+import { SITE_NAME } from '@/lib/seo/site';
 
 const PAGE = SEO_PAGES.howItWorks;
 
@@ -20,44 +26,20 @@ export const metadata: Metadata = buildPageMetadata({
   keywords: PAGE.keywords,
 });
 
-const steps = [
-  {
-    id: 'traveller-info',
-    title: 'Choose your destination',
-    description:
-      'Pick the country you’re visiting and the visa that fits your trip: tourist, business.',
-    stepNumber: 1,
-  },
-  {
-    id: 'docs',
-    title: 'Check documents and price',
-    description:
-      'See the full cost, how long it takes, and the exact documents you’ll need, before you pay.',
-    stepNumber: 2,
-  },
-  {
-    id: 'review',
-    title: 'Apply in one go',
-    description:
-      'Add travellers, upload your documents and pay. Our experts review everything before it’s submitted.',
-    stepNumber: 3,
-  },
-  {
-    id: 'submit',
-    title: 'Track your visa',
-    description:
-      'Get updates at every stage, so you always know where your application stands.',
-    stepNumber: 4,
-  },
-];
-
 export default function HowItWorksPage() {
+  const faqSchema = buildFaqPageJsonLd(
+    SITE_FAQS.map((faq) => ({
+      question: faq.question,
+      answer: faq.answer,
+    }))
+  );
+
   return (
     <>
       <JsonLd
         data={[
           buildWebPageJsonLd({
-            title: `${PAGE.title} | Viserv`,
+            title: `${PAGE.title} | ${SITE_NAME}`,
             description: PAGE.description,
             path: PAGE.path,
           }),
@@ -65,6 +47,17 @@ export default function HowItWorksPage() {
             { name: 'Home', path: '/' },
             { name: 'How it works', path: PAGE.path },
           ]),
+          buildHowToJsonLd({
+            name: 'Apply for a visa with Viserv in four steps',
+            description: PAGE.description,
+            path: PAGE.path,
+            steps: HOW_IT_WORKS_STEPS.map((step) => ({
+              title: step.title,
+              description: step.description,
+              stepNumber: step.stepNumber,
+            })),
+          }),
+          ...(faqSchema ? [faqSchema] : []),
         ]}
       />
       <Header />
@@ -82,7 +75,9 @@ export default function HowItWorksPage() {
             </p>
           </MotionReveal>
 
-          <ProcessTimeline steps={steps} />
+          <ProcessTimeline steps={[...HOW_IT_WORKS_STEPS]} />
+
+          <SiteFaqSection className="scroll-mt-32 px-0 py-0 sm:scroll-mt-36" />
         </div>
       </main>
       <Footer />
