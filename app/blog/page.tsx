@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation';
+import { permanentRedirect } from 'next/navigation';
 
-/** Legacy /blog → /blogs */
+/** Legacy /blog → /blogs (301). */
 export default function BlogIndexRedirect() {
-  redirect('/blogs');
+  permanentRedirect('/blogs');
 }

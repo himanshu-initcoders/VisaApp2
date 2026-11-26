@@ -1,9 +1,14 @@
 import type { Metadata } from 'next';
 import { ReactNode } from 'react';
 import { Logo } from '@/components/shared/Logo';
-import { NOINDEX_METADATA } from '@/lib/seo/metadata';
+import { buildPrivateMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = NOINDEX_METADATA;
+export const metadata: Metadata = buildPrivateMetadata({
+  title: 'Your Viserv account',
+  description:
+    'Sign in or create a Viserv account. These account pages are not indexed by search engines.',
+  path: '/signin',
+});
 
 /**
  * Authentication Layout

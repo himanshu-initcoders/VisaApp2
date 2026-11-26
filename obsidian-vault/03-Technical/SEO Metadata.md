@@ -8,7 +8,7 @@ Canonical public SEO for Viserv (`www.viserv.in`).
 |--------|------|
 | `lib/seo/site.ts` | Brand name, default title/description, keywords, OG image, social `sameAs` |
 | `lib/seo/pages.ts` | Unique title/description/keywords per static public route |
-| `lib/seo/metadata.ts` | `buildPageMetadata()` + `NOINDEX_METADATA` |
+| `lib/seo/metadata.ts` | `buildPageMetadata()`, `buildPrivateMetadata()`, `NOINDEX_METADATA` |
 | `lib/seo/jsonld.ts` | Organization, WebSite, WebPage, Service, FAQ, HowTo, CollectionPage/ItemList, BlogPosting, breadcrumbs |
 | `lib/seo/howItWorksSteps.ts` | Shared 4-step copy for home, `/how-it-works`, HowTo schema |
 | `lib/seo/siteFaqs.ts` | Sitewide FAQs for home + how-it-works |
@@ -40,7 +40,22 @@ Canonical public SEO for Viserv (`www.viserv.in`).
 
 ## Not indexed
 
-- `/admin/*`, `/dashboard/*`, `/signin`, `/register`, `/*/apply`, most `/api/*` (except `/api/media`)
+- `/admin/*`, `/dashboard/*`, `/signin`, `/register`, visa/passport `/*/apply`, most `/api/*` (except `/api/media`)
+- Private layouts use `buildPrivateMetadata()` — **unique title/description/OG** + hard `noindex` (never inherit homepage marketing snippet)
+- Visa apply metadata mirrors passport apply: `robots: noindex` + canonical points at the public listing, not `/apply`
+- `robots.txt` disallows `/visa/*/*/apply` and `/passport/*/apply` (multi-segment; bare `/*/apply` is not enough for visa paths)
+
+## Private page titles (Google clarity)
+
+`buildPrivateMetadata()` always sets absolute `Title | Viserv` (tab + OG + Twitter).
+
+| Path | Document title |
+|------|----------------|
+| `/signin` | Sign in with WhatsApp \| Viserv |
+| `/register` | Create staff account \| Viserv |
+| `/admin/login` | Staff login \| Viserv |
+| `/dashboard/*` | Dashboard \| Viserv (default) |
+| `/admin/*` | Admin \| Viserv (default) |
 
 ## Country vs listing SEO
 
@@ -72,4 +87,4 @@ Goal: be **citable** in ChatGPT, Perplexity, Google AI Overviews — not keyword
 
 When a public listing slug is renamed or a listing is removed, add a row in `lib/seo/legacyVisaListingRedirects.ts` (source → current canonical). Admin Basic Info updates also call `revalidatePath('/sitemap.xml')` and `revalidatePath('/llms.txt')` via `revalidatePublicVisaCatalog`, so crawlers stop seeing stale listing URLs.
 
-**Last updated**: 2026-11-26
+**Last updated**: 2026-11-26 (private metadata audit)

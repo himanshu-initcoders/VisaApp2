@@ -84,13 +84,13 @@ export default auth((req) => {
     }
   }
 
-  // Legacy staff login URL
+  // Legacy staff login URL (permanent)
   if (pathname === '/login') {
     const url = new URL('/admin/login', req.url);
     req.nextUrl.searchParams.forEach((value, key) => {
       url.searchParams.set(key, value);
     });
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(url, 301);
   }
 
   const protectedRoutes = [

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
-import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, Input } from '@/components/ui';
+import { Button, Card, CardHeader, CardDescription, CardContent, CardFooter, Input } from '@/components/ui';
 import { registerSchema, type RegisterInput } from '@/lib/validations/auth';
 
 /**
@@ -86,12 +86,12 @@ export default function RegisterPage() {
   return (
     <Card variant="elevated">
       <CardHeader>
-        <CardTitle className="font-basier text-2xl">
+        <h1 className="font-basier text-2xl font-semibold leading-none tracking-tight text-portrait-ink">
           Create{' '}
           <span className="italic bg-gradient-rainbow bg-clip-text text-transparent">
             account
           </span>
-        </CardTitle>
+        </h1>
         <CardDescription>
           Sign up to start your visa journey
         </CardDescription>

@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation';
+import { permanentRedirect } from 'next/navigation';
 
-/** Legacy URL — vault lives at /traveller-profiles. */
+/** Legacy URL — vault lives at /traveller-profiles (301). */
 export default function DocumentsRedirectPage() {
-  redirect('/traveller-profiles');
+  permanentRedirect('/traveller-profiles');
 }

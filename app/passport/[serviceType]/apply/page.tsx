@@ -71,6 +71,11 @@ export async function generateMetadata({
     robots: {
       index: false,
       follow: false,
+      googleBot: {
+        index: false,
+        follow: false,
+        noimageindex: true,
+      },
     },
   };
 }

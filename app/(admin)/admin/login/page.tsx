@@ -10,7 +10,6 @@ import {
   Button,
   Card,
   CardHeader,
-  CardTitle,
   CardDescription,
   CardContent,
   CardFooter,
@@ -73,12 +72,12 @@ export default function AdminLoginPage() {
   return (
     <Card variant="elevated">
       <CardHeader>
-        <CardTitle className="font-basier text-2xl">
+        <h1 className="font-basier text-2xl font-semibold leading-none tracking-tight text-portrait-ink">
           Staff{' '}
           <span className="italic bg-gradient-rainbow bg-clip-text text-transparent">
             login
           </span>
-        </CardTitle>
+        </h1>
         <CardDescription>
           Email and password for admin and reviewer accounts
         </CardDescription>

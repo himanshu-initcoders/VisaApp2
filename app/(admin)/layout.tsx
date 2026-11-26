@@ -5,9 +5,14 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { signOutAction } from '@/app/(admin)/actions';
-import { NOINDEX_METADATA } from '@/lib/seo/metadata';
+import { buildPrivateMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = NOINDEX_METADATA;
+export const metadata: Metadata = buildPrivateMetadata({
+  title: 'Admin',
+  description:
+    'Viserv staff console for applications and configuration. Not indexed by search engines.',
+  path: '/admin',
+});
 
 /**
  * Admin Layout

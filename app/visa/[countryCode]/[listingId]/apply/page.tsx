@@ -80,10 +80,35 @@ export async function generateMetadata({ params }: PageProps) {
     daysLabel: data.process.priceOptions[0]?.daysLabel,
   });
 
+  const title = `Apply · ${visaFullName}`;
+  const description = `Complete your ${visaFullName} application with Viserv. Guided form, document upload, and secure payment.`;
+
   return {
-    title: `Apply · ${visaFullName}`,
-    description: `Complete your ${visaFullName} application.`,
-    alternates: { canonical: `${data.href}/apply` },
+    title,
+    description,
+    // Point at the public listing if crawlers ignore noindex; never self-canonicalize apply.
+    alternates: { canonical: data.href },
+    openGraph: {
+      title,
+      description,
+      url: data.href,
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary',
+      title,
+      description,
+    },
+    // Apply funnel is disallowed in robots.txt; reinforce noindex for HTML crawlers.
+    robots: {
+      index: false,
+      follow: false,
+      googleBot: {
+        index: false,
+        follow: false,
+        noimageindex: true,
+      },
+    },
   };
 }
 

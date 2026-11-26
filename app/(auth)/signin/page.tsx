@@ -7,7 +7,6 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from '@/components/ui';
 import { ApplicantAuthPanel } from '@/components/auth/ApplicantAuthPanel';
 
@@ -28,12 +27,12 @@ export default function SignInPage() {
   return (
     <Card variant="elevated">
       <CardHeader>
-        <CardTitle className="font-basier text-2xl">
+        <h1 className="font-basier text-2xl font-semibold leading-none tracking-tight text-portrait-ink">
           Sign{' '}
           <span className="italic bg-gradient-rainbow bg-clip-text text-transparent">
             in
           </span>
-        </CardTitle>
+        </h1>
         <CardDescription>
           Enter your mobile number. We will send a one-time code on WhatsApp.
         </CardDescription>

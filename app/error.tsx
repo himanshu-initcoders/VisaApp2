@@ -25,6 +25,7 @@ export default function GlobalAppError({
   reset: () => void;
 }) {
   useEffect(() => {
+    console.error('App error boundary:', error.message, error.digest ?? '');
     if (!isChunkLoadError(error)) return;
     try {
       const last = Number(sessionStorage.getItem(RELOAD_KEY) || '0');

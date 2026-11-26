@@ -24,12 +24,16 @@ const PUBLIC_DISALLOW = [
   '/traveller-profiles/',
   '/profile/',
   '/signin',
+  '/signin/',
   '/admin/login',
+  '/admin/login/',
   '/register',
+  '/register/',
 
-  // Visa + passport apply funnels (e.g. /visa/.../apply, /passport/fresh/apply)
-  '/*/apply',
-  '/*/apply/',
+  // Visa + passport apply funnels
+  // Google *: /visa/*/*/apply matches /visa/{cc}/{slug}/apply; /*/apply alone does not.
+  '/visa/*/*/apply',
+  '/visa/*/*/apply/',
   '/passport/*/apply',
   '/passport/*/apply/',
 ] as const;

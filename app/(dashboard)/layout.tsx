@@ -5,9 +5,14 @@ import { redirect } from 'next/navigation';
 import { UserShell } from '@/components/dashboard/UserShell';
 import { signOutAction } from '@/app/(dashboard)/actions';
 import { listNotifications } from '@/lib/notifications';
-import { NOINDEX_METADATA } from '@/lib/seo/metadata';
+import { buildPrivateMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = NOINDEX_METADATA;
+export const metadata: Metadata = buildPrivateMetadata({
+  title: 'Dashboard',
+  description:
+    'Your Viserv applications, documents, and traveller profiles. Signed-in area — not indexed by search engines.',
+  path: '/dashboard',
+});
 
 /**
  * Dashboard layout — sidebar shell (mirrors admin panel pattern).

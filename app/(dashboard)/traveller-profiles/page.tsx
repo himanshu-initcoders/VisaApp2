@@ -6,10 +6,14 @@ import { Button } from '@/components/ui';
 import { redirectStaffToAdmin } from '@/lib/auth-utils';
 import { getTravelerProfilesForUser } from '@/lib/dashboard/travelerProfiles';
 import { TravelerProfilesView } from '@/components/dashboard/TravelerProfilesView';
+import { buildPrivateMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPrivateMetadata({
   title: 'Traveller Profiles',
-};
+  description:
+    'Manage traveller documents and profiles in your Viserv account. Signed-in area — not indexed.',
+  path: '/traveller-profiles',
+});
 
 export default async function TravellerProfilesPage() {
   const session = await auth();
